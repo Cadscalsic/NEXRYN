@@ -1,0 +1,20 @@
+{
+    "strategy_id": "531d93b6-37b8-4069-aaa9-e822e0112787",
+    "strategy": {
+        "type": "color_transformation",
+        "category": "symbolic",
+        "description": "Detected symbolic color substitution",
+        "confidence": 0.95,
+        "metadata": {
+            "added_colors": [
+                3
+            ],
+            "removed_colors": [
+                1
+            ]
+        },
+        "adaptive_boost": 0.0,
+        "mutation_applied": false
+    },
+    "timestamp": "2026-05-22 15:44:08.067517"
+}

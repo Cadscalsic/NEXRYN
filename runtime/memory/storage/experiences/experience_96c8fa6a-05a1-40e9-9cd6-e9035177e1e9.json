@@ -1,0 +1,108 @@
+{
+    "experience_id": "96c8fa6a-05a1-40e9-9cd6-e9035177e1e9",
+    "winner_hypothesis": {
+        "type": "color_transformation",
+        "category": "symbolic",
+        "description": "Detected symbolic color substitution",
+        "confidence": 1.0,
+        "metadata": {
+            "added_colors": [
+                3
+            ],
+            "removed_colors": [
+                1
+            ]
+        },
+        "adaptive_boost": 0.0,
+        "exploration_applied": true,
+        "mutation_applied": false
+    },
+    "evaluation_result": {
+        "accuracy": 1.0,
+        "difference_count": 0,
+        "color_similarity": 1.0,
+        "structural_score": 1.0,
+        "final_score": 1.0,
+        "confidence": "very_high",
+        "success": true
+    },
+    "best_evolved_strategy": {
+        "strategy_name": "adaptive_color_transformation",
+        "evolution_score": 0.0,
+        "success_count": 0,
+        "failure_count": 0,
+        "mutations": 1,
+        "lineage_depth": 1
+    },
+    "semantic_summary": null,
+    "semantic_graph": {
+        "concept_nodes": [
+            {
+                "concept": "symbolic_surface_remapping",
+                "confidence": 1.0
+            },
+            {
+                "concept": "structural_identity_preservation",
+                "confidence": 0.95
+            },
+            {
+                "concept": "spatial_balance_preservation",
+                "confidence": 0.93
+            },
+            {
+                "concept": "structural_mass_conservation",
+                "confidence": 0.9
+            }
+        ],
+        "concept_count": 4
+    },
+    "execution_plan": {
+        "plan_id": "bc7b62d3-51ab-45b6-b6ec-f12224f3c12c",
+        "node_count": 1,
+        "nodes": [
+            {
+                "node_id": "ac21ab39-0a5e-4ed2-a8b1-01c01dde5e17",
+                "execution_index": 0,
+                "operation": "replace_color",
+                "parameters": {
+                    "source": [
+                        1
+                    ],
+                    "target": [
+                        3
+                    ]
+                },
+                "dependencies": [],
+                "priority": 1.0,
+                "semantic_weight": 0.5,
+                "recursive_depth": 0,
+                "status": "pending",
+                "created_at": "2026-05-21 21:25:28.253539"
+            }
+        ],
+        "plan_state": "active",
+        "created_at": "2026-05-21 21:25:28.253539"
+    },
+    "reasoning_trace": [
+        "Detected symbolic color substitution",
+        "Detected object preservation",
+        "Detected symmetry preservation",
+        "Detected density conservation",
+        "Retrieved 0 similar experiences",
+        "Applied adaptive strategy injection",
+        "Applied adaptive search reinforcement",
+        "Applied exploration strategy",
+        "Applied strategy mutation",
+        "Built hierarchical cognition structure",
+        "Performed recursive cognition analysis",
+        "Adapted cognitive control state",
+        "Selected goal: unknown",
+        "Constructed semantic abstraction graph",
+        "Performed analogical transfer analysis",
+        "Updated cognitive state manager",
+        "Cognitive search generated 5 paths",
+        "Generated dynamic cognitive routing plan"
+    ],
+    "cognitive_pressure": 0.72,
+    "timestamp": "2026-05-21 21:25:28.299795"
+}

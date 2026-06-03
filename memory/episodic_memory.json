@@ -1,0 +1,1156 @@
+{
+    "episodes": [
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "timestamp": "2026-05-19 02:54:07.903205",
+            "task": "data/training/task_001.json",
+            "runtime_summary": {},
+            "evaluation": {
+                "stage": "evaluation",
+                "status": "completed",
+                "timestamp": "2026-05-19 02:54:07.857091",
+                "runtime_health": "stable",
+                "evaluation_metrics": {
+                    "history_size": 1,
+                    "recent_episodes": 1,
+                    "introspection_insights": 1,
+                    "failure_detected": false
+                }
+            },
+            "reasoning_trace": [
+                "Detected symbolic color substitution",
+                "Detected object preservation",
+                "Detected symmetry preservation",
+                "Detected density conservation",
+                "Retrieved 0 similar experiences",
+                "Applied adaptive search reinforcement",
+                "Applied exploration strategy",
+                "Applied strategy mutation",
+                "Built hierarchical cognition structure",
+                "Performed recursive cognition analysis",
+                "Adapted cognitive control state",
+                "Selected goal: unknown",
+                "Constructed semantic abstraction graph",
+                "Performed analogical transfer analysis",
+                "Updated cognitive state manager",
+                "Cognitive search generated 5 paths",
+                "Generated dynamic cognitive routing plan"
+            ],
+            "semantic_graph": {
+                "concept_nodes": [
+                    {
+                        "concept": "symbolic_surface_remapping",
+                        "confidence": 0.95
+                    },
+                    {
+                        "concept": "structural_identity_preservation",
+                        "confidence": 0.9
+                    },
+                    {
+                        "concept": "spatial_balance_preservation",
+                        "confidence": 0.88
+                    },
+                    {
+                        "concept": "structural_mass_conservation",
+                        "confidence": 0.85
+                    }
+                ],
+                "concept_count": 4
+            },
+            "governance": {},
+            "transformation": {
+                "stage": "transformation",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 02:54:07.851001",
+                "executed_steps": 1,
+                "strategy_count": 4,
+                "transformation_confidence": 0.0,
+                "transformation_complexity": "low"
+            },
+            "self_improvement": {
+                "stage": "self_improvement",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 02:54:07.864993",
+                "updated_hypotheses": 1,
+                "evolved_hypotheses": 1,
+                "validated_hypotheses": 0,
+                "rejected_hypotheses": 0,
+                "success": true,
+                "evolution_pressure": 0.05
+            },
+            "abstractions": [
+                {
+                    "original_type": "color_transformation",
+                    "semantic_concept": "symbolic_surface_remapping",
+                    "confidence": 0.95,
+                    "category": "symbolic"
+                },
+                {
+                    "original_type": "object_preservation",
+                    "semantic_concept": "structural_identity_preservation",
+                    "confidence": 0.9,
+                    "category": "structural"
+                },
+                {
+                    "original_type": "recursive_symmetry_preservation",
+                    "semantic_concept": "spatial_balance_preservation",
+                    "confidence": 0.88,
+                    "category": "spatial"
+                },
+                {
+                    "original_type": "density_conservation",
+                    "semantic_concept": "structural_mass_conservation",
+                    "confidence": 0.85,
+                    "category": "structural"
+                }
+            ],
+            "strategies": [
+                {
+                    "type": "adaptive_color_transformation",
+                    "category": "symbolic",
+                    "description": "Detected symbolic color substitution",
+                    "confidence": 1.0,
+                    "metadata": {
+                        "added_colors": [
+                            3
+                        ],
+                        "removed_colors": [
+                            1
+                        ]
+                    },
+                    "adaptive_boost": 0.0,
+                    "mutation_applied": true,
+                    "parent_strategy": "color_transformation",
+                    "evolution_source": "strategy_evolution_engine",
+                    "evolved": true
+                }
+            ],
+            "runtime_health": {}
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "timestamp": "2026-05-19 02:57:51.055880",
+            "task": "data/training/task_001.json",
+            "runtime_summary": {},
+            "evaluation": {
+                "stage": "evaluation",
+                "status": "completed",
+                "timestamp": "2026-05-19 02:57:51.010124",
+                "runtime_health": "stable",
+                "evaluation_metrics": {
+                    "history_size": 1,
+                    "recent_episodes": 1,
+                    "introspection_insights": 1,
+                    "failure_detected": false
+                }
+            },
+            "reasoning_trace": [
+                "Detected symbolic color substitution",
+                "Detected object preservation",
+                "Detected symmetry preservation",
+                "Detected density conservation",
+                "Retrieved 0 similar experiences",
+                "Applied adaptive search reinforcement",
+                "Applied exploration strategy",
+                "Applied strategy mutation",
+                "Built hierarchical cognition structure",
+                "Performed recursive cognition analysis",
+                "Adapted cognitive control state",
+                "Selected goal: unknown",
+                "Constructed semantic abstraction graph",
+                "Performed analogical transfer analysis",
+                "Updated cognitive state manager",
+                "Cognitive search generated 5 paths",
+                "Generated dynamic cognitive routing plan"
+            ],
+            "semantic_graph": {
+                "concept_nodes": [
+                    {
+                        "concept": "symbolic_surface_remapping",
+                        "confidence": 0.95
+                    },
+                    {
+                        "concept": "structural_identity_preservation",
+                        "confidence": 0.9
+                    },
+                    {
+                        "concept": "spatial_balance_preservation",
+                        "confidence": 0.88
+                    },
+                    {
+                        "concept": "structural_mass_conservation",
+                        "confidence": 0.85
+                    }
+                ],
+                "concept_count": 4
+            },
+            "governance": {},
+            "transformation": {
+                "stage": "transformation",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 02:57:51.003941",
+                "executed_steps": 1,
+                "strategy_count": 4,
+                "transformation_confidence": 0.0,
+                "transformation_complexity": "low"
+            },
+            "self_improvement": {
+                "stage": "self_improvement",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 02:57:51.016610",
+                "updated_hypotheses": 1,
+                "evolved_hypotheses": 1,
+                "validated_hypotheses": 0,
+                "rejected_hypotheses": 0,
+                "success": true,
+                "evolution_pressure": 0.05
+            },
+            "abstractions": [
+                {
+                    "original_type": "recursive_color_transformation",
+                    "semantic_concept": "symbolic_surface_remapping",
+                    "confidence": 0.95,
+                    "category": "symbolic"
+                },
+                {
+                    "original_type": "object_preservation",
+                    "semantic_concept": "structural_identity_preservation",
+                    "confidence": 0.9,
+                    "category": "structural"
+                },
+                {
+                    "original_type": "symmetry_preservation",
+                    "semantic_concept": "spatial_balance_preservation",
+                    "confidence": 0.88,
+                    "category": "spatial"
+                },
+                {
+                    "original_type": "density_conservation",
+                    "semantic_concept": "structural_mass_conservation",
+                    "confidence": 0.85,
+                    "category": "structural"
+                }
+            ],
+            "strategies": [
+                {
+                    "type": "adaptive_recursive_color_transformation",
+                    "category": "symbolic",
+                    "description": "Detected symbolic color substitution",
+                    "confidence": 1.0,
+                    "metadata": {
+                        "added_colors": [
+                            3
+                        ],
+                        "removed_colors": [
+                            1
+                        ]
+                    },
+                    "adaptive_boost": 0.0,
+                    "parent_strategy": "recursive_color_transformation",
+                    "mutation_applied": true,
+                    "mutation_source": "strategy_mutation_engine",
+                    "evolution_source": "strategy_evolution_engine",
+                    "evolved": true
+                }
+            ],
+            "runtime_health": {}
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "timestamp": "2026-05-19 02:58:59.103465",
+            "task": "data/training/task_001.json",
+            "runtime_summary": {},
+            "evaluation": {
+                "stage": "evaluation",
+                "status": "completed",
+                "timestamp": "2026-05-19 02:58:59.058573",
+                "runtime_health": "stable",
+                "evaluation_metrics": {
+                    "history_size": 1,
+                    "recent_episodes": 1,
+                    "introspection_insights": 1,
+                    "failure_detected": false
+                }
+            },
+            "reasoning_trace": [
+                "Detected symbolic color substitution",
+                "Detected object preservation",
+                "Detected symmetry preservation",
+                "Detected density conservation",
+                "Retrieved 0 similar experiences",
+                "Applied adaptive search reinforcement",
+                "Applied exploration strategy",
+                "Applied strategy mutation",
+                "Built hierarchical cognition structure",
+                "Performed recursive cognition analysis",
+                "Adapted cognitive control state",
+                "Selected goal: unknown",
+                "Constructed semantic abstraction graph",
+                "Performed analogical transfer analysis",
+                "Updated cognitive state manager",
+                "Cognitive search generated 5 paths",
+                "Generated dynamic cognitive routing plan"
+            ],
+            "semantic_graph": {
+                "concept_nodes": [
+                    {
+                        "concept": "symbolic_surface_remapping",
+                        "confidence": 0.95
+                    },
+                    {
+                        "concept": "structural_identity_preservation",
+                        "confidence": 0.9
+                    },
+                    {
+                        "concept": "spatial_balance_preservation",
+                        "confidence": 0.88
+                    },
+                    {
+                        "concept": "structural_mass_conservation",
+                        "confidence": 0.85
+                    }
+                ],
+                "concept_count": 4
+            },
+            "governance": {},
+            "transformation": {
+                "stage": "transformation",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 02:58:59.052147",
+                "executed_steps": 1,
+                "strategy_count": 4,
+                "transformation_confidence": 0.0,
+                "transformation_complexity": "low"
+            },
+            "self_improvement": {
+                "stage": "self_improvement",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 02:58:59.065884",
+                "updated_hypotheses": 1,
+                "evolved_hypotheses": 1,
+                "validated_hypotheses": 0,
+                "rejected_hypotheses": 0,
+                "success": true,
+                "evolution_pressure": 0.05
+            },
+            "abstractions": [
+                {
+                    "original_type": "color_transformation",
+                    "semantic_concept": "symbolic_surface_remapping",
+                    "confidence": 0.95,
+                    "category": "symbolic"
+                },
+                {
+                    "original_type": "object_preservation",
+                    "semantic_concept": "structural_identity_preservation",
+                    "confidence": 0.9,
+                    "category": "structural"
+                },
+                {
+                    "original_type": "adaptive_symmetry_preservation",
+                    "semantic_concept": "spatial_balance_preservation",
+                    "confidence": 0.88,
+                    "category": "spatial"
+                },
+                {
+                    "original_type": "density_conservation",
+                    "semantic_concept": "structural_mass_conservation",
+                    "confidence": 0.85,
+                    "category": "structural"
+                }
+            ],
+            "strategies": [
+                {
+                    "type": "adaptive_color_transformation",
+                    "category": "symbolic",
+                    "description": "Detected symbolic color substitution",
+                    "confidence": 1.0,
+                    "metadata": {
+                        "added_colors": [
+                            3
+                        ],
+                        "removed_colors": [
+                            1
+                        ]
+                    },
+                    "adaptive_boost": 0.0,
+                    "mutation_applied": true,
+                    "parent_strategy": "color_transformation",
+                    "evolution_source": "strategy_evolution_engine",
+                    "evolved": true
+                }
+            ],
+            "runtime_health": {}
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "timestamp": "2026-05-19 03:07:23.524065",
+            "task": "data/training/task_001.json",
+            "runtime_summary": {},
+            "evaluation": {
+                "stage": "evaluation",
+                "status": "completed",
+                "timestamp": "2026-05-19 03:07:23.474563",
+                "runtime_health": "stable",
+                "evaluation_metrics": {
+                    "history_size": 1,
+                    "recent_episodes": 1,
+                    "introspection_insights": 1,
+                    "failure_detected": false
+                }
+            },
+            "reasoning_trace": [
+                "Detected symbolic color substitution",
+                "Detected object preservation",
+                "Detected symmetry preservation",
+                "Detected density conservation",
+                "Retrieved 0 similar experiences",
+                "Applied adaptive search reinforcement",
+                "Applied exploration strategy",
+                "Applied strategy mutation",
+                "Built hierarchical cognition structure",
+                "Performed recursive cognition analysis",
+                "Adapted cognitive control state",
+                "Selected goal: unknown",
+                "Constructed semantic abstraction graph",
+                "Performed analogical transfer analysis",
+                "Updated cognitive state manager",
+                "Cognitive search generated 5 paths",
+                "Generated dynamic cognitive routing plan"
+            ],
+            "semantic_graph": {
+                "concept_nodes": [
+                    {
+                        "concept": "symbolic_surface_remapping",
+                        "confidence": 0.95
+                    },
+                    {
+                        "concept": "structural_identity_preservation",
+                        "confidence": 0.9
+                    },
+                    {
+                        "concept": "spatial_balance_preservation",
+                        "confidence": 0.88
+                    },
+                    {
+                        "concept": "structural_mass_conservation",
+                        "confidence": 0.85
+                    }
+                ],
+                "concept_count": 4
+            },
+            "governance": {},
+            "transformation": {
+                "stage": "transformation",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 03:07:23.468397",
+                "executed_steps": 1,
+                "strategy_count": 4,
+                "transformation_confidence": 0.0,
+                "transformation_complexity": "low"
+            },
+            "self_improvement": {
+                "stage": "self_improvement",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 03:07:23.481216",
+                "updated_hypotheses": 1,
+                "evolved_hypotheses": 1,
+                "validated_hypotheses": 0,
+                "rejected_hypotheses": 0,
+                "success": true,
+                "evolution_pressure": 0.05
+            },
+            "abstractions": [
+                {
+                    "original_type": "color_transformation",
+                    "semantic_concept": "symbolic_surface_remapping",
+                    "confidence": 0.95,
+                    "category": "symbolic"
+                },
+                {
+                    "original_type": "contextual_object_preservation",
+                    "semantic_concept": "structural_identity_preservation",
+                    "confidence": 0.9,
+                    "category": "structural"
+                },
+                {
+                    "original_type": "contextual_symmetry_preservation",
+                    "semantic_concept": "spatial_balance_preservation",
+                    "confidence": 0.88,
+                    "category": "spatial"
+                },
+                {
+                    "original_type": "density_conservation",
+                    "semantic_concept": "structural_mass_conservation",
+                    "confidence": 0.85,
+                    "category": "structural"
+                }
+            ],
+            "strategies": [
+                {
+                    "type": "adaptive_color_transformation",
+                    "category": "symbolic",
+                    "description": "Detected symbolic color substitution",
+                    "confidence": 1.0,
+                    "metadata": {
+                        "added_colors": [
+                            3
+                        ],
+                        "removed_colors": [
+                            1
+                        ]
+                    },
+                    "adaptive_boost": 0.0,
+                    "mutation_applied": true,
+                    "parent_strategy": "color_transformation",
+                    "evolution_source": "strategy_evolution_engine",
+                    "evolved": true
+                }
+            ],
+            "runtime_health": {}
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "timestamp": "2026-05-19 20:21:48.073520",
+            "task": "data/training/task_001.json",
+            "runtime_summary": {},
+            "evaluation": {
+                "stage": "evaluation",
+                "status": "completed",
+                "timestamp": "2026-05-19 20:21:47.941579",
+                "runtime_health": "stable",
+                "evaluation_metrics": {
+                    "history_size": 1,
+                    "recent_episodes": 1,
+                    "introspection_insights": 1,
+                    "failure_detected": false
+                }
+            },
+            "reasoning_trace": [
+                "Detected symbolic color substitution",
+                "Detected object preservation",
+                "Detected symmetry preservation",
+                "Detected density conservation",
+                "Retrieved 0 similar experiences",
+                "Applied adaptive search reinforcement",
+                "Applied exploration strategy",
+                "Applied strategy mutation",
+                "Built hierarchical cognition structure",
+                "Performed recursive cognition analysis",
+                "Adapted cognitive control state",
+                "Selected goal: unknown",
+                "Constructed semantic abstraction graph",
+                "Performed analogical transfer analysis",
+                "Updated cognitive state manager",
+                "Cognitive search generated 5 paths",
+                "Generated dynamic cognitive routing plan"
+            ],
+            "semantic_graph": {
+                "concept_nodes": [
+                    {
+                        "concept": "symbolic_surface_remapping",
+                        "confidence": 1.0
+                    },
+                    {
+                        "concept": "structural_identity_preservation",
+                        "confidence": 0.95
+                    },
+                    {
+                        "concept": "spatial_balance_preservation",
+                        "confidence": 0.93
+                    },
+                    {
+                        "concept": "structural_mass_conservation",
+                        "confidence": 0.9
+                    }
+                ],
+                "concept_count": 4
+            },
+            "governance": {},
+            "transformation": {
+                "stage": "transformation",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 20:21:47.922379",
+                "executed_steps": 1,
+                "strategy_count": 4,
+                "transformation_confidence": 0.0,
+                "transformation_complexity": "low"
+            },
+            "self_improvement": {
+                "stage": "self_improvement",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 20:21:47.954240",
+                "updated_hypotheses": 1,
+                "evolved_hypotheses": 1,
+                "validated_hypotheses": 0,
+                "rejected_hypotheses": 0,
+                "success": true,
+                "evolution_pressure": 0.05
+            },
+            "abstractions": [
+                {
+                    "original_type": "dynamic_color_transformation",
+                    "semantic_concept": "symbolic_surface_remapping",
+                    "confidence": 1.0,
+                    "category": "symbolic"
+                },
+                {
+                    "original_type": "object_preservation",
+                    "semantic_concept": "structural_identity_preservation",
+                    "confidence": 0.95,
+                    "category": "structural"
+                },
+                {
+                    "original_type": "symmetry_preservation",
+                    "semantic_concept": "spatial_balance_preservation",
+                    "confidence": 0.93,
+                    "category": "spatial"
+                },
+                {
+                    "original_type": "density_conservation",
+                    "semantic_concept": "structural_mass_conservation",
+                    "confidence": 0.9,
+                    "category": "structural"
+                }
+            ],
+            "strategies": [
+                {
+                    "type": "adaptive_dynamic_color_transformation",
+                    "category": "symbolic",
+                    "description": "Detected symbolic color substitution",
+                    "confidence": 1.0,
+                    "metadata": {
+                        "added_colors": [
+                            3
+                        ],
+                        "removed_colors": [
+                            1
+                        ]
+                    },
+                    "adaptive_boost": 0.0,
+                    "exploration_applied": true,
+                    "parent_strategy": "dynamic_color_transformation",
+                    "mutation_applied": true,
+                    "mutation_source": "strategy_mutation_engine",
+                    "last_updated": "2026-05-19 20:21:47.954240",
+                    "confidence_state": "high",
+                    "update_event": {
+                        "event_id": "d7bc2a6a-d59c-4070-bfc5-5ebb3410d0bb",
+                        "hypothesis_id": "unknown",
+                        "success": true,
+                        "previous_confidence": 1.0,
+                        "updated_confidence": 1.0,
+                        "confidence_delta": 0.0,
+                        "timestamp": "2026-05-19 20:21:47.954240"
+                    },
+                    "evolution_source": "strategy_evolution_engine",
+                    "evolved": true
+                }
+            ],
+            "runtime_health": {}
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "timestamp": "2026-05-19 22:31:54.153995",
+            "task": "data/training/task_001.json",
+            "runtime_summary": {},
+            "evaluation": {
+                "stage": "evaluation",
+                "status": "completed",
+                "timestamp": "2026-05-19 22:31:54.080815",
+                "runtime_health": "stable",
+                "evaluation_metrics": {
+                    "history_size": 1,
+                    "recent_episodes": 1,
+                    "introspection_insights": 1,
+                    "failure_detected": false
+                }
+            },
+            "reasoning_trace": [
+                "Detected symbolic color substitution",
+                "Detected object preservation",
+                "Detected symmetry preservation",
+                "Detected density conservation",
+                "Retrieved 0 similar experiences",
+                "Applied adaptive search reinforcement",
+                "Applied exploration strategy",
+                "Applied strategy mutation",
+                "Built hierarchical cognition structure",
+                "Performed recursive cognition analysis",
+                "Adapted cognitive control state",
+                "Selected goal: unknown",
+                "Constructed semantic abstraction graph",
+                "Performed analogical transfer analysis",
+                "Updated cognitive state manager",
+                "Cognitive search generated 5 paths",
+                "Generated dynamic cognitive routing plan"
+            ],
+            "semantic_graph": {
+                "concept_nodes": [
+                    {
+                        "concept": "symbolic_surface_remapping",
+                        "confidence": 0.95
+                    },
+                    {
+                        "concept": "structural_identity_preservation",
+                        "confidence": 0.9
+                    },
+                    {
+                        "concept": "spatial_balance_preservation",
+                        "confidence": 0.88
+                    },
+                    {
+                        "concept": "structural_mass_conservation",
+                        "confidence": 0.85
+                    }
+                ],
+                "concept_count": 4
+            },
+            "governance": {},
+            "transformation": {
+                "stage": "transformation",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 22:31:54.077447",
+                "executed_steps": 1,
+                "strategy_count": 4,
+                "transformation_confidence": 0.0,
+                "transformation_complexity": "low"
+            },
+            "self_improvement": {
+                "stage": "self_improvement",
+                "status": "completed",
+                "runtime_health": "stable",
+                "timestamp": "2026-05-19 22:31:54.082326",
+                "updated_hypotheses": 1,
+                "evolved_hypotheses": 1,
+                "validated_hypotheses": 0,
+                "rejected_hypotheses": 0,
+                "success": true,
+                "evolution_pressure": 0.05
+            },
+            "abstractions": [
+                {
+                    "original_type": "color_transformation",
+                    "semantic_concept": "symbolic_surface_remapping",
+                    "confidence": 0.95,
+                    "category": "symbolic"
+                },
+                {
+                    "original_type": "object_preservation",
+                    "semantic_concept": "structural_identity_preservation",
+                    "confidence": 0.9,
+                    "category": "structural"
+                },
+                {
+                    "original_type": "contextual_symmetry_preservation",
+                    "semantic_concept": "spatial_balance_preservation",
+                    "confidence": 0.88,
+                    "category": "spatial"
+                },
+                {
+                    "original_type": "density_conservation",
+                    "semantic_concept": "structural_mass_conservation",
+                    "confidence": 0.85,
+                    "category": "structural"
+                }
+            ],
+            "strategies": [
+                {
+                    "type": "adaptive_color_transformation",
+                    "category": "symbolic",
+                    "description": "Detected symbolic color substitution",
+                    "confidence": 1.0,
+                    "metadata": {
+                        "added_colors": [
+                            3
+                        ],
+                        "removed_colors": [
+                            1
+                        ]
+                    },
+                    "adaptive_boost": 0.0,
+                    "mutation_applied": true,
+                    "last_updated": "2026-05-19 22:31:54.082326",
+                    "confidence_state": "high",
+                    "update_event": {
+                        "event_id": "fe10f2c8-44c1-4ce1-a62c-238a8aeae0df",
+                        "hypothesis_id": "unknown",
+                        "success": true,
+                        "previous_confidence": 0.95,
+                        "updated_confidence": 0.975,
+                        "confidence_delta": 0.025,
+                        "timestamp": "2026-05-19 22:31:54.082326"
+                    },
+                    "parent_strategy": "color_transformation",
+                    "evolution_source": "strategy_evolution_engine",
+                    "evolved": true
+                }
+            ],
+            "runtime_health": {}
+        }
+    ],
+    "temporal_index": {
+        "2026-05-19 02:54:07.903205": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+        "2026-05-19 02:57:51.055880": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+        "2026-05-19 02:58:59.103465": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+        "2026-05-19 03:07:23.524065": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+        "2026-05-19 20:21:48.073520": "96b52f17-0f56-451a-b92d-23b122b32b92",
+        "2026-05-19 22:31:54.153995": "653c751f-5fa3-416c-8a8a-c912267cc838"
+    },
+    "strategy_index": {
+        "unknown": [
+            "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "653c751f-5fa3-416c-8a8a-c912267cc838"
+        ]
+    },
+    "failure_index": {
+        "data/training/task_001.json": [
+            "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "653c751f-5fa3-416c-8a8a-c912267cc838"
+        ]
+    },
+    "success_index": {},
+    "recursive_events": [
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 02:54:07.903205"
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 02:57:51.055880"
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 02:58:59.103465"
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 03:07:23.524065"
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 20:21:48.073520"
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 22:31:54.153995"
+        }
+    ],
+    "abstraction_memory": [
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "abstraction": {
+                "original_type": "color_transformation",
+                "semantic_concept": "symbolic_surface_remapping",
+                "confidence": 0.95,
+                "category": "symbolic"
+            },
+            "timestamp": "2026-05-19 02:54:07.903205"
+        },
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "abstraction": {
+                "original_type": "object_preservation",
+                "semantic_concept": "structural_identity_preservation",
+                "confidence": 0.9,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 02:54:07.903205"
+        },
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "abstraction": {
+                "original_type": "recursive_symmetry_preservation",
+                "semantic_concept": "spatial_balance_preservation",
+                "confidence": 0.88,
+                "category": "spatial"
+            },
+            "timestamp": "2026-05-19 02:54:07.903205"
+        },
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "abstraction": {
+                "original_type": "density_conservation",
+                "semantic_concept": "structural_mass_conservation",
+                "confidence": 0.85,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 02:54:07.903205"
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "abstraction": {
+                "original_type": "recursive_color_transformation",
+                "semantic_concept": "symbolic_surface_remapping",
+                "confidence": 0.95,
+                "category": "symbolic"
+            },
+            "timestamp": "2026-05-19 02:57:51.055880"
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "abstraction": {
+                "original_type": "object_preservation",
+                "semantic_concept": "structural_identity_preservation",
+                "confidence": 0.9,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 02:57:51.055880"
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "abstraction": {
+                "original_type": "symmetry_preservation",
+                "semantic_concept": "spatial_balance_preservation",
+                "confidence": 0.88,
+                "category": "spatial"
+            },
+            "timestamp": "2026-05-19 02:57:51.055880"
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "abstraction": {
+                "original_type": "density_conservation",
+                "semantic_concept": "structural_mass_conservation",
+                "confidence": 0.85,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 02:57:51.055880"
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "abstraction": {
+                "original_type": "color_transformation",
+                "semantic_concept": "symbolic_surface_remapping",
+                "confidence": 0.95,
+                "category": "symbolic"
+            },
+            "timestamp": "2026-05-19 02:58:59.103465"
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "abstraction": {
+                "original_type": "object_preservation",
+                "semantic_concept": "structural_identity_preservation",
+                "confidence": 0.9,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 02:58:59.103465"
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "abstraction": {
+                "original_type": "adaptive_symmetry_preservation",
+                "semantic_concept": "spatial_balance_preservation",
+                "confidence": 0.88,
+                "category": "spatial"
+            },
+            "timestamp": "2026-05-19 02:58:59.103465"
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "abstraction": {
+                "original_type": "density_conservation",
+                "semantic_concept": "structural_mass_conservation",
+                "confidence": 0.85,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 02:58:59.103465"
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "abstraction": {
+                "original_type": "color_transformation",
+                "semantic_concept": "symbolic_surface_remapping",
+                "confidence": 0.95,
+                "category": "symbolic"
+            },
+            "timestamp": "2026-05-19 03:07:23.524065"
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "abstraction": {
+                "original_type": "contextual_object_preservation",
+                "semantic_concept": "structural_identity_preservation",
+                "confidence": 0.9,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 03:07:23.524065"
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "abstraction": {
+                "original_type": "contextual_symmetry_preservation",
+                "semantic_concept": "spatial_balance_preservation",
+                "confidence": 0.88,
+                "category": "spatial"
+            },
+            "timestamp": "2026-05-19 03:07:23.524065"
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "abstraction": {
+                "original_type": "density_conservation",
+                "semantic_concept": "structural_mass_conservation",
+                "confidence": 0.85,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 03:07:23.524065"
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "abstraction": {
+                "original_type": "dynamic_color_transformation",
+                "semantic_concept": "symbolic_surface_remapping",
+                "confidence": 1.0,
+                "category": "symbolic"
+            },
+            "timestamp": "2026-05-19 20:21:48.073520"
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "abstraction": {
+                "original_type": "object_preservation",
+                "semantic_concept": "structural_identity_preservation",
+                "confidence": 0.95,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 20:21:48.073520"
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "abstraction": {
+                "original_type": "symmetry_preservation",
+                "semantic_concept": "spatial_balance_preservation",
+                "confidence": 0.93,
+                "category": "spatial"
+            },
+            "timestamp": "2026-05-19 20:21:48.073520"
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "abstraction": {
+                "original_type": "density_conservation",
+                "semantic_concept": "structural_mass_conservation",
+                "confidence": 0.9,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 20:21:48.073520"
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "abstraction": {
+                "original_type": "color_transformation",
+                "semantic_concept": "symbolic_surface_remapping",
+                "confidence": 0.95,
+                "category": "symbolic"
+            },
+            "timestamp": "2026-05-19 22:31:54.153995"
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "abstraction": {
+                "original_type": "object_preservation",
+                "semantic_concept": "structural_identity_preservation",
+                "confidence": 0.9,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 22:31:54.153995"
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "abstraction": {
+                "original_type": "contextual_symmetry_preservation",
+                "semantic_concept": "spatial_balance_preservation",
+                "confidence": 0.88,
+                "category": "spatial"
+            },
+            "timestamp": "2026-05-19 22:31:54.153995"
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "abstraction": {
+                "original_type": "density_conservation",
+                "semantic_concept": "structural_mass_conservation",
+                "confidence": 0.85,
+                "category": "structural"
+            },
+            "timestamp": "2026-05-19 22:31:54.153995"
+        }
+    ],
+    "experience_snapshots": [
+        {
+            "episode_id": "aec94cf0-a100-4930-991c-8cf0568ed0d9",
+            "task": "data/training/task_001.json",
+            "strategy_count": 1,
+            "abstraction_count": 4,
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 02:54:07.903205"
+        },
+        {
+            "episode_id": "8c29189c-7d72-4d8c-9476-bb61245b81f4",
+            "task": "data/training/task_001.json",
+            "strategy_count": 1,
+            "abstraction_count": 4,
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 02:57:51.055880"
+        },
+        {
+            "episode_id": "8eac685f-ba4d-448a-8346-c253c5fed66d",
+            "task": "data/training/task_001.json",
+            "strategy_count": 1,
+            "abstraction_count": 4,
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 02:58:59.103465"
+        },
+        {
+            "episode_id": "a579fb93-f04e-4f7e-9f1a-a62bf1c359c9",
+            "task": "data/training/task_001.json",
+            "strategy_count": 1,
+            "abstraction_count": 4,
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 03:07:23.524065"
+        },
+        {
+            "episode_id": "96b52f17-0f56-451a-b92d-23b122b32b92",
+            "task": "data/training/task_001.json",
+            "strategy_count": 1,
+            "abstraction_count": 4,
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 20:21:48.073520"
+        },
+        {
+            "episode_id": "653c751f-5fa3-416c-8a8a-c912267cc838",
+            "task": "data/training/task_001.json",
+            "strategy_count": 1,
+            "abstraction_count": 4,
+            "recursive_depth": 17,
+            "timestamp": "2026-05-19 22:31:54.153995"
+        }
+    ]
+}

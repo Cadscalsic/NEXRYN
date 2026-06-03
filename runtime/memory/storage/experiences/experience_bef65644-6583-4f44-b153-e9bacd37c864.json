@@ -1,0 +1,136 @@
+{
+    "experience_id": "bef65644-6583-4f44-b153-e9bacd37c864",
+    "winner_hypothesis": {
+        "type": "color_transformation",
+        "category": "symbolic",
+        "description": "Detected symbolic color substitution",
+        "confidence": 0.95,
+        "metadata": {
+            "added_colors": [
+                3
+            ],
+            "removed_colors": [
+                1
+            ]
+        },
+        "adaptive_boost": 0.0,
+        "mutation_applied": false
+    },
+    "evaluation_result": {
+        "accuracy": 1.0,
+        "difference_count": 0,
+        "color_similarity": 1.0,
+        "structural_score": 1.0,
+        "final_score": 1.0,
+        "confidence": "very_high",
+        "success": true
+    },
+    "best_evolved_strategy": {
+        "strategy_name": "adaptive_color_transformation",
+        "evolution_score": 0.0,
+        "success_count": 0,
+        "failure_count": 0,
+        "mutations": 1,
+        "lineage_depth": 1
+    },
+    "semantic_summary": {
+        "winner_hypothesis": {
+            "type": "color_transformation",
+            "category": "symbolic",
+            "description": "Detected symbolic color substitution",
+            "confidence": 0.95,
+            "metadata": {
+                "added_colors": [
+                    3
+                ],
+                "removed_colors": [
+                    1
+                ]
+            },
+            "adaptive_boost": 0.0,
+            "mutation_applied": false
+        },
+        "evaluation_result": {
+            "accuracy": 1.0,
+            "difference_count": 0,
+            "color_similarity": 1.0,
+            "structural_score": 1.0,
+            "final_score": 1.0,
+            "confidence": "very_high",
+            "success": true
+        },
+        "best_evolved_strategy": {
+            "strategy_name": "adaptive_color_transformation",
+            "evolution_score": 0.0,
+            "success_count": 0,
+            "failure_count": 0,
+            "mutations": 1,
+            "lineage_depth": 1
+        },
+        "cognitive_pressure": 0.72,
+        "execution_state": "completed",
+        "timestamp": "2026-05-21 01:59:53.241097"
+    },
+    "semantic_graph": {
+        "concept_nodes": [
+            {
+                "concept": "symbolic_surface_remapping",
+                "confidence": 0.95
+            },
+            {
+                "concept": "structural_identity_preservation",
+                "confidence": 0.9
+            },
+            {
+                "concept": "spatial_balance_preservation",
+                "confidence": 0.88
+            },
+            {
+                "concept": "structural_mass_conservation",
+                "confidence": 0.85
+            }
+        ],
+        "concept_count": 4
+    },
+    "execution_plan": {
+        "plan_id": "c62a9f87-08d5-4b81-9edc-efaf4089e65a",
+        "node_count": 1,
+        "nodes": [
+            {
+                "node_id": "e863b4c0-2025-4eba-8fd0-9f542b34ac56",
+                "execution_index": 0,
+                "operation": "replace_color",
+                "parameters": {
+                    "source": [
+                        1
+                    ],
+                    "target": [
+                        3
+                    ]
+                },
+                "dependencies": [],
+                "priority": 1.0,
+                "semantic_weight": 0.5,
+                "recursive_depth": 0,
+                "status": "pending",
+                "created_at": "2026-05-21 01:59:53.132465"
+            }
+        ],
+        "plan_state": "active",
+        "created_at": "2026-05-21 01:59:53.132465"
+    },
+    "reasoning_trace": [
+        "Detected symbolic color substitution",
+        "Detected object preservation",
+        "Detected symmetry preservation",
+        "Detected density conservation",
+        "Retrieved 0 similar experiences",
+        "Applied adaptive strategy injection",
+        "Applied adaptive search reinforcement",
+        "Applied exploration strategy",
+        "Applied strategy mutation",
+        "Built hierarchical cognition structure"
+    ],
+    "cognitive_pressure": 0.72,
+    "timestamp": "2026-05-21 01:59:53.242835"
+}

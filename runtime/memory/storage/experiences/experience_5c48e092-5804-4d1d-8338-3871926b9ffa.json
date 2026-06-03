@@ -1,0 +1,76 @@
+{
+    "experience_id": "5c48e092-5804-4d1d-8338-3871926b9ffa",
+    "winner_hypothesis": {
+        "type": "hybrid_object_preservation",
+        "category": "structural",
+        "description": "Object count preserved",
+        "confidence": 1.0,
+        "metadata": {
+            "input_count": 1,
+            "output_count": 1
+        },
+        "adaptive_boost": 0.0,
+        "exploration_applied": true,
+        "parent_strategy": "object_preservation",
+        "mutation_applied": true,
+        "mutation_source": "strategy_mutation_engine"
+    },
+    "evaluation_result": {
+        "accuracy": 0.88,
+        "difference_count": 3,
+        "color_similarity": 1.0,
+        "structural_score": 0.88,
+        "final_score": 0.904,
+        "confidence": "high",
+        "success": false
+    },
+    "best_evolved_strategy": {
+        "strategy_name": "adaptive_color_transformation",
+        "evolution_score": 0.0,
+        "success_count": 0,
+        "failure_count": 0,
+        "mutations": 2,
+        "lineage_depth": 2
+    },
+    "semantic_summary": null,
+    "semantic_graph": {
+        "concept_nodes": [
+            {
+                "concept": "structural_identity_preservation",
+                "confidence": 1.0
+            },
+            {
+                "concept": "spatial_balance_preservation",
+                "confidence": 1.0
+            }
+        ],
+        "concept_count": 2
+    },
+    "execution_plan": {
+        "plan_id": "e99111e3-1e71-44b8-8bef-729aaac59515",
+        "node_count": 0,
+        "nodes": [],
+        "plan_state": "active",
+        "created_at": "2026-05-22 23:35:48.331525"
+    },
+    "reasoning_trace": [
+        "Detected object preservation",
+        "Detected symmetry preservation",
+        "Retrieved 5 similar experiences",
+        "Applied adaptive strategy injection",
+        "Applied adaptive search reinforcement",
+        "Applied exploration strategy",
+        "Applied strategy mutation",
+        "Built hierarchical cognition structure",
+        "Performed recursive cognition analysis",
+        "Adapted cognitive control state",
+        "Selected goal: unknown",
+        "Constructed semantic abstraction graph",
+        "Performed analogical transfer analysis",
+        "Updated cognitive state manager",
+        "Cognitive search generated 3 paths",
+        "Generated dynamic cognitive routing plan"
+    ],
+    "cognitive_pressure": 0.64,
+    "timestamp": "2026-05-22 23:35:48.485367"
+}

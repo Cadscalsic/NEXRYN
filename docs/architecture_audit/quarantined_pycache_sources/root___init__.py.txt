@@ -1,0 +1,27 @@
+# ============================================
+# NEXRYN / AMIS BENCHMARKS PACKAGE
+# ============================================
+
+"""
+Benchmarks package for evaluating:
+
+- reasoning performance
+- planning quality
+- transformation accuracy
+- cognitive search efficiency
+- adaptive learning progression
+"""
+
+# ============================================
+# PACKAGE VERSION
+# ============================================
+
+__version__ = "0.1.0"
+
+# ============================================
+# PACKAGE NAME
+# ============================================
+
+PACKAGE_NAME = (
+    "NEXRYN-AMIS Benchmarks"
+)

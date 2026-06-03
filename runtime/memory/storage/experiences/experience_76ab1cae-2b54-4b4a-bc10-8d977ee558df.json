@@ -1,0 +1,79 @@
+{
+    "experience_id": "76ab1cae-2b54-4b4a-bc10-8d977ee558df",
+    "winner_hypothesis": {
+        "type": "symmetry_preservation",
+        "category": "spatial",
+        "description": "Spatial symmetry preserved",
+        "confidence": 1.0,
+        "metadata": {},
+        "adaptive_boost": 0.0,
+        "exploration_applied": true,
+        "mutation_applied": false
+    },
+    "evaluation_result": {
+        "accuracy": 0.92,
+        "difference_count": 2,
+        "color_similarity": 1.0,
+        "structural_score": 0.92,
+        "final_score": 0.936,
+        "confidence": "high",
+        "success": false
+    },
+    "best_evolved_strategy": {
+        "strategy_name": "adaptive_color_transformation",
+        "evolution_score": 0.0,
+        "success_count": 0,
+        "failure_count": 0,
+        "mutations": 2,
+        "lineage_depth": 1
+    },
+    "semantic_summary": null,
+    "semantic_graph": {
+        "concept_nodes": [
+            {
+                "concept": "spatial_balance_preservation",
+                "confidence": 1.0
+            }
+        ],
+        "concept_count": 1
+    },
+    "execution_plan": {
+        "plan_id": "4b3280f5-1ab6-4cbd-ae88-22a83a350b70",
+        "node_count": 1,
+        "nodes": [
+            {
+                "node_id": "e048d9c7-58a6-4c0e-b3d4-aebc63a0325c",
+                "execution_index": 0,
+                "operation": "preserve_symmetry",
+                "parameters": {},
+                "dependencies": [],
+                "priority": 1.0,
+                "semantic_weight": 0.5,
+                "recursive_depth": 0,
+                "status": "pending",
+                "created_at": "2026-05-22 23:09:13.556348"
+            }
+        ],
+        "plan_state": "active",
+        "created_at": "2026-05-22 23:09:13.556348"
+    },
+    "reasoning_trace": [
+        "Detected symmetry preservation",
+        "Retrieved 4 similar experiences",
+        "Applied adaptive strategy injection",
+        "Applied adaptive search reinforcement",
+        "Applied exploration strategy",
+        "Applied strategy mutation",
+        "Built hierarchical cognition structure",
+        "Performed recursive cognition analysis",
+        "Adapted cognitive control state",
+        "Selected goal: unknown",
+        "Constructed semantic abstraction graph",
+        "Performed analogical transfer analysis",
+        "Updated cognitive state manager",
+        "Cognitive search generated 1 paths",
+        "Generated dynamic cognitive routing plan"
+    ],
+    "cognitive_pressure": 0.6,
+    "timestamp": "2026-05-22 23:09:13.698665"
+}

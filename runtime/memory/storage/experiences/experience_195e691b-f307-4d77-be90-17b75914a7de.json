@@ -1,0 +1,19 @@
+{
+    "experience_id": "195e691b-f307-4d77-be90-17b75914a7de",
+    "winner_hypothesis": null,
+    "evaluation_result": null,
+    "best_evolved_strategy": {},
+    "semantic_summary": {
+        "winner_hypothesis": null,
+        "evaluation_result": null,
+        "best_evolved_strategy": {},
+        "cognitive_pressure": null,
+        "execution_state": "completed",
+        "timestamp": "2026-05-21 00:23:43.366958"
+    },
+    "semantic_graph": null,
+    "execution_plan": null,
+    "reasoning_trace": null,
+    "cognitive_pressure": null,
+    "timestamp": "2026-05-21 00:23:43.371872"
+}

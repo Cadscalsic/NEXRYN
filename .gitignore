@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+runtime_data/
+outputs/
+error_log.txt

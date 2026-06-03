@@ -1,0 +1,52 @@
+{
+  "concept_fusion_engine_config": {
+    "fusion_mode": "multi_layer_identity_meta_concept_resolution",
+    "override_policies": [
+      "FORCE_STRICT_DECOUPLING_ON_CONCURRENT_UPDATES",
+      "AUTOMATE_CAUSAL_REHEARSAL_ON_LATENT_FALLBACK"
+    ],
+    "repair_plan": {
+      "status": "active",
+      "target_conflict_count": 118,
+      "repair_actions": {
+        "fusion_mode": "multi_layer_identity_meta_concept_resolution",
+        "override_policies": [
+          "FORCE_STRICT_DECOUPLING_ON_CONCURRENT_UPDATES",
+          "AUTOMATE_CAUSAL_REHEARSAL_ON_LATENT_FALLBACK"
+        ],
+        "merge_budget_allocation": {
+          "preservation_family": {
+            "max_attempts": 10,
+            "cooldown_period_ms": 1500
+          },
+          "structural_resolution": {
+            "max_attempts": 8,
+            "cooldown_period_ms": 1200
+          },
+          "causal_chain_repair": {
+            "max_attempts": 12,
+            "cooldown_period_ms": 2000
+          }
+        }
+      }
+    },
+    "identity_boundaries": {
+      "local_identity_strictness": 0.92,
+      "structural_identity_tolerance": 0.78,
+      "causal_identity_coherence_minimum": 0.65
+    },
+    "active_repair_directives": {
+      "enable_concurrent_decoupling": true,
+      "enable_causal_rehearsal_automation": true,
+      "enable_latent_fallback_recovery": true,
+      "force_memory_integrity_checks": true
+    },
+    "conflict_resolution_thresholds": {
+      "signature_conflict_threshold": 0.58,
+      "archetype_alignment_required": 0.72,
+      "structural_separation_trigger": 1.0
+    },
+    "timestamp_created": "2026-05-28T13:39:23Z",
+    "hotfix_applied": true
+  }
+}

@@ -1,0 +1,45 @@
+{
+    "memory_id": "36c1e580-340b-4a1b-b6ec-556a868b8a06",
+    "semantic_memory": {
+        "winner_hypothesis": {
+            "type": "adaptive_color_transformation",
+            "category": "symbolic",
+            "description": "Detected symbolic color substitution",
+            "confidence": 1.0,
+            "metadata": {
+                "added_colors": [
+                    3
+                ],
+                "removed_colors": [
+                    1
+                ]
+            },
+            "adaptive_boost": 0.0,
+            "exploration_applied": true,
+            "parent_strategy": "color_transformation",
+            "mutation_applied": true,
+            "mutation_source": "strategy_mutation_engine"
+        },
+        "evaluation_result": {
+            "accuracy": 1.0,
+            "difference_count": 0,
+            "color_similarity": 1.0,
+            "structural_score": 1.0,
+            "final_score": 1.0,
+            "confidence": "very_high",
+            "success": true
+        },
+        "best_evolved_strategy": {
+            "strategy_name": "adaptive_color_transformation",
+            "evolution_score": 0.0,
+            "success_count": 0,
+            "failure_count": 0,
+            "mutations": 1,
+            "lineage_depth": 1
+        },
+        "cognitive_pressure": 0.72,
+        "execution_state": "completed",
+        "timestamp": "2026-05-21 02:15:35.069716"
+    },
+    "timestamp": "2026-05-21 02:15:35.078714"
+}

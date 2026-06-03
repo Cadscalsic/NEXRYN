@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #07090d;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #07090d;
+}
+
+button {
+  font: inherit;
+}
+
+.runtime-shell {
+  background:
+    linear-gradient(115deg, rgba(53, 215, 255, 0.06), transparent 28%),
+    linear-gradient(245deg, rgba(139, 92, 246, 0.055), transparent 32%),
+    linear-gradient(180deg, #07090d 0%, #0c1017 48%, #07090d 100%);
+}
+
+.semantic-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, transparent, black 12%, black 86%, transparent);
+}
+
+.dna-helix {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(53, 215, 255, 0.9) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.9) 0 3px, transparent 4px),
+    radial-gradient(circle at 20% 35%, rgba(53, 215, 255, 0.9) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 48%, rgba(139, 92, 246, 0.9) 0 3px, transparent 4px),
+    radial-gradient(circle at 20% 64%, rgba(53, 215, 255, 0.9) 0 3px, transparent 4px),
+    radial-gradient(circle at 80% 78%, rgba(139, 92, 246, 0.9) 0 3px, transparent 4px),
+    linear-gradient(110deg, transparent 0 42%, rgba(53, 215, 255, 0.4) 43% 45%, transparent 46%),
+    linear-gradient(70deg, transparent 0 42%, rgba(139, 92, 246, 0.36) 43% 45%, transparent 46%);
+  border-radius: 999px;
+}
