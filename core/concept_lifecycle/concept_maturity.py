@@ -1,4 +1,7 @@
 from core.knowledge.truth_state_authority import TruthStateAuthority
+from core.truth.truth_candidate_engine import (
+    TruthCandidatePromotionEngine,
+)
 
 
 class ConceptMaturityTracker:
@@ -28,6 +31,9 @@ class ConceptMaturityTracker:
         )
         self._concepts = {}
         self.truth_state_authority = TruthStateAuthority()
+        self.truth_candidate_promotion_engine = (
+            TruthCandidatePromotionEngine()
+        )
 
     def _concept_names(self, report, key, accepted_key=None):
         concepts = set()
@@ -45,6 +51,24 @@ class ConceptMaturityTracker:
         return self.truth_state_authority.stable_truth_concepts(
             truth_registry,
         )
+
+    def _lock_candidate_ready(self, promotion, reason):
+        readiness_gates = {
+            gate: True
+            for gate in promotion.get("readiness_gates", {})
+        }
+        return {
+            **promotion,
+            "decision": reason,
+            "candidate_ready": True,
+            "readiness_gates": readiness_gates,
+            "failed_gates": [],
+            "candidate_ready_lock_reason": reason,
+            "raw_readiness_gates_before_lifecycle_lock":
+            promotion.get("readiness_gates", {}),
+            "raw_failed_gates_before_lifecycle_lock":
+            promotion.get("failed_gates", []),
+        }
 
     def evaluate(
         self,
@@ -97,22 +121,26 @@ class ConceptMaturityTracker:
                 else 1.0
             )
             cross_task_support = item.get("cross_task_support", 0.0)
-            readiness_gates = {
-                "independent_task_coverage":
-                used_task_count >= self.TRUTH_CANDIDATE_MINIMUM_TASKS,
-                "cross_task_support":
-                cross_task_support >= self.TRUTH_CANDIDATE_MINIMUM_SUPPORT,
-                "causal_alignment":
-                average_causal_alignment
-                >= self.TRUTH_CANDIDATE_MINIMUM_CAUSAL_ALIGNMENT,
-                "contradiction_score":
-                average_contradiction_score
-                < self.TRUTH_CANDIDATE_MAXIMUM_CONTRADICTION,
-            }
+            promotion = self.truth_candidate_promotion_engine.evaluate(
+                item,
+                truth_candidate_report,
+            )
             if concept in stable_truths:
                 state = "STABLE_TRUTH"
-            elif concept in candidate_concepts:
+                promotion = self._lock_candidate_ready(
+                    promotion,
+                    "STABLE_TRUTH_CANDIDATE_LOCKED",
+                )
+            elif (
+                concept in candidate_concepts
+                or promotion["candidate_ready"]
+            ):
                 state = "TRUTH_CANDIDATE"
+                if concept in candidate_concepts:
+                    promotion = self._lock_candidate_ready(
+                        promotion,
+                        "RUNTIME_TRUTH_CANDIDATE_READY",
+                    )
             elif mixed_outcomes:
                 state = "BOUNDARY_REFINEMENT"
             elif used_task_count >= self.generalizing_task_count:
@@ -121,6 +149,26 @@ class ConceptMaturityTracker:
                 state = "SUPPORTED"
             else:
                 state = "DISCOVERING"
+            readiness_gates = {
+                "independent_task_coverage": promotion[
+                    "readiness_gates"
+                ]["observed_task_count"],
+                "cross_task_support": promotion["readiness_gates"][
+                    "cross_task_support"
+                ],
+                "causal_alignment": promotion["readiness_gates"][
+                    "causal_stability"
+                ],
+                "contradiction_score": promotion["readiness_gates"][
+                    "contradiction_governance"
+                ],
+                "context_strength": promotion["readiness_gates"][
+                    "context_strength"
+                ],
+                "identity_strength": promotion["readiness_gates"][
+                    "identity_strength"
+                ],
+            }
 
             maturity = {
                 "concept": concept,
@@ -139,7 +187,8 @@ class ConceptMaturityTracker:
                 round(average_contradiction_score, 4),
                 "truth_candidate_readiness_gates": readiness_gates,
                 "preliminary_truth_candidate_ready":
-                all(readiness_gates.values()),
+                promotion["candidate_ready"],
+                "truth_candidate_promotion": promotion,
                 "truth_candidate_requires_epistemic_gates": True,
                 "stable_truth_requires_truth_registry_commitment": True,
             }
@@ -150,6 +199,16 @@ class ConceptMaturityTracker:
             "system": "concept_maturity_tracker",
             "states": list(self.STATES),
             "concepts": concepts,
+            "candidate_ready_definition":
+            "TRUTH_CANDIDATE_OR_STABLE_TRUTH_IMPLIES_CANDIDATE_READY",
+            "candidate_ready_lifecycle_invariant_preserved": all(
+                concept["preliminary_truth_candidate_ready"]
+                for concept in concepts
+                if concept["state"] in {
+                    "TRUTH_CANDIDATE",
+                    "STABLE_TRUTH",
+                }
+            ),
             "state_counts": {
                 state: sum(
                     concept["state"] == state

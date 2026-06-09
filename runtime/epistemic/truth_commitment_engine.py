@@ -177,6 +177,44 @@ class TruthCommitmentEngine(TruthCommitEngine):
                 "counterevidence_can_revoke_truth": True,
                 "knowledge_generalization_state":
                 generalization.get("generalization_state"),
+                "causal_graph_alignment":
+                context.get("causal_graph_alignment", {}),
+                "causal_graph_validation":
+                context.get("causal_graph_validation", {}),
+                "causal_explanation":
+                context.get("causal_explanation", {}),
+                "causal_validation":
+                context.get("causal_validation", {}),
+                "contextual_truth":
+                context.get("contextual_truth", {}),
+                "context_hierarchy":
+                context.get("context_hierarchy", {}),
+                "semantic_context":
+                context.get("semantic_context", {}),
+                "stable_truth_semantic_context":
+                context.get("semantic_context", {}).get(
+                    "semantic_profile",
+                    {},
+                ),
+                "stable_truth_why_chain":
+                context.get("causal_explanation", {}).get("why", []),
+                "stable_truth_how_we_know":
+                context.get("causal_validation", {}).get(
+                    "how_we_know",
+                    [],
+                ),
+                "stable_truth_when_valid":
+                context.get("contextual_truth", {}).get("when_valid", []),
+                "stable_truth_when_invalid":
+                context.get("contextual_truth", {}).get(
+                    "when_invalid",
+                    [],
+                ),
+                "stable_truth_context_inheritance":
+                context.get("context_hierarchy", {}).get(
+                    "inheritance",
+                    [],
+                ),
             },
             decision=commit.decision,
             reasons=commit.reasons,

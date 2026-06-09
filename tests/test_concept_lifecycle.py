@@ -34,6 +34,32 @@ def maturity_concept(concept, count, successes=None):
     }
 
 
+def reasoning_maturity_concept():
+    return {
+        "concept": "symmetry_reasoning",
+        "used_task_count": 31,
+        "used_task_ids": [
+            f"data/training/task_{index:03d}.json"
+            for index in range(1, 32)
+        ],
+        "independent_success_rate": 0.91,
+        "cross_task_support": 0.91,
+        "records": [
+            {
+                "success": True,
+                "contradiction_score": 0.1159,
+                "causal_alignment": 0.8164,
+            }
+            for _ in range(30)
+        ] + [{
+            "success": False,
+            "contradiction_score": 0.1159,
+            "causal_alignment": 0.8164,
+        }],
+        "identity_strength": 0.75,
+    }
+
+
 def test_concept_maturity_tracks_discovery_support_and_generalization():
     report = ConceptMaturityTracker().evaluate({
         "concepts": [
@@ -69,6 +95,177 @@ def test_concept_maturity_requires_boundary_refinement_for_mixed_outcomes():
     assert report["concepts"][0]["state"] == "BOUNDARY_REFINEMENT"
 
 
+def test_concept_maturity_promotes_reasoning_truth_candidate_with_soft_review():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                reasoning_maturity_concept(),
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "symmetry_reasoning",
+                "effective_contradiction_score": 0.1159,
+                "causal_validation": {
+                    "validation_score": 0.8004,
+                },
+                "causal_graph_alignment": {
+                    "alignment_score": 0.8164,
+                },
+                "contextual_truth": {
+                    "effective_contextual_truth": 0.6907,
+                },
+                "contextual_truth_authority": {
+                    "effective_contextual_truth": 0.6907,
+                    "contextual_truth_supported": True,
+                },
+                "identity_safe_truth_integration": {
+                    "identity_continuity": 0.75,
+                },
+            }],
+        },
+    )
+
+    concept = report["concepts"][0]
+    promotion = concept["truth_candidate_promotion"]
+
+    assert concept["state"] == "TRUTH_CANDIDATE"
+    assert concept["mixed_outcomes_detected"] is True
+    assert concept["preliminary_truth_candidate_ready"] is True
+    assert promotion["decision"] == "PROMOTE_TO_TRUTH_CANDIDATE"
+    assert promotion["contradiction_governance"][
+        "soft_review_acceptable_for_candidate_promotion"
+    ] is True
+    assert promotion["failed_gates"] == []
+
+
+def test_concept_maturity_uses_complete_dependency_chain_for_process_candidate():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept(
+                        "growth",
+                        8,
+                        [True, True, True, True, True, True, True, False],
+                    ),
+                    "cross_task_support": 0.84,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.58,
+                        }
+                        for _ in range(7)
+                    ] + [{
+                        "success": False,
+                        "contradiction_score": 0.05,
+                        "causal_alignment": 0.58,
+                    }],
+                    "context_strength": 0.72,
+                    "identity_strength": 0.75,
+                },
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "growth",
+                "causal_validation": {
+                    "validation_score": 0.58,
+                    "promotion_dependency_score": 0.91,
+                    "promotion_dependency_bonus": 0.0275,
+                    "dependency_promotion_evidence": {
+                        "dependency_confidence": 0.9017,
+                        "dependency_chain_depth": 5,
+                        "dependency_chain_coverage": 0.8556,
+                        "missing_dependencies": [],
+                    },
+                },
+                "contextual_truth_authority": {
+                    "effective_contextual_truth": 0.72,
+                    "contextual_truth_supported": True,
+                },
+                "identity_safe_truth_integration": {
+                    "identity_continuity": 0.75,
+                },
+            }],
+        },
+    )
+
+    concept = report["concepts"][0]
+    promotion = concept["truth_candidate_promotion"]
+
+    assert concept["state"] == "TRUTH_CANDIDATE"
+    assert concept["preliminary_truth_candidate_ready"] is True
+    assert promotion["promotion_dependency_score"] >= 0.90
+    assert promotion["promotion_dependency_bonus"] > 0.0
+    assert promotion["readiness_gates"]["causal_stability"] is True
+    assert promotion["dependency_promotion_blockers"] == []
+
+
+def test_concept_maturity_reports_blockers_after_complete_dependency_chain():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept(
+                        "propagation",
+                        8,
+                        [True, True, True, True, True, True, True, False],
+                    ),
+                    "cross_task_support": 0.84,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.58,
+                        }
+                        for _ in range(7)
+                    ] + [{
+                        "success": False,
+                        "contradiction_score": 0.05,
+                        "causal_alignment": 0.58,
+                    }],
+                    "context_strength": 0.41,
+                    "identity_strength": 0.75,
+                },
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "propagation",
+                "causal_validation": {
+                    "promotion_dependency_score": 0.87,
+                    "dependency_promotion_evidence": {
+                        "dependency_confidence": 0.87,
+                        "dependency_chain_depth": 4,
+                        "dependency_chain_coverage": 0.86,
+                        "missing_dependencies": [],
+                    },
+                },
+                "contextual_truth_authority": {
+                    "effective_contextual_truth": 0.41,
+                },
+                "identity_safe_truth_integration": {
+                    "identity_continuity": 0.75,
+                },
+            }],
+        },
+    )
+
+    concept = report["concepts"][0]
+    promotion = concept["truth_candidate_promotion"]
+
+    assert concept["state"] == "BOUNDARY_REFINEMENT"
+    assert concept["preliminary_truth_candidate_ready"] is False
+    assert promotion["readiness_gates"]["causal_stability"] is True
+    assert promotion["readiness_gates"]["context_strength"] is False
+    assert (
+        "promotion_gate_blocked:context_strength"
+        in promotion["dependency_promotion_blockers"]
+    )
+
+
 def test_concept_maturity_uses_truth_gates_for_candidate_and_stable_truth():
     report = ConceptMaturityTracker().evaluate(
         {
@@ -96,6 +293,21 @@ def test_concept_maturity_uses_truth_gates_for_candidate_and_stable_truth():
 
     assert states["growth"] == "TRUTH_CANDIDATE"
     assert states["propagation"] == "STABLE_TRUTH"
+    assert (
+        report["candidate_ready_lifecycle_invariant_preserved"]
+        is True
+    )
+    propagation = next(
+        item
+        for item in report["concepts"]
+        if item["concept"] == "propagation"
+    )
+    assert propagation["preliminary_truth_candidate_ready"] is True
+    assert propagation["truth_candidate_promotion"]["candidate_ready"] is True
+    assert propagation["truth_candidate_promotion"][
+        "candidate_ready_lock_reason"
+    ] == "STABLE_TRUTH_CANDIDATE_LOCKED"
+    assert propagation["truth_candidate_promotion"]["failed_gates"] == []
 
 
 def test_concept_maturity_does_not_treat_revoked_truth_as_stable():

@@ -1,200 +1,130 @@
-from core.belief_engine import EpistemicCognitionLayer
-from core.causality.causal_alignment_engine import CausalAlignmentEngine
-from core.identity.core_truth_registry import (
-    CORE_TRUTHS,
-    LOCKED,
-    CoreTruthRegistry,
-)
+from core.causal import CausalAlignmentEngine, CausalGraph, CausalValidator
 
 
-class SpineRegistry:
-    def __init__(self, truths=None):
-        self.truths = list(truths or [])
+def test_causal_alignment_scoring_and_contextual_action():
+    engine = CausalAlignmentEngine()
 
-    def active_truths(self):
-        return list(self.truths)
-
-
-def strong_evidence(concept, source):
-    return {
-        "concept": concept,
-        "source": source,
-        "support_score": 1.0,
-        "contradiction_score": 0.0,
-        "reliability": 1.0,
-        "semantic_consistency": 1.0,
-        "causal_alignment": 1.0,
-    }
-
-
-def truth_context(concept, **extra):
-    return {
-        "epistemic_hypotheses": [{
-            "concept": concept,
-            "prior_confidence": 0.98,
-            "semantic_consistency": 1.0,
-            "causal_alignment": 1.0,
-        }],
-        "epistemic_evidence": [
-            strong_evidence(concept, source)
-            for source in [
-                "causal_observation",
-                "semantic_anchor_graph",
-                "mutation_rehearsal",
-            ]
-        ],
-        **extra,
-    }
-
-
-def test_causal_alignment_engine_allows_semantic_spine_bootstrap():
-    report = CausalAlignmentEngine().evaluate(
-        "topology_preservation",
-        0.94,
-        SpineRegistry(),
-    )
-
-    assert report["alignment_state"] == "CAUSAL_SPINE_BOOTSTRAP"
-    assert report["alignment_ready"] is True
-
-
-def test_causal_alignment_engine_uses_explicit_spine_relation():
-    report = CausalAlignmentEngine().evaluate(
-        "density_preservation",
-        0.96,
-        SpineRegistry([{
-            "truth_id": "truth:topology",
-            "concept": "topology_preservation",
-            "causal_alignment": 0.95,
-        }]),
-        {
-            "causal_spine_alignments": {
-                "density_preservation": {
-                    "topology_preservation": 0.52,
-                },
-            },
-        },
-    )
-
-    assert report["alignment_score"] == 0.52
-    assert report["alignment_ready"] is False
-    assert report["blocked_by_spine_truths"] == [
-        "topology_preservation",
-    ]
-
-
-def test_truth_commit_requires_alignment_with_active_semantic_spine():
-    layer = EpistemicCognitionLayer()
-    topology = truth_context("topology_preservation")
-    layer.run_cycle(topology)
-    layer.run_cycle(topology)
-
-    density = truth_context(
-        "density_preservation",
-        causal_spine_alignments={
-            "density_preservation": {
-                "topology_preservation": 0.52,
-            },
-        },
-    )
-    layer.run_cycle(density)
-    report = layer.run_cycle(density)
-    evaluation = report["evaluations"][0]
-
-    assert evaluation["causal_spine_alignment"]["alignment_ready"] is False
-    assert evaluation["truth_commit"]["decision"] == "REMAIN_BELIEF"
-    assert "causal_spine_alignment" in evaluation["truth_commit"]["reasons"]
-    assert report["causal_alignment_engine"]["blocked_concepts"] == [
-        "density_preservation",
-    ]
-    assert [
-        truth["concept"]
-        for truth in report["reusable_truth_commitments"]
-    ] == ["topology_preservation"]
-
-
-def test_core_truth_registry_defines_locked_identity_truths():
-    registry = CoreTruthRegistry()
-
-    assert CORE_TRUTHS == {
-        "density_preservation": LOCKED,
-        "symmetry_preservation": LOCKED,
-    }
-    assert registry.is_locked("color_preservation") is False
-    assert registry.is_locked("topology_preservation") is False
-
-
-def test_causal_alignment_ignores_color_preservation_when_not_locked():
-    report = CausalAlignmentEngine().evaluate(
-        "topology_preservation",
-        0.96,
-        SpineRegistry([
-            {
-                "truth_id": "truth:color",
-                "concept": "color_preservation",
-                "causal_alignment": 0.95,
-            },
-            {
-                "truth_id": "truth:shape",
-                "concept": "shape_preservation",
-                "causal_alignment": 0.95,
-            },
-        ]),
-        {
-            "causal_spine_alignments": {
-                "topology_preservation": {
-                    "color_preservation": 0.54,
-                    "shape_preservation": 0.92,
-                },
-            },
-        },
-    )
-
-    assert report["locked_core_truths"] == []
-    assert report["compatible_with_core_truths"] is True
-    assert report["blocked_by_spine_truths"] == ["color_preservation"]
-    assert report["blocked_by_core_truths"] == []
-
-
-def test_historical_spine_score_does_not_create_false_pairwise_conflict():
-    report = CausalAlignmentEngine().evaluate(
-        "density_preservation",
-        0.96,
-        SpineRegistry([{
-            "truth_id": "truth:color",
-            "concept": "color_preservation",
-            "causal_alignment": 0.42,
-        }]),
-    )
-
-    comparison = report["comparisons"][0]
-    assert comparison["alignment_score"] == 0.96
-    assert comparison["spine_truth_local_causal_alignment"] == 0.42
-    assert comparison["alignment_source"] == (
-        "candidate_local_alignment_proxy"
-    )
-    assert comparison["core_compatibility_state"] == (
-        "NOT_REQUIRED"
-    )
-    assert report["alignment_ready"] is True
-    assert report["compatible_with_core_truths"] is True
-    assert report["pairwise_attestation_pending"] == [
+    report = engine.evaluate(
         "color_preservation",
-    ]
-
-
-def test_missing_pairwise_attestation_is_not_core_incompatibility():
-    report = CausalAlignmentEngine().evaluate(
-        "topology_preservation",
-        0.62,
-        SpineRegistry([{
-            "truth_id": "truth:color",
-            "concept": "color_preservation",
-            "causal_alignment": 0.95,
-        }]),
+        concept_metrics={"confidence": 0.95},
+        context_report={"color_behavior": "unchanged"},
+        semantic_context_report={
+            "semantic_context_score": 0.5,
+            "identity_compatibility": 1.0,
+        },
+        truth_candidate_report={"support_score": 0.95},
+        contradiction_score=0.0,
     )
 
-    assert report["alignment_ready"] is False
-    assert report["blocked_by_spine_truths"] == ["color_preservation"]
-    assert report["compatible_with_core_truths"] is True
-    assert report["blocked_by_core_truths"] == []
+    assert report["causal_alignment_supported"] is True
+    assert report["causal_graph_alignment"] >= 0.8
+    assert report["causal_validation_score"] >= 0.8
+    assert report["dependency_coherence"] == 1.0
+    assert report["recommended_action"] == "REQUIRE_CONTEXTUAL_TRUTH"
+    assert report["when_valid"] == ["color_behavior is unchanged"]
+
+
+def test_blocked_truth_when_causal_path_is_incomplete():
+    graph = CausalGraph()
+    graph.ensure_concept("shape_preservation", confidence=0.9)
+    validator = CausalValidator()
+
+    report = validator.validate(
+        "shape_preservation",
+        graph,
+        dependencies=[{
+            "concept": "shape_preservation",
+            "context_key": "transformation_family",
+            "context_value": "shape_transform",
+            "supported": False,
+            "requires_review": True,
+            "relation": "context_requires",
+            "confidence": 1.0,
+        }],
+        contradiction_score=0.0,
+        semantic_context_report={"identity_compatibility": 1.0},
+        counterfactual_report={"counterfactual_robustness": 0.5},
+    )
+
+    assert report["causal_path_complete"] is False
+    assert report["status"] == "BLOCKED"
+    assert report["failed_dependencies"]
+
+
+def test_context_dependent_truth_blocks_color_reassignment():
+    engine = CausalAlignmentEngine()
+
+    report = engine.evaluate(
+        "color_preservation",
+        concept_metrics={"confidence": 0.95},
+        context_report={"color_behavior": "color_reassigned"},
+        semantic_context_report={
+            "semantic_context_score": 0.5,
+            "identity_compatibility": 1.0,
+        },
+        truth_candidate_report={"support_score": 0.95},
+        contradiction_score=0.0,
+    )
+
+    assert report["status"] == "BLOCKED"
+    assert report["causal_alignment_supported"] is False
+    assert report["recommended_action"] == "BLOCK_TRUTH_COMMIT"
+    assert "color_behavior requires review under color_reassigned" in (
+        report["when_invalid"]
+    )
+
+
+def test_phase_five_alignment_report_reaches_success_thresholds():
+    engine = CausalAlignmentEngine()
+
+    report = engine.evaluate(
+        "shape_preservation",
+        concept_metrics={"confidence": 0.98},
+        context_report={
+            "transformation_family": "duplication",
+            "identity_behavior": "identity_preserved",
+        },
+        semantic_context_report={"semantic_context_score": 1.0},
+        truth_candidate_report={"support_score": 0.98},
+        contradiction_report={"contradiction_score": 0.0},
+        world_model_report={
+            "causal_stability": 0.95,
+            "contradiction_risk": 0.0,
+            "context_transfer_reliability": 0.95,
+        },
+        identity_governance_report={
+            "identity_governance": True,
+            "identity_continuity": 0.95,
+            "semantic_integrity": True,
+            "ontology_integrity": True,
+        },
+    )
+
+    assert report["dependency_coherence"] > 0.8
+    assert report["causal_graph_alignment"] > 0.85
+    assert report["causal_validation_score"] > 0.85
+    assert report["counterfactual_report"]["causal_resilience"] > 0.8
+    assert report["contextual_truth_report"][
+        "context_transfer_reliability"
+    ] > 0.85
+    assert "DEPENDENCY REPORT" in report["runtime_report"]["reports"]
+
+
+def test_alignment_blocks_identity_continuity_failure():
+    engine = CausalAlignmentEngine()
+
+    report = engine.evaluate(
+        "identity_preservation",
+        concept_metrics={"confidence": 0.95},
+        context_report={"identity_behavior": "identity_preserved"},
+        semantic_context_report={"semantic_context_score": 1.0},
+        truth_candidate_report={"support_score": 0.95},
+        identity_governance_report={
+            "identity_governance": False,
+            "identity_continuity": 0.2,
+        },
+    )
+
+    assert report["status"] == "BLOCKED"
+    assert report["recommended_action"] == "BLOCK_TRUTH_COMMIT"
+    assert report["identity_continuity_report"]["identity_continuity"] == 0.2

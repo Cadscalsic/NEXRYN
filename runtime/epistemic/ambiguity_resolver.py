@@ -2,7 +2,9 @@ from runtime.ambiguity_resolution_engine import AmbiguityResolutionEngine
 
 
 class AmbiguityResolver(AmbiguityResolutionEngine):
-    pass
+    """Backward-compatible alias for ambiguity resolution."""
+
+    compatibility_alias = True
 
 
 __all__ = [

@@ -1,3 +1,5 @@
+import json
+
 from core.confidence_calibration import ConfidenceCalibrator
 from core.learning.curriculum_manager import LearningCurriculumManager
 from core.learning.evidence_integration_engine import (
@@ -67,7 +69,17 @@ from core.causality.causal_evidence_accumulator import (
     CausalEvidenceAccumulator,
 )
 from core.causality.causal_graph_validator import CausalGraphValidator
+from core.causal_graph import CausalGraph
+from core.causal_validation import CausalValidationEngine
+from core.context_discovery import ContextDiscoveryEngine
+from core.context import ContextConsistencyEngine
+from core.contextual_truth import ContextualTruthEngine
+from core.context_hierarchy import ContextDifferentiationEngine, ContextHierarchy
+from core.semantic_context import SemanticContextReasoner
+from core.identity.identity_continuity_engine import IdentityContinuityEngine
+from core.perception import SceneGraphEngine
 from runtime.causal import RuntimeCausalAlignmentEngine
+from core.dependency.process_dependency_graph import ProcessDependencyGraph
 
 
 class BeliefEngine:
@@ -151,6 +163,7 @@ class EpistemicCognitionLayer:
         semantic_spine_recovery_path=None,
         reversible_rehearsal_state_path=None,
         causal_evidence_ledger_path=None,
+        causal_validation_ledger_path=None,
     ):
         self.evidence_registry = EvidenceRegistry()
         self.knowledge_replication_ledger = KnowledgeReplicationLedger(
@@ -247,6 +260,21 @@ class EpistemicCognitionLayer:
         self.runtime_causal_alignment_engine = (
             RuntimeCausalAlignmentEngine()
         )
+        self.process_dependency_graph = ProcessDependencyGraph()
+        self.causal_graph = CausalGraph()
+        self.causal_validation_engine = CausalValidationEngine(
+            storage_path=causal_validation_ledger_path
+        )
+        self.context_discovery_engine = ContextDiscoveryEngine()
+        self.context_consistency_engine = ContextConsistencyEngine()
+        self.contextual_truth_engine = ContextualTruthEngine()
+        self.context_hierarchy = ContextHierarchy()
+        self.context_differentiation_engine = ContextDifferentiationEngine(
+            self.context_hierarchy
+        )
+        self.semantic_context_reasoner = SemanticContextReasoner()
+        self.scene_graph_engine = SceneGraphEngine()
+        self.identity_continuity_engine = IdentityContinuityEngine()
         self.causal_graph_validator = CausalGraphValidator(
             evidence_accumulator=CausalEvidenceAccumulator(
                 storage_path=causal_evidence_ledger_path
@@ -262,8 +290,168 @@ class EpistemicCognitionLayer:
             for item in hypotheses
         ]
 
+    def _scene_graph_comparison(self, context):
+        existing = context.get("scene_graph_comparison")
+        if isinstance(existing, dict):
+            return existing
+        input_grid = context.get("input_grid")
+        output_grid = context.get("output_grid")
+        if input_grid is None or output_grid is None:
+            task = context.get("task", {})
+            if isinstance(task, dict):
+                input_grid = input_grid if input_grid is not None else task.get(
+                    "input_grid",
+                )
+                output_grid = (
+                    output_grid
+                    if output_grid is not None
+                    else task.get("output_grid")
+                )
+        if input_grid is None or output_grid is None:
+            return {}
+        try:
+            return self.scene_graph_engine.compare_scene_graphs(
+                input_grid,
+                output_grid,
+            )
+        except (TypeError, ValueError, KeyError):
+            return {}
+
+    def _grid_pair(self, context):
+        input_grid = context.get("input_grid")
+        output_grid = context.get("output_grid")
+        if input_grid is None or output_grid is None:
+            task = context.get("task", {})
+            if isinstance(task, dict):
+                input_grid = input_grid if input_grid is not None else task.get(
+                    "input_grid",
+                )
+                output_grid = (
+                    output_grid
+                    if output_grid is not None
+                    else task.get("output_grid")
+                )
+        if input_grid is None or output_grid is None:
+            task_path = context.get("task_path")
+            if task_path:
+                try:
+                    with open(task_path, "r", encoding="utf-8") as handle:
+                        task_data = json.load(handle)
+                    train_examples = task_data.get("train", [])
+                    if train_examples:
+                        first = train_examples[0]
+                        input_grid = (
+                            input_grid
+                            if input_grid is not None
+                            else first.get("input")
+                        )
+                        output_grid = (
+                            output_grid
+                            if output_grid is not None
+                            else first.get("output")
+                        )
+                except (OSError, TypeError, ValueError, KeyError):
+                    return None
+        if input_grid is None or output_grid is None:
+            return None
+        return input_grid, output_grid
+
+    IDENTITY_RUNTIME_TRANSFORMATION_FAMILIES = {
+        "identity_preservation",
+        "growth",
+        "duplication",
+        "replication",
+        "propagation",
+        "topological_growth",
+        "topology_expansion",
+    }
+    IDENTITY_RUNTIME_BEHAVIORS = {
+        "identity_modified",
+        "identity_split",
+        "identity_merged",
+        "identity_propagated",
+        "object_split",
+        "object_merge",
+    }
+    IDENTITY_RUNTIME_CONCEPTS = {
+        "object_identity_preservation",
+        "identity_preservation",
+        "growth",
+        "topological_growth",
+        "duplication",
+        "replication",
+        "propagation",
+    }
+
+    def _should_run_identity_runtime(
+        self,
+        context,
+        concept,
+        context_discovery,
+    ):
+        context = context if isinstance(context, dict) else {}
+        context_discovery = (
+            context_discovery
+            if isinstance(context_discovery, dict)
+            else {}
+        )
+        signature = context_discovery.get("context_signature", {})
+        signature = signature if isinstance(signature, dict) else {}
+        concept = str(concept or "").lower()
+        family = str(
+            context_discovery.get(
+                "transformation_family",
+                signature.get("transformation_family", ""),
+            )
+            or ""
+        ).lower()
+        identity_behavior = str(
+            context_discovery.get(
+                "identity_behavior",
+                signature.get(
+                    "identity_behavior",
+                    context.get("identity_behavior", context.get("identity", "")),
+                ),
+            )
+            or ""
+        ).lower()
+        return (
+            concept in self.IDENTITY_RUNTIME_CONCEPTS
+            or family in self.IDENTITY_RUNTIME_TRANSFORMATION_FAMILIES
+            or identity_behavior in self.IDENTITY_RUNTIME_BEHAVIORS
+        )
+
+    def _identity_runtime_context(self, context, concept, context_discovery):
+        if not self._should_run_identity_runtime(
+            context,
+            concept,
+            context_discovery,
+        ):
+            return {}
+        grid_pair = self._grid_pair(context)
+        if grid_pair is None:
+            return {}
+        try:
+            report = self.identity_continuity_engine.run_identity_runtime(
+                list(grid_pair),
+                concept=concept,
+            )
+        except (TypeError, ValueError, KeyError):
+            return {}
+        return {
+            "identity_runtime_report": report,
+            "identity_continuity_runtime_report": report,
+            **report.get("truth_commit_context_patch", {}),
+        }
+
     def run_cycle(self, context):
         context = context if isinstance(context, dict) else {}
+        scene_graph_comparison = self._scene_graph_comparison(context)
+        if scene_graph_comparison:
+            context = {
+                **context,
+                "scene_graph_comparison": scene_graph_comparison,
+            }
         self.sandbox_experiment_runner.register(
             context.get("sandbox_execution_requests", [])
         )
@@ -376,11 +564,189 @@ class EpistemicCognitionLayer:
                 ),
                 arbitration_by_concept.get(hypothesis.concept),
             )
+            concept_evidence = self.evidence_registry.evidence_for(
+                hypothesis.concept,
+            )
+            causal_spine = self.causal_graph.build_causal_spine(
+                hypothesis.concept,
+                observations=concept_evidence,
+                truth_claim=f"{hypothesis.concept} is stable",
+                confidence=aggregate.causal_alignment,
+                originating_tasks=context.get(
+                    "originating_tasks",
+                    context.get("task_ids", []),
+                ),
+                context=context,
+            )
+            causal_graph_alignment = (
+                self.causal_graph.compute_causal_alignment(
+                    hypothesis.concept,
+                )
+            )
+            causal_explanation = self.causal_graph.explain_truth(
+                hypothesis.concept,
+            )
+            process_dependency_memory = (
+                self.process_dependency_graph.resolve_dependency_chain(
+                    hypothesis.concept,
+                )
+            )
+            causal_validation = (
+                self.causal_validation_engine.validate_hypothesis(
+                    {
+                        "source_concept": hypothesis.concept,
+                        "target_concept": hypothesis.concept,
+                        "confidence": aggregate.causal_alignment,
+                    },
+                    concept_evidence,
+                    {
+                        **context,
+                        "process_dependency_memory":
+                        process_dependency_memory,
+                        "dependency_confidence":
+                        process_dependency_memory.get(
+                            "dependency_confidence",
+                            0.0,
+                        ),
+                        "dependency_chain_depth":
+                        process_dependency_memory.get(
+                            "dependency_chain_depth",
+                            0,
+                        ),
+                        "dependency_chain_coverage":
+                        process_dependency_memory.get(
+                            "dependency_chain_coverage",
+                            0.0,
+                        ),
+                        "missing_dependencies":
+                        process_dependency_memory.get(
+                            "missing_dependencies",
+                            [],
+                        ),
+                        "causal_graph_alignment":
+                        causal_graph_alignment,
+                        "dependency_coherence":
+                        causal_graph_alignment.get(
+                            "components",
+                            {},
+                        ).get("dependency_coherence", 0.0),
+                        "identity_compatibility":
+                        context.get(
+                            "identity_continuity",
+                            context.get("identity_compatibility", 1.0),
+                        ),
+                        "scene_graph_comparison": scene_graph_comparison,
+                    },
+                    self.causal_graph,
+                )
+            )
+            context_discovery = (
+                self.context_discovery_engine.discover_context(
+                    {
+                        **context,
+                        "task_id": context.get(
+                            "task_id",
+                            hypothesis.concept,
+                        ),
+                        "concept": hypothesis.concept,
+                    }
+                )
+            )
+            identity_runtime_context = self._identity_runtime_context(
+                context,
+                hypothesis.concept,
+                context_discovery,
+            )
+            discovered_context_context = {
+                **context,
+                **identity_runtime_context,
+                "context_discovery": context_discovery,
+            }
+            if (
+                context_discovery["transformation_family"] != "unknown"
+                or context_discovery["confidence"] >= 0.50
+            ):
+                discovered_context_context[
+                    "discovered_context_signature"
+                ] = context_discovery["context_signature"]
+            context_hierarchy = (
+                self.context_differentiation_engine.refine_clusters([
+                    context_discovery
+                ])
+            )
+            semantic_context = (
+                self.semantic_context_reasoner.generate_semantic_profile(
+                    context_discovery,
+                    concept_evidence,
+                )
+            )
+            context_consistency = {}
+            if scene_graph_comparison:
+                context_consistency = self.context_consistency_engine.analyze(
+                    hypothesis.concept,
+                    context_report=context_discovery.get(
+                        "context_signature",
+                        context_discovery,
+                    ),
+                    semantic_context_report=semantic_context,
+                    contextual_truth_report={},
+                    scene_graph_report=scene_graph_comparison,
+                )
+            discovered_context_context[
+                "context_hierarchy"
+            ] = context_hierarchy
+            discovered_context_context[
+                "semantic_context"
+            ] = semantic_context
+            if context_consistency:
+                discovered_context_context[
+                    "context_consistency"
+                ] = context_consistency
+            contextual_truth = (
+                self.contextual_truth_engine.generate_contextual_truth_report(
+                    hypothesis.concept,
+                    discovered_context_context,
+                    causal_validation,
+                    identity_runtime_context.get(
+                        "identity_continuity",
+                        context.get(
+                            "identity_continuity",
+                            context.get("identity_compatibility", 1.0),
+                        ),
+                    ),
+                )
+            )
+            context_binding = contextual_truth.get("context_binding", {})
+            if context_consistency:
+                causal_validation["context_consistency"] = max(
+                    causal_validation.get("context_consistency", 0.0),
+                    context_consistency.get("context_consistency", 0.0),
+                )
+            if context_binding:
+                causal_validation["context_binding"] = context_binding
+                causal_validation["context_consistency"] = max(
+                    causal_validation.get("context_consistency", 0.0),
+                    context_binding.get("context_binding_score", 0.0),
+                )
             causal_spine_alignment = self.causal_alignment_engine.evaluate(
                 hypothesis.concept,
-                aggregate.causal_alignment,
+                max(
+                    aggregate.causal_alignment,
+                    causal_graph_alignment["alignment_score"],
+                ),
                 self.truth_commit_engine.registry,
-                context,
+                {
+                    **context,
+                    **identity_runtime_context,
+                    "process_dependency_memory":
+                    process_dependency_memory,
+                    "causal_graph_alignment": causal_graph_alignment,
+                    "causal_validation": causal_validation,
+                    "contextual_truth": contextual_truth,
+                    "context_discovery": context_discovery,
+                    "context_hierarchy": context_hierarchy,
+                    "semantic_context": semantic_context,
+                },
             )
             causal_boundary_alignment = (
                 self.runtime_causal_alignment_engine.evaluate(
@@ -392,7 +758,18 @@ class EpistemicCognitionLayer:
             causal_graph_validation = self.causal_graph_validator.evaluate(
                 hypothesis.concept,
                 context.get("semantic_graph", {}),
-                context,
+                {
+                    **context,
+                    "causal_graph_alignment": causal_graph_alignment,
+                    "causal_explanation": causal_explanation,
+                    "causal_validation": causal_validation,
+                    "process_dependency_memory":
+                    process_dependency_memory,
+                    "contextual_truth": contextual_truth,
+                    "context_discovery": context_discovery,
+                    "context_hierarchy": context_hierarchy,
+                    "semantic_context": semantic_context,
+                },
             )
             contradiction_resolution = (
                 self.contradiction_resolution_engine.evaluate(
@@ -433,6 +810,7 @@ class EpistemicCognitionLayer:
                     replication_bonus_already_applied=True,
                 )
             )
+            contextual_truth_authority = {}
             candidate = self.truth_candidate_engine.evaluate(
                 belief,
                 aggregate,
@@ -440,9 +818,43 @@ class EpistemicCognitionLayer:
                     **context,
                     "knowledge_generalization":
                     knowledge_generalization,
+                    "process_dependency_memory":
+                    process_dependency_memory,
                     "causal_boundary_alignment":
                     causal_boundary_alignment,
+                    "causal_graph_alignment":
+                    causal_graph_alignment,
+                    "causal_explanation":
+                    causal_explanation,
+                    "causal_validation":
+                    causal_validation,
+                    "contextual_truth":
+                    contextual_truth,
+                    "contextual_truth_authority":
+                    contextual_truth_authority,
+                    "context_discovery":
+                    context_discovery,
+                    "context_hierarchy":
+                    context_hierarchy,
+                    "semantic_context":
+                    semantic_context,
                 },
+            )
+            contextual_truth = candidate.get(
+                "contextual_truth",
+                contextual_truth,
+            )
+            contextual_truth_authority = candidate.get(
+                "contextual_truth_authority",
+                {},
+            )
+            context_hierarchy = candidate.get(
+                "context_hierarchy",
+                context_hierarchy,
+            )
+            semantic_context = candidate.get(
+                "semantic_context",
+                semantic_context,
             )
             causal_failure_analysis = self.counterexample_engine.evaluate(
                 hypothesis.concept
@@ -470,6 +882,8 @@ class EpistemicCognitionLayer:
                         **context,
                         "knowledge_generalization":
                         knowledge_generalization,
+                        "process_dependency_memory":
+                        process_dependency_memory,
                     },
                     self.truth_commit_engine.registry,
                 )
@@ -481,10 +895,29 @@ class EpistemicCognitionLayer:
             )
             integration_context = {
                 **context,
+                **identity_runtime_context,
+                "process_dependency_memory":
+                process_dependency_memory,
                 "causal_graph_validation":
                 causal_graph_validation,
                 "causal_evidence_accumulator":
                 self.causal_graph_validator.evidence_accumulator.report(),
+                "causal_graph_alignment":
+                causal_graph_alignment,
+                "causal_explanation":
+                causal_explanation,
+                "causal_validation":
+                causal_validation,
+                "contextual_truth":
+                contextual_truth,
+                "contextual_truth_authority":
+                contextual_truth_authority,
+                "context_discovery":
+                context_discovery,
+                "context_hierarchy":
+                context_hierarchy,
+                "semantic_context":
+                semantic_context,
                 "semantic_spine_recovery_report":
                 semantic_spine_recovery,
                 "adaptive_identity_integration_policy":
@@ -595,9 +1028,36 @@ class EpistemicCognitionLayer:
                 belief.history[-1][
                     "causal_graph_validation"
                 ] = causal_graph_validation
+                belief.history[-1][
+                    "causal_graph_alignment"
+                ] = causal_graph_alignment
+                belief.history[-1][
+                    "causal_explanation"
+                ] = causal_explanation
+                belief.history[-1][
+                    "causal_validation"
+                ] = causal_validation
+                belief.history[-1][
+                    "process_dependency_memory"
+                ] = process_dependency_memory
+                belief.history[-1][
+                    "contextual_truth"
+                ] = contextual_truth
+                belief.history[-1][
+                    "contextual_truth_authority"
+                ] = contextual_truth_authority
+                belief.history[-1][
+                    "context_discovery"
+                ] = context_discovery
                 belief.history[-1]["epistemic_evidence_fusion"] = (
                     evidence_fusion
                 )
+                belief.history[-1][
+                    "context_hierarchy"
+                ] = context_hierarchy
+                belief.history[-1][
+                    "semantic_context"
+                ] = semantic_context
                 belief.history[-1][
                     "contradiction_resolution"
                 ] = contradiction_resolution
@@ -605,6 +1065,12 @@ class EpistemicCognitionLayer:
                 belief.history[-1][
                     "identity_safe_truth_integration"
                 ] = identity_safe_truth_integration
+                belief.history[-1][
+                    "identity_runtime_report"
+                ] = identity_runtime_context.get(
+                    "identity_runtime_report",
+                    {},
+                )
                 belief.history[-1][
                     "adaptive_identity_integration"
                 ] = adaptive_identity_integration
@@ -643,6 +1109,7 @@ class EpistemicCognitionLayer:
                 trials,
                 {
                     **context,
+                    **identity_runtime_context,
                     "truth_commit_evidence":
                     self.evidence_registry.evidence_for(
                         hypothesis.concept,
@@ -655,6 +1122,8 @@ class EpistemicCognitionLayer:
                     semantic_spine_recovery,
                     "knowledge_generalization":
                     knowledge_generalization,
+                    "process_dependency_memory":
+                    process_dependency_memory,
                     "adaptive_identity_integration_policy":
                     adaptive_identity_integration,
                     "causal_attestation":
@@ -665,6 +1134,26 @@ class EpistemicCognitionLayer:
                     causal_boundary_alignment,
                     "causal_graph_validation":
                     causal_graph_validation,
+                    "causal_graph_alignment":
+                    causal_graph_alignment,
+                    "causal_explanation":
+                    causal_explanation,
+                    "causal_validation":
+                    causal_validation,
+                    "process_dependency_memory":
+                    process_dependency_memory,
+                    "contextual_truth":
+                    contextual_truth,
+                    "contextual_truth_authority":
+                    contextual_truth_authority,
+                    "context_discovery":
+                    context_discovery,
+                    "context_hierarchy":
+                    context_hierarchy,
+                    "semantic_context":
+                    semantic_context,
+                    "causal_spine":
+                    causal_spine,
                 },
             )
             evaluations.append({
@@ -677,6 +1166,16 @@ class EpistemicCognitionLayer:
                 "causal_spine_alignment": causal_spine_alignment,
                 "causal_boundary_alignment": causal_boundary_alignment,
                 "causal_graph_validation": causal_graph_validation,
+                "causal_graph_alignment": causal_graph_alignment,
+                "causal_explanation": causal_explanation,
+                "causal_validation": causal_validation,
+                "process_dependency_memory": process_dependency_memory,
+                "contextual_truth": contextual_truth,
+                "contextual_truth_authority": contextual_truth_authority,
+                "context_discovery": context_discovery,
+                "context_hierarchy": context_hierarchy,
+                "semantic_context": semantic_context,
+                "causal_spine": causal_spine,
                 "epistemic_evidence_fusion": evidence_fusion,
                 "causal_evidence_arbitration":
                 arbitration_by_concept.get(hypothesis.concept, {}),
@@ -693,6 +1192,8 @@ class EpistemicCognitionLayer:
                 "truth_candidate": candidate,
                 "identity_safe_truth_integration":
                 identity_safe_truth_integration,
+                "identity_runtime_report":
+                identity_runtime_context.get("identity_runtime_report", {}),
                 "adaptive_identity_integration":
                 adaptive_identity_integration,
                 "truth_internalization": truth_internalization,
@@ -702,6 +1203,7 @@ class EpistemicCognitionLayer:
                 "semantic_spine_recovery": semantic_spine_recovery,
                 "evidence_replication": evidence_replication,
                 "knowledge_generalization": knowledge_generalization,
+                "process_dependency_memory": process_dependency_memory,
                 "causal_failure_analysis": causal_failure_analysis,
                 "boundary_refinement": boundary_refinement,
                 "evidence_gap_analysis": evidence_gap_analysis,
@@ -777,6 +1279,34 @@ class EpistemicCognitionLayer:
         ]
         causal_graph_validation_evaluations = [
             item["causal_graph_validation"]
+            for item in evaluations
+        ]
+        causal_graph_alignment_evaluations = [
+            item["causal_graph_alignment"]
+            for item in evaluations
+        ]
+        causal_explanations = [
+            item["causal_explanation"]
+            for item in evaluations
+        ]
+        causal_validation_evaluations = [
+            item["causal_validation"]
+            for item in evaluations
+        ]
+        contextual_truth_evaluations = [
+            item["contextual_truth"]
+            for item in evaluations
+        ]
+        context_discovery_evaluations = [
+            item["context_discovery"]
+            for item in evaluations
+        ]
+        context_hierarchy_evaluations = [
+            item["context_hierarchy"]
+            for item in evaluations
+        ]
+        semantic_context_evaluations = [
+            item["semantic_context"]
             for item in evaluations
         ]
         fusion_evaluations = [
@@ -1059,6 +1589,13 @@ class EpistemicCognitionLayer:
             "causal_graph_validator": {
                 "system": "causal_graph_validator",
                 "evaluations": causal_graph_validation_evaluations,
+                "causal_graph_structure":
+                self.causal_graph.export_graph(),
+                "causal_graph_foundation_validation":
+                self.causal_graph.validate_causal_graph(),
+                "causal_graph_alignment_evaluations":
+                causal_graph_alignment_evaluations,
+                "causal_explanations": causal_explanations,
                 "causal_evidence_accumulator":
                 self.causal_graph_validator.evidence_accumulator.report(),
                 "blocked_concepts": [
@@ -1068,6 +1605,95 @@ class EpistemicCognitionLayer:
                 ],
                 "semantic_sequence_is_not_causal_proof": True,
                 "automatic_truth_commit_forbidden": True,
+            },
+            "causal_validation_engine": {
+                "system": "causal_validation_engine",
+                "phase": "5.3",
+                "evaluations": causal_validation_evaluations,
+                "validation_report":
+                self.causal_validation_engine.generate_validation_report(),
+                "validated_concepts": [
+                    item["hypothesis"]["target_concept"]
+                    for item in causal_validation_evaluations
+                    if item["validation_ready"]
+                ],
+                "rejected_hypotheses": [
+                    item["hypothesis"]
+                    for item in causal_validation_evaluations
+                    if item["validation_state"] == "REJECTED"
+                ],
+                "correlation_is_not_causation": True,
+                "counterfactual_testing_enabled": True,
+                "automatic_truth_commit_forbidden": True,
+            },
+            "contextual_truth_engine": {
+                "system": "contextual_truth_engine",
+                "phase": "5.4",
+                "evaluations": contextual_truth_evaluations,
+                "context_validated_concepts": [
+                    item["truth"]
+                    for item in contextual_truth_evaluations
+                    if item["contextual_consistency"]
+                ],
+                "context_review_required_concepts": [
+                    item["truth"]
+                    for item in contextual_truth_evaluations
+                    if not item["contextual_consistency"]
+                ],
+                "truths_are_contextual": True,
+                "context_transfer_reliability_measured": True,
+                "automatic_truth_commit_forbidden": True,
+            },
+            "context_discovery_engine": {
+                "system": "context_discovery_engine",
+                "phase": "5.5",
+                "evaluations": context_discovery_evaluations,
+                "clusters":
+                self.context_discovery_engine.cluster_contexts()["clusters"],
+                "unknown_context_count": sum(
+                    item["transformation_family"] == "unknown"
+                    for item in context_discovery_evaluations
+                ),
+                "automatic_context_discovery_enabled": True,
+            },
+            "context_hierarchy_engine": {
+                "system": "context_hierarchy_engine",
+                "phase": "5.6",
+                "evaluations": context_hierarchy_evaluations,
+                "hierarchy":
+                self.context_hierarchy.report(),
+                "hierarchy_ready_count": sum(
+                    item["hierarchy_ready"]
+                    for item in context_hierarchy_evaluations
+                ),
+                "advanced_contextual_truth_promotion_threshold": 0.75,
+                "context_hierarchy_metric": (
+                    "context_hierarchy_score = "
+                    "(context_stability + specialization_consistency + "
+                    "differentiation_confidence + "
+                    "inheritance_integrity) / 4"
+                ),
+                "automatic_context_hierarchy_enabled": True,
+            },
+            "semantic_context_reasoner": {
+                "system": "semantic_context_reasoner",
+                "phase": "5.7",
+                "evaluations": semantic_context_evaluations,
+                "semantic_context_report":
+                self.semantic_context_reasoner.report(),
+                "semantically_validated_contexts": [
+                    item["context"]
+                    for item in semantic_context_evaluations
+                    if item["semantically_validated"]
+                ],
+                "semantic_review_required_contexts": [
+                    item["context"]
+                    for item in semantic_context_evaluations
+                    if not item["semantically_validated"]
+                ],
+                "contexts_are_explainable_entities": True,
+                "context_labels_are_not_semantic_meaning": True,
+                "automatic_semantic_context_enabled": True,
             },
             "epistemic_evidence_fusion_engine": {
                 "system": "epistemic_evidence_fusion_engine",

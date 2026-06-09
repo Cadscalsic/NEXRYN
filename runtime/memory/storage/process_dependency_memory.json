@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "process_chains": {
+    "duplication": [
+      {
+        "source": "duplication",
+        "relation": "causes",
+        "target": "identity_split",
+        "confidence": 0.94
+      },
+      {
+        "source": "identity_split",
+        "relation": "causes",
+        "target": "object_count_increase",
+        "confidence": 0.92
+      },
+      {
+        "source": "object_count_increase",
+        "relation": "enables",
+        "target": "replication",
+        "confidence": 0.9
+      },
+      {
+        "source": "replication",
+        "relation": "may_cause",
+        "target": "topological_growth",
+        "confidence": 0.86
+      },
+      {
+        "source": "topological_growth",
+        "relation": "supports",
+        "target": "growth",
+        "confidence": 0.88
+      },
+      {
+        "source": "growth",
+        "relation": "requires",
+        "target": "object_identity_preservation",
+        "confidence": 0.91
+      }
+    ]
+  }
+}

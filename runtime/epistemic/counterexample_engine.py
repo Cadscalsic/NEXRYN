@@ -2,7 +2,9 @@ from runtime.epistemic.causal_failure_analyzer import CausalFailureAnalyzer
 
 
 class CounterexampleEngine(CausalFailureAnalyzer):
-    pass
+    """Backward-compatible alias for causal counterexample analysis."""
+
+    compatibility_alias = True
 
 
 __all__ = [

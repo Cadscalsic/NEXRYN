@@ -36,6 +36,8 @@ class SemanticExperienceIndex:
             "semantic_index.json"
         )
 
+        self.last_persistence_error = None
+
         # ====================================
         # LOAD PERSISTENT INDEX
         # ====================================
@@ -126,9 +128,9 @@ class SemanticExperienceIndex:
                 self.storage_path
             )
 
-        except Exception:
+        except Exception as error:
 
-            pass
+            self.last_persistence_error = str(error)
 
     # ========================================
     # LOAD PERSISTENT INDEX

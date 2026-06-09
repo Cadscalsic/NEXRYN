@@ -21,6 +21,30 @@ def test_world_model_acceptance_separates_search_candidate_from_execution():
     assert report["acceptance_state"] == "SEARCH_CANDIDATE_ONLY"
 
 
+def test_world_model_acceptance_calibrates_near_miss_without_execution():
+    report = WorldModelAcceptanceCalibrator().evaluate(
+        {
+            "prediction_accuracy": 0.88,
+            "success": False,
+            "dependency_coherence": 0.66,
+            "context_consistency": 1.0,
+            "identity_compatibility": 1.0,
+            "cross_task_stability": 1.0,
+            "causal_support": 0.94,
+        },
+        {
+            "simulation_uncertainty": 0.12,
+        },
+    )
+
+    calibration = report["world_model_calibration"]
+
+    assert report["execution_accepted"] is False
+    assert calibration["calibration_state"] == "CALIBRATION_BRIDGE"
+    assert calibration["recommended_next_step"] == "strengthen_dependency_coherence"
+    assert calibration["execution_threshold_preserved"] == 0.95
+
+
 def test_world_model_acceptance_requires_prediction_success():
     report = WorldModelAcceptanceCalibrator().evaluate(
         {

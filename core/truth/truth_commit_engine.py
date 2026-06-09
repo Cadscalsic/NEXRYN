@@ -62,6 +62,17 @@ class TruthCommitEngine:
             identity_integration.get("integration_safe", False) is True,
             "schema_valid": rejected is None,
         }
+        dependency_promotion_diagnostics = {
+            "promotion_dependency_score":
+            truth_candidate.get("promotion_dependency_score", 0.0),
+            "promotion_dependency_bonus":
+            truth_candidate.get("promotion_dependency_bonus", 0.0),
+            "dependency_promotion_blockers":
+            truth_candidate.get("dependency_promotion_blockers", []),
+            "dependency_adjusted_candidate_ready":
+            truth_candidate.get("eligible_for_truth_candidate", False),
+            "dependency_does_not_override_identity_governance": True,
+        }
         eligible = all(gates.values())
         record = None
         if eligible:
@@ -118,6 +129,8 @@ class TruthCommitEngine:
                 for name, passed in gates.items()
                 if not passed
             ],
+            "dependency_promotion_diagnostics":
+            dependency_promotion_diagnostics,
             "truth_record": (
                 record.as_dict()
                 if record is not None

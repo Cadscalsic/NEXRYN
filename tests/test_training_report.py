@@ -236,3 +236,116 @@ def test_training_report_exposes_locked_truth_review_snapshot(capsys):
     assert "rehearsal_validation_pending=True" in output
     assert "revocation_severity=LOW_RISK_REVIEW" in output
     assert "identity_governance_state=TEMPORARY_RECOVERY_HOLD" in output
+
+
+def test_training_report_detects_architecture_bottleneck_plateau(capsys):
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_101.json",
+            "status": "completed",
+            "result": {
+                "epistemic_cognition_report": {
+                    "causal_validation_engine": {
+                        "evaluations": [{
+                            "hypothesis": {
+                                "target_concept": "color_preservation",
+                            },
+                            "validation_score": 0.8861,
+                            "cross_task_stability": 1.0,
+                            "contradiction_resistance": 0.8093,
+                            "dependency_coherence": 0.6812,
+                            "context_consistency": 0.94,
+                            "identity_compatibility": 1.0,
+                            "validation_state": "VALIDATED",
+                        }],
+                    },
+                    "contextual_truth_engine": {
+                        "evaluations": [{
+                            "truth": "color_preservation",
+                            "context_confidence": 0.9024,
+                            "status": "CONTEXT_REVIEW_REQUIRED",
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [{
+                            "task": "color_preservation",
+                            "transformation_family": "duplication",
+                            "confidence": 0.76,
+                        }],
+                    },
+                    "semantic_context_reasoner": {
+                        "evaluations": [{
+                            "context": "duplication",
+                            "semantic_context_score": 0.90,
+                            "status": "SEMANTICALLY_VALIDATED",
+                        }],
+                    },
+                },
+            },
+        }],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "BOUNDARY_REFINEMENT",
+                "preliminary_truth_candidate_ready": False,
+                "truth_candidate_promotion": {
+                    "failed_gates": ["context_strength"],
+                    "dependency_promotion_blockers": [
+                        "promotion_gate_blocked:context_strength",
+                    ],
+                },
+            }],
+        },
+    )
+
+    print_training_report(report)
+    output = capsys.readouterr().out
+    architecture_report = report["architecture_bottleneck_report"]
+
+    assert architecture_report["bottleneck_type"] == (
+        "ARCHITECTURE_BOTTLENECK"
+    )
+    assert architecture_report["architecture_bottleneck"] is True
+    assert architecture_report["dependency_coherence_average"] == 0.6812
+    assert architecture_report["context_count"] == 1
+    assert architecture_report[
+        "dependency_reasoning_operator_available"
+    ] is True
+    assert architecture_report[
+        "process_dependency_memory_available"
+    ] is True
+    assert architecture_report[
+        "process_concepts_in_boundary_refinement"
+    ] == ["growth"]
+    assert architecture_report["recommended_next_step"] == (
+        "ingest_process_dependency_memory"
+    )
+    assert architecture_report["process_dependency_links_loaded"] >= 1
+    assert architecture_report["process_dependency_links_used"] >= 1
+    assert architecture_report["dependency_chain_depth"] >= 1
+    assert architecture_report["dependency_chain_coverage"] > 0.0
+    assert architecture_report["boundary_refinement_dependency_debug"][0][
+        "concept"
+    ] == "growth"
+    assert architecture_report[
+        "dependency_ready_boundary_refinement_blockers"
+    ][0]["exact_blocker"] == [
+        "promotion_gate_blocked:context_strength",
+    ]
+    assert "ARCHITECTURE BOTTLENECK REPORT" in output
+    assert "bottleneck_type=ARCHITECTURE_BOTTLENECK" in output
+    assert (
+        "dependency_reasoning_operator_available=True"
+        in output
+    )
+    assert (
+        "process_dependency_memory_available=True"
+        in output
+    )
+    assert "recommended_next_step=ingest_process_dependency_memory" in output
+    assert "process_dependency_links_loaded=" in output
+    assert "process_dependency_links_used=" in output
+    assert "dependency_chain_depth=" in output
+    assert "dependency_chain_coverage=" in output
+    assert "boundary_refinement_dependency concept=growth" in output
+    assert "dependency_ready_boundary_refinement_blocker concept=growth" in output

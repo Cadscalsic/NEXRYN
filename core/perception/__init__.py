@@ -23,6 +23,69 @@ from core.perception.objects import (
 )
 
 # ============================================
+# OBJECT EXTRACTION / SHAPE / SPATIAL LAYER
+# ============================================
+
+from core.perception.object_extractor import (
+
+    ExtractedObject,
+
+    ObjectExtractor
+)
+
+from core.perception.color_analyzer import (
+
+    ColorAnalyzer
+)
+
+from core.perception.object_tracker import (
+
+    IdentityTransitionKind,
+
+    IdentityTransition,
+
+    IdentityTrack,
+
+    ObjectIdentity,
+
+    ObjectTracker,
+
+    TrackedObject
+)
+
+from core.perception.identity_tracker import (
+
+    IdentityTracker
+)
+
+from core.perception.shape_analyzer import (
+
+    ShapeAnalyzer
+)
+
+from core.perception.spatial_relations import (
+
+    SpatialRelationEngine,
+
+    SpatialRelationEvidence
+)
+
+# ============================================
+# PERCEPTION ENGINE
+# ============================================
+
+from core.perception.perception_engine import (
+
+    PerceivedObject,
+
+    PerceptionEngine,
+
+    SceneGraph as PerceptionSceneGraph,
+
+    SpatialRelation
+)
+
+# ============================================
 # RELATIONAL COGNITION
 # ============================================
 
@@ -42,6 +105,26 @@ from core.perception.scene_graph import (
     SceneNode,
 
     SceneGraph
+)
+
+# ============================================
+# OBJECT-CENTRIC SCENE GRAPH ENGINE
+# ============================================
+
+from core.perception.scene_graph_engine import (
+
+    SceneGraphEdge,
+
+    SceneGraphEngine,
+
+    SceneGraphNode
+)
+
+from core.perception.object_runtime import (
+
+    ObjectRuntime,
+
+    object_runtime
 )
 
 # ============================================
@@ -65,6 +148,52 @@ __all__ = [
     "ARCObject",
 
     # ========================================
+    # OBJECT EXTRACTION / SHAPE / SPATIAL
+    # ========================================
+
+    "ExtractedObject",
+
+    "ObjectExtractor",
+
+    "ColorAnalyzer",
+
+    "ObjectTracker",
+
+    "TrackedObject",
+
+    "IdentityTransitionKind",
+
+    "IdentityTransition",
+
+    "IdentityTrack",
+
+    "ObjectIdentity",
+
+    "IdentityTracker",
+
+    "ObjectRuntime",
+
+    "object_runtime",
+
+    "ShapeAnalyzer",
+
+    "SpatialRelationEngine",
+
+    "SpatialRelationEvidence",
+
+    # ========================================
+    # PERCEPTION ENGINE
+    # ========================================
+
+    "PerceivedObject",
+
+    "PerceptionEngine",
+
+    "PerceptionSceneGraph",
+
+    "SpatialRelation",
+
+    # ========================================
     # RELATIONAL COGNITION
     # ========================================
 
@@ -78,5 +207,15 @@ __all__ = [
 
     "SceneNode",
 
-    "SceneGraph"
+    "SceneGraph",
+
+    # ========================================
+    # OBJECT-CENTRIC SCENE GRAPH ENGINE
+    # ========================================
+
+    "SceneGraphEdge",
+
+    "SceneGraphEngine",
+
+    "SceneGraphNode"
 ]
