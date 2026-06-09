@@ -45,6 +45,10 @@ def identity_continuity_score(context):
         .get("state_transition", {})
         .get("current_state", {})
         .get("identity_continuity"),
+        context.get("identity_continuity_engine_report", {})
+        .get("identity_continuity"),
+        context.get("identity_continuity_engine_report", {})
+        .get("continuity_score"),
     ]
     values = [clamp(score) for score in scores if score is not None]
     return min(values, default=1.0)

@@ -5,12 +5,12 @@
       "truth_id": "truth:25fbca879f8b4dd995c886080d693801",
       "concept": "symmetry_preservation",
       "truth_state": "PROVISIONAL_TRUTH_COMMITMENT",
-      "confidence": 0.9263,
-      "evidence_strength": 0.9605,
-      "causal_alignment": 0.9084,
-      "contradiction_score": 0.1054,
-      "semantic_consistency": 0.8788,
-      "generalization_score": 0.9489,
+      "confidence": 0.8939,
+      "evidence_strength": 0.9089,
+      "causal_alignment": 0.8158,
+      "contradiction_score": 0.1265,
+      "semantic_consistency": 0.8508,
+      "generalization_score": 0.9497,
       "identity_continuity": 1.0,
       "semantic_drift": 0.0,
       "source_tasks": [
@@ -55,6 +55,7 @@
         "data/training\\task_048.json",
         "data/training\\task_049.json",
         "data/training\\task_051.json",
+        "data/training\\task_052.json",
         "data/training\\task_053.json",
         "data/training\\task_054.json",
         "data/training\\task_055.json",
@@ -79,7 +80,7 @@
         "data/training\\task_095.json",
         "data/training\\task_097.json",
         "data/training\\task_100.json",
-        "{'value': 'data/training\\\\task_087.json', 'priority': 'medium', 'timestamp': '2026-06-03 14:16:37.413065'}"
+        "{'value': 'data/training\\\\task_091.json', 'priority': 'medium', 'timestamp': '2026-06-08 23:38:56.575844'}"
       ],
       "evidence_sources": [
         "causal_attestation",
@@ -93,7 +94,7 @@
       ],
       "lineage": {},
       "created_at": "2026-06-01T18:21:53.185070",
-      "revision_count": 80
+      "revision_count": 170
     },
     {
       "truth_id": "truth:01802959bc844a1fa6a3738b3f9012c4",
@@ -252,12 +253,12 @@
       "truth_id": "truth:000be4e89dc549f3b20338330c59aee0",
       "concept": "color_preservation",
       "truth_state": "PROVISIONAL_TRUTH_COMMITMENT",
-      "confidence": 0.9027,
-      "evidence_strength": 0.9106,
-      "causal_alignment": 0.8951,
-      "contradiction_score": 0.129,
-      "semantic_consistency": 0.8474,
-      "generalization_score": 0.9591,
+      "confidence": 0.9149,
+      "evidence_strength": 0.9464,
+      "causal_alignment": 0.9267,
+      "contradiction_score": 0.1055,
+      "semantic_consistency": 0.885,
+      "generalization_score": 0.9552,
       "identity_continuity": 1.0,
       "semantic_drift": 0.0,
       "source_tasks": [
@@ -331,7 +332,8 @@
         "data/training\\task_098.json",
         "data/training\\task_099.json",
         "data/training\\task_100.json",
-        "{'value': 'data/training\\\\task_087.json', 'priority': 'medium', 'timestamp': '2026-06-03 14:16:37.413065'}"
+        "data/training\\task_101.json",
+        "{'value': 'data/training\\\\task_082.json', 'priority': 'medium', 'timestamp': '2026-06-09 00:53:17.924439'}"
       ],
       "evidence_sources": [
         "causal_attestation",
@@ -345,18 +347,18 @@
       ],
       "lineage": {},
       "created_at": "2026-06-01T18:31:43.204189",
-      "revision_count": 136
+      "revision_count": 320
     },
     {
       "truth_id": "truth:2360d4b467d04deebe2374a5121c044e",
       "concept": "position_preservation",
       "truth_state": "PROVISIONAL_TRUTH_COMMITMENT",
-      "confidence": 0.9494,
-      "evidence_strength": 0.9986,
+      "confidence": 0.9213,
+      "evidence_strength": 0.9569,
       "causal_alignment": 0.9267,
-      "contradiction_score": 0.0892,
-      "semantic_consistency": 0.9116,
-      "generalization_score": 0.958,
+      "contradiction_score": 0.0961,
+      "semantic_consistency": 0.8942,
+      "generalization_score": 0.9574,
       "identity_continuity": 1.0,
       "semantic_drift": 0.0,
       "source_tasks": [
@@ -417,11 +419,12 @@
         "data/training\\task_092.json",
         "data/training\\task_093.json",
         "data/training\\task_094.json",
+        "data/training\\task_095.json",
         "data/training\\task_096.json",
         "data/training\\task_097.json",
         "data/training\\task_098.json",
         "data/training\\task_099.json",
-        "{'value': 'data/training\\\\task_087.json', 'priority': 'medium', 'timestamp': '2026-06-03 14:16:37.413065'}"
+        "{'value': 'data/training\\\\task_047.json', 'priority': 'medium', 'timestamp': '2026-06-08 23:43:18.175417'}"
       ],
       "evidence_sources": [
         "causal_attestation",
@@ -435,7 +438,7 @@
       ],
       "lineage": {},
       "created_at": "2026-06-01T18:31:45.894368",
-      "revision_count": 102
+      "revision_count": 249
     },
     {
       "truth_id": "truth:78b5fe31161845c99ee69a7bee3d0d2d",
@@ -557,12 +560,12 @@
       "truth_id": "truth:1480a246788f42229f2faed23c2bd81b",
       "concept": "shape_preservation",
       "truth_state": "PROVISIONAL_TRUTH_COMMITMENT",
-      "confidence": 0.9352,
-      "evidence_strength": 1.0,
-      "causal_alignment": 0.8056,
-      "contradiction_score": 0.0944,
-      "semantic_consistency": 0.9081,
-      "generalization_score": 0.9528,
+      "confidence": 0.9128,
+      "evidence_strength": 0.9435,
+      "causal_alignment": 0.8205,
+      "contradiction_score": 0.1108,
+      "semantic_consistency": 0.8821,
+      "generalization_score": 0.9484,
       "identity_continuity": 1.0,
       "semantic_drift": 0.0,
       "source_tasks": [
@@ -623,6 +626,8 @@
         "data/training\\task_062.json",
         "data/training\\task_063.json",
         "data/training\\task_064.json",
+        "data/training\\task_065.json",
+        "data/training\\task_066.json",
         "data/training\\task_079.json",
         "data/training\\task_080.json",
         "data/training\\task_081.json",
@@ -641,8 +646,10 @@
         "data/training\\task_096.json",
         "data/training\\task_097.json",
         "data/training\\task_098.json",
+        "data/training\\task_099.json",
         "data/training\\task_100.json",
-        "{'value': 'data/training\\\\task_050.json', 'priority': 'medium', 'timestamp': '2026-06-03 00:00:32.178027'}"
+        "data/training\\task_101.json",
+        "{'value': 'data/training\\\\task_047.json', 'priority': 'medium', 'timestamp': '2026-06-08 23:43:18.175417'}"
       ],
       "evidence_sources": [
         "causal_attestation",
@@ -656,7 +663,77 @@
       ],
       "lineage": {},
       "created_at": "2026-06-02T13:26:34.198560",
-      "revision_count": 37
+      "revision_count": 122
+    },
+    {
+      "truth_id": "truth:01b1310224fd46b7ae7d11ba66559cda",
+      "concept": "symmetry_reasoning",
+      "truth_state": "PROVISIONAL_TRUTH_COMMITMENT",
+      "confidence": 0.9101,
+      "evidence_strength": 0.9466,
+      "causal_alignment": 0.8445,
+      "contradiction_score": 0.1235,
+      "semantic_consistency": 0.8673,
+      "generalization_score": 0.9511,
+      "identity_continuity": 1.0,
+      "semantic_drift": 0.0,
+      "source_tasks": [
+        "data/training\\task_002.json",
+        "data/training\\task_009.json",
+        "data/training\\task_019.json",
+        "data/training\\task_020.json",
+        "data/training\\task_021.json",
+        "data/training\\task_026.json",
+        "data/training\\task_029.json",
+        "data/training\\task_030.json",
+        "data/training\\task_033.json",
+        "data/training\\task_037.json",
+        "data/training\\task_039.json",
+        "data/training\\task_047.json",
+        "data/training\\task_048.json",
+        "data/training\\task_049.json",
+        "data/training\\task_050.json",
+        "data/training\\task_051.json",
+        "data/training\\task_052.json",
+        "data/training\\task_054.json",
+        "data/training\\task_055.json",
+        "data/training\\task_056.json",
+        "data/training\\task_057.json",
+        "data/training\\task_058.json",
+        "data/training\\task_059.json",
+        "data/training\\task_060.json",
+        "data/training\\task_062.json",
+        "data/training\\task_066.json",
+        "data/training\\task_081.json",
+        "data/training\\task_082.json",
+        "data/training\\task_088.json",
+        "data/training\\task_089.json",
+        "data/training\\task_090.json",
+        "data/training\\task_091.json",
+        "data/training\\task_092.json",
+        "data/training\\task_093.json",
+        "data/training\\task_094.json",
+        "data/training\\task_095.json",
+        "data/training\\task_096.json",
+        "data/training\\task_097.json",
+        "data/training\\task_098.json",
+        "data/training\\task_099.json",
+        "data/training\\task_101.json",
+        "{'value': 'data/training\\\\task_090.json', 'priority': 'medium', 'timestamp': '2026-06-08 23:28:02.743138'}"
+      ],
+      "evidence_sources": [
+        "causal_attestation",
+        "constructive_reasoning",
+        "evolutionary_trait_observation",
+        "evolutionary_trait_survival_history",
+        "execution_validation",
+        "independent_execution_replication",
+        "mutation_rehearsal",
+        "semantic_abstraction_observation"
+      ],
+      "lineage": {},
+      "created_at": "2026-06-07T16:45:06.114161",
+      "revision_count": 102
     }
   ]
 }

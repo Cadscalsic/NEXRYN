@@ -2,6 +2,10 @@ __pycache__/
 *.py[cod]
 *.pyo
 .venv/
+node_modules/
+interface/**/node_modules/
 runtime_data/
 outputs/
 error_log.txt
+*.zip
+memory/*.json

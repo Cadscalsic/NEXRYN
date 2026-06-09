@@ -57,11 +57,22 @@ class AdaptiveIdentityIntegrationEngine:
             context,
             registry,
         )
+        adaptive_contradiction = candidate.get(
+            "adaptive_contradiction_governance",
+            context.get("adaptive_contradiction_governance", {}),
+        )
+        contradiction_supported = (
+            adaptive_contradiction.get(
+                "contradiction_below_dynamic_threshold",
+                False,
+            )
+            or aggregate.contradiction_score < 0.10
+        )
         epistemic_ready = (
             candidate.get("eligible_for_truth_candidate", False)
             and aggregate.semantic_consistency >= 0.90
             and aggregate.causal_alignment >= 0.80
-            and aggregate.contradiction_score < 0.10
+            and contradiction_supported
         )
         candidate_pressure = clamp(
             max(
@@ -124,6 +135,10 @@ class AdaptiveIdentityIntegrationEngine:
             "truth_candidate_pressure_threshold":
             self.truth_candidate_pressure_threshold,
             "semantic_consistency": aggregate.semantic_consistency,
+            "adaptive_contradiction_governance":
+            adaptive_contradiction,
+            "contradiction_supported_by_adaptive_governance":
+            contradiction_supported,
             "generalization_score": generalization_score,
             "concept_strengthens_existing_truths":
             strengthens_existing_truths,

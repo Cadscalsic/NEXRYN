@@ -37,13 +37,50 @@ def evaluate_identity_governance(
     ).get(
         "stability_state",
     )
+    identity_runtime_report = context.get(
+        "identity_runtime_report",
+        context.get("identity_continuity_runtime_report", {}),
+    )
+    identity_continuity_engine_report = context.get(
+        "identity_continuity_engine_report",
+        {},
+    )
+    runtime_gates = identity_runtime_report.get(
+        "identity_governance_gates",
+        identity_continuity_engine_report.get(
+            "identity_governance_gates",
+            {},
+        ),
+    )
+    runtime_identity_stable = runtime_gates.get("identity_stable") is True
+    runtime_semantic_spine_stable = (
+        runtime_gates.get("semantic_spine_stable") is True
+    )
+    runtime_continuity_supported = (
+        runtime_gates.get("identity_continuity_above_limit") is True
+        or identity_continuity_engine_report.get(
+            "identity_continuity_preserved",
+            False,
+        )
+        is True
+        or identity_runtime_report.get(
+            "identity_continuity_preserved",
+            False,
+        )
+        is True
+    )
     explicit_identity_block = context.get("identity_stable") is False
     identity_stable = (
         not explicit_identity_block
         and (
+            runtime_identity_stable
+            or
             identity_stability_state
             not in [
                 "fragile_semantic_spine",
+                "identity_branching_tracked",
+                "identity_convergence_tracked",
+                "identity_transformation_tracked",
                 "rollback_required",
                 "recovery_monitoring",
             ]
@@ -53,7 +90,8 @@ def evaluate_identity_governance(
     )
     semantic_spine_stable = (
         (
-            identity_stability_state != "fragile_semantic_spine"
+            runtime_semantic_spine_stable
+            or identity_stability_state != "fragile_semantic_spine"
             or allow_fragile_semantic_spine_integration
         )
         and spine_report.get(
@@ -89,6 +127,10 @@ def evaluate_identity_governance(
         semantic_spine_report.get("semantic_spine_state"),
         "semantic_anchor_spine_state":
         semantic_anchor_spine_state,
+        "identity_runtime_supported":
+        runtime_continuity_supported,
+        "identity_runtime_gates":
+        runtime_gates,
         "allow_fragile_semantic_spine_integration":
         allow_fragile_semantic_spine_integration,
         "recovery_confirmed": recovery_confirmed,

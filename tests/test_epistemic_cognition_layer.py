@@ -10,6 +10,8 @@ from core.epistemic_models import (
     BeliefState,
     Evidence,
     EvidenceAggregate,
+    EpistemicTrial,
+    TrialResult,
     utcnow,
 )
 from core.governance_compression.governance_kernel import GovernanceKernel
@@ -23,6 +25,7 @@ from runtime.epistemic_promotion_engine import EpistemicPromotionEngine
 from runtime.ambiguity_resolution_engine import AmbiguityResolutionEngine
 from runtime.truth_gate_remediation_engine import TruthGateRemediationEngine
 from runtime.truth_candidate_engine import TruthCandidateEngine
+from runtime.epistemic.belief_promotion_engine import BeliefPromotionEngine
 from runtime.identity_safe_truth_integration import (
     IdentitySafeTruthIntegrationEngine,
 )
@@ -1217,15 +1220,178 @@ def test_truth_candidate_engine_marks_soft_contradiction_review_zone():
         ),
     )
 
-    assert report["eligible_for_truth_candidate"] is False
+    assert report["eligible_for_truth_candidate"] is True
+    assert report["metrics_eligible_for_truth_candidate"] is True
+    assert report["strict_qualified_metrics"] is False
     assert report["eligibility_reason"] == (
         "truth_candidate_contradiction_review_required"
     )
+    assert report["candidate_state"] == (
+        "ADVANCING_TO_TRUTH_CANDIDATE_REVIEW"
+    )
+    assert report["promotion_review_required"] is True
+    assert report["soft_contradiction_review_only"] is True
     assert report["contradiction_review_required"] is True
     assert report["within_soft_review_zone"] is True
     assert report["contradiction_review_severity"] == "LOW_RISK_REVIEW"
     assert report["contradiction_review_zone"] == 0.02
     assert report["contradiction_gap"] == 0.0114
+
+
+def test_truth_candidate_uses_adaptive_contradiction_threshold():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="symmetry_reasoning",
+            claim="symmetry_reasoning",
+            state=BeliefState.VALIDATED,
+            confidence=0.90,
+        ),
+        EvidenceAggregate(
+            concept="symmetry_reasoning",
+            evidence_strength=0.90,
+            contradiction_score=0.1159,
+            causal_alignment=0.8164,
+        ),
+        {
+            "knowledge_generalization": {
+                "used_task_count": 31,
+            },
+            "causal_validation": {
+                "validation_score": 0.8004,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.8164,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 0.6907,
+            },
+            "contextual_truth_authority": {
+                "effective_contextual_truth": 0.6907,
+                "contextual_truth_supported": True,
+            },
+            "context_hierarchy": {
+                "score": 0.94,
+            },
+            "semantic_context": {
+                "confidence": 0.90,
+            },
+            "causal_explanation": {
+                "why": ["observed in 31 tasks"],
+            },
+            "causal_validation_report": {
+                "how_we_know": ["validated across 34 tasks"],
+            },
+        },
+    )
+
+    assert report["eligible_for_truth_candidate"] is True
+    assert report["eligibility_reason"] == "truth_candidate_ready"
+    assert report["blocked_metrics"] == []
+    assert report["contradiction_threshold"] >= 0.1159
+    assert report["adaptive_contradiction_governance"][
+        "base_threshold"
+    ] == 0.10
+    assert report["adaptive_contradiction_governance"][
+        "contradiction_below_dynamic_threshold"
+    ] is True
+
+
+def test_truth_candidate_uses_dependency_promotion_bonus_for_process_concept():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="growth",
+            claim="growth",
+            state=BeliefState.VALIDATED,
+            confidence=0.90,
+        ),
+        EvidenceAggregate(
+            concept="growth",
+            evidence_strength=0.90,
+            contradiction_score=0.05,
+            causal_alignment=0.82,
+        ),
+        {
+            "knowledge_generalization": {
+                "used_task_count": 8,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.74,
+            },
+            "causal_validation": {
+                "validation_score": 0.70,
+                "promotion_dependency_score": 0.91,
+                "dependency_promotion_evidence": {
+                    "dependency_confidence": 0.9017,
+                    "dependency_chain_depth": 5,
+                    "dependency_chain_coverage": 0.8556,
+                    "missing_dependencies": [],
+                },
+            },
+        },
+    )
+
+    metrics = {
+        item["metric"]: item
+        for item in report["metrics"]
+    }
+
+    assert report["eligible_for_truth_candidate"] is True
+    assert report["promotion_dependency_score"] >= 0.90
+    assert report["promotion_dependency_bonus"] > 0.0
+    assert metrics["causal_validation_score"]["passed"] is True
+    assert report["dependency_promotion_blockers"] == []
+
+
+def test_belief_promotion_allows_soft_contradiction_truth_candidate_review():
+    report = BeliefPromotionEngine().evaluate(
+        EvidenceAggregate(
+            concept="near_threshold_claim",
+            evidence_count=3,
+            evidence_strength=0.90,
+            contradiction_score=0.1114,
+            semantic_consistency=0.90,
+            causal_alignment=0.90,
+        ),
+        [
+            EpistemicTrial(
+                concept="near_threshold_claim",
+                support_score=0.90,
+                contradiction_score=0.1114,
+                evidence_strength=0.90,
+                semantic_consistency=0.90,
+                causal_alignment=0.90,
+                trial_result=TrialResult.PASSED,
+                evidence_count=3,
+                trial_number=1,
+            ),
+            EpistemicTrial(
+                concept="near_threshold_claim",
+                support_score=0.90,
+                contradiction_score=0.1114,
+                evidence_strength=0.90,
+                semantic_consistency=0.90,
+                causal_alignment=0.90,
+                trial_result=TrialResult.PASSED,
+                evidence_count=3,
+                trial_number=2,
+            ),
+        ],
+        0.90,
+    )
+    contradiction_gate = next(
+        item
+        for item in report["gate_diagnostics"]
+        if item["gate_name"] == "truth_candidate_contradiction"
+    )
+
+    assert report["promotion_state"] == "TRUTH_CANDIDATE"
+    assert contradiction_gate["passed"] is True
+    assert contradiction_gate["contradiction_review_required"] is True
+    assert contradiction_gate["within_soft_review_zone"] is True
+    assert contradiction_gate[
+        "soft_review_permits_truth_candidate_promotion"
+    ] is True
+    assert contradiction_gate["truth_commit_review_still_required"] is True
 
 
 def test_locked_truth_candidate_exposes_runtime_contradiction_snapshot():
@@ -1268,6 +1434,207 @@ def test_locked_truth_candidate_marks_medium_contradiction_review():
     assert report["contradiction_review_severity"] == (
         "MEDIUM_RISK_REVIEW"
     )
+
+
+def test_truth_candidate_consumes_context_hierarchy_and_authority_reports():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="shape_preservation",
+            claim="shape_preservation",
+            state=BeliefState.VALIDATED,
+            confidence=0.90,
+        ),
+        EvidenceAggregate(
+            concept="shape_preservation",
+            evidence_strength=0.90,
+            contradiction_score=0.05,
+            causal_alignment=0.82,
+        ),
+        {
+            "context_discovery": {
+                "transformation_family": "duplication",
+            },
+            "context_hierarchy": {
+                "score": 0.94,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "confidence": 0.90,
+                "status": "SEMANTICALLY_VALIDATED",
+            },
+            "causal_validation": {
+                "validation_score": 0.80,
+                "context_consistency": 0.765,
+                "dependency_coherence": 0.70,
+                "contradiction_resistance": 0.90,
+                "identity_compatibility": 1.0,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.83,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 0.6874,
+                "context_confidence": 0.8228,
+                "transfer_reliability": 0.4444,
+            },
+        },
+    )
+
+    assert report["context_discovery"]["transformation_family"] == (
+        "duplication"
+    )
+    assert report["context_hierarchy"]["context_hierarchy_score"] == 0.94
+    assert report["contextual_truth_authority"][
+        "contextual_truth_authority"
+    ] >= 0.60
+    assert "context_hierarchy_score" not in report["blocked_metrics"]
+
+
+def test_truth_candidate_uses_effective_contextual_truth_alpha_threshold():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="symmetry_reasoning",
+            claim="symmetry_reasoning",
+            state=BeliefState.VALIDATED,
+            confidence=0.90,
+        ),
+        EvidenceAggregate(
+            concept="symmetry_reasoning",
+            evidence_strength=0.90,
+            contradiction_score=0.05,
+            causal_alignment=0.82,
+        ),
+        {
+            "context_discovery": {
+                "transformation_family": "duplication",
+            },
+            "context_hierarchy": {
+                "score": 0.94,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "confidence": 0.90,
+                "status": "SEMANTICALLY_VALIDATED",
+            },
+            "causal_validation": {
+                "validation_score": 0.80,
+                "context_consistency": 0.5589,
+                "dependency_coherence": 0.70,
+                "contradiction_resistance": 0.90,
+                "identity_compatibility": 1.0,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.83,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 0.6907,
+                "context_confidence": 0.8228,
+                "transfer_reliability": 1.0,
+            },
+        },
+    )
+
+    contextual_metric = next(
+        item
+        for item in report["metrics"]
+        if item["metric"] == "contextual_truth_score"
+    )
+
+    assert report["contextual_truth_authority"][
+        "effective_contextual_truth"
+    ] == 0.6907
+    assert report["contextual_truth_authority"][
+        "contextual_truth_supported"
+    ] is True
+    assert contextual_metric["passed"] is True
+    assert "contextual_truth_score" not in report["blocked_metrics"]
+
+
+def test_locked_truth_candidate_still_reports_contextual_authority():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="color_preservation",
+            claim="color_preservation",
+            state=BeliefState.TRUTH_COMMITTED,
+            confidence=0.90,
+        ),
+        EvidenceAggregate(
+            concept="color_preservation",
+            evidence_strength=0.90,
+            contradiction_score=0.05,
+            causal_alignment=0.82,
+        ),
+        {
+            "context_discovery": {
+                "transformation_family": "duplication",
+            },
+            "context_hierarchy": {
+                "score": 0.94,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "confidence": 0.90,
+                "status": "SEMANTICALLY_VALIDATED",
+            },
+            "causal_validation": {
+                "validation_score": 0.80,
+                "context_consistency": 0.5589,
+                "dependency_coherence": 0.70,
+                "contradiction_resistance": 0.90,
+                "identity_compatibility": 1.0,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.83,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 0.6907,
+                "context_confidence": 0.8228,
+                "transfer_reliability": 1.0,
+            },
+        },
+    )
+
+    assert report["truth_candidate_evaluation_skipped"] is True
+    assert report["contextual_truth_authority"][
+        "contextual_truth_authority"
+    ] is not None
+    assert report["context_discovery"]["transformation_family"] == (
+        "duplication"
+    )
+
+
+def test_identity_integration_consumes_contextual_truth_authority_support():
+    report = IdentitySafeTruthIntegrationEngine().evaluate(
+        Belief(
+            concept="shape_preservation",
+            claim="shape_preservation",
+            state=BeliefState.TRUTH_CANDIDATE,
+            confidence=0.95,
+        ),
+        EvidenceAggregate(
+            concept="shape_preservation",
+            semantic_consistency=1.0,
+            causal_alignment=1.0,
+        ),
+        {"eligible_for_truth_candidate": True},
+        {
+            "identity_continuity": 0.82,
+            "contextual_truth": {
+                "contextual_truth_score": 0.68,
+            },
+            "contextual_truth_authority": {
+                "contextual_truth_supported": True,
+                "contextual_truth_authority": 0.78,
+            },
+            "context_hierarchy": {
+                "score": 0.94,
+                "hierarchy_required": True,
+            },
+        },
+    )
+
+    assert "contextual_truth_supported" not in report["failed_checks"]
+    assert "context_hierarchy_supported" not in report["failed_checks"]
 
 
 def test_repeated_color_trials_report_stalled_causal_attestation_gap():

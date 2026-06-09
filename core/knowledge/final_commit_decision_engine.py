@@ -38,7 +38,13 @@ class FinalCommitDecisionEngine:
         stable_truth_authority_locked=False,
         contradiction_score=None,
         truth_key=None,
+        adaptive_contradiction_governance=None,
     ):
+        adaptive_contradiction_governance = (
+            adaptive_contradiction_governance
+            if isinstance(adaptive_contradiction_governance, dict)
+            else {}
+        )
         failed_gates = [
             name
             for name, passed in gates.items()
@@ -51,6 +57,13 @@ class FinalCommitDecisionEngine:
                 stable_truth_authority_locked
                 and name == "belief_is_truth_candidate"
             )
+            and not (
+                name == "contradiction_below_limit"
+                and adaptive_contradiction_governance.get(
+                    "contradiction_below_dynamic_threshold",
+                    False,
+                )
+            )
         ]
         revocation_review_reasons = [
             name
@@ -58,7 +71,10 @@ class FinalCommitDecisionEngine:
             if name in self.REVOCATION_REVIEW_GATES
         ]
         revocation_severity = (
-            self._revocation_severity(contradiction_score)
+            adaptive_contradiction_governance.get(
+                "contradiction_review_severity",
+                self._revocation_severity(contradiction_score),
+            )
             if revocation_review_reasons
             else None
         )
@@ -126,6 +142,8 @@ class FinalCommitDecisionEngine:
                 "medium_risk_review_maximum":
                 self.MEDIUM_RISK_REVIEW_LIMIT,
             },
+            "adaptive_contradiction_governance":
+            adaptive_contradiction_governance,
             "forbid_automatic_truth_revocation":
             stable_truth_authority_locked,
             "manual_review_required":

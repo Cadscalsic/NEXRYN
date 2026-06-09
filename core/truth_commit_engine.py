@@ -11,9 +11,25 @@ from core.identity.identity_governance_policy import (
 from core.knowledge.final_commit_decision_engine import (
     FinalCommitDecisionEngine,
 )
+from core.knowledge.adaptive_contradiction_governance import (
+    AdaptiveContradictionGovernance,
+)
+from core.knowledge.knowledge_promotion_policy import (
+    KnowledgePromotionPolicy,
+)
+from core.knowledge.contextual_truth_support_policy import (
+    ContextualTruthSupportPolicy,
+)
 
 
 class TruthCommitEngine:
+    CONTEXTUAL_TRUTH_SUPPORT_THRESHOLD = (
+        ContextualTruthSupportPolicy.SUPPORT_THRESHOLD
+    )
+    CONTEXTUAL_TRUTH_SUPPORT_GRACE = (
+        ContextualTruthSupportPolicy.SUPPORT_GRACE
+    )
+
     def __init__(
         self,
         minimum_evidence=3,
@@ -33,9 +49,79 @@ class TruthCommitEngine:
         self.remediation_engine = TruthGateRemediationEngine()
         self.truth_state_authority = TruthStateAuthority()
         self.final_commit_decision_engine = FinalCommitDecisionEngine()
+        self.adaptive_contradiction_governance = (
+            AdaptiveContradictionGovernance()
+        )
+        self.knowledge_promotion_policy = KnowledgePromotionPolicy()
+        self.contextual_truth_support_policy = (
+            ContextualTruthSupportPolicy()
+        )
 
     def evaluate(self, belief, aggregate, trials, context=None):
         context = context if isinstance(context, dict) else {}
+        contextual_truth = context.get("contextual_truth", {})
+        contextual_truth = (
+            contextual_truth
+            if isinstance(contextual_truth, dict)
+            else {}
+        )
+        contextual_truth_authority = context.get(
+            "contextual_truth_authority",
+            contextual_truth.get("contextual_truth_authority", {}),
+        )
+        contextual_truth_authority = (
+            contextual_truth_authority
+            if isinstance(contextual_truth_authority, dict)
+            else {}
+        )
+        context_hierarchy = context.get("context_hierarchy", {})
+        context_hierarchy = (
+            context_hierarchy
+            if isinstance(context_hierarchy, dict)
+            else {}
+        )
+        context_hierarchy_score = context_hierarchy.get(
+            "context_hierarchy_score",
+            context_hierarchy.get("score", 1.0),
+        )
+        context_hierarchy_ready = context_hierarchy.get(
+            "hierarchy_ready",
+            context_hierarchy_score >= 0.75,
+        )
+        contextual_truth_supported = contextual_truth_authority.get(
+            "contextual_truth_supported",
+            contextual_truth.get(
+                "contextual_truth_supported",
+                contextual_truth.get("contextual_consistency", True),
+            ),
+        )
+        contextual_truth_authority_score = contextual_truth_authority.get(
+            "contextual_truth_authority",
+            0.0,
+        )
+        effective_contextual_truth = max(
+            contextual_truth.get(
+                "effective_contextual_truth",
+                contextual_truth.get("contextual_truth_score", 1.0),
+            ),
+            contextual_truth_authority_score,
+        )
+        contextual_truth_support_policy = (
+            self.contextual_truth_support_policy.evaluate(
+                contextual_truth={
+                    **contextual_truth,
+                    "contextual_truth_supported":
+                    contextual_truth_supported,
+                },
+                contextual_truth_authority=contextual_truth_authority,
+                context_hierarchy=context_hierarchy,
+                semantic_context=context.get("semantic_context", {}),
+                effective_score=effective_contextual_truth,
+            )
+        )
+        contextual_truth_supported = (
+            contextual_truth_support_policy["contextual_truth_supported"]
+        )
         passed_trials = sum(trial.trial_result.value == "PASSED" for trial in trials)
         semantic_stable = context.get("semantic_consistency", True) is not False
         rehearsal_safe = context.get("mutation_rehearsal_safe", True) is not False
@@ -112,8 +198,23 @@ class TruthCommitEngine:
         semantic_spine_stable = identity_governance[
             "semantic_spine_stable"
         ]
+        previously_committed = belief.concept in self.truth_registry
+        adaptive_contradiction_governance = (
+            self.adaptive_contradiction_governance.evaluate(
+                aggregate.contradiction_score,
+                {
+                    **context,
+                    "contextual_truth": contextual_truth,
+                    "contextual_truth_authority":
+                    contextual_truth_authority,
+                    "identity_safe_truth_integration":
+                    identity_safe_truth_integration,
+                },
+                stable_truth_authority_locked=previously_committed,
+            )
+        )
 
-        gates = {
+        raw_gates = {
             "belief_is_truth_candidate":
             belief.state == BeliefState.TRUTH_CANDIDATE,
 
@@ -122,7 +223,10 @@ class TruthCommitEngine:
             "minimum_consistency": aggregate.semantic_consistency >= self.minimum_consistency,
             "minimum_confidence": belief.confidence >= self.minimum_confidence,
             "minimum_strength": aggregate.evidence_strength >= self.minimum_strength,
-            "contradiction_below_limit": aggregate.contradiction_score < self.maximum_contradiction,
+            "contradiction_below_limit":
+            adaptive_contradiction_governance[
+                "contradiction_below_dynamic_threshold"
+            ],
             "identity_stable": identity_stable,
             "semantic_anchor_stable": semantic_stable,
             "semantic_spine_stable": semantic_spine_stable,
@@ -158,6 +262,43 @@ class TruthCommitEngine:
                 True,
             )
             is True,
+            "causal_graph_alignment":
+            context.get(
+                "causal_graph_alignment",
+                {
+                    "alignment_ready": True,
+                },
+            ).get(
+                "alignment_ready",
+                True,
+            )
+            is True,
+            "causal_validation_score":
+            context.get(
+                "causal_validation",
+                {
+                    "validation_ready": True,
+                },
+            ).get(
+                "validation_ready",
+                True,
+            )
+            is True,
+            "contextual_truth_score":
+            contextual_truth_supported is True,
+            "context_hierarchy_score":
+            context_hierarchy_ready is True,
+            "semantic_context_validated":
+            context.get(
+                "semantic_context",
+                {
+                    "semantically_validated": True,
+                },
+            ).get(
+                "semantically_validated",
+                True,
+            )
+            is True,
             "semantic_containment_inactive":
             identity_safe_truth_integration.get(
                 "semantic_containment",
@@ -183,6 +324,27 @@ class TruthCommitEngine:
             )
             is True,
         }
+        policy_context = {
+            **context,
+            "concept": belief.concept,
+            "truth_candidate": context.get("truth_candidate", {}),
+            "adaptive_contradiction_governance":
+            adaptive_contradiction_governance,
+            "contextual_truth": contextual_truth,
+            "contextual_truth_authority": contextual_truth_authority,
+            "identity_safe_truth_integration":
+            identity_safe_truth_integration,
+            "semantic_spine_recovery_report": semantic_spine_recovery,
+        }
+        knowledge_promotion_policy = (
+            self.knowledge_promotion_policy.evaluate(
+                raw_gates,
+                policy_context,
+                stable_truth_authority_locked=previously_committed,
+                minimum_trials=self.minimum_trials,
+            )
+        )
+        gates = knowledge_promotion_policy["adjusted_gates"]
         identity_governance_gates = [
             "identity_stable",
             "semantic_spine_stable",
@@ -207,16 +369,49 @@ class TruthCommitEngine:
             ]
             else "IDENTITY_GOVERNANCE_REVIEW_REQUIRED"
         )
-        previously_committed = belief.concept in self.truth_registry
         final_commit = self.final_commit_decision_engine.evaluate(
             gates,
             stable_truth_authority_locked=previously_committed,
             contradiction_score=aggregate.contradiction_score,
             truth_key=belief.concept,
+            adaptive_contradiction_governance=
+            adaptive_contradiction_governance,
         )
         decision = final_commit["decision"]
         committed = decision == "TRUTH_COMMITTED"
         reasons = list(final_commit["effective_failed_gates"])
+        truth_candidate = context.get("truth_candidate", {})
+        truth_candidate = (
+            truth_candidate
+            if isinstance(truth_candidate, dict)
+            else {}
+        )
+        causal_validation = context.get("causal_validation", {})
+        causal_validation = (
+            causal_validation
+            if isinstance(causal_validation, dict)
+            else {}
+        )
+        dependency_promotion_diagnostics = {
+            "promotion_dependency_score":
+            truth_candidate.get(
+                "promotion_dependency_score",
+                causal_validation.get("promotion_dependency_score", 0.0),
+            ),
+            "promotion_dependency_bonus":
+            truth_candidate.get(
+                "promotion_dependency_bonus",
+                causal_validation.get("promotion_dependency_bonus", 0.0),
+            ),
+            "dependency_promotion_blockers":
+            truth_candidate.get(
+                "dependency_promotion_blockers",
+                causal_validation.get("dependency_promotion_blockers", []),
+            ),
+            "dependency_adjusted_candidate_ready":
+            truth_candidate.get("eligible_for_truth_candidate", False),
+            "dependency_does_not_override_identity_governance": True,
+        }
         remediation = self.remediation_engine.build_plan(
             gates,
         )
@@ -246,6 +441,10 @@ class TruthCommitEngine:
             },
             metadata={
                 "gates": gates,
+                "raw_gates_before_knowledge_promotion_policy":
+                raw_gates,
+                "knowledge_promotion_policy":
+                knowledge_promotion_policy,
                 "semantic_drift": semantic_drift,
                 "identity_continuity": identity_continuity,
                 "identity_safe_truth_integration":
@@ -256,6 +455,14 @@ class TruthCommitEngine:
                 effective_maximum_semantic_drift,
                 "effective_minimum_identity_continuity":
                 effective_minimum_identity_continuity,
+                "adaptive_contradiction_governance":
+                adaptive_contradiction_governance,
+                "maximum_contradiction":
+                self.maximum_contradiction,
+                "effective_maximum_contradiction":
+                adaptive_contradiction_governance[
+                    "dynamic_threshold"
+                ],
                 "semantic_spine_recovery":
                 semantic_spine_recovery,
                 "identity_governance":
@@ -268,6 +475,45 @@ class TruthCommitEngine:
                 context.get("causal_spine_alignment", {}),
                 "causal_graph_validation":
                 context.get("causal_graph_validation", {}),
+                "causal_graph_alignment":
+                context.get("causal_graph_alignment", {}),
+                "causal_explanation":
+                context.get("causal_explanation", {}),
+                "causal_validation":
+                context.get("causal_validation", {}),
+                "dependency_promotion_diagnostics":
+                dependency_promotion_diagnostics,
+                "contextual_truth":
+                contextual_truth,
+                "contextual_truth_authority":
+                contextual_truth_authority,
+                "effective_contextual_truth":
+                effective_contextual_truth,
+                "contextual_truth_support_threshold":
+                self.CONTEXTUAL_TRUTH_SUPPORT_THRESHOLD,
+                "contextual_truth_support_grace":
+                self.CONTEXTUAL_TRUTH_SUPPORT_GRACE,
+                "contextual_truth_support_policy":
+                contextual_truth_support_policy,
+                "context_hierarchy":
+                context_hierarchy,
+                "semantic_context":
+                context.get("semantic_context", {}),
+                "semantic_context_support_links": [
+                    {
+                        "truth": belief.concept,
+                        "context_property":
+                        item.get("property_name"),
+                        "support_type": "semantic_context_property",
+                    }
+                    for item in context.get(
+                        "semantic_context",
+                        {},
+                    ).get("properties", [])
+                    if isinstance(item, dict)
+                ],
+                "context_discovery":
+                context.get("context_discovery", {}),
                 "remediation": remediation,
                 "truth_state_authority": {
                     "truth_state_locked": previously_committed,
