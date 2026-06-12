@@ -504,6 +504,14 @@ try:
         ],
     )
 
+    truth_graveyard_consistency_report = collect_governance_reports(
+        all_results,
+        [
+            "truth_graveyard_consistency",
+            "truth_graveyard_consistency_report",
+        ],
+    )
+
     concepts = normalize_concept_diagnostics(training_report)
     truth_candidates = normalize_truth_candidates(training_report)
     truth_commits = training_report.get("truth_commit_evaluations", {})
@@ -530,6 +538,8 @@ try:
         "truth_candidate_report": truth_candidate_report,
         "truth_commit_report": truth_commit_report,
         "contextual_truth_report": contextual_truth_report,
+        "truth_graveyard_consistency_report":
+        truth_graveyard_consistency_report,
     }
 
     runtime_status = "completed"

@@ -37,7 +37,10 @@ def build_training_report(
         context_reports,
         semantic_reports,
         contextual_reports,
+        candidate_evaluations=None,
     ):
+        candidate_evaluations = candidate_evaluations or {}
+
         try:
             from core.dependency import (
                 DependencyReasoningOperator,
@@ -48,15 +51,23 @@ def build_training_report(
             dependency_reasoning_operator_available = (
                 DependencyReasoningOperator is not None
             )
-            process_dependency_memory = ProcessDependencyMemory(
-                seed_defaults=True,
+
+            process_dependency_memory = (
+                ProcessDependencyMemory(
+                    seed_defaults=True,
+                )
             )
-            process_dependency_graph = ProcessDependencyGraph(
-                process_dependency_memory=process_dependency_memory,
+
+            process_dependency_graph = (
+                ProcessDependencyGraph(
+                    process_dependency_memory=process_dependency_memory,
+                )
             )
+
             process_dependency_memory_available = (
                 process_dependency_memory.links_loaded > 0
             )
+
         except Exception:
             process_dependency_graph = None
             dependency_reasoning_operator_available = False
@@ -115,18 +126,60 @@ def build_training_report(
                 and dependency_debug.get("dependency_chain_depth", 0) >= 4
             ):
                 continue
-            promotion = item.get("truth_candidate_promotion", {})
+            promotion = candidate_evaluations.get(
+                concept,
+                item.get("truth_candidate_promotion", {}),
+            )
+
+            if not promotion:
+                dependency_confidence = float(
+                    dependency_debug.get("dependency_confidence", 0.0) or 0.0
+                )
+                dependency_coverage = float(
+                    dependency_debug.get("dependency_chain_coverage", 0.0) or 0.0
+                )
+                dependency_depth = int(
+                    dependency_debug.get("dependency_chain_depth", 0) or 0
+                )
+                depth_score = min(dependency_depth / 5.0, 1.0)
+
+                promotion_score = round(
+                    min(
+                        dependency_confidence * 0.46
+                        + dependency_coverage * 0.34
+                        + depth_score * 0.20,
+                        1.0,
+                    ),
+                    4,
+                )
+
+                promotion = {
+                    "promotion_dependency_score": promotion_score,
+                    "promotion_dependency_bonus": (
+                        round(min((promotion_score - 0.80) * 0.25, 0.08), 4)
+                        if promotion_score > 0.80
+                        else 0.0
+                    ),
+                    "stage_eligible_for_truth_candidate": None,
+                    "eligible_for_truth_candidate": None,
+                    "blocked_metrics": [],
+                    "eligibility_reason": "computed_from_dependency_debug",
+                    "dependency_promotion_blockers": [],
+                }
+
             blockers = list(
                 promotion.get(
                     "dependency_promotion_blockers",
                     promotion.get("failed_gates", []),
                 )
             )
+
             if not blockers:
                 blockers = [
                     f"promotion_gate_blocked:{gate}"
                     for gate in promotion.get("failed_gates", [])
                 ]
+
             dependency_ready_boundary_refinement_blockers.append({
                 "concept": concept,
                 "dependency_confidence":
@@ -141,6 +194,18 @@ def build_training_report(
                 item.get("preliminary_truth_candidate_ready", False),
                 "state": item.get("state"),
                 "exact_blocker": blockers,
+                "promotion_dependency_score":
+                promotion.get("promotion_dependency_score"),
+                "promotion_dependency_bonus":
+                promotion.get("promotion_dependency_bonus"),
+                "stage_eligible_for_truth_candidate":
+                promotion.get("stage_eligible_for_truth_candidate"),
+                "eligible_for_truth_candidate":
+                promotion.get("eligible_for_truth_candidate"),
+                "blocked_metrics":
+                promotion.get("blocked_metrics", []),
+                "eligibility_reason":
+                promotion.get("eligibility_reason"),
             })
 
         causal_values = list(causal_reports.values())
@@ -673,6 +738,7 @@ def build_training_report(
         context_discovery_reports,
         semantic_context_reports,
         contextual_truth_reports,
+        candidate_evaluations,
     )
     return {
         "system": "training_report",
@@ -912,9 +978,22 @@ def print_training_report(report):
         f"{architecture_report.get('dependency_chain_coverage')}",
         "evidence_saturated="
         f"{architecture_report.get('evidence_saturated')}",
+        "promotion_dependency_score="
+        f"{architecture_report.get('promotion_dependency_score')}",
+        "promotion_dependency_bonus="
+        f"{architecture_report.get('promotion_dependency_bonus')}",
+        "eligible_for_truth_candidate="
+        f"{architecture_report.get('eligible_for_truth_candidate')}",
+        "stage_eligible_for_truth_candidate="
+        f"{architecture_report.get('stage_eligible_for_truth_candidate')}",
+        "blocked_metrics="
+        f"{architecture_report.get('blocked_metrics')}",
+        "eligibility_reason="
+        f"{architecture_report.get('eligibility_reason')}",
         "recommended_next_step="
         f"{architecture_report.get('recommended_next_step')}",
     )
+    
     for item in architecture_report.get(
         "boundary_refinement_dependency_debug",
         [],
@@ -938,6 +1017,14 @@ def print_training_report(report):
             "dependency_ready_boundary_refinement_blocker",
             "concept="
             f"{item.get('concept')}",
+            "promotion_dependency_score="
+            f"{item.get('promotion_dependency_score')}",
+            "promotion_dependency_bonus="
+            f"{item.get('promotion_dependency_bonus')}",
+            "stage_eligible="
+            f"{item.get('stage_eligible_for_truth_candidate')}",
+            "eligible="
+            f"{item.get('eligible_for_truth_candidate')}",
             "exact_blocker="
             f"{item.get('exact_blocker', [])}",
         )

@@ -390,20 +390,51 @@ class CausalValidationEngine:
         }
 
     def _dependency_promotion(self, context):
+        context = context if isinstance(context, dict) else {}
         evidence = {}
+
         for key in [
             "process_dependency_memory",
+            "dependency_promotion_evidence",
             "dependency_reasoning",
             "dependency_reasoning_report",
             "dependency_chain_resolution",
         ]:
             candidate = context.get(key)
-            if isinstance(candidate, dict):
+            if isinstance(candidate, dict) and (
+                candidate.get("dependency_confidence")
+                or candidate.get("dependency_chain_depth")
+                or candidate.get("dependency_chain_coverage")
+                or candidate.get("resolved_dependency_chain")
+            ):
                 evidence = candidate
                 break
+
         causal_validation = context.get("causal_validation", {})
         if not evidence and isinstance(causal_validation, dict):
-            evidence = causal_validation.get("dependency_promotion_evidence", {})
+            candidate = causal_validation.get(
+                "dependency_promotion_evidence",
+                {},
+            )
+            if isinstance(candidate, dict):
+                evidence = candidate
+
+        architecture_report = context.get(
+            "architecture_bottleneck_report",
+            {},
+        )
+        if not evidence and isinstance(architecture_report, dict):
+            evidence = {
+                "dependency_confidence":
+                architecture_report.get("dependency_confidence", 0.0),
+                "dependency_chain_depth":
+                architecture_report.get("dependency_chain_depth", 0),
+                "dependency_chain_coverage":
+                architecture_report.get("dependency_chain_coverage", 0.0),
+                "missing_dependencies":
+                architecture_report.get("missing_dependencies", []),
+            }
+
         confidence = clamp(
             context.get(
                 "dependency_confidence",
@@ -416,16 +447,21 @@ class CausalValidationEngine:
                 evidence.get("dependency_chain_coverage", 0.0),
             )
         )
+
         try:
             depth = int(
                 context.get(
                     "dependency_chain_depth",
-                    evidence.get("dependency_chain_depth", 0),
+                    evidence.get(
+                        "dependency_chain_depth",
+                        len(evidence.get("resolved_dependency_chain", [])),
+                    ),
                 )
                 or 0
             )
         except Exception:
             depth = 0
+
         missing_dependencies = list(
             context.get(
                 "missing_dependencies",
@@ -433,29 +469,35 @@ class CausalValidationEngine:
             )
             or []
         )
+
         blockers = []
-        if confidence <= 0.85:
+        if confidence < 0.85:
             blockers.append("dependency_confidence_below_promotion_floor")
         if missing_dependencies:
             blockers.append("dependency_chain_missing_dependencies")
-        if depth < 4:
+        if depth < 3:
             blockers.append("dependency_chain_depth_below_promotion_floor")
+
         depth_score = clamp(depth / 5.0)
+
         promotion_dependency_score = clamp(
             confidence * 0.46
             + coverage * 0.34
             + depth_score * 0.20
         )
+
         complete = (
-            confidence > 0.85
+            confidence >= 0.85
             and not missing_dependencies
             and depth >= 4
         )
+
         promotion_dependency_bonus = (
             round(min((promotion_dependency_score - 0.80) * 0.25, 0.08), 4)
             if complete and promotion_dependency_score > 0.80
             else 0.0
         )
+
         return {
             "promotion_dependency_score":
             round(promotion_dependency_score, 4),
@@ -634,10 +676,9 @@ class CausalValidationEngine:
         counterfactual = spurious_report["counterfactual_validation"]
         metrics["dependency_coherence"] = clamp(
             (
-                metrics["dependency_coherence"]
-                + counterfactual["counterfactual_score"]
+              metrics["dependency_coherence"] * 0.70
+              + counterfactual["counterfactual_score"] * 0.30
             )
-            / 2.0
         )
         validation_score = self.compute_validation_score(metrics)
         state = self._state_for_score(

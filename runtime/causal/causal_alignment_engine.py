@@ -57,6 +57,11 @@ class RuntimeCausalAlignmentEngine:
                 "object_identity_transform",
                 "object_split",
                 "object_merge",
+                "identity_continuity",
+                "identity_tracking",
+                "identity_preservation",
+                "object_persistence",
+                "object_core",
             },
         },
     }
@@ -248,13 +253,61 @@ class RuntimeCausalAlignmentEngine:
             observation_support["boundary_observation_confidence"],
             0.80 if mode_supported else 0.0,
         )
+
         contradiction_interpretable = (
-            explanation_confidence >= self.minimum_explanation_confidence
+            explanation_confidence
+            >= self.minimum_explanation_confidence
             and (
                 mode_supported
-                or observation_support["mixed_boundary_observed"]
+                or observation_support[
+                    "mixed_boundary_observed"
+                ]
             )
         )
+        process_dependency_memory = context.get(
+            "process_dependency_memory",
+            {},
+        )
+        process_dependency_memory = (
+            process_dependency_memory
+            if isinstance(process_dependency_memory, dict)
+            else {}
+        )
+
+        dependency_confidence = context.get(
+            "dependency_confidence",
+            process_dependency_memory.get(
+                "dependency_confidence",
+                0.0,
+            ),
+        )
+
+        promotion_dependency_score = context.get(
+            "promotion_dependency_score",
+            process_dependency_memory.get(
+                "promotion_dependency_score",
+                0.0,
+            ),
+        )
+
+        causal_alignment_audit = {
+            "explanation_confidence":
+                explanation_confidence,
+            "minimum_explanation_confidence":
+                self.minimum_explanation_confidence,
+            "mode_supported":
+                mode_supported,
+            "mixed_boundary_observed":
+                observation_support[
+                    "mixed_boundary_observed"
+                ],
+            "dependency_confidence":
+                dependency_confidence,
+            "promotion_dependency_score":
+                promotion_dependency_score,
+            "contradiction_interpretable":
+                contradiction_interpretable,
+        }
         adjusted_contradiction = (
             min(raw_contradiction, self.max_explained_contradiction)
             if contradiction_interpretable
@@ -283,7 +336,10 @@ class RuntimeCausalAlignmentEngine:
             "raw_contradiction_score": raw_contradiction,
             "adjusted_contradiction_score": adjusted_contradiction,
             "contradiction_adjustment": adjustment,
-            "causal_alignment_supported": contradiction_interpretable,
+            "causal_alignment_supported":
+            contradiction_interpretable,
+            "causal_alignment_audit":
+            causal_alignment_audit,
             "boundary_evidence": observation_support,
             "required_action": (
                 None
