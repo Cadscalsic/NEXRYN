@@ -207,71 +207,106 @@ class TruthCandidateEngine:
 
     def _dependency_promotion(self, concept, context):
         causal_validation = self._causal_validation_report(context)
-        evidence = causal_validation.get("dependency_promotion_evidence", {})
+
+        evidence = causal_validation.get(
+            "dependency_promotion_evidence",
+            {},
+        )
         evidence = evidence if isinstance(evidence, dict) else {}
+
         process_memory = context.get("process_dependency_memory", {})
-        process_memory = process_memory if isinstance(process_memory, dict) else {}
+        process_memory = (
+            process_memory
+            if isinstance(process_memory, dict)
+            else {}
+        )
+
+        alignment = context.get("dependency_chain_alignment", {})
+        alignment = alignment if isinstance(alignment, dict) else {}
+
+        alignment_ready = alignment.get("alignment_ready", False)
+        alignment_confidence = clamp(
+            alignment.get("alignment_confidence", 0.0)
+        )
+
         confidence = clamp(
-            causal_validation.get(
+            process_memory.get(
                 "dependency_confidence",
                 evidence.get(
                     "dependency_confidence",
-                    process_memory.get("dependency_confidence", 0.0),
+                    causal_validation.get("dependency_confidence", 0.0),
                 ),
             )
         )
+
         coverage = clamp(
-            causal_validation.get(
+            process_memory.get(
                 "dependency_chain_coverage",
                 evidence.get(
                     "dependency_chain_coverage",
-                    process_memory.get("dependency_chain_coverage", 0.0),
+                    causal_validation.get("dependency_chain_coverage", 0.0),
                 ),
             )
         )
+
         try:
             depth = int(
-                causal_validation.get(
+                process_memory.get(
                     "dependency_chain_depth",
                     evidence.get(
                         "dependency_chain_depth",
-                        process_memory.get("dependency_chain_depth", 0),
+                        causal_validation.get("dependency_chain_depth", 0),
                     ),
                 )
                 or 0
             )
         except Exception:
             depth = 0
+
         missing_dependencies = list(
-            causal_validation.get(
+            process_memory.get(
                 "missing_dependencies",
                 evidence.get(
                     "missing_dependencies",
-                    process_memory.get("missing_dependencies", []),
+                    causal_validation.get("missing_dependencies", []),
                 ),
             )
             or []
         )
+
         blockers = []
-        if confidence <= 0.85:
+
+        if confidence < 0.85:
             blockers.append("dependency_confidence_below_promotion_floor")
+
         if missing_dependencies:
             blockers.append("dependency_chain_missing_dependencies")
+
         if depth < 4:
             blockers.append("dependency_chain_depth_below_promotion_floor")
+
+        if not alignment_ready:
+            blockers.append("dependency_chain_alignment_not_ready")
+
         complete = (
-            confidence > 0.85
+            confidence >= 0.85
             and not missing_dependencies
             and depth >= 4
+            and alignment_ready
         )
+
+        calculated_score = clamp(
+            confidence * 0.42
+            + coverage * 0.30
+            + clamp(depth / 5.0) * 0.18
+            + alignment_confidence * 0.10
+        )
+
         score = max(
             clamp(causal_validation.get("promotion_dependency_score", 0.0)),
-            clamp(
-                confidence * 0.46
-                + coverage * 0.34
-                + clamp(depth / 5.0) * 0.20
-            ),
+            calculated_score,
         )
+
         bonus = max(
             clamp(causal_validation.get("promotion_dependency_bonus", 0.0)),
             (
@@ -280,7 +315,9 @@ class TruthCandidateEngine:
                 else 0.0
             ),
         )
+
         applicable = concept in self.PROCESS_CONCEPTS
+
         return {
             "promotion_dependency_score": round(score, 4),
             "promotion_dependency_bonus": bonus if applicable else 0.0,
@@ -289,10 +326,11 @@ class TruthCandidateEngine:
             "dependency_chain_depth": depth,
             "dependency_chain_coverage": coverage,
             "missing_dependencies": missing_dependencies,
+            "dependency_alignment_ready": alignment_ready,
+            "dependency_alignment_confidence": alignment_confidence,
             "dependency_chain_complete_for_promotion": complete,
             "dependency_aware_promotion_applicable": applicable,
         }
-
     def _contextual_truth_authority_report(
         self,
         concept,
@@ -737,19 +775,100 @@ class TruthCandidateEngine:
             if ranked_bottlenecks
             else None
         )
+
         soft_contradiction_review_only = (
             blocked_metrics == ["contradiction_score"]
             and contradiction_review["within_soft_review_zone"]
         )
+
         qualified = not blocked_metrics
-        promotion_qualified = qualified or soft_contradiction_review_only
+
+        dependency_promotion_override_candidate = (
+            dependency_promotion[
+                "dependency_chain_complete_for_promotion"
+            ]
+            and dependency_promotion[
+                "dependency_aware_promotion_applicable"
+            ]
+            and dependency_promotion[
+                "promotion_dependency_score"
+            ] >= 0.90
+            and blocked_metrics == ["causal_alignment"]
+        )
+
+        promotion_qualified = (
+            qualified
+            or soft_contradiction_review_only
+        )
+
+        promotion_override_review_candidate = (
+            not promotion_qualified
+            and dependency_promotion_override_candidate
+        )
+
+        dependency_promotion_audit = {
+            "qualified": qualified,
+            "promotion_qualified": promotion_qualified,
+            "promotion_override_review_candidate":
+                promotion_override_review_candidate,
+            "dependency_promotion_override_candidate":
+                dependency_promotion_override_candidate,
+            "promotion_dependency_score":
+                dependency_promotion["promotion_dependency_score"],
+            "promotion_dependency_bonus":
+                dependency_promotion["promotion_dependency_bonus"],
+            "dependency_chain_complete_for_promotion":
+                dependency_promotion[
+                    "dependency_chain_complete_for_promotion"
+                ],
+            "dependency_aware_promotion_applicable":
+                dependency_promotion[
+                    "dependency_aware_promotion_applicable"
+                ],
+            "blocked_metrics": blocked_metrics,
+            "blocked_metric_details": [
+                {
+                    "metric": item["metric"],
+                    "current_value": item["current_value"],
+                    "threshold": item["threshold"],
+                    "gap": item["gap"],
+                    "required_action": item["required_action"],
+                }
+                for item in metrics
+                if not item["passed"]
+            ],
+        }
+
         current_state = belief.state.value
         stage_eligible = belief.state in [
             BeliefState.VALIDATED,
             BeliefState.TRUTH_CANDIDATE,
             BeliefState.TRUTH_COMMITTED,
         ]
-        eligible = promotion_qualified and stage_eligible
+
+        eligible = (
+            promotion_qualified
+            and stage_eligible
+        )
+
+        override_review_ready = (
+            promotion_override_review_candidate
+            and stage_eligible
+        )
+
+        if override_review_ready:
+            eligible = True
+
+        dependency_promotion_audit[
+            "stage_eligible"
+        ] = stage_eligible
+        dependency_promotion_audit[
+            "eligible_for_truth_candidate"
+        ] = eligible
+        dependency_promotion_audit[
+            "override_review_ready"
+        ] = override_review_ready
+
         dependency_promotion_blockers = list(
             dependency_promotion["dependency_promotion_blockers"]
         )
@@ -768,13 +887,19 @@ class TruthCandidateEngine:
                 dependency_promotion_blockers.append(
                     "promotion_stage_blocked:validated_stage_required"
                 )
+            if override_review_ready:
+                dependency_promotion_blockers.append(
+                    "promotion_override_review_ready"
+                )
         metrics_passed = len(metrics) - len(blocked_metrics)
         progress_ratio = round(
             metrics_passed / max(len(metrics), 1),
             4,
         )
         eligibility_reason = (
-            "truth_candidate_ready"
+            "dependency_promotion_override"
+            if override_review_ready
+            else "truth_candidate_ready"
             if eligible
             and not soft_contradiction_review_only
             else "truth_candidate_contradiction_review_required"
@@ -846,6 +971,14 @@ class TruthCandidateEngine:
             dependency_promotion["promotion_dependency_score"],
             "promotion_dependency_bonus":
             dependency_promotion["promotion_dependency_bonus"],
+            "dependency_promotion_audit":
+            dependency_promotion_audit,
+            "dependency_promotion_override_candidate":
+            dependency_promotion_override_candidate,
+            "promotion_override_review_candidate":
+            promotion_override_review_candidate,
+            "override_review_ready":
+            override_review_ready,
             "dependency_promotion_blockers":
             dependency_promotion_blockers,
             "dependency_confidence":

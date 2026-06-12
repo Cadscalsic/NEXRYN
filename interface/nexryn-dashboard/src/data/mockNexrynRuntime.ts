@@ -166,6 +166,26 @@ export type GraveyardItem = {
   status: string;
 };
 
+export type TruthGraveyardAuditRow = {
+  concept: string;
+  truth_state: string;
+  graveyard_state: string;
+  source_of_truth: string;
+  last_update_cycle: string;
+  stale_graveyard_entry: boolean;
+};
+
+export type TruthGraveyardConsistencyAudit = {
+  truth_graveyard_conflicts: number;
+  stale_graveyard_entries: number;
+  resurrection_conflicts: number;
+  constitutional_consistency_score: number;
+  source_of_truth_policy: string;
+  auto_resurrection_performed: boolean;
+  audit_report: TruthGraveyardAuditRow[];
+  stale_graveyard_concepts: string[];
+};
+
 export type GraveyardPressureFactors = {
   failedMergePressure: number;
   extinctTraitPressure: number;
@@ -854,27 +874,22 @@ export const dnaTraits: DNATrait[] = [
   },
 ];
 
-export const graveyard: GraveyardHealth = {
-  graveyardPressure: cognitiveHealthRuntime.graveyardPressure,
-  extinctTraits: 3,
-  rejectedMerges: 7,
-  failedLineages: 4,
-  entropyPrunedStrategies: 5,
-  ontologyDamage: 0.21,
-  recoveryActions: 3,
-  memoryScarCount: 9,
-};
-
 export const pressureFactors: GraveyardPressureFactors = {
   failedMergePressure: 0.24,
-  extinctTraitPressure: 0.19,
+  extinctTraitPressure: 0,
   ontologyDamagePressure: 0.21,
   entropyPruningPressure: 0.27,
   unstableLineagePressure: 0.22,
   recoveryDebt: 0.18,
 };
 
-export const graveyardItems: GraveyardItem[] = [
+const truthAuthoritativeStableConcepts = new Set([
+  "size_preservation",
+  "symmetry_preservation",
+  "topology_preservation",
+]);
+
+const rawGraveyardItems: GraveyardItem[] = [
   {
     id: "size-preservation",
     name: "size_preservation",
@@ -932,6 +947,49 @@ export const graveyardItems: GraveyardItem[] = [
   },
 ];
 
+const staleStableTruthGraveyardItems = rawGraveyardItems.filter((item) =>
+  truthAuthoritativeStableConcepts.has(item.name),
+);
+
+export const graveyardItems: GraveyardItem[] = rawGraveyardItems.filter(
+  (item) => !truthAuthoritativeStableConcepts.has(item.name),
+);
+
+export const truthGraveyardConsistencyAudit: TruthGraveyardConsistencyAudit = {
+  truth_graveyard_conflicts: staleStableTruthGraveyardItems.length,
+  stale_graveyard_entries: staleStableTruthGraveyardItems.length,
+  resurrection_conflicts: 0,
+  constitutional_consistency_score: Number(
+    (1 - staleStableTruthGraveyardItems.length / rawGraveyardItems.length).toFixed(4),
+  ),
+  source_of_truth_policy: "truth_registry_over_graveyard_reporting",
+  auto_resurrection_performed: false,
+  stale_graveyard_concepts: staleStableTruthGraveyardItems.map((item) => item.name),
+  audit_report: staleStableTruthGraveyardItems.map((item) => ({
+    concept: item.name,
+    truth_state: "STABLE_TRUTH",
+    graveyard_state: item.type.includes("Weakened")
+      ? "WEAKENED"
+      : "EXTINCT",
+    source_of_truth: "truth_registry",
+    last_update_cycle: item.lastSeen,
+    stale_graveyard_entry: true,
+  })),
+};
+
+export const graveyard: GraveyardHealth = {
+  graveyardPressure: cognitiveHealthRuntime.graveyardPressure,
+  extinctTraits: graveyardItems.filter((item) =>
+    item.type.toLowerCase().includes("extinct"),
+  ).length,
+  rejectedMerges: 7,
+  failedLineages: 4,
+  entropyPrunedStrategies: 5,
+  ontologyDamage: 0.21,
+  recoveryActions: 3,
+  memoryScarCount: 9,
+};
+
 export const evolutionaryTraumaGroups = [
   {
     label: "Unsafe Merges",
@@ -945,7 +1003,9 @@ export const evolutionaryTraumaGroups = [
   },
   {
     label: "Extinct Traits",
-    items: ["size_preservation", "symmetry_preservation", "topology_preservation"],
+    items: graveyardItems
+      .filter((item) => item.type.toLowerCase().includes("extinct"))
+      .map((item) => item.name),
     tone: "cyan" as Tone,
   },
   {

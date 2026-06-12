@@ -239,6 +239,25 @@ class EvidenceRegistry:
             historical_reliability=average("reliability"),
             effective_weight=clamp(total_weight),
         )
+
+        aggregate.audit = {
+            "raw_causal_alignment":
+                average("causal_alignment"),
+            "support_score":
+                support,
+            "contradiction_score":
+                contradiction,
+            "evidence_strength":
+                evidence_strength,
+            "semantic_consistency":
+                average("semantic_consistency"),
+            "historical_reliability":
+                average("reliability"),
+            "evidence_count":
+                len(evidence_items),
+            "effective_weight":
+                clamp(total_weight),
+        }
         return self._apply_contradiction_attribution(
             concept,
             aggregate,
@@ -246,12 +265,21 @@ class EvidenceRegistry:
         )
 
     def _apply_contradiction_attribution(self, concept, aggregate, now=None):
-        return self.contradiction_attribution_engine.apply(
+        result = self.contradiction_attribution_engine.apply(
             concept,
             aggregate,
             self.evidence_for(concept),
             lambda item: self.effective_evidence_weight(item, now),
         )
+
+        if hasattr(aggregate, "audit"):
+            setattr(
+                result,
+                "causal_alignment_audit",
+                aggregate.audit,
+            )
+
+        return result
 
     def report(self):
         evidence_items = [

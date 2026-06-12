@@ -257,6 +257,10 @@ from core.evolutionary_graveyard import (
     evolutionary_graveyard
 )
 
+from core.truth_graveyard_synchronization import (
+    truth_graveyard_synchronizer
+)
+
 from core.ontological_stability import (
     ontological_boundary_system
 )
@@ -924,6 +928,10 @@ class AdaptiveCognitivePipeline:
 
         self.evolutionary_graveyard = (
             evolutionary_graveyard
+        )
+
+        self.truth_graveyard_synchronizer = (
+            truth_graveyard_synchronizer
         )
 
         self.ontological_boundary_system = (
@@ -2357,6 +2365,16 @@ class AdaptiveCognitivePipeline:
             "extinction_engine_report"
         ] = extinction_engine_report
 
+        runtime_context = (
+            self.truth_graveyard_synchronizer
+            .synchronize_context_reports(runtime_context)
+        )
+
+        extinction_engine_report = runtime_context.get(
+            "extinction_engine_report",
+            extinction_engine_report,
+        )
+
         trait_recovery_report = (
             self.trait_recovery_engine
             .run_cycle(runtime_context)
@@ -2510,6 +2528,31 @@ class AdaptiveCognitivePipeline:
         runtime_context[
             "evolutionary_graveyard_report"
         ] = evolutionary_graveyard_report
+
+        runtime_context = (
+            self.truth_graveyard_synchronizer
+            .synchronize_context_reports(runtime_context)
+        )
+
+        extinction_engine_report = runtime_context.get(
+            "extinction_engine_report",
+            extinction_engine_report,
+        )
+
+        trait_recovery_report = runtime_context.get(
+            "trait_recovery_report",
+            trait_recovery_report,
+        )
+
+        evolutionary_graveyard_report = runtime_context.get(
+            "evolutionary_graveyard_report",
+            evolutionary_graveyard_report,
+        )
+
+        truth_graveyard_consistency_report = runtime_context.get(
+            "truth_graveyard_consistency_report",
+            {},
+        )
 
         ontological_boundary_report = (
             self.ontological_boundary_system
@@ -3514,6 +3557,9 @@ class AdaptiveCognitivePipeline:
             "evolutionary_graveyard":
             evolutionary_graveyard_report,
 
+            "truth_graveyard_consistency":
+            truth_graveyard_consistency_report,
+
             "ontological_boundary":
             ontological_boundary_report,
 
@@ -3818,6 +3864,10 @@ class AdaptiveCognitivePipeline:
         compressed_context[
             "evolutionary_graveyard_report"
         ] = evolutionary_graveyard_report
+
+        compressed_context[
+            "truth_graveyard_consistency_report"
+        ] = truth_graveyard_consistency_report
 
         compressed_context[
             "ontological_boundary_report"
@@ -4766,6 +4816,9 @@ class AdaptiveCognitivePipeline:
 
             "evolutionary_graveyard":
             evolutionary_graveyard_report,
+
+            "truth_graveyard_consistency":
+            truth_graveyard_consistency_report,
 
             "ontological_boundary":
             ontological_boundary_report,

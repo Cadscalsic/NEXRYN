@@ -1,6 +1,8 @@
 import json
 
+from core import causal_validation
 from core.confidence_calibration import ConfidenceCalibrator
+from core.dependency import process_dependency_memory
 from core.learning.curriculum_manager import LearningCurriculumManager
 from core.learning.evidence_integration_engine import (
     LearningEvidenceIntegrationEngine,
@@ -27,6 +29,9 @@ from runtime.causal_evidence_arbitration_engine import (
 from runtime.causal_attestation_engine import CausalAttestationEngine
 from runtime.contradiction_resolution_engine import (
     ContradictionResolutionEngine,
+)
+from runtime.dependency_chain_alignment_engine import (
+    DependencyChainAlignmentEngine,
 )
 from runtime.truth_candidate_engine import TruthCandidateEngine
 from runtime.truth_advancement_planner import TruthAdvancementPlanner
@@ -219,7 +224,7 @@ class EpistemicCognitionLayer:
         self.sandbox_experiment_executor = SandboxExperimentExecutor()
         self.causal_effect_analyzer = CausalEffectAnalyzer()
         self.experiment_result_evaluator = ExperimentResultEvaluator(
-            self.causal_effect_analyzer
+        self.causal_effect_analyzer
         )
         self.sandbox_experiment_runner = SandboxExperimentRunner(
             self.sandbox_experiment_executor,
@@ -264,6 +269,9 @@ class EpistemicCognitionLayer:
         self.causal_graph = CausalGraph()
         self.causal_validation_engine = CausalValidationEngine(
             storage_path=causal_validation_ledger_path
+        )
+        self.dependency_chain_alignment_engine = (
+            DependencyChainAlignmentEngine()
         )
         self.context_discovery_engine = ContextDiscoveryEngine()
         self.context_consistency_engine = ContextConsistencyEngine()
@@ -591,6 +599,12 @@ class EpistemicCognitionLayer:
                     hypothesis.concept,
                 )
             )
+            print(
+              "\nPROCESS MEMORY DEBUG:",
+              hypothesis.concept,
+            )
+            print(process_dependency_memory)
+  
             causal_validation = (
                 self.causal_validation_engine.validate_hypothesis(
                     {
@@ -639,6 +653,109 @@ class EpistemicCognitionLayer:
                     },
                     self.causal_graph,
                 )
+            )
+
+            print(
+            "\nCAUSAL VALIDATION DEP DEBUG:",
+              hypothesis.concept,
+            )
+            print(
+              causal_validation.get(
+              "dependency_promotion_evidence",
+              {},
+            )
+            )
+
+            dependency_chain_alignment = (
+                self.dependency_chain_alignment_engine.evaluate(
+                    hypothesis.concept,
+                    runtime_dependency_chain=process_dependency_memory,
+                    process_dependency_memory=process_dependency_memory,
+                    context={
+                        **context,
+                        "causal_validation":
+                        causal_validation,
+                        "process_dependency_memory":
+                        process_dependency_memory,
+                    },
+                )
+            )
+
+            print(
+                "\nPROCESS MEMORY DEBUG:",
+                hypothesis.concept,
+            )
+
+            print(
+                process_dependency_memory,
+            )
+
+            print(
+                "\nDEPENDENCY ALIGNMENT:",
+                hypothesis.concept,
+            )
+
+            print(
+                dependency_chain_alignment,
+            )
+
+            print(
+                "\nDEPENDENCY ALIGNMENT:",
+                hypothesis.concept,
+            )
+
+            print(
+                dependency_chain_alignment,
+            )
+            context_discovery = (
+                self.context_discovery_engine.discover_context(
+                    {
+                        **context,
+                        "task_id": context.get(
+                            "task_id",
+                            hypothesis.concept,
+                        ),
+                        "concept": hypothesis.concept,
+                    }
+                )
+            )
+            identity_runtime_context = self._identity_runtime_context(
+                context,
+                hypothesis.concept,
+                context_discovery,
+            )
+            discovered_context_context = {
+                **context,
+                **identity_runtime_context,
+                "context_discovery": context_discovery,
+            }
+            if (
+                context_discovery["transformation_family"] != "unknown"
+                or context_discovery["confidence"] >= 0.50
+            ):
+                discovered_context_context[
+                    "discovered_context_signature"
+                ] = context_discovery["context_signature"]
+            context_hierarchy = (
+                self.context_differentiation_engine.refine_clusters([
+                    context_discovery
+                ])
+            )
+            semantic_context = (
+                self.semantic_context_reasoner.generate_semantic_profile(
+                    context_discovery,
+                    concept_evidence,
+                )
+            )
+
+           
+            print(
+                "\nDEPENDENCY ALIGNMENT:",
+                hypothesis.concept,
+            )
+
+            print(
+                dependency_chain_alignment,
             )
             context_discovery = (
                 self.context_discovery_engine.discover_context(
@@ -820,6 +937,8 @@ class EpistemicCognitionLayer:
                     knowledge_generalization,
                     "process_dependency_memory":
                     process_dependency_memory,
+                    "dependency_chain_alignment":
+                    dependency_chain_alignment,
                     "causal_boundary_alignment":
                     causal_boundary_alignment,
                     "causal_graph_alignment":
@@ -1118,6 +1237,8 @@ class EpistemicCognitionLayer:
                     identity_safe_truth_integration,
                     "truth_candidate":
                     candidate,
+                    "dependency_chain_alignment":
+                    dependency_chain_alignment,
                     "semantic_spine_recovery_report":
                     semantic_spine_recovery,
                     "knowledge_generalization":
@@ -1142,6 +1263,9 @@ class EpistemicCognitionLayer:
                     causal_validation,
                     "process_dependency_memory":
                     process_dependency_memory,
+                    "dependency_chain_alignment":
+                    dependency_chain_alignment,
+
                     "contextual_truth":
                     contextual_truth,
                     "contextual_truth_authority":
@@ -1176,6 +1300,7 @@ class EpistemicCognitionLayer:
                 "context_hierarchy": context_hierarchy,
                 "semantic_context": semantic_context,
                 "causal_spine": causal_spine,
+                "dependency_chain_alignment": dependency_chain_alignment,
                 "epistemic_evidence_fusion": evidence_fusion,
                 "causal_evidence_arbitration":
                 arbitration_by_concept.get(hypothesis.concept, {}),
@@ -1291,6 +1416,10 @@ class EpistemicCognitionLayer:
         ]
         causal_validation_evaluations = [
             item["causal_validation"]
+            for item in evaluations
+        ]
+        dependency_chain_alignment_evaluations = [
+            item["dependency_chain_alignment"]
             for item in evaluations
         ]
         contextual_truth_evaluations = [
@@ -1546,6 +1675,36 @@ class EpistemicCognitionLayer:
                     for item in attestation_evaluations
                     if item["truth_candidate_gap"] > 0
                 ],
+            },
+
+            "dependency_chain_alignment": {
+                "system": "dependency_chain_alignment_engine",
+                "phase": "6.97",
+                "evaluations": [
+                    item
+                    for item in dependency_chain_alignment_evaluations
+                    if isinstance(item, dict)
+                ],
+                "alignment_ready_concepts": [
+                    item["concept"]
+                    for item in dependency_chain_alignment_evaluations
+                    if (
+                        isinstance(item, dict)
+                        and item.get("alignment_ready") is True
+                    )
+                ],
+                "memory_ready_link_count": sum(
+                    item.get("memory_ready_link_count", 0)
+                    for item in dependency_chain_alignment_evaluations
+                    if isinstance(item, dict)
+                ),
+                "invalid_alignment_report_count": sum(
+                    1
+                    for item in dependency_chain_alignment_evaluations
+                    if not isinstance(item, dict)
+                ),
+                "automatic_truth_promotion_forbidden": True,
+                "automatic_memory_persistence_forbidden": True,
             },
             "causal_alignment_engine": {
                 "system": "causal_alignment_engine",

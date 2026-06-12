@@ -1,4 +1,7 @@
-import { graveyard } from "../data/mockNexrynRuntime";
+import {
+  graveyard,
+  truthGraveyardConsistencyAudit,
+} from "../data/mockNexrynRuntime";
 import { EvolutionaryTraumaMap } from "./EvolutionaryTraumaMap";
 import { ExtinctionTable } from "./ExtinctionTable";
 import { GraveyardMetricCard } from "./GraveyardMetricCard";
@@ -63,6 +66,20 @@ const metrics = [
     meter: graveyard.memoryScarCount / 12,
     tone: "amber" as const,
   },
+  {
+    label: "Consistency Score",
+    value: truthGraveyardConsistencyAudit.constitutional_consistency_score.toFixed(2),
+    detail: "Truth registry and graveyard report alignment",
+    meter: truthGraveyardConsistencyAudit.constitutional_consistency_score,
+    tone: "mint" as const,
+  },
+  {
+    label: "Stale Graveyard Entries",
+    value: String(truthGraveyardConsistencyAudit.stale_graveyard_entries),
+    detail: "Hidden from effective extinction state",
+    meter: truthGraveyardConsistencyAudit.stale_graveyard_entries / 10,
+    tone: "cyan" as const,
+  },
 ];
 
 export function GraveyardPage() {
@@ -91,6 +108,34 @@ export function GraveyardPage() {
       </section>
 
       <GraveyardPressureEngine />
+      <section className="rounded-lg border border-white/10 bg-white/[0.045] p-5 shadow-runtime backdrop-blur-xl">
+        <p className="text-xs uppercase text-cyan-200/70">Truth / Graveyard Synchronization</p>
+        <h3 className="mt-1 text-xl font-semibold text-white">Stale graveyard audit</h3>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-[760px] w-full text-left text-sm">
+            <thead className="text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Concept</th>
+                <th className="px-3 py-2">Truth State</th>
+                <th className="px-3 py-2">Graveyard State</th>
+                <th className="px-3 py-2">Source of Truth</th>
+                <th className="px-3 py-2">Last Update Cycle</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {truthGraveyardConsistencyAudit.audit_report.map((row) => (
+                <tr key={row.concept} className="text-slate-300">
+                  <td className="px-3 py-3 font-mono text-xs text-cyan-100">{row.concept}</td>
+                  <td className="px-3 py-3">{row.truth_state}</td>
+                  <td className="px-3 py-3">{row.graveyard_state}</td>
+                  <td className="px-3 py-3">{row.source_of_truth}</td>
+                  <td className="px-3 py-3">{row.last_update_cycle}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
       <EvolutionaryTraumaMap />
       <RecoveryRecommendationPanel />
       <ExtinctionTable />

@@ -87,6 +87,18 @@ class RuntimeDiagnostics:
             or {}
         )
 
+    def _get_truth_graveyard_consistency(self) -> Dict[str, Any]:
+        report = self._get_report()
+        governance = report.get("governance_reports", {})
+
+        return (
+            report.get("truth_graveyard_consistency_report")
+            or report.get("truth_graveyard_consistency")
+            or governance.get("truth_graveyard_consistency")
+            or self._get("truth_graveyard_consistency_report", None)
+            or {}
+        )
+
     # --------------------------------------------------
     # PUBLIC COMMANDS
     # --------------------------------------------------
@@ -143,6 +155,8 @@ class RuntimeDiagnostics:
         for name, data in concepts.items():
             diagnostic = self._build_concept_diagnostic(name, data)
             self._print_concept_summary(diagnostic)
+
+        self._print_truth_graveyard_consistency()
 
     def explain(self, concept_name: str) -> None:
         concepts = self._get_concepts()
@@ -313,6 +327,52 @@ class RuntimeDiagnostics:
         print(f"  causal_validation_score: {diagnostic.causal_validation_score}")
         print(f"  contextual_truth_score: {diagnostic.contextual_truth_score}")
         print(f"  semantic_context_score: {diagnostic.semantic_context_score}")
+
+    def _print_truth_graveyard_consistency(self) -> None:
+        report = self._get_truth_graveyard_consistency()
+
+        if not report:
+            return
+
+        print("\n==================================================")
+        print("NEXRYN :: TRUTH / GRAVEYARD CONSISTENCY")
+        print("==================================================")
+        print(
+            "truth_graveyard_conflicts:",
+            report.get("truth_graveyard_conflicts", 0),
+        )
+        print(
+            "stale_graveyard_entries:",
+            report.get("stale_graveyard_entries", 0),
+        )
+        print(
+            "resurrection_conflicts:",
+            report.get("resurrection_conflicts", 0),
+        )
+        print(
+            "constitutional_consistency_score:",
+            report.get("constitutional_consistency_score"),
+        )
+
+        audit_rows = report.get("audit_report", [])
+        if not audit_rows:
+            print("audit_report: none")
+            return
+
+        print("\nAudit Report:")
+        for row in audit_rows:
+            if not (
+                row.get("state_conflict")
+                or row.get("stale_graveyard_entry")
+                or row.get("resurrection_conflict")
+            ):
+                continue
+
+            print(f"\n{row.get('concept')}")
+            print(f"  truth_state: {row.get('truth_state')}")
+            print(f"  graveyard_state: {row.get('graveyard_state')}")
+            print(f"  source_of_truth: {row.get('source_of_truth')}")
+            print(f"  last_update_cycle: {row.get('last_update_cycle')}")
 
     def _print_list(self, values: Optional[List[str]]) -> None:
         if not values:

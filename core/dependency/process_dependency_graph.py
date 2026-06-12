@@ -24,7 +24,11 @@ class ProcessDependencyRelation:
             "relation",
             normalize_process_dependency_relation(self.relation),
         )
-        object.__setattr__(self, "confidence", clamp(self.confidence))
+        object.__setattr__(
+            self,
+            "confidence",
+            clamp(self.confidence),
+        )
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -36,7 +40,11 @@ class ProcessDependencyRelation:
             "relation": self.relation,
             "confidence": clamp(self.confidence),
             "dependency_type": "process_dependency",
-            "required": self.relation in {"requires", "causes", "supports"},
+            "required": self.relation in {
+                "requires",
+                "causes",
+                "supports",
+            },
             "supported": True,
             "transfer_success": True,
             "metadata": {
@@ -115,11 +123,13 @@ class ProcessDependencyGraph:
             process_dependency_memory
             or ProcessDependencyMemory(seed_defaults=process_relations is None)
         )
+
         if process_relations is not None:
             self.process_dependency_memory.ingest_chains(
                 process_relations,
                 persist=False,
             )
+
         self.process_relations = {
             process: [
                 (
@@ -131,11 +141,16 @@ class ProcessDependencyGraph:
                 for link in self.process_dependency_memory.links_for(process)
             ]
             for process in self.process_dependency_memory.process_links
-        } or self.PROCESS_RELATIONS
+        }
+
+        if not self.process_relations:
+            self.process_relations = dict(self.PROCESS_RELATIONS)
 
     def relations_for(self, process: str) -> list[ProcessDependencyRelation]:
         process = str(process or "").strip()
+
         memory_links = self.process_dependency_memory.links_for(process)
+
         if memory_links:
             return [
                 ProcessDependencyRelation(
@@ -147,6 +162,7 @@ class ProcessDependencyGraph:
                 )
                 for link in memory_links
             ]
+
         return [
             ProcessDependencyRelation(
                 process=process,
@@ -156,7 +172,10 @@ class ProcessDependencyGraph:
                 confidence=confidence,
             )
             for source, relation, target, confidence
-            in self.process_relations.get(process, [])
+            in self.process_relations.get(
+                process,
+                self.PROCESS_RELATIONS.get(process, []),
+            )
         ]
 
     def dependencies_for(self, process: str) -> list[dict[str, Any]]:
@@ -166,15 +185,102 @@ class ProcessDependencyGraph:
         ]
 
     def resolve_dependency_chain(self, process: str) -> dict[str, Any]:
-        return self.process_dependency_memory.resolve_chain(process)
+        process = str(process or "").strip()
+
+        memory_report = self.process_dependency_memory.resolve_chain(process)
+
+        if (
+            isinstance(memory_report, dict)
+            and memory_report.get("dependency_chain_depth", 0) > 0
+        ):
+            return memory_report
+
+        return self._resolve_from_graph_relations(process)
+
+    def _resolve_from_graph_relations(
+        self,
+        process: str,
+        max_depth: int = 6,
+    ) -> dict[str, Any]:
+        process = str(process or "").strip()
+
+        if not process:
+            return {
+                "concept": process,
+                "resolved_dependency_chain": [],
+                "missing_dependencies": [],
+                "dependency_confidence": 0.0,
+                "dependency_chain_depth": 0,
+                "dependency_chain_coverage": 0.0,
+                "process_dependency_links_used": 0,
+            }
+
+        chain = [process]
+        used_relations: list[ProcessDependencyRelation] = []
+        visited = {process}
+        current = process
+
+        for _ in range(max_depth):
+            relations = self.relations_for(current)
+
+            if not relations:
+                break
+
+            relations = sorted(
+                relations,
+                key=lambda relation: relation.confidence,
+                reverse=True,
+            )
+
+            best = relations[0]
+            target = str(best.target or "").strip()
+
+            if not target or target in visited:
+                break
+
+            used_relations.append(best)
+            chain.append(target)
+            visited.add(target)
+            current = target
+
+        confidence = (
+            sum(relation.confidence for relation in used_relations)
+            / len(used_relations)
+            if used_relations
+            else 0.0
+        )
+
+        missing_dependencies = []
+        if not used_relations and process in self.PROCESS_RELATIONS:
+            missing_dependencies = []
+        elif not used_relations:
+            missing_dependencies = [process]
+
+        return {
+            "concept": process,
+            "resolved_dependency_chain": chain if len(chain) > 1 else [],
+            "missing_dependencies": missing_dependencies,
+            "dependency_confidence": round(confidence, 4),
+            "dependency_chain_depth": len(used_relations),
+            "dependency_chain_coverage": round(
+                len(used_relations) / max(max_depth, 1),
+                4,
+            ),
+            "process_dependency_links_used": len(used_relations),
+            "resolution_source": "process_dependency_graph_fallback",
+        }
 
     def chain_records_for(self, process: str) -> list[dict[str, Any]]:
         records = []
+
         for relation in self.relations_for(process):
             records.append({
                 "source": relation.source,
                 "target": relation.target,
-                "signals": [relation.source, relation.target],
+                "signals": [
+                    relation.source,
+                    relation.target,
+                ],
                 "evidence": {
                     "confidence": relation.confidence,
                     "process": process,
@@ -184,6 +290,7 @@ class ProcessDependencyGraph:
                     "relation": relation.relation,
                 },
             })
+
         for chain in self.typed_chains_for(process):
             records.append({
                 "source": chain[0],
@@ -198,22 +305,33 @@ class ProcessDependencyGraph:
                     "relation": "typed_process_chain",
                 },
             })
+
         return records
 
     def typed_chains_for(self, process: str) -> list[list[str]]:
         relations = self.relations_for(process)
         adjacency: dict[str, list[str]] = {}
         targets = set()
+
         for relation in relations:
             adjacency.setdefault(relation.source, []).append(relation.target)
             targets.add(relation.target)
+
         roots = [process]
+
         if process not in adjacency:
             roots = sorted(set(adjacency) - targets)
+
         chains = []
+
         for root in roots:
             self._walk_chains(root, adjacency, [root], chains)
-        return [chain for chain in chains if len(chain) > 1]
+
+        return [
+            chain
+            for chain in chains
+            if len(chain) > 1
+        ]
 
     def _walk_chains(
         self,
@@ -223,33 +341,60 @@ class ProcessDependencyGraph:
         chains: list[list[str]],
     ) -> None:
         children = adjacency.get(node, [])
+
         if not children:
             chains.append(path)
             return
+
         for child in children:
             if child in path:
                 chains.append(path)
                 continue
-            self._walk_chains(child, adjacency, [*path, child], chains)
 
-    def _chain_confidence(self, process: str, chain: list[str]) -> float:
+            self._walk_chains(
+                child,
+                adjacency,
+                [*path, child],
+                chains,
+            )
+
+    def _chain_confidence(
+        self,
+        process: str,
+        chain: list[str],
+    ) -> float:
         confidence_by_edge = {
             (relation.source, relation.target): relation.confidence
             for relation in self.relations_for(process)
         }
+
         scores = [
             confidence_by_edge.get((source, target), 0.86)
             for source, target in zip(chain, chain[1:])
         ]
-        return round(sum(scores) / len(scores), 4) if scores else 0.0
 
-    def build_report(self, processes: list[str] | None = None) -> dict[str, Any]:
-        processes = processes or sorted(self.process_relations)
+        return (
+            round(sum(scores) / len(scores), 4)
+            if scores
+            else 0.0
+        )
+
+    def build_report(
+        self,
+        processes: list[str] | None = None,
+    ) -> dict[str, Any]:
+        processes = processes or sorted(
+            set(self.process_relations)
+            | set(self.PROCESS_RELATIONS)
+        )
+
         reports = {}
         dependencies = []
         chain_records = []
+
         for process in processes:
             process_dependencies = self.dependencies_for(process)
+
             reports[process] = {
                 "process": process,
                 "relations": [
@@ -261,8 +406,10 @@ class ProcessDependencyGraph:
                 self.resolve_dependency_chain(process),
                 "dependency_count": len(process_dependencies),
             }
+
             dependencies.extend(process_dependencies)
             chain_records.extend(self.chain_records_for(process))
+
         return {
             "system": "process_dependency_graph",
             "process_count": len(reports),

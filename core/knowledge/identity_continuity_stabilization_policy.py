@@ -108,6 +108,25 @@ class IdentityContinuityStabilizationPolicy:
             or candidate.get("qualified_metrics") is True
             or candidate.get("strict_qualified_metrics") is True
         ) and not candidate.get("blocked_metrics", [])
+
+        blocked_metrics = list(
+            candidate.get("blocked_metrics", []) or []
+        )
+
+        dependency_resolved_metric_block = (
+            blocked_metrics == ["causal_alignment"]
+            and candidate.get(
+                "dependency_chain_complete_for_promotion"
+            ) is True
+            and clamp(
+                candidate.get("promotion_dependency_score", 0.0)
+            ) >= 0.90
+        )
+
+        metrics_ready_before_stage = (
+            metrics_ready_before_stage
+            or dependency_resolved_metric_block
+        )
         stage_only_blocked = (
             candidate.get("eligibility_reason")
             in self.CANDIDATE_STAGE_BLOCKERS
@@ -171,6 +190,19 @@ class IdentityContinuityStabilizationPolicy:
             "explicit_identity_block": explicit_identity_block,
             "candidate_ready": candidate_ready,
             "metrics_ready_before_stage": metrics_ready_before_stage,
+                        "blocked_metrics": blocked_metrics,
+            "dependency_resolved_metric_block":
+                dependency_resolved_metric_block,
+            "promotion_dependency_score":
+                candidate.get("promotion_dependency_score"),
+            "promotion_dependency_bonus":
+                candidate.get("promotion_dependency_bonus"),
+            "stage_eligible_for_truth_candidate":
+                candidate.get("stage_eligible_for_truth_candidate"),
+            "eligible_for_truth_candidate":
+                candidate.get("eligible_for_truth_candidate"),
+            "dependency_chain_complete_for_promotion":
+                candidate.get("dependency_chain_complete_for_promotion"),
             "stage_only_blocked": stage_only_blocked,
             "contradiction_ready": contradiction_ready,
             "identity_recovery_required": identity_recovery_required,

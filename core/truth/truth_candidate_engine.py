@@ -63,7 +63,7 @@ class TruthCandidatePromotionEngine:
         )
         return successes, counterexamples
 
-    def _runtime_evaluation(self, concept, truth_candidate_report):
+    def _runtime_evaluation (self, concept, truth_candidate_report):
         for item in truth_candidate_report.get("evaluations", []):
             if (
                 isinstance(item, dict)
@@ -299,6 +299,20 @@ class TruthCandidatePromotionEngine:
             runtime,
         )
         dependency_promotion = self._dependency_promotion(concept, runtime)
+        print(
+            "LIFECYCLE DEP DEBUG:",
+            concept,
+            {
+                "runtime_keys": list(runtime.keys())
+                if isinstance(runtime, dict)
+                else [],
+                "process_dependency_memory":
+                runtime.get("process_dependency_memory", {})
+                if isinstance(runtime, dict)
+                else {},
+                "dependency_promotion": dependency_promotion,
+            },
+        )
         dependency_bonus = (
             dependency_promotion["promotion_dependency_bonus"]
             if dependency_promotion["dependency_aware_promotion_applicable"]
