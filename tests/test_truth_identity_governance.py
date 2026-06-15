@@ -20,6 +20,10 @@ from core.knowledge.knowledge_promotion_policy import (
 from core.knowledge.contextual_truth_support_policy import (
     ContextualTruthSupportPolicy,
 )
+from core.epistemic_drift_regulator import (
+    identity_continuity_score,
+    semantic_drift_score,
+)
 from core.knowledge.identity_continuity_stabilization_policy import (
     IdentityContinuityStabilizationPolicy,
 )
@@ -487,6 +491,48 @@ def test_contextual_truth_support_policy_softens_strong_context_boundary():
     assert support["contextual_truth_supported"] is True
     assert abs(support["effective_support_floor"] - 0.685) < 0.0001
     assert support["strong_context_floor_applied"] is True
+
+
+def test_stable_identity_runtime_reconciles_stale_drift_regulator_signals():
+    context = {
+        "identity_continuity": 0.55,
+        "semantic_drift": 0.72,
+        "identity_runtime_report": {
+            "runtime_state": "IDENTITY_RUNTIME_STABLE",
+            "runtime_ready": True,
+            "identity_continuity": 0.706,
+            "semantic_drift": 0.294,
+            "identity_split": False,
+            "identity_merged": False,
+            "identity_governance_gates": {
+                "identity_continuity_above_limit": True,
+                "semantic_drift_below_limit": True,
+            },
+        },
+    }
+
+    assert identity_continuity_score(context) == 0.706
+    assert semantic_drift_score(context) == 0.294
+
+
+def test_unready_identity_runtime_does_not_reconcile_drift_regulator_signals():
+    context = {
+        "identity_continuity": 0.55,
+        "semantic_drift": 0.72,
+        "identity_runtime_report": {
+            "runtime_state": "IDENTITY_RUNTIME_REVIEW_REQUIRED",
+            "runtime_ready": False,
+            "identity_continuity": 0.706,
+            "semantic_drift": 0.294,
+            "identity_governance_gates": {
+                "identity_continuity_above_limit": True,
+                "semantic_drift_below_limit": True,
+            },
+        },
+    }
+
+    assert identity_continuity_score(context) == 0.55
+    assert semantic_drift_score(context) == 0.72
 
 
 def test_identity_stabilization_unblocks_mature_reasoning_candidate():

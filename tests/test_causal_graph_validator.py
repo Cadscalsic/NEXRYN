@@ -290,3 +290,70 @@ def test_downstream_relationship_does_not_block_current_concept_admission():
         "target": "object_identity_preservation",
     }]
     assert report["downstream_relationships_are_diagnostic_only"] is True
+
+
+def test_process_dependency_chain_can_validate_missing_core_graph_edge():
+    report = CausalGraphValidator().evaluate(
+        "object_identity_preservation",
+        semantic_graph(include_edge=False),
+        {
+            "process_dependency_memory": {
+                "resolved_dependency_chain": [
+                    "object_identity_preservation",
+                    "object_persistence",
+                    "identity_continuity",
+                    "object_core",
+                    "shape_preservation",
+                ],
+                "dependency_confidence": 0.888,
+                "dependency_chain_depth": 4,
+                "dependency_chain_coverage": 0.8556,
+                "missing_dependencies": [],
+            },
+        },
+    )
+
+    check = report["relationship_checks"][0]
+
+    assert report["validation_state"] == "CAUSAL_GRAPH_VALIDATED"
+    assert report["validation_ready"] is True
+    assert report["blocked_relationships"] == []
+    assert check["source"] == "symmetry_preservation"
+    assert check["target"] == "object_identity_preservation"
+    assert check["edge_observed"] is False
+    assert check["dependency_proof_ready"] is True
+    assert check["support_source"] == "TYPED_PROCESS_DEPENDENCY_MEMORY"
+    assert report["process_dependency_proof_chains"][0][
+        "resolved_dependency_chain"
+    ] == [
+        "object_identity_preservation",
+        "object_persistence",
+        "identity_continuity",
+        "object_core",
+        "shape_preservation",
+    ]
+
+
+def test_incomplete_process_dependency_chain_does_not_validate_graph_edge():
+    report = CausalGraphValidator().evaluate(
+        "object_identity_preservation",
+        semantic_graph(include_edge=False),
+        {
+            "process_dependency_memory": {
+                "resolved_dependency_chain": [
+                    "object_identity_preservation",
+                    "object_persistence",
+                ],
+                "dependency_confidence": 0.888,
+                "dependency_chain_depth": 1,
+                "dependency_chain_coverage": 0.20,
+                "missing_dependencies": [],
+            },
+        },
+    )
+
+    assert report["validation_state"] == (
+        "CAUSAL_GRAPH_VALIDATION_REQUIRED"
+    )
+    assert report["validation_ready"] is False
+    assert report["relationship_checks"][0]["dependency_proof_ready"] is False

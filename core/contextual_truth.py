@@ -4,6 +4,8 @@ from uuid import uuid4
 from core.context.context_binding_engine import ContextBindingEngine
 from core.context_discovery import ContextDiscoveryEngine
 from core.epistemic_models import clamp
+from core.process_abstraction import ProcessAbstractionLayer
+from core.process_context_generation import ProcessContextGenerationEngine
 
 
 def _normalize(value, default="unknown"):
@@ -401,8 +403,11 @@ def _infer_transformation_family(context, active_concepts):
         "recoloring": ("recolor", "color_transform", "color_change"),
         "reflection": ("reflect", "reflection"),
         "translation": ("translate", "translation", "move"),
+        "replication": ("replication", "replicated", "replicating"),
         "duplication": ("duplicate", "copy", "replicate"),
+        "propagation": ("propagate", "propagation", "spread"),
         "topological_growth": ("grow", "expand", "fill", "topology"),
+        "growth": ("growth", "expanded", "expansion"),
         "identity_preservation": ("identity", "object_identity"),
         "symmetry": ("symmetry", "mirror"),
     }
@@ -422,7 +427,11 @@ class ContextualTruthEngine:
             "topological_growth",
             "topology_transform",
         },
-        "object_identity_preservation": {"object_split", "object_merge"},
+        "identity_persistence": {
+            "identity_forking",
+            "object_split",
+            "object_merge",
+        },
     }
 
     def __init__(self):
@@ -713,6 +722,21 @@ class ContextualTruthEngine:
             causal_validation_report=causal_validation,
         )
         base_contextual_truth_score = confidence["contextual_truth_score"]
+        process_abstraction = (
+            ProcessAbstractionLayer.get(truth_name)
+            or ProcessAbstractionLayer.get(
+                current_signature.transformation_family
+            )
+        )
+        process_context_generation = (
+            ProcessContextGenerationEngine().generate_context(
+                truth_name,
+            )
+            if ProcessAbstractionLayer.get(truth_name)
+            else ProcessContextGenerationEngine().generate_context(
+                current_signature.transformation_family,
+            )
+        )
         contextual_truth_score = clamp(
             base_contextual_truth_score * 0.65
             + context_binding["context_binding_score"] * 0.35
@@ -728,6 +752,36 @@ class ContextualTruthEngine:
             "truth": truth_name,
             "context_signature": current_signature.signature_id,
             "context_signature_fields": current_signature.as_dict(),
+            "process_abstraction": (
+                process_abstraction.as_dict()
+                if process_abstraction
+                else {}
+            ),
+            "process_abstraction_ready": bool(process_abstraction),
+            "process_context_generation": process_context_generation,
+            "process_context_generated": bool(
+                process_context_generation.get("process_context_generated")
+            ),
+            "process_context_family": (
+                process_abstraction.context_family
+                if process_abstraction
+                else "none"
+            ),
+            "process_context_surface": (
+                process_abstraction.surface
+                if process_abstraction
+                else "none"
+            ),
+            "transfer_conditions": (
+                list(process_abstraction.transfer_conditions)
+                if process_abstraction
+                else []
+            ),
+            "validation_criteria": (
+                list(process_abstraction.validation_criteria)
+                if process_abstraction
+                else []
+            ),
             "valid_contexts": explanation["when_valid"],
             "invalid_contexts": explanation["when_invalid"],
             "context_confidence":

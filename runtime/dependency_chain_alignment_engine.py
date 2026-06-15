@@ -14,14 +14,22 @@ class DependencyChainAlignmentEngine:
     MINIMUM_CHAIN_COVERAGE = 0.70
 
     PROCESS_CONCEPTS = {
-        "growth",
-        "propagation",
-        "replication",
-        "topological_growth",
-        "directional_motion",
-        "object_identity_preservation",
-        "duplication",
-    }
+    "growth",
+    "propagation",
+    "replication",
+    "topological_growth",
+    "directional_motion",
+    "identity_persistence",
+    "identity_forking",
+    "duplication",
+
+    "color_preservation",
+    "shape_preservation",
+    "size_preservation",
+    "position_preservation",
+    "symmetry_preservation",
+    "topology_preservation",
+}
 
     def _safe_dict(self, value):
         return value if isinstance(value, dict) else {}
@@ -121,6 +129,54 @@ class DependencyChainAlignmentEngine:
             ],
         }
 
+    RELATION_PATTERNS = {
+        ("growth", "identity_persistence"): "requires",
+        ("growth", "identity_continuity"): "modifies",
+        ("growth", "object_core"): "preserves",
+        ("growth", "topology_expansion"): "creates",
+        ("growth", "source_pattern_preserved"): "depends_on",
+        ("topological_growth", "growth"): "derived_from",
+        ("topological_growth", "topology_expansion"): "modifies",
+        ("topological_growth", "topology_splitting"): "creates",
+        ("topological_growth", "source_pattern_preserved"): "depends_on",
+        ("replication", "source_pattern_preserved"): "requires",
+        ("replication", "identity_forking"): "causes",
+        ("identity_forking", "identity_split"): "causes",
+        ("replication", "topological_growth"): "creates",
+        ("identity_split", "object_count_increase"): "causes",
+        ("object_count_increase", "replication"): "enables",
+        ("object_count_increase", "topological_growth"): "enables",
+        ("object_count_increase", "topology_splitting"): "causes",
+        ("propagation", "source_pattern_preserved"): "requires",
+        ("source_pattern_preserved", "directional_motion"): "enables",
+        ("directional_motion", "position_change"): "modifies",
+        ("position_change", "position_preservation"): "supports",
+        ("identity_persistence", "object_persistence"): "requires",
+        ("object_persistence", "identity_continuity"): "requires",
+        ("identity_continuity", "object_core"): "preserves",
+        ("object_core", "shape_preservation"): "supports",
+        ("topology_expansion", "local_shape"): "preserves",
+        ("topology_splitting", "local_shape"): "preserves",
+        ("local_shape", "shape_preservation"): "supports",
+    }
+
+    def _semantic_relation(self, source, target):
+        source = str(source or "").strip()
+        target = str(target or "").strip()
+        if (source, target) in self.RELATION_PATTERNS:
+            return self.RELATION_PATTERNS[(source, target)]
+        if target in {"identity_persistence", "object_persistence"}:
+            return "requires"
+        if target == "identity_forking":
+            return "causes"
+        if target in {"identity_continuity", "position_change"}:
+            return "modifies"
+        if target in {"topology_expansion", "topology_splitting"}:
+            return "creates"
+        if target.endswith("_preserved") or target.endswith("_preservation"):
+            return "preserves"
+        return "depends_on"
+
     def _memory_ready_links(self, concept, runtime_nodes, confidence):
         links = []
 
@@ -128,15 +184,17 @@ class DependencyChainAlignmentEngine:
             return links
 
         for source, target in zip(runtime_nodes, runtime_nodes[1:]):
+            relation = self._semantic_relation(source, target)
             links.append({
                 "process": concept,
                 "source": source,
-                "relation": "supports",
+                "relation": relation,
                 "target": target,
                 "confidence": confidence,
                 "metadata": {
                     "source": "dependency_chain_alignment_engine",
                     "runtime_chain_aligned": True,
+                    "semantic_relation_inferred": True,
                     "persistent_write_requires_governance": True,
                 },
             })

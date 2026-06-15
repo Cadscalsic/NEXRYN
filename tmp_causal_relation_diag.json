@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "hypotheses": [
+    {
+      "hypothesis_id": "causal:growth->growth",
+      "source_concept": "growth",
+      "target_concept": "growth",
+      "evidence_count": 3,
+      "confidence": 0.8805,
+      "validation_state": "REJECTED",
+      "contradiction_score": 0.0,
+      "supporting_tasks": [
+        "a",
+        "b",
+        "c"
+      ],
+      "rejecting_tasks": []
+    }
+  ],
+  "validated_hypotheses": [],
+  "rejected_hypotheses": [
+    {
+      "hypothesis_id": "causal:growth->growth",
+      "source_concept": "growth",
+      "target_concept": "growth",
+      "evidence_count": 3,
+      "confidence": 0.8805,
+      "validation_state": "REJECTED",
+      "contradiction_score": 0.0,
+      "supporting_tasks": [
+        "a",
+        "b",
+        "c"
+      ],
+      "rejecting_tasks": []
+    }
+  ],
+  "confidence_history": {
+    "causal:growth->growth": [
+      0.8805
+    ]
+  },
+  "contradiction_history": {
+    "causal:growth->growth": [
+      0.0
+    ]
+  },
+  "recovery_history": {}
+}

@@ -97,8 +97,16 @@ def evaluate_identity_governance(
 
     identity_runtime_state = identity_runtime_report.get("runtime_state")
     identity_runtime_ready = identity_runtime_report.get("runtime_ready") is True
-    identity_runtime_split = identity_runtime_report.get("identity_split") is True
-    identity_runtime_merged = identity_runtime_report.get("identity_merged") is True
+    identity_runtime_split = (
+        identity_runtime_report.get("identity_split") is True
+        or identity_continuity_engine_report.get("identity_split") is True
+        or identity_stability_state == "identity_branching_tracked"
+    )
+    identity_runtime_merged = (
+        identity_runtime_report.get("identity_merged") is True
+        or identity_continuity_engine_report.get("identity_merged") is True
+        or identity_stability_state == "identity_convergence_tracked"
+    )
 
     identity_runtime_continuity = _first_number(
         identity_runtime_report.get("identity_runtime_continuity"),
@@ -106,6 +114,7 @@ def evaluate_identity_governance(
         identity_continuity_engine_report.get("identity_continuity"),
         identity_continuity_engine_report.get("continuity_score"),
         context.get("identity_runtime_continuity"),
+        context.get("identity_continuity"),
     )
 
     semantic_drift_score = _first_number(
@@ -137,6 +146,20 @@ def evaluate_identity_governance(
         and identity_runtime_continuity is not None
         and identity_runtime_continuity >= stable_runtime_continuity_threshold
     )
+    transformed_identity_runtime_supported = (
+        identity_runtime_ready
+        and identity_runtime_state == "IDENTITY_RUNTIME_TRANSFORMED"
+        and identity_runtime_continuity is not None
+        and identity_runtime_continuity >= stable_runtime_continuity_threshold
+    )
+    fragile_semantic_spine_integration_supported = (
+        allow_fragile_semantic_spine_integration
+        and not explicit_identity_block
+        and not identity_runtime_split
+        and not identity_runtime_merged
+        and identity_runtime_continuity is not None
+        and identity_runtime_continuity >= stable_runtime_continuity_threshold
+    )
 
     identity_continuity_above_limit = (
         runtime_gates.get("identity_continuity_above_limit") is True
@@ -148,6 +171,8 @@ def evaluate_identity_governance(
             and identity_runtime_continuity >= identity_continuity_threshold
         )
         or stable_runtime_continuity_supported
+        or transformed_identity_runtime_supported
+        or fragile_semantic_spine_integration_supported
     )
 
     semantic_drift_below_limit = (
@@ -200,7 +225,18 @@ def evaluate_identity_governance(
         not explicit_identity_block
         and (
             runtime_identity_stable
-            or identity_continuity_above_limit
+            or stable_runtime_continuity_supported
+            or fragile_semantic_spine_integration_supported
+            or (
+                identity_continuity_above_limit
+                and not identity_runtime_split
+                and not identity_runtime_merged
+                and identity_runtime_state
+                not in {
+                    "IDENTITY_RUNTIME_TRANSFORMED",
+                    "IDENTITY_RUNTIME_REVIEW_REQUIRED",
+                }
+            )
             or recovery_confirmed
         )
     )
@@ -251,6 +287,10 @@ def evaluate_identity_governance(
         "identity_runtime_continuity": identity_runtime_continuity,
         "stable_runtime_continuity_supported":
             stable_runtime_continuity_supported,
+        "transformed_identity_runtime_supported":
+            transformed_identity_runtime_supported,
+        "fragile_semantic_spine_integration_supported":
+            fragile_semantic_spine_integration_supported,
         "semantic_drift_score": semantic_drift_score,
         "semantic_spine_score": semantic_spine_score,
         "thresholds": {

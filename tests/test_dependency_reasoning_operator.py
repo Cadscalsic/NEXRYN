@@ -428,3 +428,72 @@ def test_dependency_graph_engine_ingests_process_dependency_memory(tmp_path):
     assert report["boundary_refinement_dependency_debug"][0]["concept"] == (
         "growth"
     )
+
+
+def test_process_dependency_memory_exposes_semantic_relation_categories():
+    memory = ProcessDependencyMemory(seed_defaults=True)
+    graph = ProcessDependencyGraph(process_dependency_memory=memory)
+
+    growth_relations = {
+        (relation.source, relation.relation, relation.target)
+        for relation in graph.relations_for("growth")
+    }
+    replication_relations = {
+        (relation.source, relation.relation, relation.target)
+        for relation in graph.relations_for("replication")
+    }
+    topological_growth_relations = {
+        (relation.source, relation.relation, relation.target)
+        for relation in graph.relations_for("topological_growth")
+    }
+    engine = DependencyGraphEngine(
+        process_dependency_graph=graph,
+    )
+    report = engine.ingest_process_dependency_memory([
+        "growth",
+        "replication",
+        "topological_growth",
+    ])
+
+    assert (
+        "growth",
+        "requires",
+        "identity_persistence",
+    ) in growth_relations
+    assert ("growth", "modifies", "identity_continuity") in growth_relations
+    assert ("growth", "creates", "topology_expansion") in growth_relations
+    assert ("growth", "depends_on", "source_pattern_preserved") in (
+        growth_relations
+    )
+    assert (
+        "replication",
+        "requires",
+        "source_pattern_preserved",
+    ) in replication_relations
+    assert (
+        "replication",
+        "preserves",
+        "source_pattern_preserved",
+    ) in replication_relations
+    assert (
+        "replication",
+        "causes",
+        "identity_forking",
+    ) in replication_relations
+    assert (
+        "identity_forking",
+        "causes",
+        "identity_split",
+    ) in replication_relations
+    assert (
+        "topological_growth",
+        "derived_from",
+        "growth",
+    ) in topological_growth_relations
+    assert report["dependency_coherence_average"] >= 0.80
+    assert report["coherence_reports"]["growth"][
+        "dependency_coherence"
+    ] >= 0.80
+    assert report["coherence_reports"]["replication"][
+        "dependency_coherence"
+    ] >= 0.80

@@ -2,6 +2,8 @@ from dataclasses import asdict, dataclass, field
 from uuid import uuid4
 
 from core.epistemic_models import clamp
+from core.process_context_generation import ProcessContextGenerationEngine
+from core.process_abstraction import ProcessAbstractionLayer
 
 
 def _normalize(value, default="unknown"):
@@ -200,6 +202,122 @@ class ContextCluster:
 
 
 class ContextDiscoveryEngine:
+    TRUTH_CONTEXT_SURFACES = {
+        "shape_preservation": {
+            "context_family": "Shape Context",
+            "context_name": "shape_context",
+            "surface": "shape_stability",
+            "native_contexts": [
+                "shape_stability",
+                "local_shape_preservation",
+                "boundary_geometry_preservation",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "unknown",
+        },
+        "topology_preservation": {
+            "context_family": "Topology Context",
+            "context_name": "topology_context",
+            "surface": "topology_stability",
+            "native_contexts": [
+                "topology_stability",
+                "connectivity_preservation",
+                "region_relation_preservation",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "unknown",
+        },
+        "position_preservation": {
+            "context_family": "Position Context",
+            "context_name": "position_context",
+            "surface": "position_stability",
+            "native_contexts": [
+                "position_stability",
+                "coordinate_anchor_preservation",
+                "relative_position_preservation",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "unknown",
+        },
+        "color_preservation": {
+            "context_family": "Color Context",
+            "context_name": "color_context",
+            "surface": "color_stability",
+            "native_contexts": [
+                "color_stability",
+                "attribute_mapping_preservation",
+                "no_color_reassignment",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "unknown",
+        },
+        "symmetry_reasoning": {
+            "context_family": "Symmetry Context",
+            "context_name": "symmetry_context",
+            "surface": "symmetry_relation",
+            "native_contexts": [
+                "symmetry_relation",
+                "axis_consistency",
+                "mirror_consistency",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "symmetry_reasoned",
+        },
+        "symmetry_preservation": {
+            "context_family": "Symmetry Context",
+            "context_name": "symmetry_context",
+            "surface": "symmetry_stability",
+            "native_contexts": [
+                "symmetry_stability",
+                "axis_consistency",
+                "mirror_consistency",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "symmetry_preserved",
+        },
+        "identity_persistence": {
+            "context_family": "Identity Persistence",
+            "context_name": "identity_persistence",
+            "surface": "identity_persistence",
+            "native_contexts": [
+                "identity_persistence",
+                "object_persistence",
+                "identity_continuity",
+            ],
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_reassignment_allowed",
+            "identity_behavior": "identity_preserved",
+            "symmetry_behavior": "unknown",
+        },
+        "identity_forking": {
+            "context_family": "Identity Forking",
+            "context_name": "identity_forking",
+            "surface": "identity_forking",
+            "native_contexts": [
+                "identity_forking",
+                "identity_split",
+                "object_count_increase",
+                "topology_splitting",
+            ],
+            "topology_behavior": "topology_splitting",
+            "color_behavior": "color_preserved",
+            "identity_behavior": "identity_split",
+            "symmetry_behavior": "unknown",
+        },
+    }
+    PROCESS_CONTEXT_SURFACES = ProcessContextGenerationEngine.discovery_surfaces()
     FAMILY_KEYWORDS = {
         "translation": ["translation", "translate", "move", "shift"],
         "rotation": ["rotation", "rotate"],
@@ -213,9 +331,21 @@ class ContextDiscoveryEngine:
             "object_split",
             "object_splitting",
         ],
+        "replication": ["replication", "replicated", "replicating"],
         "deletion": ["delete", "remove"],
         "insertion": ["insert", "create", "add"],
         "propagation": ["propagate", "spread"],
+        "topological_growth": [
+            "topological_growth",
+            "topology_growth",
+            "topology_expansion",
+            "fill_region",
+        ],
+        "directional_motion": [
+            "directional_motion",
+            "position_delta",
+            "directional_displacement",
+        ],
         "growth": ["growth", "grow", "expand"],
         "topology_change": ["topology_change", "restructure"],
         "topology_expansion": ["topology_expansion", "fill_region"],
@@ -236,15 +366,86 @@ class ContextDiscoveryEngine:
             "duplication",
             "deletion",
             "insertion",
-            "growth",
+            "structural_transformation_context",
             "topology_change",
             "topology_expansion",
         },
-        "Propagation Transformation": {
+        "Growth Context": {
+            "growth",
+            "topology_expansion",
+            "region_expansion",
+            "object_count_growth",
+            "identity_preservation_under_growth",
+        },
+        "Topological Growth Context": {
+            "topological_growth",
+            "topology_splitting",
+            "topological_expansion",
+        },
+        "Propagation Context": {
             "propagation",
+            "directional_spread",
+            "source_pattern_preservation",
+            "signal_transfer",
+        },
+        "Directional Motion Context": {
+            "directional_motion",
+            "position_delta",
+            "directional_displacement",
+            "source_pattern_motion",
+        },
+        "Replication Context": {
+            "replication",
+            "object_creation",
+            "identity_split",
+            "structural_copying",
         },
         "Identity Preservation": {
             "identity_preservation",
+            "identity_persistence",
+        },
+        "Identity Forking": {
+            "identity_forking",
+            "identity_split",
+            "object_count_increase",
+            "topology_splitting",
+        },
+        "Color Context": {
+            "color_context",
+            "color_preservation",
+            "color_stability",
+            "attribute_mapping_preservation",
+            "no_color_reassignment",
+        },
+        "Position Context": {
+            "position_context",
+            "position_preservation",
+            "position_stability",
+            "coordinate_anchor_preservation",
+            "relative_position_preservation",
+        },
+        "Shape Context": {
+            "shape_context",
+            "shape_preservation",
+            "shape_stability",
+            "local_shape_preservation",
+            "boundary_geometry_preservation",
+        },
+        "Topology Context": {
+            "topology_context",
+            "topology_preservation",
+            "topology_stability",
+            "connectivity_preservation",
+            "region_relation_preservation",
+        },
+        "Symmetry Context": {
+            "symmetry_context",
+            "symmetry_reasoning",
+            "symmetry_preservation",
+            "symmetry_relation",
+            "symmetry_stability",
+            "axis_consistency",
+            "mirror_consistency",
         },
     }
 
@@ -288,6 +489,12 @@ class ContextDiscoveryEngine:
 
     def _keyword_family(self, features):
         joined = " ".join(features.get("active_concepts", []))
+        for family in self.PROCESS_CONTEXT_SURFACES:
+            if family in features.get("active_concepts", []):
+                return family, 0.90, [
+                    f"active process concept indicates {family}",
+                    "process-native context surface available",
+                ]
         for family, keywords in self.FAMILY_KEYWORDS.items():
             if family in joined or any(keyword in joined for keyword in keywords):
                 return family, 0.86, [f"active concept indicates {family}"]
@@ -303,6 +510,20 @@ class ContextDiscoveryEngine:
                 "reasons": ["explicit transformation family supplied"],
             }
         features = self.extract_context_features(context)
+        if (
+            features["colors_preserved"] is False
+            and features["positions_preserved"] is True
+        ):
+            return {
+                "value": "recoloring",
+                "confidence": 0.90,
+                "reasons": [
+                    "objects preserved",
+                    "topology preserved",
+                    "colors changed consistently",
+                    "no geometric movement detected",
+                ],
+            }
         keyword_family, keyword_confidence, reasons = self._keyword_family(
             features
         )
@@ -325,7 +546,10 @@ class ContextDiscoveryEngine:
             )
         )
         if (
-            "object_identity_preservation" in features["active_concepts"]
+            (
+                "identity_forking" in features["active_concepts"]
+                or "object_identity_preservation" in features["active_concepts"]
+            )
             and (
                 identity_behavior in {"identity_split", "object_split"}
                 or topology_behavior in {
@@ -335,40 +559,30 @@ class ContextDiscoveryEngine:
             )
         ):
             return {
-                "value": "duplication",
+                "value": "replication",
                 "confidence": 0.74,
                 "reasons": [
-                    "object identity concept observed under split context",
-                    "identity split implies structural duplication context",
+                    "identity forking observed under split context",
+                    "identity split implies replication context",
                 ],
             }
-        if "object_identity_preservation" in features["active_concepts"]:
+        if (
+            "identity_persistence" in features["active_concepts"]
+            or "object_identity_preservation" in features["active_concepts"]
+        ):
             return {
                 "value": "identity_preservation",
                 "confidence": 0.82,
                 "reasons": [
-                    "object identity concept anchors identity context",
+                    "identity persistence concept anchors identity context",
                     "no split or merge evidence requires structural context",
-                ],
-            }
-        if (
-            features["colors_preserved"] is False
-            and features["positions_preserved"] is True
-        ):
-            return {
-                "value": "recoloring",
-                "confidence": 0.90,
-                "reasons": [
-                    "objects preserved",
-                    "topology preserved",
-                    "colors changed consistently",
-                    "no geometric movement detected",
                 ],
             }
         if (
             features["positions_preserved"] is False
             and features["colors_preserved"] is True
             and features["object_delta"] == 0
+            and features["grid_shape_changed"] is False
         ):
             return {
                 "value": "translation",
@@ -403,8 +617,90 @@ class ContextDiscoveryEngine:
             "reasons": ["insufficient transformation evidence"],
         }
 
+    def discover_process_operator(self, observation=None):
+        return self.discover_transformation_family(observation)
+
+    def discover_semantic_context(self, observation=None):
+        context = observation if isinstance(observation, dict) else {}
+        features = self.extract_context_features(context)
+        truth_surface = self._truth_surface_for_observation(context)
+        if truth_surface:
+            context_name = truth_surface.get(
+                "context_name",
+                _normalize(truth_surface["context_family"]),
+            )
+            return {
+                "value": context_name,
+                "confidence": 0.92,
+                "reasons": [
+                    f"active truth concept indicates {context_name}",
+                    "truth-native semantic context surface available",
+                ],
+            }
+        operator = self.discover_process_operator(context)
+        process_surface = self.PROCESS_CONTEXT_SURFACES.get(operator["value"])
+        if process_surface:
+            context_name = process_surface["process_context"]
+            return {
+                "value": context_name,
+                "confidence": max(operator["confidence"], 0.90),
+                "reasons": [
+                    f"process operator {operator['value']} maps to {context_name}",
+                    "process abstraction context surface available",
+                ],
+            }
+        if operator["value"] == "translation":
+            return {
+                "value": "position_context",
+                "confidence": operator["confidence"],
+                "reasons": [
+                    "translation operator carries position context evidence",
+                ],
+            }
+        if operator["value"] in {"recoloring", "symbolic_remapping"}:
+            return {
+                "value": "color_context",
+                "confidence": operator["confidence"],
+                "reasons": [
+                    f"{operator['value']} operator carries color context evidence",
+                ],
+            }
+        if operator["value"] in {"rotation", "reflection"}:
+            return {
+                "value": "shape_context",
+                "confidence": operator["confidence"],
+                "reasons": [
+                    f"{operator['value']} operator carries shape context evidence",
+                ],
+            }
+        if operator["value"] in {"duplication", "deletion", "insertion"}:
+            return {
+                "value": "structural_transformation_context",
+                "confidence": operator["confidence"],
+                "reasons": [
+                    f"{operator['value']} operator carries structural context evidence",
+                ],
+            }
+        if operator["value"] == "identity_preservation":
+            return {
+                "value": "identity_preservation",
+                "confidence": operator["confidence"],
+                "reasons": [
+                    "identity preservation operator anchors identity context",
+                ],
+            }
+        return {
+            "value": "unknown",
+            "confidence": operator["confidence"],
+            "reasons": ["insufficient semantic context evidence"],
+        }
+
     def discover_object_dynamics(self, observation=None):
         features = self.extract_context_features(observation)
+        family = self.discover_process_operator(observation)["value"]
+        process_surface = self.PROCESS_CONTEXT_SURFACES.get(family)
+        if process_surface:
+            return process_surface["object_dynamics"]
         if features["object_delta"] > 0:
             return "object_created"
         if features["object_delta"] < 0:
@@ -417,10 +713,17 @@ class ContextDiscoveryEngine:
 
     def discover_topology_behavior(self, observation=None):
         context = observation if isinstance(observation, dict) else {}
+        truth_surface = self._truth_surface_for_observation(observation)
+        if truth_surface:
+            return truth_surface["topology_behavior"]
         explicit = context.get("topology_behavior", context.get("topology"))
         if explicit:
             return _normalize(explicit)
         features = self.extract_context_features(observation)
+        family = self.discover_process_operator(observation)["value"]
+        process_surface = self.PROCESS_CONTEXT_SURFACES.get(family)
+        if process_surface:
+            return process_surface["topology_behavior"]
         if features["cell_count_delta"] > 0:
             return "topology_expanding"
         if features["object_delta"] > 0:
@@ -433,11 +736,14 @@ class ContextDiscoveryEngine:
 
     def discover_color_behavior(self, observation=None):
         context = observation if isinstance(observation, dict) else {}
+        truth_surface = self._truth_surface_for_observation(observation)
+        if truth_surface:
+            return truth_surface["color_behavior"]
         explicit = context.get("color_behavior", context.get("color"))
         if explicit:
             return _normalize(explicit)
         features = self.extract_context_features(observation)
-        family = self.discover_transformation_family(observation)["value"]
+        family = self.discover_process_operator(observation)["value"]
         if features["colors_preserved"] is True:
             return "color_preserved"
         if family == "symbolic_remapping":
@@ -450,15 +756,22 @@ class ContextDiscoveryEngine:
 
     def discover_identity_behavior(self, observation=None):
         context = observation if isinstance(observation, dict) else {}
+        truth_surface = self._truth_surface_for_observation(observation)
+        if truth_surface:
+            return truth_surface["identity_behavior"]
         explicit = context.get("identity_behavior", context.get("identity"))
         if explicit:
             return _normalize(explicit)
         features = self.extract_context_features(observation)
+        family = self.discover_process_operator(observation)["value"]
+        process_surface = self.PROCESS_CONTEXT_SURFACES.get(family)
+        if process_surface:
+            return process_surface["identity_behavior"]
         if features["object_delta"] > 0:
             return "identity_split"
         if features["object_delta"] < 0:
             return "identity_merged"
-        if self.discover_transformation_family(observation)["value"] == (
+        if self.discover_process_operator(observation)["value"] == (
             "propagation"
         ):
             return "identity_propagated"
@@ -468,38 +781,115 @@ class ContextDiscoveryEngine:
 
     def generate_context_signature(self, observation=None):
         context = observation if isinstance(observation, dict) else {}
-        family = self.discover_transformation_family(context)
+        operator = self.discover_process_operator(context)
+        semantic_context = self.discover_semantic_context(context)
         features = self.extract_context_features(context)
+        process_surface = self.PROCESS_CONTEXT_SURFACES.get(operator["value"])
+        process_context_report = (
+            ProcessContextGenerationEngine().generate_context(
+                operator["value"],
+                evidence={
+                    "operator_confidence": operator["confidence"],
+                    "operator_reasons": operator["reasons"],
+                },
+            )
+            if process_surface
+            else {}
+        )
+        truth_surface = self._truth_surface_for_observation(context)
+        process_native_contexts = (
+            list(process_surface["native_contexts"])
+            if process_surface
+            else []
+        )
+        truth_native_contexts = (
+            list(truth_surface["native_contexts"])
+            if truth_surface
+            else []
+        )
+        native_contexts = truth_native_contexts or process_native_contexts
+        context_surface = (
+            truth_surface["surface"]
+            if truth_surface
+            else process_surface["surface"]
+            if process_surface
+            else semantic_context["value"]
+        )
         return {
             "task_cluster": _normalize(
-                context.get("task_cluster", family["value"])
+                context.get("task_cluster", semantic_context["value"])
             ),
-            "transformation_family": family["value"],
+            "transformation_family": semantic_context["value"],
+            "semantic_context": semantic_context["value"],
+            "process_operator": operator["value"],
+            "operator_confidence": operator["confidence"],
+            "operator_reasons": operator["reasons"],
+            "process_abstraction": (
+                ProcessAbstractionLayer.get(operator["value"]).as_dict()
+                if ProcessAbstractionLayer.get(operator["value"])
+                else {}
+            ),
+            "process_abstraction_ready": bool(
+                ProcessAbstractionLayer.get(operator["value"])
+            ),
+            "process_context_generation": process_context_report,
+            "process_context_generated": bool(
+                process_context_report.get("process_context_generated")
+            ),
+            "process_context_family": (
+                process_surface["context_family"]
+                if process_surface
+                else "none"
+            ),
+            "truth_context_family": (
+                truth_surface["context_family"]
+                if truth_surface
+                else "none"
+            ),
+            "process_context_surface": (
+                process_surface["surface"] if process_surface else "none"
+            ),
+            "truth_context_surface": (
+                truth_surface["surface"] if truth_surface else "none"
+            ),
+            "context_surface": context_surface,
+            "process_native_contexts": process_native_contexts,
+            "truth_native_contexts": truth_native_contexts,
+            "native_contexts": native_contexts,
+            "process_native_context_ready": bool(process_surface),
+            "truth_native_context_ready": bool(truth_surface),
             "object_count": str(features["output_object_count"]),
             "object_dynamics": self.discover_object_dynamics(context),
             "topology_behavior": self.discover_topology_behavior(context),
             "color_behavior": self.discover_color_behavior(context),
             "symmetry_behavior": _normalize(
-                context.get("symmetry_behavior", "unknown")
+                context.get(
+                    "symmetry_behavior",
+                    truth_surface["symmetry_behavior"]
+                    if truth_surface
+                    else "unknown",
+                )
             ),
             "size_behavior": (
-                "size_expanded"
+                process_surface["size_behavior"]
+                if process_surface
+                else "size_expanded"
                 if features["cell_count_delta"] > 0
                 else "size_preserved"
             ),
             "identity_behavior": self.discover_identity_behavior(context),
             "propagation_behavior": (
-                "propagation_detected"
-                if family["value"] == "propagation"
+                process_surface["propagation_behavior"]
+                if process_surface
                 else "propagation_absent"
             ),
-            "confidence": family["confidence"],
-            "classification_reasons": family["reasons"],
+            "confidence": semantic_context["confidence"],
+            "classification_reasons": semantic_context["reasons"],
         }
 
     def classify_context(self, observation=None):
         signature = self.generate_context_signature(observation)
-        family = signature["transformation_family"]
+        family = signature["semantic_context"]
         cluster_name = self._cluster_name_for_family(family)
         return {
             "context_name": family,
@@ -531,6 +921,11 @@ class ContextDiscoveryEngine:
             "context_signature": classification["signature"],
             "transformation_family":
             classification["signature"]["transformation_family"],
+            "semantic_context":
+            classification["signature"]["semantic_context"],
+            "discovered_context_name": classification["context_name"],
+            "process_operator":
+            classification["signature"]["process_operator"],
             "topology_behavior":
             classification["signature"]["topology_behavior"],
             "color_behavior":
@@ -543,10 +938,35 @@ class ContextDiscoveryEngine:
         }
 
     def _cluster_name_for_family(self, family):
+        process_surface = self.PROCESS_CONTEXT_SURFACES.get(family)
+        if process_surface:
+            return process_surface["context_family"]
+        for surface in self.PROCESS_CONTEXT_SURFACES.values():
+            if family == surface.get("context_id"):
+                return surface["context_family"]
+        if family == "color_context":
+            return "Color Context"
+        if family == "symmetry_context":
+            return "Symmetry Context"
+        if family == "position_context":
+            return "Position Context"
+        if family == "shape_context":
+            return "Shape Context"
+        if family == "topology_context":
+            return "Topology Context"
+        if family == "structural_transformation_context":
+            return "Structural Transformation"
         for cluster_name, families in self.CLUSTER_FAMILIES.items():
             if family in families:
                 return cluster_name
         return "Unknown Context Family"
+
+    def _truth_surface_for_observation(self, observation=None):
+        features = self.extract_context_features(observation)
+        for concept, surface in self.TRUTH_CONTEXT_SURFACES.items():
+            if concept in features.get("active_concepts", []):
+                return surface
+        return None
 
     def cluster_contexts(self, contexts=None):
         contexts = list(contexts or self.discovered_contexts)

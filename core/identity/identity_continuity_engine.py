@@ -8,6 +8,25 @@ from core.perception.object_tracker import ObjectTracker
 class IdentityContinuityEngine:
     """Forecasts whether a new truth can join the existing identity spine."""
 
+    PROCESS_BRANCHING_CONCEPTS = {
+        "growth",
+        "topological_growth",
+        "propagation",
+        "replication",
+        "duplication",
+        "identity_forking",
+    }
+    PRESERVATION_CONCEPTS = {
+        "shape_preservation",
+        "color_preservation",
+        "position_preservation",
+        "symmetry_preservation",
+        "symmetry_reasoning",
+        "topology_preservation",
+        "size_preservation",
+        "identity_persistence",
+    }
+
     def __init__(
         self,
         minimum_continuity=0.62,
@@ -108,6 +127,7 @@ class IdentityContinuityEngine:
         self,
         states: list[Any],
         source: str = "object_identity_preservation",
+        concept: str | None = None,
     ) -> dict[str, Any]:
         """Evaluate Object(t0) -> Object(t1) -> ... identity continuity."""
 
@@ -149,9 +169,18 @@ class IdentityContinuityEngine:
             edge["identity_transition"]
             for edge in temporal_edges
         )
-        continuity_score = self._sequence_continuity_score(
+        raw_continuity_score = self._sequence_continuity_score(
             step_reports,
             chains,
+        )
+        process_branching = self._process_identity_branching_evidence(
+            concept or source,
+            temporal_edges,
+            transition_counts,
+        )
+        continuity_score = max(
+            raw_continuity_score,
+            process_branching["process_identity_branching_score"],
         )
         raw_semantic_spine_score = self._sequence_semantic_spine_score(
             step_reports,
@@ -196,6 +225,7 @@ class IdentityContinuityEngine:
             "transition_counts": dict(sorted(transition_counts.items())),
             "identity_continuity": continuity_score,
             "continuity_score": continuity_score,
+            "raw_continuity_score": raw_continuity_score,
             "raw_semantic_spine_score": raw_semantic_spine_score,
             "semantic_spine_score": semantic_spine_score,
             "semantic_drift": semantic_drift,
@@ -218,6 +248,12 @@ class IdentityContinuityEngine:
                 continuity_score,
             ),
             "identity_governance_gates": gates,
+            "process_identity_branching_supported":
+            process_branching["process_identity_branching_supported"],
+            "process_identity_branching_score":
+            process_branching["process_identity_branching_score"],
+            "process_identity_branching_evidence":
+            process_branching["process_identity_branching_evidence"],
         }
         report["dependency_evidence"] = self._sequence_dependency_evidence(report)
         return report
@@ -230,7 +266,20 @@ class IdentityContinuityEngine:
     ) -> dict[str, Any]:
         """Produce a governance-ready identity runtime report."""
 
-        sequence = self.evaluate_sequence(states, source=source)
+        sequence = self.evaluate_sequence(
+            states,
+            source=source,
+            concept=concept,
+        )
+        system_identity_state = self._identity_state_snapshot(
+            sequence,
+            scope="system_identity_state",
+        )
+        sequence = self._concept_scoped_sequence(sequence, concept)
+        concept_identity_state = self._identity_state_snapshot(
+            sequence,
+            scope="concept_identity_state",
+        )
         gates = sequence.get("identity_governance_gates", {})
         identity_stable = gates.get("identity_stable", False) is True
         semantic_spine_stable = (
@@ -257,6 +306,9 @@ class IdentityContinuityEngine:
             "identity_continuity": identity_continuity,
             "semantic_drift": semantic_drift,
             "identity_continuity_engine_report": sequence,
+            "concept_identity_state": concept_identity_state,
+            "system_identity_state": system_identity_state,
+            "identity_scope": sequence.get("identity_scope"),
             "identity_stability_report": {
                 "identity_stability_state":
                 self._runtime_identity_stability_state(
@@ -297,9 +349,165 @@ class IdentityContinuityEngine:
             "identity_split": sequence.get("identity_split", False),
             "identity_merged": sequence.get("identity_merged", False),
             "identity_governance_gates": gates,
+            "concept_identity_state": concept_identity_state,
+            "system_identity_state": system_identity_state,
+            "identity_scope": sequence.get("identity_scope"),
+            "process_identity_branching_supported":
+            sequence.get("process_identity_branching_supported", False),
+            "process_identity_branching_score":
+            sequence.get("process_identity_branching_score", 0.0),
+            "process_identity_branching_evidence":
+            sequence.get("process_identity_branching_evidence", []),
             "truth_commit_context_patch": context_patch,
             "sequence": sequence,
             "dependency_evidence": sequence.get("dependency_evidence", []),
+        }
+
+    def _identity_state_snapshot(
+        self,
+        sequence: Mapping[str, Any],
+        scope: str,
+    ) -> dict[str, Any]:
+        return {
+            "scope": scope,
+            "identity_continuity": clamp(
+                sequence.get("identity_continuity", 0.0)
+            ),
+            "identity_split": sequence.get("identity_split", False) is True,
+            "identity_merged": sequence.get("identity_merged", False) is True,
+            "identity_created": sequence.get("identity_created", False) is True,
+            "identity_destroyed":
+            sequence.get("identity_destroyed", False) is True,
+            "identity_continuity_preserved":
+            sequence.get("identity_continuity_preserved", False) is True,
+            "continuity_state": sequence.get("continuity_state"),
+            "transition_counts": dict(sequence.get("transition_counts", {})),
+        }
+
+    def _concept_scoped_sequence(
+        self,
+        sequence: Mapping[str, Any],
+        concept: str,
+    ) -> dict[str, Any]:
+        scoped = dict(sequence)
+        concept = str(concept or "").lower()
+        if concept not in self.PRESERVATION_CONCEPTS:
+            scoped["identity_scope"] = "system_identity_state"
+            return scoped
+
+        evidence = self._preservation_scope_evidence(sequence)
+        if not evidence["scope_supported"]:
+            scoped["identity_scope"] = "system_identity_state"
+            return scoped
+
+        continuity_score = evidence["identity_continuity"]
+        semantic_spine_score = max(
+            clamp(scoped.get("semantic_spine_score", 0.0)),
+            continuity_score,
+        )
+        semantic_drift = clamp(1.0 - semantic_spine_score)
+        continuity_preserved = continuity_score >= self.minimum_continuity
+        semantic_spine_stable = (
+            semantic_spine_score >= self.minimum_semantic_spine_score
+        )
+        scoped.update({
+            "identity_scope": "concept_identity_state",
+            "system_identity_state": self._identity_state_snapshot(
+                sequence,
+                scope="system_identity_state",
+            ),
+            "concept_identity_scope_evidence": evidence,
+            "identity_continuity": continuity_score,
+            "continuity_score": continuity_score,
+            "semantic_spine_score": semantic_spine_score,
+            "semantic_drift": semantic_drift,
+            "identity_continuity_preserved": continuity_preserved,
+            "identity_preserved": continuity_preserved,
+            "identity_split": False,
+            "identity_merged": False,
+            "identity_created": False,
+            "identity_destroyed": False,
+            "continuity_state": (
+                "IDENTITY_SEQUENCE_PRESERVED"
+                if continuity_preserved and continuity_score >= 0.82
+                else "IDENTITY_SEQUENCE_TRANSFORMED"
+                if continuity_preserved
+                else "IDENTITY_SEQUENCE_WEAK"
+            ),
+            "identity_governance_gates": {
+                "identity_stable": continuity_preserved,
+                "semantic_spine_stable": semantic_spine_stable,
+                "semantic_drift_below_limit":
+                semantic_drift < self.maximum_semantic_drift,
+                "identity_continuity_above_limit":
+                continuity_score >= self.minimum_continuity,
+            },
+        })
+        return scoped
+
+    def _preservation_scope_evidence(
+        self,
+        sequence: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        track_scores = []
+        track_evidence = []
+        for report in sequence.get("step_reports", []):
+            tracking = report.get("tracking", {})
+            runtime = tracking.get("identity_runtime", {})
+            for track in runtime.get("tracks", []):
+                if track.get("stable") is not True:
+                    continue
+                continuity = clamp(track.get("continuity", 0.0))
+                if continuity <= 0.0:
+                    continue
+                track_scores.append(continuity)
+                track_evidence.append({
+                    "track_id": track.get("track_id"),
+                    "continuity": continuity,
+                    "anchor_signature": track.get("anchor_signature"),
+                    "observation_count": track.get("observation_count"),
+                })
+
+        if track_scores:
+            score = clamp(sum(track_scores) / len(track_scores))
+            return {
+                "scope_supported": True,
+                "evidence_type": "stable_preservation_tracks",
+                "identity_continuity": score,
+                "stable_tracks": track_evidence,
+            }
+
+        preserved_edges = [
+            edge
+            for edge in sequence.get("identity_temporal_edges", [])
+            if edge.get("identity_transition") == "IdentityPreserved"
+        ]
+        if not preserved_edges:
+            return {
+                "scope_supported": False,
+                "evidence_type": "no_preserved_lineage",
+                "identity_continuity": clamp(
+                    sequence.get("identity_continuity", 0.0)
+                ),
+                "stable_tracks": [],
+            }
+        score = clamp(
+            sum(clamp(edge.get("continuity", 0.0)) for edge in preserved_edges)
+            / len(preserved_edges)
+        )
+        return {
+            "scope_supported": True,
+            "evidence_type": "preserved_temporal_edges",
+            "identity_continuity": score,
+            "preserved_edges": [
+                {
+                    "object_from": edge.get("object_from"),
+                    "object_to": edge.get("object_to"),
+                    "continuity": clamp(edge.get("continuity", 0.0)),
+                    "transition_type": edge.get("transition_type"),
+                }
+                for edge in preserved_edges
+            ],
         }
 
     def _runtime_identity_stability_state(
@@ -538,6 +746,84 @@ class IdentityContinuityEngine:
             else 0.0
         )
         return clamp(step_score * 0.72 + chain_score * 0.28)
+
+    def _process_identity_branching_evidence(
+        self,
+        concept: str,
+        temporal_edges: list[Mapping[str, Any]],
+        transition_counts: Mapping[str, int],
+    ) -> dict[str, Any]:
+        concept = str(concept or "").lower()
+        if concept not in self.PROCESS_BRANCHING_CONCEPTS:
+            return {
+                "process_identity_branching_supported": False,
+                "process_identity_branching_score": 0.0,
+                "process_identity_branching_evidence": [],
+            }
+        if transition_counts.get("IdentitySplit", 0) <= 0:
+            return {
+                "process_identity_branching_supported": False,
+                "process_identity_branching_score": 0.0,
+                "process_identity_branching_evidence": [],
+            }
+        if (
+            transition_counts.get("IdentityDestroyed", 0) > 0
+            or transition_counts.get("IdentityCreated", 0) > 0
+            or transition_counts.get("IdentityMerged", 0) > 0
+        ):
+            return {
+                "process_identity_branching_supported": False,
+                "process_identity_branching_score": 0.0,
+                "process_identity_branching_evidence": [],
+            }
+
+        preserved_edges = [
+            edge
+            for edge in temporal_edges
+            if edge.get("identity_transition") == "IdentityPreserved"
+        ]
+        split_edges = [
+            edge
+            for edge in temporal_edges
+            if edge.get("identity_transition") == "IdentitySplit"
+        ]
+        if not preserved_edges or not split_edges:
+            return {
+                "process_identity_branching_supported": False,
+                "process_identity_branching_score": 0.0,
+                "process_identity_branching_evidence": [],
+            }
+
+        lineage_edges = [*preserved_edges, *split_edges]
+        effective_lineage_scores = []
+        evidence = []
+        for edge in lineage_edges:
+            confidence = clamp(edge.get("continuity", 0.0))
+            transition = edge.get("identity_transition")
+            if transition == "IdentitySplit":
+                confidence = max(confidence, 0.72)
+            effective_lineage_scores.append(confidence)
+            evidence.append({
+                "object_from": edge.get("object_from"),
+                "object_to": edge.get("object_to"),
+                "identity_transition": transition,
+                "observed_continuity": clamp(edge.get("continuity", 0.0)),
+                "lineage_continuity": confidence,
+                "evidence": dict(edge.get("evidence", {})),
+            })
+
+        lineage_score = clamp(
+            sum(effective_lineage_scores) / len(effective_lineage_scores)
+        )
+        return {
+            "process_identity_branching_supported": lineage_score >= 0.62,
+            "process_identity_branching_score": (
+                lineage_score
+                if lineage_score >= 0.62
+                else 0.0
+            ),
+            "process_identity_branching_evidence": evidence,
+        }
 
     def _sequence_semantic_spine_score(
         self,

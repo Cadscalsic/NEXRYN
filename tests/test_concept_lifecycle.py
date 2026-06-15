@@ -203,6 +203,73 @@ def test_concept_maturity_uses_complete_dependency_chain_for_process_candidate()
     assert promotion["dependency_promotion_blockers"] == []
 
 
+def test_concept_maturity_uses_runtime_process_dependency_memory_directly():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept(
+                        "topological_growth",
+                        8,
+                        [True, True, True, True, True, True, True, False],
+                    ),
+                    "cross_task_support": 0.84,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.58,
+                        }
+                        for _ in range(7)
+                    ] + [{
+                        "success": False,
+                        "contradiction_score": 0.05,
+                        "causal_alignment": 0.58,
+                    }],
+                    "context_strength": 0.72,
+                    "identity_strength": 0.75,
+                },
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "topological_growth",
+                "causal_validation": {
+                    "validation_score": 0.58,
+                },
+                "process_dependency_memory": {
+                    "dependency_confidence": 0.9017,
+                    "dependency_chain_depth": 5,
+                    "dependency_chain_coverage": 0.8556,
+                    "missing_dependencies": [],
+                },
+                "dependency_chain_alignment": {
+                    "alignment_ready": True,
+                    "alignment_confidence": 0.88,
+                },
+                "contextual_truth_authority": {
+                    "effective_contextual_truth": 0.72,
+                    "contextual_truth_supported": True,
+                },
+                "identity_safe_truth_integration": {
+                    "identity_continuity": 0.75,
+                },
+            }],
+        },
+    )
+
+    promotion = report["concepts"][0]["truth_candidate_promotion"]
+
+    assert promotion["promotion_dependency_score"] >= 0.89
+    assert promotion["promotion_dependency_bonus"] > 0.0
+    assert promotion["dependency_confidence"] == 0.9017
+    assert promotion["dependency_chain_depth"] == 5
+    assert promotion["dependency_chain_coverage"] == 0.8556
+    assert promotion["process_dependency_memory"]["dependency_chain_depth"] == 5
+    assert promotion["readiness_gates"]["causal_stability"] is True
+    assert promotion["dependency_promotion_blockers"] == []
+
+
 def test_concept_maturity_reports_blockers_after_complete_dependency_chain():
     report = ConceptMaturityTracker().evaluate(
         {
@@ -264,6 +331,159 @@ def test_concept_maturity_reports_blockers_after_complete_dependency_chain():
         "promotion_gate_blocked:context_strength"
         in promotion["dependency_promotion_blockers"]
     )
+
+
+def test_process_native_context_strength_unblocks_boundary_refinement():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept(
+                        "propagation",
+                        8,
+                        [True, True, True, True, True, True, True, False],
+                    ),
+                    "cross_task_support": 0.84,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.58,
+                        }
+                        for _ in range(7)
+                    ] + [{
+                        "success": False,
+                        "contradiction_score": 0.05,
+                        "causal_alignment": 0.58,
+                    }],
+                    "identity_strength": 0.75,
+                },
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "propagation",
+                "causal_validation": {
+                    "promotion_dependency_score": 0.90,
+                    "dependency_promotion_evidence": {
+                        "dependency_confidence": 0.90,
+                        "dependency_chain_depth": 5,
+                        "dependency_chain_coverage": 1.0,
+                        "missing_dependencies": [],
+                    },
+                },
+                "context_hierarchy": {
+                    "context_hierarchy_score": 0.96,
+                    "hierarchy_ready": True,
+                },
+                "semantic_context": {
+                    "semantic_context_score": 0.93,
+                    "status": "SEMANTICALLY_VALIDATED",
+                    "properties": [
+                        "directional_spread",
+                        "source_pattern_preservation",
+                        "signal_transfer",
+                    ],
+                    "capabilities": [
+                        "pattern_extension",
+                        "directional_transfer",
+                    ],
+                },
+                "contextual_truth_authority": {
+                    "effective_contextual_truth": 0.81,
+                    "contextual_truth_supported": True,
+                },
+                "identity_safe_truth_integration": {
+                    "identity_continuity": 0.75,
+                },
+            }],
+        },
+    )
+
+    promotion = report["concepts"][0]["truth_candidate_promotion"]
+
+    assert promotion["readiness_gates"]["context_strength"] is True
+    assert promotion["context_strength"] >= 0.81
+    assert "promotion_gate_blocked:context_strength" not in (
+        promotion["dependency_promotion_blockers"]
+    )
+
+
+def test_all_process_context_surfaces_clear_context_strength_gate():
+    evaluations = []
+    concepts = [
+        "growth",
+        "propagation",
+        "replication",
+        "topological_growth",
+        "directional_motion",
+    ]
+    for concept in concepts:
+        evaluations.append({
+            "concept": concept,
+            "causal_validation": {
+                "promotion_dependency_score": 0.92,
+                "dependency_promotion_evidence": {
+                    "dependency_confidence": 0.90,
+                    "dependency_chain_depth": 5,
+                    "dependency_chain_coverage": 1.0,
+                    "missing_dependencies": [],
+                },
+            },
+            "context_hierarchy": {
+                "context_hierarchy_score": 0.98,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "semantic_context_score": 0.94,
+                "status": "SEMANTICALLY_VALIDATED",
+            },
+            "contextual_truth_authority": {
+                "effective_contextual_truth": 0.86,
+                "contextual_truth_supported": True,
+            },
+            "identity_safe_truth_integration": {
+                "identity_continuity": 0.75,
+            },
+        })
+
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept(
+                        concept,
+                        8,
+                        [True, True, True, True, True, True, True, False],
+                    ),
+                    "cross_task_support": 0.84,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.58,
+                        }
+                        for _ in range(7)
+                    ] + [{
+                        "success": False,
+                        "contradiction_score": 0.05,
+                        "causal_alignment": 0.58,
+                    }],
+                    "identity_strength": 0.75,
+                }
+                for concept in concepts
+            ],
+        },
+        {"evaluations": evaluations},
+    )
+
+    for item in report["concepts"]:
+        promotion = item["truth_candidate_promotion"]
+        assert promotion["readiness_gates"]["context_strength"] is True
+        assert promotion["context_strength"] >= 0.86
+        assert "promotion_gate_blocked:context_strength" not in (
+            promotion["dependency_promotion_blockers"]
+        )
 
 
 def test_concept_maturity_uses_truth_gates_for_candidate_and_stable_truth():

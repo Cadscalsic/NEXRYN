@@ -315,6 +315,12 @@ class CausalValidationEngine:
                 dependency_coherence
                 + dependency_promotion["promotion_dependency_bonus"]
             ),
+            clamp(
+                dependency_promotion["dependency_promotion_evidence"].get(
+                    "relation_semantics_score",
+                    0.0,
+                )
+            ),
         )
         identity_compatibility = context.get(
             "identity_compatibility",
@@ -469,6 +475,41 @@ class CausalValidationEngine:
             )
             or []
         )
+        typed_relations = context.get(
+            "typed_dependency_relations",
+            evidence.get("typed_dependency_relations", []),
+        )
+        if not isinstance(typed_relations, list):
+            typed_relations = []
+        relation_semantics_score = clamp(
+            context.get(
+                "relation_semantics_score",
+                evidence.get("relation_semantics_score", 0.0),
+            )
+        )
+        if typed_relations and relation_semantics_score <= 0.0:
+            semantic_relations = [
+                relation
+                for relation in typed_relations
+                if relation.get("relation")
+                in {
+                    "causes",
+                    "creates",
+                    "depends_on",
+                    "derived_from",
+                    "enables",
+                    "requires",
+                    "preserves",
+                    "modifies",
+                }
+            ]
+            relation_semantics_score = clamp(
+                sum(
+                    clamp(relation.get("confidence", 0.0))
+                    for relation in semantic_relations
+                )
+                / max(len(semantic_relations), 1)
+            )
 
         blockers = []
         if confidence < 0.85:
@@ -480,10 +521,20 @@ class CausalValidationEngine:
 
         depth_score = clamp(depth / 5.0)
 
-        promotion_dependency_score = clamp(
+        chain_only_score = clamp(
             confidence * 0.46
             + coverage * 0.34
             + depth_score * 0.20
+        )
+        relation_aware_score = clamp(
+            confidence * 0.46
+            + coverage * 0.34
+            + depth_score * 0.14
+            + relation_semantics_score * 0.06
+        )
+        promotion_dependency_score = max(
+            chain_only_score,
+            relation_aware_score,
         )
 
         complete = (
@@ -509,6 +560,8 @@ class CausalValidationEngine:
                 "dependency_chain_coverage": coverage,
                 "missing_dependencies": missing_dependencies,
                 "dependency_chain_complete_for_promotion": complete,
+                "typed_dependency_relations": typed_relations,
+                "relation_semantics_score": relation_semantics_score,
             },
         }
 
@@ -674,10 +727,15 @@ class CausalValidationEngine:
             causal_graph,
         )
         counterfactual = spurious_report["counterfactual_validation"]
+        relation_semantics_score = metrics.get(
+            "dependency_promotion_evidence",
+            {},
+        ).get("relation_semantics_score", 0.0)
         metrics["dependency_coherence"] = clamp(
-            (
-              metrics["dependency_coherence"] * 0.70
-              + counterfactual["counterfactual_score"] * 0.30
+            max(
+                metrics["dependency_coherence"] * 0.70
+                + counterfactual["counterfactual_score"] * 0.30,
+                relation_semantics_score,
             )
         )
         validation_score = self.compute_validation_score(metrics)

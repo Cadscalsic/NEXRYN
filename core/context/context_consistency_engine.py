@@ -45,17 +45,21 @@ class ContextConsistencyEngine:
                 "connectivity_state",
                 "topology_preserved",
             ],
-            "object_identity_preservation": [
+            "identity_persistence": [
                 "identity_behavior",
                 "lineage_continuity",
                 "identity_preserved",
-                "identity_split_with_lineage",
             ],
             "identity_preservation": [
                 "identity_behavior",
                 "lineage_continuity",
                 "identity_preserved",
+            ],
+            "identity_forking": [
+                "identity_behavior",
+                "lineage_continuity",
                 "identity_split_with_lineage",
+                "object_count_increase",
             ],
             "symmetry_reasoning": [
                 "symmetry_evidence",
@@ -232,13 +236,15 @@ class ContextConsistencyEngine:
                 score += 0.15
             if "changes_color" in signals:
                 score -= 0.10
-        elif concept in {
-            "object_identity_preservation",
-            "identity_preservation",
-        }:
+        elif concept in {"identity_persistence", "identity_preservation"}:
             if context.get("identity_behavior") == "identity_split":
                 score -= 0.25
             if {"lineage_continuity", "identity_continuity"} & signals:
+                score += 0.20
+        elif concept == "identity_forking":
+            if context.get("identity_behavior") == "identity_split":
+                score += 0.20
+            if {"identity_split_with_lineage", "object_count_increase"} & signals:
                 score += 0.20
         elif concept == "topology_preservation":
             if context.get("topology_behavior") == "topology_splitting":
@@ -257,10 +263,7 @@ class ContextConsistencyEngine:
                 score += scene_score * 0.12
             elif concept == "color_preservation":
                 score += scene_score * 0.08
-            elif concept in {
-                "object_identity_preservation",
-                "identity_preservation",
-            }:
+            elif concept in {"identity_persistence", "identity_preservation"}:
                 score += scene_score * 0.10
             elif concept == "topology_preservation":
                 score += scene_score * 0.08
@@ -383,11 +386,10 @@ class ContextConsistencyEngine:
         ):
             reasons.append("topology_splitting_without_continuity_rule")
         if (
-            concept in {"identity_preservation", "object_identity_preservation"}
+            concept in {"identity_preservation", "identity_persistence"}
             and context.get("identity_behavior") == "identity_split"
-            and not ({"lineage_continuity", "identity_continuity"} & signals)
         ):
-            reasons.append("identity_split_without_lineage_rule")
+            reasons.append("identity_split_invalid_for_identity_persistence")
         return {
             "mismatch_detected": bool(reasons),
             "mismatch_reasons": reasons,

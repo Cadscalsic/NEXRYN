@@ -62,10 +62,12 @@ def test_context_hierarchy_links_specializations_to_general_families():
     duplication = hierarchy.add_context(context("duplication"))
     translation = hierarchy.add_context(context("translation"))
     recoloring = hierarchy.add_context(context("recoloring"))
+    identity = hierarchy.add_context(context("identity_preservation"))
 
     assert duplication.parent_context == "structural_transformation"
     assert translation.parent_context == "geometric_transformation"
     assert recoloring.parent_context == "color_transformation"
+    assert identity.parent_context == "structural_transformation"
 
 
 def test_context_distance_differentiates_near_and_far_contexts():
@@ -83,6 +85,75 @@ def test_context_inheritance_exposes_parent_features():
     assert inheritance["parent_context"] == "structural_transformation"
     assert "topology_change" in inheritance["inherited_features"]
     assert inheritance["inheritance_integrity"] == 1.0
+
+
+def test_identity_preservation_context_inherits_structural_hierarchy():
+    layer = EpistemicCognitionLayer()
+    discovery = layer.context_discovery_engine.discover_context({
+        "task_id": "task_identity_preservation",
+        "concept": "object_identity_preservation",
+        "input_grid": [[1]],
+        "output_grid": [[1]],
+    })
+
+    report = layer.context_differentiation_engine.refine_clusters([
+        discovery,
+    ])
+    inheritance = report["inheritance"][0]
+
+    assert discovery["transformation_family"] == "identity_preservation"
+    assert inheritance["parent_context"] == "structural_transformation"
+    assert "object_identity_preservation" in (
+        inheritance["process_dependency_contexts"]
+    )
+    assert "structural_identity_preserved" in (
+        inheritance["inherited_features"]
+    )
+    assert report["context_hierarchy_score"] >= 0.75
+    assert report["hierarchy_ready"] is True
+
+
+def test_process_contexts_inherit_process_native_hierarchies():
+    layer = EpistemicCognitionLayer()
+
+    expected = {
+        "growth": ("growth_context", "topology_expansion"),
+        "propagation": ("propagation_context", "directional_spread"),
+        "replication": ("replication_context", "structural_copying"),
+        "topological_growth": (
+            "topological_growth_context",
+            "topology_splitting",
+        ),
+        "directional_motion": (
+            "directional_motion_context",
+            "directional_displacement",
+        ),
+    }
+
+    for concept, (parent, inherited_feature) in expected.items():
+        discovery = layer.context_discovery_engine.discover_context({
+            "task_id": f"task_{concept}",
+            "concept": concept,
+            "active_concepts": [concept],
+        })
+        report = layer.context_differentiation_engine.refine_clusters([
+            discovery,
+        ])
+        inheritance = report["inheritance"][0]
+
+        assert discovery["cluster"] in {
+            "Growth Context",
+            "Propagation Context",
+            "Replication Context",
+            "Topological Growth Context",
+            "Directional Motion Context",
+        }
+        assert inheritance["context"] == parent
+        assert inheritance["parent_context"] is None
+        assert inheritance["process_dependency_contexts"]
+        assert inherited_feature in inheritance["inherited_features"]
+        assert report["context_hierarchy_score"] >= 0.75
+        assert report["hierarchy_ready"] is True
 
 
 def test_context_conflict_detection_separates_hybrid_contexts():

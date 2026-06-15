@@ -277,6 +277,107 @@ def test_shape_preservation_with_improved_context_consistency():
     assert report["contextual_truth_supported"] is False
 
 
+def test_high_confidence_transfer_promotes_contextual_truth_support():
+    engine = ContextualTruthAuthorityEngine()
+
+    report = engine.analyze(
+        "growth",
+        truth_candidate_report={
+            "effective_contradiction": 0.0,
+            "contradiction_threshold": 0.1,
+        },
+        context_consistency_report={"context_consistency": 0.76},
+        contextual_truth_report={
+            "context_confidence": 0.8771,
+            "transfer_reliability": 1.0,
+            "status": "CONTEXT_REVIEW_REQUIRED",
+        },
+        semantic_context_report={
+            "semantic_context_score": 0.9,
+            "status": "SEMANTICALLY_VALIDATED",
+        },
+        context_hierarchy_report={
+            "context_hierarchy_score": 0.9,
+            "hierarchy_ready": True,
+        },
+        causal_validation_report={
+            "causal_validation_score": 0.9,
+            "causal_graph_alignment": 0.85,
+            "dependency_coherence": 0.8584,
+            "contradiction_resistance": 0.9,
+            "identity_compatibility": 1.0,
+        },
+        identity_report={
+            "identity_governance_state": "IDENTITY_GOVERNANCE_STABLE",
+            "identity_state": "IDENTITY_STABLE",
+        },
+    )
+
+    assert report["authority_components"][
+        "context_transfer_support"
+    ] is True
+    assert report["authority_components"][
+        "derived_contextual_support"
+    ] >= 0.85
+    assert report["contextual_truth_supported"] is True
+    assert report["authority_status"] in {
+        "AUTHORITATIVE_CONTEXTUAL_TRUTH",
+        "SUPPORTED_CONTEXTUAL_TRUTH",
+    }
+
+
+def test_measured_effective_truth_uses_transfer_evidence_for_support():
+    engine = ContextualTruthAuthorityEngine()
+
+    for concept in ["symmetry_reasoning", "color_preservation"]:
+        report = engine.analyze(
+            concept,
+            truth_candidate_report={
+                "effective_contradiction": 0.0,
+                "contradiction_threshold": 0.1,
+            },
+            context_consistency_report={"context_consistency": 0.5589},
+            contextual_truth_report={
+                "effective_contextual_truth": 0.664,
+                "context_confidence": 0.8771,
+                "transfer_reliability": 1.0,
+                "valid_contexts": ["duplication"],
+                "status": "CONTEXT_REVIEW_REQUIRED",
+            },
+            semantic_context_report={
+                "semantic_context_score": 0.9,
+                "status": "SEMANTICALLY_VALIDATED",
+            },
+            context_hierarchy_report={
+                "context_hierarchy_score": 0.94,
+                "hierarchy_ready": True,
+            },
+            causal_validation_report={
+                "causal_validation_score": 0.80,
+                "causal_graph_alignment": 0.83,
+                "dependency_coherence": 0.70,
+                "contradiction_resistance": 0.90,
+                "identity_compatibility": 1.0,
+            },
+            identity_report={
+                "identity_state": "HOLD_FOR_IDENTITY_SAFETY",
+                "identity_failed_checks": ["contextual_truth_supported"],
+            },
+        )
+
+        assert report["authority_components"][
+            "contextual_truth_score"
+        ] == 0.664
+        assert report["authority_components"][
+            "derived_contextual_support"
+        ] >= 0.90
+        assert report["authority_components"][
+            "context_transfer_support"
+        ] is True
+        assert report["contextual_truth_supported"] is True
+        assert report["authority_status"] == "SUPPORTED_CONTEXTUAL_TRUTH"
+
+
 def test_color_preservation_with_high_contradiction_risk_blocks():
     engine = ContextualTruthAuthorityEngine()
 

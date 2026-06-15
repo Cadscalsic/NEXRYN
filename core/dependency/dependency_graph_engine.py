@@ -36,6 +36,7 @@ from core.dependency.process_dependency_graph import ProcessDependencyGraph
 from core.dependency.process_dependency_memory import (
     DEFAULT_PROCESS_DEPENDENCY_MEMORY_PATH,
     ProcessDependencyMemory,
+    REQUIRED_PROCESS_DEPENDENCY_RELATIONS,
 )
 from core.perception.color_analyzer import ColorAnalyzer
 from core.perception.identity_tracker import IdentityTracker
@@ -650,7 +651,7 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
                         process
                     )
                     if relation.source == process
-                    and relation.relation in {"requires", "causes", "supports"}
+                    and relation.relation in REQUIRED_PROCESS_DEPENDENCY_RELATIONS
                 ],
             )
             for process in process_list
@@ -826,12 +827,14 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
         runtime = record.get("identity_runtime_report", {})
         runtime = runtime if isinstance(runtime, dict) else {}
         if runtime.get("identity_split") is True:
+            add("identity_forking")
             add("identity_split")
             add("object_count_increase")
         if runtime.get("identity_merged") is True:
             add("identity_merged")
             add("object_count_decrease")
         if runtime.get("identity_continuity_preserved") is True:
+            add("identity_persistence")
             add("identity_preserved")
         if runtime.get("runtime_ready") is True:
             add("local_shape")
@@ -847,7 +850,8 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
                     "propagation",
                     "replication",
                     "duplication",
-                    "object_identity_preservation",
+                    "identity_persistence",
+                    "identity_forking",
                 }
             ),
             None,
@@ -862,14 +866,19 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
             add("directional_motion")
             add("position_preservation")
         elif family in {"replication", "duplication"}:
+            add("identity_forking")
             add("identity_split")
             add("object_count_increase")
             add("topology_splitting")
             add("shape_preservation")
-        elif family == "object_identity_preservation":
+        elif family == "identity_persistence":
             add("identity_preserved")
             add("local_shape")
             add("shape_preservation")
+        elif family == "identity_forking":
+            add("identity_split")
+            add("object_count_increase")
+            add("topology_splitting")
 
         return signals
 

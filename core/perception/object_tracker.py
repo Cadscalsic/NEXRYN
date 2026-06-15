@@ -793,7 +793,7 @@ class ObjectTracker:
         )["manhattan_distance"]
         proximity = 1.0 / (1.0 + float(center_distance))
         bbox_related = 1.0 if self._bbox_related(input_obj, output_obj) else 0.0
-        return clamp(
+        score = clamp(
             containment * 0.30
             + union_overlap * 0.16
             + same_color * 0.16
@@ -802,6 +802,16 @@ class ObjectTracker:
             + proximity * 0.08
             + bbox_related * 0.04
         )
+        semantic_anchor = clamp(
+            same_shape * 0.42
+            + same_color * 0.22
+            + size_ratio * 0.22
+            + bbox_related * 0.08
+            + proximity * 0.06
+        )
+        if same_shape and same_color and size_ratio >= 0.90:
+            score = max(score, semantic_anchor)
+        return score
 
     def _semantic_spine_stability(
         self,

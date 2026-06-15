@@ -78,7 +78,8 @@ def build_training_report(
             "propagation",
             "replication",
             "topological_growth",
-            "object_identity_preservation",
+            "identity_persistence",
+            "identity_forking",
             "directional_motion",
         }
         process_concepts_in_boundary_refinement = [
@@ -114,17 +115,99 @@ def build_training_report(
             item.get("concept"): item
             for item in boundary_refinement_dependency_debug
         }
+        dependency_promotion_blocker_names = {
+            "dependency_confidence_below_promotion_floor",
+            "dependency_chain_depth_below_promotion_floor",
+            "dependency_chain_missing_dependencies",
+        }
+
+        def dependency_ready(dependency_debug):
+            return (
+                float(
+                    dependency_debug.get("dependency_confidence", 0.0)
+                    or 0.0
+                ) > 0.85
+                and dependency_debug.get("missing_dependencies", []) == []
+                and int(
+                    dependency_debug.get("dependency_chain_depth", 0)
+                    or 0
+                ) >= 4
+            )
+
+        def promotion_from_dependency_debug(dependency_debug):
+            dependency_confidence = float(
+                dependency_debug.get("dependency_confidence", 0.0) or 0.0
+            )
+            dependency_coverage = float(
+                dependency_debug.get("dependency_chain_coverage", 0.0) or 0.0
+            )
+            dependency_depth = int(
+                dependency_debug.get("dependency_chain_depth", 0) or 0
+            )
+            depth_score = min(dependency_depth / 5.0, 1.0)
+
+            promotion_score = round(
+                min(
+                    dependency_confidence * 0.46
+                    + dependency_coverage * 0.34
+                    + depth_score * 0.20,
+                    1.0,
+                ),
+                4,
+            )
+
+            return {
+                "promotion_dependency_score": promotion_score,
+                "promotion_dependency_bonus": (
+                    round(min((promotion_score - 0.80) * 0.25, 0.08), 4)
+                    if promotion_score > 0.80
+                    else 0.0
+                ),
+                "dependency_confidence": dependency_confidence,
+                "dependency_chain_depth": dependency_depth,
+                "dependency_chain_coverage": dependency_coverage,
+                "missing_dependencies":
+                list(dependency_debug.get("missing_dependencies", [])),
+            }
+
+        def reconcile_dependency_promotion(promotion, dependency_debug):
+            promotion = dict(promotion or {})
+            dependency_metrics = promotion_from_dependency_debug(
+                dependency_debug,
+            )
+            promotion.update({
+                key: (
+                    promotion.get(key)
+                    if promotion.get(key) not in [None, 0, 0.0, []]
+                    else value
+                )
+                for key, value in dependency_metrics.items()
+            })
+
+            if dependency_ready(dependency_debug):
+                promotion.update(dependency_metrics)
+                blockers = [
+                    blocker
+                    for blocker in promotion.get(
+                        "dependency_promotion_blockers",
+                        [],
+                    )
+                    if blocker not in dependency_promotion_blocker_names
+                ]
+                promotion["dependency_promotion_blockers"] = blockers
+                promotion[
+                    "dependency_promotion_metrics_source"
+                ] = "process_dependency_memory"
+
+            return promotion
+
         dependency_ready_boundary_refinement_blockers = []
         for item in concept_lifecycle_report.get("concepts", []):
             concept = item.get("concept")
             if item.get("state") != "BOUNDARY_REFINEMENT":
                 continue
             dependency_debug = debug_by_concept.get(concept, {})
-            if not (
-                dependency_debug.get("dependency_confidence", 0.0) > 0.85
-                and dependency_debug.get("missing_dependencies", []) == []
-                and dependency_debug.get("dependency_chain_depth", 0) >= 4
-            ):
+            if not dependency_ready(dependency_debug):
                 continue
             promotion = candidate_evaluations.get(
                 concept,
@@ -132,40 +215,18 @@ def build_training_report(
             )
 
             if not promotion:
-                dependency_confidence = float(
-                    dependency_debug.get("dependency_confidence", 0.0) or 0.0
-                )
-                dependency_coverage = float(
-                    dependency_debug.get("dependency_chain_coverage", 0.0) or 0.0
-                )
-                dependency_depth = int(
-                    dependency_debug.get("dependency_chain_depth", 0) or 0
-                )
-                depth_score = min(dependency_depth / 5.0, 1.0)
-
-                promotion_score = round(
-                    min(
-                        dependency_confidence * 0.46
-                        + dependency_coverage * 0.34
-                        + depth_score * 0.20,
-                        1.0,
-                    ),
-                    4,
-                )
-
                 promotion = {
-                    "promotion_dependency_score": promotion_score,
-                    "promotion_dependency_bonus": (
-                        round(min((promotion_score - 0.80) * 0.25, 0.08), 4)
-                        if promotion_score > 0.80
-                        else 0.0
-                    ),
                     "stage_eligible_for_truth_candidate": None,
                     "eligible_for_truth_candidate": None,
                     "blocked_metrics": [],
                     "eligibility_reason": "computed_from_dependency_debug",
                     "dependency_promotion_blockers": [],
                 }
+
+            promotion = reconcile_dependency_promotion(
+                promotion,
+                dependency_debug,
+            )
 
             blockers = list(
                 promotion.get(
@@ -206,13 +267,139 @@ def build_training_report(
                 promotion.get("blocked_metrics", []),
                 "eligibility_reason":
                 promotion.get("eligibility_reason"),
+                "dependency_promotion_metrics_source":
+                promotion.get("dependency_promotion_metrics_source"),
             })
 
         causal_values = list(causal_reports.values())
-        dependency_average = average(
+        raw_dependency_average = average(
             item.get("dependency_coherence")
             for item in causal_values
         )
+        dependency_evidence_values = [
+            item.get("dependency_coherence")
+            for item in causal_values
+        ]
+        process_dependency_evidence_sources = []
+
+        def typed_dependency_evidence_from_debug(concept, dependency_debug):
+            dependency_debug = (
+                dependency_debug
+                if isinstance(dependency_debug, dict)
+                else {}
+            )
+            typed_relations = dependency_debug.get(
+                "typed_dependency_relations",
+                [],
+            )
+            if not typed_relations:
+                return None
+            try:
+                relation_score = float(
+                    dependency_debug.get("relation_semantics_score", 0.0)
+                    or 0.0
+                )
+                dependency_confidence = float(
+                    dependency_debug.get("dependency_confidence", 0.0)
+                    or 0.0
+                )
+                dependency_chain_depth = int(
+                    dependency_debug.get("dependency_chain_depth", 0)
+                    or 0
+                )
+                dependency_chain_coverage = float(
+                    dependency_debug.get("dependency_chain_coverage", 0.0)
+                    or 0.0
+                )
+            except (TypeError, ValueError):
+                return None
+            missing_dependencies = list(
+                dependency_debug.get("missing_dependencies", [])
+            )
+            if (
+                dependency_confidence <= 0.85
+                or dependency_chain_depth < 4
+                or dependency_chain_coverage < 0.70
+                or missing_dependencies
+                or relation_score <= 0.0
+            ):
+                return None
+            depth_score = min(dependency_chain_depth / 5.0, 1.0)
+            semantic_dependency_score = min(
+                dependency_confidence * 0.36
+                + dependency_chain_coverage * 0.24
+                + depth_score * 0.14
+                + relation_score * 0.26,
+                1.0,
+            )
+            return {
+                "concept": concept,
+                "source": "typed_process_dependency_memory_relations",
+                "semantic_dependency_score":
+                round(semantic_dependency_score, 4),
+                "relation_semantics_score": round(relation_score, 4),
+                "typed_dependency_relation_count": len(typed_relations),
+                "dependency_confidence": round(dependency_confidence, 4),
+                "dependency_chain_depth": dependency_chain_depth,
+                "dependency_chain_coverage":
+                round(dependency_chain_coverage, 4),
+            }
+
+        for concept in process_concepts_in_boundary_refinement:
+            typed_evidence = typed_dependency_evidence_from_debug(
+                concept,
+                debug_by_concept.get(concept, {}),
+            )
+            if typed_evidence is None:
+                continue
+            dependency_evidence_values.append(
+                typed_evidence["semantic_dependency_score"]
+            )
+            process_dependency_evidence_sources.append(typed_evidence)
+
+        for concept, evaluation in candidate_evaluations.items():
+            if concept not in process_concepts:
+                continue
+            dependency_confidence = evaluation.get("dependency_confidence")
+            dependency_chain_depth = evaluation.get("dependency_chain_depth")
+            dependency_chain_coverage = evaluation.get(
+                "dependency_chain_coverage",
+            )
+            missing_dependencies = evaluation.get("missing_dependencies", [])
+            try:
+                dependency_confidence = float(dependency_confidence)
+                dependency_chain_depth = int(dependency_chain_depth)
+                dependency_chain_coverage = float(dependency_chain_coverage)
+            except (TypeError, ValueError):
+                continue
+            if (
+                dependency_confidence <= 0.85
+                or dependency_chain_depth < 4
+                or missing_dependencies
+            ):
+                continue
+            promotion_score = evaluation.get("promotion_dependency_score")
+            try:
+                promotion_score = float(promotion_score)
+            except (TypeError, ValueError):
+                depth_score = min(dependency_chain_depth / 5.0, 1.0)
+                promotion_score = min(
+                    dependency_confidence * 0.46
+                    + dependency_chain_coverage * 0.34
+                    + depth_score * 0.20,
+                    1.0,
+                )
+            dependency_evidence_values.append(promotion_score)
+            process_dependency_evidence_sources.append({
+                "concept": concept,
+                "source": "typed_process_dependency_memory",
+                "promotion_dependency_score": round(promotion_score, 4),
+                "dependency_confidence": round(dependency_confidence, 4),
+                "dependency_chain_depth": dependency_chain_depth,
+                "dependency_chain_coverage":
+                round(dependency_chain_coverage, 4),
+            })
+        dependency_average = average(dependency_evidence_values)
         validation_average = average(
             item.get("validation_score")
             for item in causal_values
@@ -302,6 +489,10 @@ def build_training_report(
             "architecture_bottleneck": architecture_bottleneck,
             "diagnosis": diagnosis,
             "dependency_coherence_average": dependency_average,
+            "raw_dependency_coherence_average": raw_dependency_average,
+            "effective_dependency_evidence_average": dependency_average,
+            "process_dependency_evidence_sources":
+            process_dependency_evidence_sources,
             "causal_validation_average": validation_average,
             "cross_task_stability_average": stability_average,
             "context_consistency_average": context_consistency_average,
@@ -421,93 +612,151 @@ def build_training_report(
     ]
     candidate_evaluations = {}
     truth_commit_evaluations = {}
+
+    def nested_score(report, paths, default=0.0):
+        for path in paths:
+            data = report if isinstance(report, dict) else {}
+            for key in path:
+                if not isinstance(data, dict):
+                    data = None
+                    break
+                data = data.get(key)
+            if data is not None:
+                try:
+                    return max(0.0, min(float(data), 1.0))
+                except (TypeError, ValueError):
+                    continue
+        return default
+
+    def context_strength_for_evaluation(evaluation):
+        return max(
+            nested_score(
+                evaluation,
+                [
+                    ("contextual_truth_authority", "effective_contextual_truth"),
+                    ("contextual_truth", "effective_contextual_truth"),
+                    ("contextual_truth", "contextual_truth_score"),
+                ],
+            ),
+            nested_score(
+                evaluation,
+                [
+                    ("context_hierarchy", "context_hierarchy_score"),
+                    ("context_hierarchy", "score"),
+                ],
+            ),
+            nested_score(
+                evaluation,
+                [
+                    ("semantic_context", "semantic_context_score"),
+                    ("semantic_context", "confidence"),
+                ],
+            ),
+        )
+
+    def candidate_report_sources(result):
+        cognition_report = result.get("epistemic_cognition_report", {})
+        return [
+            result.get("truth_candidate_report", {}),
+            cognition_report.get("truth_candidate_engine", {}),
+        ]
+
+    def record_candidate_evaluation(evaluation, source):
+        concept = evaluation.get("concept")
+        if not concept:
+            return
+        contradiction_metric = candidate_metric(
+            evaluation,
+            "contradiction_score",
+        )
+        context_strength = context_strength_for_evaluation(evaluation)
+        candidate_evaluations[str(concept)] = {
+            "concept": str(concept),
+            "candidate_state": evaluation.get("candidate_state"),
+            "eligible_for_truth_candidate":
+            evaluation.get("eligible_for_truth_candidate", False),
+            "eligibility_reason":
+            evaluation.get("eligibility_reason"),
+            "blocked_metrics": list(
+                evaluation.get("blocked_metrics", [])
+            ),
+            "effective_contradiction_score":
+            contradiction_metric.get(
+                "current_value",
+                evaluation.get("effective_contradiction_score"),
+            ),
+            "contradiction_threshold":
+            contradiction_metric.get(
+                "threshold",
+                {},
+            ).get(
+                "required",
+                evaluation.get("contradiction_threshold"),
+            ),
+            "contradiction_gap":
+            contradiction_metric.get(
+                "gap",
+                evaluation.get("contradiction_gap"),
+            ),
+            "contradiction_metric_status":
+            contradiction_metric.get("status"),
+            "contradiction_review_required":
+            evaluation.get(
+                "contradiction_review_required",
+                False,
+            ),
+            "contradiction_review_zone":
+            evaluation.get("contradiction_review_zone"),
+            "within_soft_review_zone":
+            evaluation.get("within_soft_review_zone", False),
+            "contradiction_review_severity":
+            evaluation.get("contradiction_review_severity"),
+            "contradiction_score_source":
+            "truth_candidate_effective_runtime_aggregate",
+            "promotion_dependency_score":
+            evaluation.get("promotion_dependency_score"),
+            "promotion_dependency_bonus":
+            evaluation.get("promotion_dependency_bonus"),
+            "dependency_promotion_blockers":
+            list(evaluation.get("dependency_promotion_blockers", [])),
+            "dependency_confidence":
+            evaluation.get("dependency_confidence"),
+            "dependency_chain_depth":
+            evaluation.get("dependency_chain_depth"),
+            "dependency_chain_coverage":
+            evaluation.get("dependency_chain_coverage"),
+            "missing_dependencies":
+            list(evaluation.get("missing_dependencies", [])),
+            "context_strength": context_strength,
+            "context_strength_source": source,
+            "causal_graph_alignment":
+            evaluation.get("causal_graph_alignment", {}),
+            "causal_explanation":
+            evaluation.get("causal_explanation", {}),
+            "causal_validation":
+            evaluation.get("causal_validation", {}),
+            "contextual_truth":
+            evaluation.get("contextual_truth", {}),
+            "contextual_truth_authority":
+            evaluation.get("contextual_truth_authority", {}),
+            "context_discovery":
+            evaluation.get("context_discovery", {}),
+            "context_hierarchy":
+            evaluation.get("context_hierarchy", {}),
+            "semantic_context":
+            evaluation.get("semantic_context", {}),
+        }
+
     for item in multi_task_results:
         result = item.get("result", {})
-        for evaluation in result.get(
-            "truth_candidate_report",
-            {},
-        ).get("evaluations", []):
-            concept = evaluation.get("concept")
-            if not concept:
-                continue
-            contradiction_metric = candidate_metric(
-                evaluation,
-                "contradiction_score",
+        for report_index, report in enumerate(candidate_report_sources(result)):
+            source = (
+                "truth_candidate_report"
+                if report_index == 0
+                else "epistemic_cognition_report.truth_candidate_engine"
             )
-            candidate_evaluations[str(concept)] = {
-                "concept": str(concept),
-                "candidate_state": evaluation.get("candidate_state"),
-                "eligible_for_truth_candidate":
-                evaluation.get("eligible_for_truth_candidate", False),
-                "eligibility_reason":
-                evaluation.get("eligibility_reason"),
-                "blocked_metrics": list(
-                    evaluation.get("blocked_metrics", [])
-                ),
-                "effective_contradiction_score":
-                contradiction_metric.get(
-                    "current_value",
-                    evaluation.get("effective_contradiction_score"),
-                ),
-                "contradiction_threshold":
-                contradiction_metric.get(
-                    "threshold",
-                    {},
-                ).get(
-                    "required",
-                    evaluation.get("contradiction_threshold"),
-                ),
-                "contradiction_gap":
-                contradiction_metric.get(
-                    "gap",
-                    evaluation.get("contradiction_gap"),
-                ),
-                "contradiction_metric_status":
-                contradiction_metric.get("status"),
-                "contradiction_review_required":
-                evaluation.get(
-                    "contradiction_review_required",
-                    False,
-                ),
-                "contradiction_review_zone":
-                evaluation.get("contradiction_review_zone"),
-                "within_soft_review_zone":
-                evaluation.get("within_soft_review_zone", False),
-                "contradiction_review_severity":
-                evaluation.get("contradiction_review_severity"),
-                "contradiction_score_source":
-                "truth_candidate_effective_runtime_aggregate",
-                "promotion_dependency_score":
-                evaluation.get("promotion_dependency_score"),
-                "promotion_dependency_bonus":
-                evaluation.get("promotion_dependency_bonus"),
-                "dependency_promotion_blockers":
-                list(evaluation.get("dependency_promotion_blockers", [])),
-                "dependency_confidence":
-                evaluation.get("dependency_confidence"),
-                "dependency_chain_depth":
-                evaluation.get("dependency_chain_depth"),
-                "dependency_chain_coverage":
-                evaluation.get("dependency_chain_coverage"),
-                "missing_dependencies":
-                list(evaluation.get("missing_dependencies", [])),
-                "causal_graph_alignment":
-                evaluation.get("causal_graph_alignment", {}),
-                "causal_explanation":
-                evaluation.get("causal_explanation", {}),
-                "causal_validation":
-                evaluation.get("causal_validation", {}),
-                "contextual_truth":
-                evaluation.get("contextual_truth", {}),
-                "contextual_truth_authority":
-                evaluation.get("contextual_truth_authority", {}),
-                "context_discovery":
-                evaluation.get("context_discovery", {}),
-                "context_hierarchy":
-                evaluation.get("context_hierarchy", {}),
-                "semantic_context":
-                evaluation.get("semantic_context", {}),
-            }
+            for evaluation in report.get("evaluations", []):
+                record_candidate_evaluation(evaluation, source)
         for evaluation in result.get(
             "epistemic_cognition_report",
             {},
@@ -733,6 +982,19 @@ def build_training_report(
             context_name = evaluation.get("context")
             if context_name:
                 semantic_context_reports[str(context_name)] = evaluation
+    for concept, evaluation in candidate_evaluations.items():
+        context_discovery = evaluation.get("context_discovery", {})
+        if context_discovery:
+            context_discovery_reports.setdefault(str(concept), context_discovery)
+        context_hierarchy = evaluation.get("context_hierarchy", {})
+        if context_hierarchy:
+            context_hierarchy_reports.setdefault(str(concept), context_hierarchy)
+        semantic_context = evaluation.get("semantic_context", {})
+        if semantic_context:
+            semantic_context_reports.setdefault(str(concept), semantic_context)
+        contextual_truth = evaluation.get("contextual_truth", {})
+        if contextual_truth:
+            contextual_truth_reports.setdefault(str(concept), contextual_truth)
     architecture_bottleneck_report = build_architecture_bottleneck_report(
         causal_validation_reports,
         context_discovery_reports,
@@ -852,6 +1114,10 @@ def print_training_report(report):
             f"{evaluation.get('context_hierarchy', {}).get('context_hierarchy_score')}",
             "semantic_context_score="
             f"{evaluation.get('semantic_context', {}).get('semantic_context_score')}",
+            "context_strength="
+            f"{evaluation.get('context_strength')}",
+            "context_strength_source="
+            f"{evaluation.get('context_strength_source')}",
             "discovered_context="
             f"{evaluation.get('context_discovery', {}).get('transformation_family')}",
             "promotion_dependency_score="

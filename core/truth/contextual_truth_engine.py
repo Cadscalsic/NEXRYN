@@ -47,12 +47,12 @@ class ContextualTruthEngine:
                 "topology_analysis",
             },
         },
-        "object_identity_preservation": {
+        "identity_persistence": {
             "family": "identity",
             "transform_concepts": {
                 "object_identity_transform",
-                "object_split",
-                "object_merge",
+                "attribute_change",
+                "recolor_object",
             },
         },
     }

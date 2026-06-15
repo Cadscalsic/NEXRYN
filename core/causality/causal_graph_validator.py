@@ -89,6 +89,39 @@ class CausalGraphValidator:
             if relationship.get("source") == concept
         ]
 
+    def _process_dependency_proof(self, concept, requirement, context):
+        memory = context.get("process_dependency_memory", {})
+        memory = memory if isinstance(memory, dict) else {}
+        chain = memory.get("resolved_dependency_chain", [])
+        chain = chain if isinstance(chain, list) else []
+        missing = memory.get("missing_dependencies", [])
+        missing = missing if isinstance(missing, list) else []
+        confidence = clamp(memory.get("dependency_confidence", 0.0))
+        depth = int(memory.get("dependency_chain_depth", 0) or 0)
+        coverage = clamp(memory.get("dependency_chain_coverage", 0.0))
+        target = str(requirement.get("target", ""))
+
+        typed_chain_supported = (
+            target == str(concept)
+            and target in chain[:1]
+            and confidence >= 0.85
+            and depth >= 4
+            and not missing
+        )
+
+        return {
+            "proof_source": "TYPED_PROCESS_DEPENDENCY_MEMORY",
+            "typed_process_dependency_chain_supported":
+            typed_chain_supported,
+            "resolved_dependency_chain": list(chain),
+            "dependency_confidence": confidence,
+            "dependency_chain_depth": depth,
+            "dependency_chain_coverage": coverage,
+            "missing_dependencies": list(missing),
+            "minimum_dependency_confidence": 0.85,
+            "minimum_dependency_chain_depth": 4,
+        }
+
     def evaluate(self, concept, semantic_graph=None, context=None):
         context = context if isinstance(context, dict) else {}
         semantic_graph = (
@@ -151,22 +184,41 @@ class CausalGraphValidator:
             accumulated_support_ready = (
                 causal_support["causal_support_ready"]
             )
+            dependency_proof = self._process_dependency_proof(
+                concept,
+                requirement,
+                context,
+            )
+            dependency_proof_ready = dependency_proof[
+                "typed_process_dependency_chain_supported"
+            ]
             checks.append({
                 **requirement,
                 "minimum_causal_strength": minimum_strength,
-                "causal_strength": causal_strength,
+                "causal_strength": max(
+                    causal_strength,
+                    dependency_proof["dependency_confidence"]
+                    if dependency_proof_ready
+                    else 0.0,
+                ),
                 "edge_observed": matched_edge is not None,
                 "current_edge_supported": current_edge_supported,
                 "accumulated_support_ready": accumulated_support_ready,
+                "dependency_proof_ready": dependency_proof_ready,
+                "process_dependency_proof": dependency_proof,
                 "support_source": (
                     "CURRENT_GRAPH_OBSERVATION"
                     if current_edge_supported
+                    else "TYPED_PROCESS_DEPENDENCY_MEMORY"
+                    if dependency_proof_ready
                     else "ACCUMULATED_CAUSAL_EVIDENCE"
                     if accumulated_support_ready
                     else "INSUFFICIENT_CAUSAL_EVIDENCE"
                 ),
                 "passed":
-                current_edge_supported or accumulated_support_ready,
+                current_edge_supported
+                or dependency_proof_ready
+                or accumulated_support_ready,
                 "causal_support": causal_support,
                 "causal_support_score":
                 causal_support["causal_support_score"],
@@ -192,7 +244,10 @@ class CausalGraphValidator:
         validation_ready = (
             all(
                 check["passed"]
-                and check["causal_support_ready"]
+                and (
+                    check["causal_support_ready"]
+                    or check["dependency_proof_ready"]
+                )
                 for check in checks
             )
             if graph_observed
@@ -227,6 +282,12 @@ class CausalGraphValidator:
                 }
                 for check in checks
                 if check["passed"] and not check["causal_support_ready"]
+                and not check["dependency_proof_ready"]
+            ],
+            "process_dependency_proof_chains": [
+                check["process_dependency_proof"]
+                for check in checks
+                if check["dependency_proof_ready"]
             ],
             "causal_support_accumulator":
             self.evidence_accumulator.report(),

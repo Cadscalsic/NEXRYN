@@ -2,6 +2,7 @@ from core.epistemic_drift_regulator import (
     identity_continuity_score,
     semantic_drift_score,
 )
+from core.epistemic_models import clamp
 from core.identity.identity_continuity_engine import IdentityContinuityEngine
 from core.identity.identity_governance_policy import (
     evaluate_identity_governance,
@@ -149,6 +150,77 @@ class IdentitySafeTruthIntegrationEngine:
         )
         return support["contextual_truth_supported"]
 
+    def _causal_validation_score(self, context, aggregate):
+        causal_validation = context.get("causal_validation", {})
+        causal_validation = (
+            causal_validation
+            if isinstance(causal_validation, dict)
+            else {}
+        )
+        return max(
+            aggregate.causal_alignment,
+            clamp(
+                causal_validation.get(
+                    "validation_score",
+                    causal_validation.get(
+                        "causal_validation_score",
+                        aggregate.causal_alignment,
+                    ),
+                )
+            ),
+        )
+
+    def _causal_validation_ready(self, context):
+        causal_validation = context.get("causal_validation", {})
+        causal_validation = (
+            causal_validation
+            if isinstance(causal_validation, dict)
+            else {}
+        )
+        state = str(
+            causal_validation.get(
+                "validation_state",
+                causal_validation.get("status", ""),
+            )
+            or ""
+        ).upper()
+        score = clamp(
+            causal_validation.get(
+                "validation_score",
+                causal_validation.get("causal_validation_score", 0.0),
+            )
+        )
+        return (
+            causal_validation.get("validation_ready") is True
+            or (
+                state == "VALIDATED"
+                and score >= 0.75
+            )
+        )
+
+    def _effective_causal_alignment(self, context, aggregate):
+        causal_graph_alignment = context.get("causal_graph_alignment", {})
+        causal_graph_alignment = (
+            causal_graph_alignment
+            if isinstance(causal_graph_alignment, dict)
+            else {}
+        )
+        values = [
+            aggregate.causal_alignment,
+            clamp(
+                causal_graph_alignment.get(
+                    "alignment_score",
+                    causal_graph_alignment.get(
+                        "causal_graph_alignment",
+                        aggregate.causal_alignment,
+                    ),
+                )
+            ),
+        ]
+        if self._causal_validation_ready(context):
+            values.append(self._causal_validation_score(context, aggregate))
+        return max(values)
+
     def evaluate(self, belief, aggregate, candidate, context=None):
         context = context if isinstance(context, dict) else {}
         semantic_spine_recovery = context.get(
@@ -217,11 +289,15 @@ class IdentitySafeTruthIntegrationEngine:
                 recovery_confirmed=recovery_confirmed,
             )
         )
+        effective_causal_alignment = self._effective_causal_alignment(
+            context,
+            aggregate,
+        )
         checks = {
             "truth_candidate_ready":
             candidate.get("eligible_for_truth_candidate", False),
             "causal_alignment_supported":
-            aggregate.causal_alignment >= self.minimum_causal_alignment,
+            effective_causal_alignment >= self.minimum_causal_alignment,
             "causal_graph_alignment_supported":
             context.get(
                 "causal_graph_alignment",
@@ -364,6 +440,10 @@ class IdentitySafeTruthIntegrationEngine:
             "identity_continuity_stabilization":
             identity_continuity_stabilization,
             "identity_stability_state": identity_stability,
+            "effective_causal_alignment": effective_causal_alignment,
+            "raw_aggregate_causal_alignment": aggregate.causal_alignment,
+            "causal_validation_ready":
+            self._causal_validation_ready(context),
             "identity_continuity": identity_continuity,
             "identity_continuity_observed": identity_continuity_observed,
             "identity_delta": identity_delta,

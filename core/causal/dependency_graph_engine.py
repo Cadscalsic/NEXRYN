@@ -62,6 +62,18 @@ class DependencyNode:
 class DependencyEdge:
     """Directed dependency relation with support, contradiction, and stability."""
 
+    SEMANTIC_RELATION_WEIGHTS = {
+        "causes": 1.0,
+        "creates": 1.0,
+        "requires": 0.98,
+        "preserves": 0.96,
+        "modifies": 0.94,
+        "depends_on": 0.92,
+        "derived_from": 0.90,
+        "enables": 0.90,
+        "supports": 0.82,
+    }
+
     source: str
     target: str
     relation: str = "depends_on"
@@ -127,6 +139,10 @@ class DependencyEdge:
             / max(self.support_count + self.contradiction_count, 1)
         )
         required_weight = 0.82 if self.required else 0.70
+        relation_semantics = self.SEMANTIC_RELATION_WEIGHTS.get(
+            self.relation,
+            0.68,
+        )
         return clamp(
             (
                 self.confidence
@@ -136,8 +152,9 @@ class DependencyEdge:
                 + self.transfer_success_rate
                 + (1.0 - self.contradiction_risk)
                 + required_weight
+                + relation_semantics
             )
-            / 7.0
+            / 8.0
         )
 
     def reinforce(
@@ -607,6 +624,16 @@ class DependencyGraphEngine:
             sum(edge.dependency_confidence for edge in direct_edges)
             / max(len(direct_edges), 1)
         )
+        relation_semantics_score = (
+            sum(
+                DependencyEdge.SEMANTIC_RELATION_WEIGHTS.get(
+                    edge.relation,
+                    0.68,
+                )
+                for edge in direct_edges
+            )
+            / max(len(direct_edges), 1)
+        )
         validation_ratio = len(validated) / max(len(required or direct_edges), 1)
         contradiction_resistance = clamp(
             1.0
@@ -617,10 +644,11 @@ class DependencyGraphEngine:
         )
         missing_penalty = clamp(len(missing) / max(len(required), 1)) * 0.18
         dependency_coherence = clamp(
-            confidence_average * 0.44
-            + validation_ratio * 0.26
-            + contradiction_resistance * 0.20
-            + path_bonus * 0.10
+            confidence_average * 0.38
+            + validation_ratio * 0.24
+            + contradiction_resistance * 0.18
+            + relation_semantics_score * 0.12
+            + path_bonus * 0.08
             - missing_penalty
         )
         status = (
@@ -636,6 +664,7 @@ class DependencyGraphEngine:
             "concept": concept,
             "dependency_coherence": dependency_coherence,
             "dependency_confidence": confidence_average,
+            "relation_semantics_score": relation_semantics_score,
             "dependency_path_support": path_bonus,
             "validated_dependencies": [edge.as_dict() for edge in validated],
             "provisional_dependencies": [edge.as_dict() for edge in provisional],
