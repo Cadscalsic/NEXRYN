@@ -44,3 +44,65 @@ def test_dependency_coherence_engine_identifies_missing_links():
     assert report["dependency_risk"] == "HIGH"
     assert report["recommended_action"] == "COLLECT_EVIDENCE"
     assert report["missing_dependencies"]
+
+
+def test_dependency_coherence_engine_rewards_typed_process_semantics():
+    report = DependencyCoherenceEngine().evaluate(
+        dependencies=[
+            {
+                "dependency": "object_identity_preservation",
+                "relation": "requires",
+                "supported": True,
+                "requires_review": False,
+                "context_value": "validated",
+                "confidence": 0.91,
+            },
+            {
+                "dependency": "topology_expansion",
+                "relation": "creates",
+                "supported": True,
+                "requires_review": False,
+                "context_value": "observed",
+                "confidence": 0.90,
+            },
+            {
+                "dependency": "shape_preservation",
+                "relation": "preserves",
+                "supported": True,
+                "requires_review": False,
+                "context_value": "stable",
+                "confidence": 0.89,
+            },
+        ],
+        concept="growth",
+    )
+
+    assert report["dependency_coherence"] >= 0.80
+    assert report["relation_semantics_score"] >= 0.95
+    assert report["coherence_ready"] is True
+
+
+def test_dependency_coherence_engine_keeps_generic_edges_weaker():
+    report = DependencyCoherenceEngine().evaluate(
+        dependencies=[
+            {
+                "dependency": "object_identity_preservation",
+                "relation": "supports",
+                "supported": True,
+                "requires_review": False,
+                "context_value": "observed",
+                "confidence": 0.68,
+            },
+            {
+                "dependency": "topology_expansion",
+                "supported": True,
+                "requires_review": False,
+                "context_value": "observed",
+                "confidence": 0.66,
+            },
+        ],
+        concept="growth",
+    )
+
+    assert report["dependency_coherence"] < 0.80
+    assert report["coherence_ready"] is False

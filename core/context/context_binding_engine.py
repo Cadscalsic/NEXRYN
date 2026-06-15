@@ -61,6 +61,16 @@ class ContextBindingEngine:
             "color_mapping_rule",
             "role_continuity",
         ],
+        "color_context": [
+            "color_mapping_rule",
+            "no_color_reassignment",
+            "attribute_remapping",
+        ],
+        "symmetry_context": [
+            "mirror_consistency",
+            "axis_reflection",
+            "symmetry_reasoning",
+        ],
         "identity_preservation": [
             "lineage_continuity",
             "identity_continuity",
@@ -68,10 +78,34 @@ class ContextBindingEngine:
         "growth": [
             "source_pattern_preservation",
             "topology_expansion",
+            "region_expansion",
+        ],
+        "topological_growth": [
+            "source_pattern_preservation",
+            "topology_expansion",
+            "region_expansion",
+            "topology_split_reasoning",
+        ],
+        "topological_growth_context": [
+            "source_pattern_preservation",
+            "topology_expansion",
+            "region_expansion",
+            "topology_split_reasoning",
         ],
         "propagation": [
             "source_pattern_preservation",
             "recursive_spread",
+            "pattern_extension",
+        ],
+        "directional_motion": [
+            "stable_reference_frame",
+            "directional_transfer",
+            "identity_continuity",
+        ],
+        "directional_motion_context": [
+            "stable_reference_frame",
+            "directional_transfer",
+            "identity_continuity",
         ],
     }
 
@@ -88,11 +122,37 @@ class ContextBindingEngine:
         "topology_continuity": "topology_continuity",
         "color_mapping_rule": "color_mapping_rule",
         "attribute_remapping": "attribute_remapping",
+        "attribute_mapping": "attribute_remapping",
+        "attribute_mapping_preservation": "color_mapping_rule",
+        "color_stability": "no_color_reassignment",
+        "contextual_color_stability": "no_color_reassignment",
+        "color_preservation_reasoning": "color_mapping_rule",
+        "no_color_reassignment": "no_color_reassignment",
         "mirror_consistency": "mirror_consistency",
         "symmetry_axis": "mirror_consistency",
+        "axis_consistency": "axis_reflection",
+        "symmetry_relation": "mirror_consistency",
+        "symmetry_reasoning": "symmetry_reasoning",
+        "mirror_consistency_check": "mirror_consistency",
         "coordinate_stability": "stable_reference_frame",
         "stable_reference_frame": "stable_reference_frame",
         "source_pattern_preserved": "source_pattern_preservation",
+        "source_pattern_preservation": "source_pattern_preservation",
+        "propagates_structure": "recursive_spread",
+        "directional_spread": "recursive_spread",
+        "signal_transfer": "pattern_extension",
+        "position_delta": "stable_reference_frame",
+        "directional_displacement": "directional_transfer",
+        "source_pattern_motion": "source_pattern_preservation",
+        "directional_transfer": "directional_transfer",
+        "pattern_extension": "pattern_extension",
+        "topology_growth": "topology_expansion",
+        "topology_expansion": "topology_expansion",
+        "region_expansion": "region_expansion",
+        "object_count_growth": "region_expansion",
+        "identity_preservation_under_growth": "identity_continuity",
+        "structural_copying": "structural_replication",
+        "identity_split_reasoning": "lineage_continuity",
     }
 
     CONCEPT_BINDINGS = {
@@ -129,6 +189,15 @@ class ContextBindingEngine:
             "relation": "preserves_symmetry",
             "invalidators": {"symmetry_break"},
         },
+        "symmetry_reasoning": {
+            "mechanisms": {
+                "mirror_consistency",
+                "axis_reflection",
+                "symmetry_reasoning",
+            },
+            "relation": "supports_symmetry_reasoning",
+            "invalidators": {"symmetry_break"},
+        },
         "topology_preservation": {
             "mechanisms": {
                 "topology_continuity",
@@ -137,14 +206,14 @@ class ContextBindingEngine:
             "relation": "preserves_topology",
             "invalidators": {"topology_break"},
         },
-        "object_identity_preservation": {
+        "identity_persistence": {
             "mechanisms": {
                 "identity_continuity",
                 "lineage_continuity",
                 "role_continuity",
             },
             "relation": "preserves_object_identity",
-            "invalidators": {"identity_split_without_lineage"},
+            "invalidators": {"identity_split"},
         },
         "identity_preservation": {
             "mechanisms": {
@@ -153,7 +222,62 @@ class ContextBindingEngine:
                 "role_continuity",
             },
             "relation": "preserves_identity",
-            "invalidators": {"identity_split_without_lineage"},
+            "invalidators": {"identity_split"},
+        },
+        "identity_forking": {
+            "mechanisms": {
+                "identity_forking",
+                "identity_split",
+                "lineage_continuity",
+            },
+            "relation": "creates_forked_identity",
+            "invalidators": {"identity_preserved_without_new_instance"},
+        },
+        "growth": {
+            "mechanisms": {
+                "source_pattern_preservation",
+                "topology_expansion",
+                "region_expansion",
+            },
+            "relation": "supports_growth_truth",
+            "invalidators": {"source_pattern_lost", "topology_contracts"},
+        },
+        "propagation": {
+            "mechanisms": {
+                "source_pattern_preservation",
+                "recursive_spread",
+                "pattern_extension",
+            },
+            "relation": "supports_propagation_truth",
+            "invalidators": {"source_pattern_lost", "spread_discontinuous"},
+        },
+        "replication": {
+            "mechanisms": {
+                "structural_replication",
+                "object_instance_creation",
+                "shape_equivalence",
+            },
+            "relation": "supports_replication_truth",
+            "invalidators": {"shape_transform", "identity_loss"},
+        },
+        "topological_growth": {
+            "mechanisms": {
+                "source_pattern_preservation",
+                "topology_expansion",
+                "region_expansion",
+                "topology_split_reasoning",
+            },
+            "relation": "supports_topological_growth_truth",
+            "invalidators": {"source_pattern_lost", "topology_contracts"},
+        },
+        "directional_motion": {
+            "mechanisms": {
+                "stable_reference_frame",
+                "directional_transfer",
+                "identity_continuity",
+            },
+            "relation": "supports_directional_motion_truth",
+            "invalidators": {"position_reference_lost", "identity_loss"},
         },
     }
 

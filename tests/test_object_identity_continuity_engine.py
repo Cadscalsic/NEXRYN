@@ -178,6 +178,83 @@ def test_identity_runtime_tracks_split_without_marking_identity_stable():
     assert governance["semantic_spine_stable"] is True
 
 
+def test_growth_runtime_recovers_expected_process_branching_continuity():
+    runtime = IdentityContinuityEngine().run_identity_runtime(
+        [
+            [[1, 1, 0], [0, 0, 0]],
+            [[1, 0, 1], [0, 0, 0]],
+        ],
+        concept="growth",
+    )
+    sequence = runtime["sequence"]
+
+    assert runtime["runtime_state"] == "IDENTITY_RUNTIME_TRANSFORMED"
+    assert runtime["runtime_ready"] is True
+    assert runtime["identity_split"] is True
+    assert runtime["process_identity_branching_supported"] is True
+    assert runtime["identity_continuity"] >= runtime["minimum_continuity"]
+    assert sequence["raw_continuity_score"] < runtime["minimum_continuity"]
+    assert sequence["process_identity_branching_score"] == (
+        runtime["identity_continuity"]
+    )
+    assert runtime["identity_governance_gates"][
+        "identity_continuity_above_limit"
+    ] is True
+    assert runtime["identity_governance_gates"][
+        "semantic_drift_below_limit"
+    ] is True
+
+
+def test_non_process_split_does_not_receive_process_branching_recovery():
+    runtime = IdentityContinuityEngine().run_identity_runtime(
+        [
+            [[1, 1, 0], [0, 0, 0]],
+            [[1, 0, 1], [0, 0, 0]],
+        ],
+        concept="object_identity_preservation",
+    )
+
+    assert runtime["runtime_state"] == "IDENTITY_RUNTIME_REVIEW_REQUIRED"
+    assert runtime["runtime_ready"] is False
+    assert runtime["process_identity_branching_supported"] is False
+    assert runtime["identity_continuity"] < runtime["minimum_continuity"]
+
+
+def test_preservation_runtime_isolates_concept_identity_from_system_split():
+    runtime = IdentityContinuityEngine().run_identity_runtime(
+        [
+            [[1, 1, 0], [0, 0, 0]],
+            [[1, 0, 1], [0, 0, 0]],
+        ],
+        concept="shape_preservation",
+    )
+
+    assert runtime["identity_scope"] == "concept_identity_state"
+    assert runtime["system_identity_state"]["identity_split"] is True
+    assert runtime["concept_identity_state"]["identity_split"] is False
+    assert runtime["identity_split"] is False
+    assert runtime["runtime_ready"] is True
+    assert runtime["identity_continuity"] > 0.70
+    assert runtime["sequence"]["concept_identity_scope_evidence"][
+        "evidence_type"
+    ] == "stable_preservation_tracks"
+
+
+def test_process_runtime_keeps_system_identity_split_scope():
+    runtime = IdentityContinuityEngine().run_identity_runtime(
+        [
+            [[1, 1, 0], [0, 0, 0]],
+            [[1, 0, 1], [0, 0, 0]],
+        ],
+        concept="replication",
+    )
+
+    assert runtime["identity_scope"] == "system_identity_state"
+    assert runtime["system_identity_state"]["identity_split"] is True
+    assert runtime["concept_identity_state"]["identity_split"] is True
+    assert runtime["identity_split"] is True
+
+
 def test_identity_runtime_promotes_continuous_runtime_above_truth_threshold():
     class ModerateContinuityEngine(IdentityContinuityEngine):
         def evaluate_objects(self, input_grid, output_grid, source="test"):
@@ -288,6 +365,107 @@ def test_belief_engine_builds_identity_runtime_context_for_identity_concept():
     assert patch["semantic_spine_report"][
         "semantic_spine_state"
     ] == "stable_semantic_spine"
+
+
+def test_belief_engine_builds_identity_runtime_for_preservation_concepts():
+    layer = EpistemicCognitionLayer()
+    cases = [
+        (
+            "color_preservation",
+            {
+                "input_grid": [[1]],
+                "output_grid": [[2]],
+            },
+            {
+                "transformation_family": "recoloring",
+            },
+        ),
+        (
+            "shape_preservation",
+            {
+                "input_grid": [[1, 1]],
+                "output_grid": [[2, 2]],
+            },
+            {
+                "transformation_family": "recoloring",
+            },
+        ),
+        (
+            "position_preservation",
+            {
+                "input_grid": [[1, 0]],
+                "output_grid": [[0, 1]],
+            },
+            {
+                "transformation_family": "translation",
+            },
+        ),
+        (
+            "symmetry_reasoning",
+            {
+                "input_grid": [[1, 0, 1]],
+                "output_grid": [[1, 0, 1]],
+            },
+            {
+                "transformation_family": "reflection",
+            },
+        ),
+    ]
+
+    for concept, context, discovery in cases:
+        patch = layer._identity_runtime_context(
+            context,
+            concept,
+            discovery,
+        )
+
+        assert patch["identity_runtime_report"]["runtime_ready"] is True
+        assert patch["identity_runtime_report"]["identity_split"] is False
+        assert patch["identity_runtime_report"]["identity_continuity"] >= 0.79
+        assert patch["identity_runtime_report"]["runtime_state"] in {
+            "IDENTITY_RUNTIME_STABLE",
+            "IDENTITY_RUNTIME_TRANSFORMED",
+        }
+
+
+def test_belief_engine_resets_stale_identity_runtime_for_preservation_context():
+    layer = EpistemicCognitionLayer()
+    stale_runtime = {
+        "runtime_ready": False,
+        "runtime_state": "IDENTITY_RUNTIME_REVIEW_REQUIRED",
+        "identity_split": True,
+        "identity_continuity": 0.5508,
+        "truth_commit_context_patch": {
+            "identity_continuity": 0.5508,
+            "identity_split": True,
+        },
+    }
+    context = {
+        "input_grid": [[1, 0]],
+        "output_grid": [[0, 1]],
+        "identity_runtime_report": stale_runtime,
+        "identity_continuity_runtime_report": stale_runtime,
+        "identity_continuity_engine_report": stale_runtime,
+        "identity_continuity": 0.5508,
+        "identity_split": True,
+    }
+
+    clean_context = layer._reset_identity_runtime_state(context)
+    patch = layer._identity_runtime_context(
+        clean_context,
+        "position_preservation",
+        {
+            "transformation_family": "translation",
+            "identity_behavior": "identity_preserved",
+        },
+    )
+
+    assert "identity_runtime_report" not in clean_context
+    assert "identity_continuity_engine_report" not in clean_context
+    assert "identity_split" not in clean_context
+    assert patch["identity_runtime_report"]["runtime_ready"] is True
+    assert patch["identity_runtime_report"]["identity_split"] is False
+    assert patch["identity_runtime_report"]["identity_continuity"] > 0.70
 
 
 def test_belief_engine_runs_identity_runtime_for_growth_context():

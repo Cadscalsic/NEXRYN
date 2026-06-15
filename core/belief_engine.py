@@ -366,12 +366,19 @@ class EpistemicCognitionLayer:
 
     IDENTITY_RUNTIME_TRANSFORMATION_FAMILIES = {
         "identity_preservation",
+        "identity_persistence",
+        "identity_forking",
+        "recoloring",
+        "translation",
+        "reflection",
+        "rotation",
         "growth",
         "duplication",
         "replication",
         "propagation",
         "topological_growth",
         "topology_expansion",
+        "topology_preservation",
     }
     IDENTITY_RUNTIME_BEHAVIORS = {
         "identity_modified",
@@ -382,8 +389,16 @@ class EpistemicCognitionLayer:
         "object_merge",
     }
     IDENTITY_RUNTIME_CONCEPTS = {
-        "object_identity_preservation",
+        "identity_persistence",
+        "identity_forking",
         "identity_preservation",
+        "shape_preservation",
+        "color_preservation",
+        "position_preservation",
+        "symmetry_preservation",
+        "symmetry_reasoning",
+        "topology_preservation",
+        "size_preservation",
         "growth",
         "topological_growth",
         "duplication",
@@ -451,6 +466,21 @@ class EpistemicCognitionLayer:
             "identity_continuity_runtime_report": report,
             **report.get("truth_commit_context_patch", {}),
         }
+
+    def _reset_identity_runtime_state(self, context):
+        context = dict(context if isinstance(context, dict) else {})
+        for key in [
+            "identity_runtime_report",
+            "identity_continuity_runtime_report",
+            "identity_continuity_engine_report",
+            "identity_stability_report",
+            "identity_runtime_continuity",
+            "identity_continuity",
+            "identity_split",
+            "identity_merged",
+        ]:
+            context.pop(key, None)
+        return context
 
     def run_cycle(self, context):
         context = context if isinstance(context, dict) else {}
@@ -575,6 +605,7 @@ class EpistemicCognitionLayer:
             concept_evidence = self.evidence_registry.evidence_for(
                 hypothesis.concept,
             )
+            concept_context = self._reset_identity_runtime_state(context)
             causal_spine = self.causal_graph.build_causal_spine(
                 hypothesis.concept,
                 observations=concept_evidence,
@@ -584,7 +615,7 @@ class EpistemicCognitionLayer:
                     "originating_tasks",
                     context.get("task_ids", []),
                 ),
-                context=context,
+                context=concept_context,
             )
             causal_graph_alignment = (
                 self.causal_graph.compute_causal_alignment(
@@ -599,12 +630,6 @@ class EpistemicCognitionLayer:
                     hypothesis.concept,
                 )
             )
-            print(
-              "\nPROCESS MEMORY DEBUG:",
-              hypothesis.concept,
-            )
-            print(process_dependency_memory)
-  
             causal_validation = (
                 self.causal_validation_engine.validate_hypothesis(
                     {
@@ -614,7 +639,7 @@ class EpistemicCognitionLayer:
                     },
                     concept_evidence,
                     {
-                        **context,
+                        **concept_context,
                         "process_dependency_memory":
                         process_dependency_memory,
                         "dependency_confidence":
@@ -645,34 +670,25 @@ class EpistemicCognitionLayer:
                             {},
                         ).get("dependency_coherence", 0.0),
                         "identity_compatibility":
-                        context.get(
+                        concept_context.get(
                             "identity_continuity",
-                            context.get("identity_compatibility", 1.0),
+                            concept_context.get(
+                                "identity_compatibility",
+                                1.0,
+                            ),
                         ),
                         "scene_graph_comparison": scene_graph_comparison,
                     },
                     self.causal_graph,
                 )
             )
-
-            print(
-            "\nCAUSAL VALIDATION DEP DEBUG:",
-              hypothesis.concept,
-            )
-            print(
-              causal_validation.get(
-              "dependency_promotion_evidence",
-              {},
-            )
-            )
-
             dependency_chain_alignment = (
                 self.dependency_chain_alignment_engine.evaluate(
                     hypothesis.concept,
                     runtime_dependency_chain=process_dependency_memory,
                     process_dependency_memory=process_dependency_memory,
                     context={
-                        **context,
+                        **concept_context,
                         "causal_validation":
                         causal_validation,
                         "process_dependency_memory":
@@ -680,37 +696,10 @@ class EpistemicCognitionLayer:
                     },
                 )
             )
-
-            print(
-                "\nPROCESS MEMORY DEBUG:",
-                hypothesis.concept,
-            )
-
-            print(
-                process_dependency_memory,
-            )
-
-            print(
-                "\nDEPENDENCY ALIGNMENT:",
-                hypothesis.concept,
-            )
-
-            print(
-                dependency_chain_alignment,
-            )
-
-            print(
-                "\nDEPENDENCY ALIGNMENT:",
-                hypothesis.concept,
-            )
-
-            print(
-                dependency_chain_alignment,
-            )
             context_discovery = (
                 self.context_discovery_engine.discover_context(
                     {
-                        **context,
+                        **concept_context,
                         "task_id": context.get(
                             "task_id",
                             hypothesis.concept,
@@ -720,62 +709,12 @@ class EpistemicCognitionLayer:
                 )
             )
             identity_runtime_context = self._identity_runtime_context(
-                context,
+                concept_context,
                 hypothesis.concept,
                 context_discovery,
             )
             discovered_context_context = {
-                **context,
-                **identity_runtime_context,
-                "context_discovery": context_discovery,
-            }
-            if (
-                context_discovery["transformation_family"] != "unknown"
-                or context_discovery["confidence"] >= 0.50
-            ):
-                discovered_context_context[
-                    "discovered_context_signature"
-                ] = context_discovery["context_signature"]
-            context_hierarchy = (
-                self.context_differentiation_engine.refine_clusters([
-                    context_discovery
-                ])
-            )
-            semantic_context = (
-                self.semantic_context_reasoner.generate_semantic_profile(
-                    context_discovery,
-                    concept_evidence,
-                )
-            )
-
-           
-            print(
-                "\nDEPENDENCY ALIGNMENT:",
-                hypothesis.concept,
-            )
-
-            print(
-                dependency_chain_alignment,
-            )
-            context_discovery = (
-                self.context_discovery_engine.discover_context(
-                    {
-                        **context,
-                        "task_id": context.get(
-                            "task_id",
-                            hypothesis.concept,
-                        ),
-                        "concept": hypothesis.concept,
-                    }
-                )
-            )
-            identity_runtime_context = self._identity_runtime_context(
-                context,
-                hypothesis.concept,
-                context_discovery,
-            )
-            discovered_context_context = {
-                **context,
+                **concept_context,
                 **identity_runtime_context,
                 "context_discovery": context_discovery,
             }
@@ -826,9 +765,12 @@ class EpistemicCognitionLayer:
                     causal_validation,
                     identity_runtime_context.get(
                         "identity_continuity",
-                        context.get(
+                        concept_context.get(
                             "identity_continuity",
-                            context.get("identity_compatibility", 1.0),
+                            concept_context.get(
+                                "identity_compatibility",
+                                1.0,
+                            ),
                         ),
                     ),
                 )
@@ -853,7 +795,7 @@ class EpistemicCognitionLayer:
                 ),
                 self.truth_commit_engine.registry,
                 {
-                    **context,
+                    **concept_context,
                     **identity_runtime_context,
                     "process_dependency_memory":
                     process_dependency_memory,
@@ -869,14 +811,14 @@ class EpistemicCognitionLayer:
                 self.runtime_causal_alignment_engine.evaluate(
                     hypothesis.concept,
                     aggregate,
-                    context,
+                    concept_context,
                 )
             )
             causal_graph_validation = self.causal_graph_validator.evaluate(
                 hypothesis.concept,
-                context.get("semantic_graph", {}),
+                concept_context.get("semantic_graph", {}),
                 {
-                    **context,
+                    **concept_context,
                     "causal_graph_alignment": causal_graph_alignment,
                     "causal_explanation": causal_explanation,
                     "causal_validation": causal_validation,
@@ -932,7 +874,8 @@ class EpistemicCognitionLayer:
                 belief,
                 aggregate,
                 {
-                    **context,
+                    **concept_context,
+                    **identity_runtime_context,
                     "knowledge_generalization":
                     knowledge_generalization,
                     "process_dependency_memory":
@@ -998,7 +941,7 @@ class EpistemicCognitionLayer:
                         for item in self.belief_engine.beliefs.values()
                     ),
                     {
-                        **context,
+                        **concept_context,
                         "knowledge_generalization":
                         knowledge_generalization,
                         "process_dependency_memory":
@@ -1013,7 +956,7 @@ class EpistemicCognitionLayer:
                 )
             )
             integration_context = {
-                **context,
+                **concept_context,
                 **identity_runtime_context,
                 "process_dependency_memory":
                 process_dependency_memory,
@@ -1055,7 +998,7 @@ class EpistemicCognitionLayer:
                     belief,
                     aggregate,
                     identity_safe_truth_integration,
-                    context,
+                    integration_context,
                 )
             )
             reversible_rehearsal_execution = (
@@ -1063,14 +1006,14 @@ class EpistemicCognitionLayer:
                     truth_internalization.get(
                         "reversible_internalization_rehearsal"
                     ),
-                    context,
+                    integration_context,
                 )
             )
             generated_rehearsal_result = (
                 reversible_rehearsal_execution.get("result")
             )
             repair_context = {
-                **context,
+                **integration_context,
                 "truth_internalization_rehearsal_results":
                 generated_rehearsal_result
                 or context.get(
@@ -1227,7 +1170,7 @@ class EpistemicCognitionLayer:
                 aggregate,
                 trials,
                 {
-                    **context,
+                    **concept_context,
                     **identity_runtime_context,
                     "truth_commit_evidence":
                     self.evidence_registry.evidence_for(

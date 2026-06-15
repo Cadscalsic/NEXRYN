@@ -5,6 +5,8 @@ from core.knowledge.adaptive_contradiction_governance import (
 from core.knowledge.contradiction_review_policy import (
     SOFT_REVIEW_ZONE,
 )
+from core.process_abstraction import ProcessAbstractionLayer
+from core.process_context_generation import ProcessContextGenerationEngine
 
 
 class TruthCandidatePromotionEngine:
@@ -30,7 +32,10 @@ class TruthCandidatePromotionEngine:
         "replication",
         "topological_growth",
         "directional_motion",
-        "object_identity_preservation",
+        "identity_persistence",
+        "identity_forking",
+        "duplication",
+        "symmetry_reasoning",
     }
 
     def __init__(self):
@@ -63,7 +68,7 @@ class TruthCandidatePromotionEngine:
         )
         return successes, counterexamples
 
-    def _runtime_evaluation (self, concept, truth_candidate_report):
+    def _runtime_evaluation(self, concept, truth_candidate_report):
         for item in truth_candidate_report.get("evaluations", []):
             if (
                 isinstance(item, dict)
@@ -71,6 +76,30 @@ class TruthCandidatePromotionEngine:
             ):
                 return item
         return {}
+
+    def _first_clamped(self, *values):
+        for value in values:
+            if value is not None:
+                return clamp(value)
+        return 0.0
+
+    def _first_int(self, *values):
+        for value in values:
+            if value is None:
+                continue
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                continue
+        return 0
+
+    def _first_list(self, *values):
+        for value in values:
+            if isinstance(value, list):
+                return list(value)
+            if value:
+                return list(value)
+        return []
 
     def _nested_score(self, report, *paths, default=0.0):
         for path in paths:
@@ -144,34 +173,37 @@ class TruthCandidatePromotionEngine:
         evidence = causal_validation.get("dependency_promotion_evidence", {})
         if not isinstance(evidence, dict):
             evidence = {}
-        confidence = clamp(
-            causal_validation.get(
-                "dependency_confidence",
-                evidence.get("dependency_confidence", 0.0),
-            )
+        process_memory = runtime.get("process_dependency_memory", {})
+        process_memory = (
+            process_memory
+            if isinstance(process_memory, dict)
+            else {}
         )
-        coverage = clamp(
-            causal_validation.get(
-                "dependency_chain_coverage",
-                evidence.get("dependency_chain_coverage", 0.0),
-            )
+        alignment = runtime.get("dependency_chain_alignment", {})
+        alignment = alignment if isinstance(alignment, dict) else {}
+        confidence = self._first_clamped(
+            process_memory.get("dependency_confidence"),
+            runtime.get("dependency_confidence"),
+            causal_validation.get("dependency_confidence"),
+            evidence.get("dependency_confidence"),
         )
-        try:
-            depth = int(
-                causal_validation.get(
-                    "dependency_chain_depth",
-                    evidence.get("dependency_chain_depth", 0),
-                )
-                or 0
-            )
-        except Exception:
-            depth = 0
-        missing_dependencies = list(
-            causal_validation.get(
-                "missing_dependencies",
-                evidence.get("missing_dependencies", []),
-            )
-            or []
+        coverage = self._first_clamped(
+            process_memory.get("dependency_chain_coverage"),
+            runtime.get("dependency_chain_coverage"),
+            causal_validation.get("dependency_chain_coverage"),
+            evidence.get("dependency_chain_coverage"),
+        )
+        depth = self._first_int(
+            process_memory.get("dependency_chain_depth"),
+            runtime.get("dependency_chain_depth"),
+            causal_validation.get("dependency_chain_depth"),
+            evidence.get("dependency_chain_depth"),
+        )
+        missing_dependencies = self._first_list(
+            process_memory.get("missing_dependencies"),
+            runtime.get("missing_dependencies"),
+            causal_validation.get("missing_dependencies"),
+            evidence.get("missing_dependencies"),
         )
         blockers = []
         if confidence <= 0.85:
@@ -192,9 +224,11 @@ class TruthCandidatePromotionEngine:
                 + coverage * 0.34
                 + depth_score * 0.20
             ),
+            clamp(runtime.get("promotion_dependency_score", 0.0)),
             clamp(causal_validation.get("promotion_dependency_score", 0.0)),
         )
         bonus = max(
+            clamp(runtime.get("promotion_dependency_bonus", 0.0)),
             clamp(causal_validation.get("promotion_dependency_bonus", 0.0)),
             (
                 round(min((score - 0.80) * 0.25, 0.08), 4)
@@ -210,6 +244,11 @@ class TruthCandidatePromotionEngine:
             "dependency_chain_depth": depth,
             "dependency_chain_coverage": coverage,
             "missing_dependencies": missing_dependencies,
+            "dependency_alignment_ready":
+            alignment.get("alignment_ready", False),
+            "dependency_alignment_confidence":
+            clamp(alignment.get("alignment_confidence", 0.0)),
+            "process_dependency_memory": process_memory,
             "dependency_chain_complete_for_promotion": complete,
             "dependency_aware_promotion_applicable":
             concept in self.PROCESS_CONCEPTS,
@@ -265,6 +304,10 @@ class TruthCandidatePromotionEngine:
     ):
         truth_candidate_report = truth_candidate_report or {}
         concept = str(ledger_item.get("concept", ""))
+        process_abstraction = ProcessAbstractionLayer.get(concept)
+        process_context_generation = (
+            ProcessContextGenerationEngine().generate_context(concept)
+        )
         records = self._records(ledger_item)
         runtime = self._runtime_evaluation(concept, truth_candidate_report)
         successful_tasks, counterexample_tasks = self._success_counts(
@@ -299,20 +342,6 @@ class TruthCandidatePromotionEngine:
             runtime,
         )
         dependency_promotion = self._dependency_promotion(concept, runtime)
-        print(
-            "LIFECYCLE DEP DEBUG:",
-            concept,
-            {
-                "runtime_keys": list(runtime.keys())
-                if isinstance(runtime, dict)
-                else [],
-                "process_dependency_memory":
-                runtime.get("process_dependency_memory", {})
-                if isinstance(runtime, dict)
-                else {},
-                "dependency_promotion": dependency_promotion,
-            },
-        )
         dependency_bonus = (
             dependency_promotion["promotion_dependency_bonus"]
             if dependency_promotion["dependency_aware_promotion_applicable"]
@@ -434,6 +463,12 @@ class TruthCandidatePromotionEngine:
             dependency_promotion["dependency_chain_coverage"],
             "missing_dependencies":
             dependency_promotion["missing_dependencies"],
+            "process_dependency_memory":
+            dependency_promotion["process_dependency_memory"],
+            "dependency_alignment_ready":
+            dependency_promotion["dependency_alignment_ready"],
+            "dependency_alignment_confidence":
+            dependency_promotion["dependency_alignment_confidence"],
             "dependency_chain_complete_for_promotion":
             dependency_promotion["dependency_chain_complete_for_promotion"],
             "readiness_gates": readiness_gates,
@@ -452,6 +487,42 @@ class TruthCandidatePromotionEngine:
             "causal_stability": causal_stability,
             "raw_causal_stability": raw_causal_stability,
             "context_strength": context_strength,
+            "process_abstraction_ready": bool(process_abstraction),
+            "process_abstraction": (
+                process_abstraction.as_dict()
+                if process_abstraction
+                else {}
+            ),
+            "process_context_generation": process_context_generation,
+            "process_context_generated": bool(
+                process_context_generation.get("process_context_generated")
+            ),
+            "context_strength_evidence": {
+                "contextual_truth": self._nested_score(
+                    runtime,
+                    (
+                        "contextual_truth_authority",
+                        "effective_contextual_truth",
+                    ),
+                    ("contextual_truth", "effective_contextual_truth"),
+                    ("contextual_truth", "contextual_truth_score"),
+                    default=0.0,
+                ),
+                "context_hierarchy": self._nested_score(
+                    runtime,
+                    ("context_hierarchy", "context_hierarchy_score"),
+                    ("context_hierarchy", "score"),
+                    default=0.0,
+                ),
+                "semantic_context": self._nested_score(
+                    runtime,
+                    ("semantic_context", "semantic_context_score"),
+                    ("semantic_context", "confidence"),
+                    default=0.0,
+                ),
+                "ledger_context_strength":
+                clamp(ledger_item.get("context_strength", 0.0)),
+            },
             "identity_strength": identity_strength,
             "identity_strength_observed": identity_observed,
             "contradiction_governance": contradiction_governance,

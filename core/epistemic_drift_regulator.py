@@ -1,6 +1,23 @@
 from core.epistemic_models import BeliefState, clamp
 
 
+def _runtime_identity_report(context):
+    report = context.get(
+        "identity_runtime_report",
+        context.get("identity_continuity_runtime_report", {}),
+    )
+    return report if isinstance(report, dict) else {}
+
+
+def _stable_runtime_ready(report):
+    return (
+        report.get("runtime_ready") is True
+        and report.get("runtime_state") == "IDENTITY_RUNTIME_STABLE"
+        and report.get("identity_split") is not True
+        and report.get("identity_merged") is not True
+    )
+
+
 def semantic_drift_score(context):
     context = context if isinstance(context, dict) else {}
     monitor = context.get("semantic_drift_monitor_report", {})
@@ -31,7 +48,18 @@ def semantic_drift_score(context):
         .get("semantic_drift"),
     ]
     values = [clamp(score) for score in scores if score is not None]
-    return max(values, default=0.0)
+    drift = max(values, default=0.0)
+    runtime = _runtime_identity_report(context)
+    runtime_drift = runtime.get("semantic_drift")
+    runtime_gates = runtime.get("identity_governance_gates", {})
+    runtime_gates = runtime_gates if isinstance(runtime_gates, dict) else {}
+    if (
+        _stable_runtime_ready(runtime)
+        and runtime_drift is not None
+        and runtime_gates.get("semantic_drift_below_limit") is True
+    ):
+        return min(drift, clamp(runtime_drift))
+    return drift
 
 
 def identity_continuity_score(context):
@@ -51,7 +79,21 @@ def identity_continuity_score(context):
         .get("continuity_score"),
     ]
     values = [clamp(score) for score in scores if score is not None]
-    return min(values, default=1.0)
+    continuity = min(values, default=1.0)
+    runtime = _runtime_identity_report(context)
+    runtime_continuity = runtime.get(
+        "identity_continuity",
+        runtime.get("identity_runtime_continuity"),
+    )
+    runtime_gates = runtime.get("identity_governance_gates", {})
+    runtime_gates = runtime_gates if isinstance(runtime_gates, dict) else {}
+    if (
+        _stable_runtime_ready(runtime)
+        and runtime_continuity is not None
+        and runtime_gates.get("identity_continuity_above_limit") is True
+    ):
+        return max(continuity, clamp(runtime_continuity))
+    return continuity
 
 
 class EpistemicDriftRegulator:

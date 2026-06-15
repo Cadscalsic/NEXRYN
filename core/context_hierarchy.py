@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 
 from core.context_discovery import ContextDescriptor
 from core.epistemic_models import clamp
+from core.process_abstraction import ProcessAbstractionLayer
+from core.process_context_generation import ProcessContextGenerationEngine
 
 
 def _normalize(value, default="unknown"):
@@ -177,14 +179,24 @@ class ContextHierarchy:
             "duplication",
             "deletion",
             "insertion",
-            "growth",
+            "structural_transformation_context",
+            "identity_preservation",
             "topology_change",
-            "topology_expansion",
-            "topological_growth",
             "topological_expansion",
             "object_splitting",
             "object_merging",
-            "replication",
+        },
+        "growth_context": {
+            "growth",
+            "topology_expansion",
+            "region_expansion",
+            "object_count_growth",
+            "identity_preservation_under_growth",
+        },
+        "topological_growth_context": {
+            "topological_growth",
+            "topology_splitting",
+            "topological_expansion",
         },
         "color_transformation": {
             "recoloring",
@@ -193,29 +205,73 @@ class ContextHierarchy:
             "attribute_remapping",
             "color_expansion",
         },
-        "propagation_transformation": {
-            "propagation",
-            "directional_motion",
+        "color_context": {
+            "color_preservation",
+            "color_stability",
+            "attribute_mapping_preservation",
+            "no_color_reassignment",
         },
-        "identity_preservation": {
-            "identity_preservation",
-            "object_identity_preservation",
-            "object_persistence",
-            "identity_continuity",
-            "object_core",
+        "shape_context": {
+            "shape_preservation",
+            "shape_stability",
+            "local_shape_preservation",
+            "boundary_geometry_preservation",
+        },
+        "topology_context": {
+            "topology_preservation",
+            "topology_stability",
+            "connectivity_preservation",
+            "region_relation_preservation",
+        },
+        "position_context": {
+            "position_preservation",
+            "position_stability",
+            "coordinate_anchor_preservation",
+            "relative_position_preservation",
+        },
+        "symmetry_context": {
+            "symmetry_reasoning",
+            "symmetry_preservation",
+            "symmetry_relation",
+            "symmetry_stability",
+            "axis_consistency",
+            "mirror_consistency",
+        },
+        "propagation_context": {
+            "propagation",
+            "directional_spread",
+            "source_pattern_preservation",
+            "signal_transfer",
+        },
+        "directional_motion_context": {
+            "directional_motion",
+            "position_delta",
+            "directional_displacement",
+            "source_pattern_motion",
+        },
+        "replication_context": {
+            "replication",
+            "object_creation",
+            "identity_split",
+            "structural_copying",
         },
     }
 
     PROCESS_DEPENDENCY_CONTEXTS = {
         "growth": [
-            "object_identity_preservation",
+            "identity_persistence",
             "object_persistence",
             "identity_continuity",
             "object_core",
             "shape_preservation",
             "topology_expansion",
+            "object_count_growth",
+            "identity_preservation_under_growth",
         ],
         "propagation": [
+            "directional_spread",
+            "source_pattern_preservation",
+            "signal_transfer",
             "source_pattern_preserved",
             "directional_motion",
             "position_change",
@@ -223,6 +279,9 @@ class ContextHierarchy:
             "local_shape",
         ],
         "replication": [
+            "structural_copying",
+            "object_creation",
+            "identity_forking",
             "identity_split",
             "object_count_increase",
             "topology_splitting",
@@ -232,21 +291,73 @@ class ContextHierarchy:
         "topological_growth": [
             "growth",
             "topology_expansion",
+            "region_expansion",
+            "topology_splitting",
+            "identity_preservation_under_growth",
             "local_shape",
             "shape_preservation",
         ],
-        "object_identity_preservation": [
+        "identity_preservation": [
+            "identity_persistence",
             "object_persistence",
             "identity_continuity",
             "object_core",
             "shape_preservation",
             "topology_preservation",
         ],
+        "identity_persistence": [
+            "object_persistence",
+            "identity_continuity",
+            "object_core",
+            "shape_preservation",
+            "topology_preservation",
+        ],
+        "identity_forking": [
+            "identity_split",
+            "object_count_increase",
+            "topology_splitting",
+            "local_shape",
+            "shape_preservation",
+        ],
+        "color_context": [
+            "color_preservation",
+            "color_stability",
+            "attribute_mapping_preservation",
+            "no_color_reassignment",
+        ],
+        "shape_context": [
+            "shape_preservation",
+            "shape_stability",
+            "local_shape_preservation",
+            "boundary_geometry_preservation",
+        ],
+        "topology_context": [
+            "topology_preservation",
+            "topology_stability",
+            "connectivity_preservation",
+            "region_relation_preservation",
+        ],
+        "position_context": [
+            "position_preservation",
+            "position_stability",
+            "coordinate_anchor_preservation",
+            "relative_position_preservation",
+        ],
+        "symmetry_context": [
+            "symmetry_reasoning",
+            "symmetry_preservation",
+            "symmetry_relation",
+            "axis_consistency",
+            "mirror_consistency",
+        ],
         "directional_motion": [
+            "position_delta",
+            "directional_displacement",
+            "source_pattern_motion",
             "position_delta",
             "position_change",
             "propagation",
-            "object_identity_preservation",
+            "identity_persistence",
         ],
     }
 
@@ -266,46 +377,140 @@ class ContextHierarchy:
             "topology_preserved",
             "identity_may_be_modified",
         ],
-        "propagation_transformation": [
+        "color_context": [
+            "color_stability",
+            "attribute_mapping_preservation",
+            "no_color_reassignment",
+        ],
+        "shape_context": [
+            "shape_stability",
+            "local_shape_preservation",
+            "boundary_geometry_preservation",
+        ],
+        "topology_context": [
+            "topology_stability",
+            "connectivity_preservation",
+            "region_relation_preservation",
+        ],
+        "position_context": [
+            "position_stability",
+            "coordinate_anchor_preservation",
+            "relative_position_preservation",
+        ],
+        "symmetry_context": [
+            "symmetry_relation",
+            "axis_consistency",
+            "mirror_consistency",
+        ],
+        "growth_context": [
+            "topology_expansion",
+            "object_count_growth",
+            "identity_preservation_under_growth",
+            "shape_anchor_required",
+        ],
+        "topological_growth_context": [
+            "topology_expansion",
+            "topology_splitting",
+            "growth_dependency_required",
+            "shape_anchor_required",
+        ],
+        "propagation_context": [
             "recursive_spread",
             "multi_cell_effect",
             "source_pattern_preserved",
+            "directional_spread",
+            "signal_transfer",
+        ],
+        "directional_motion_context": [
+            "position_delta",
+            "directional_displacement",
+            "object_persistence_required",
+            "source_pattern_motion",
+        ],
+        "replication_context": [
+            "structural_copying",
+            "object_creation",
+            "identity_split",
+            "shape_anchor_required",
         ],
         "identity_preservation": [
             "object_identity_consistent",
             "semantic_anchor_stable",
+            "structural_identity_preserved",
+            "object_core_preserved",
         ],
         "growth": [
             "object_expansion",
             "dependency_chain_supported",
             "identity_continuity_required",
             "shape_anchor_required",
+            "topology_expansion",
+            "object_count_growth",
+            "identity_preservation_under_growth",
         ],
         "propagation": [
             "directional_dependency",
             "source_pattern_required",
             "position_change_expected",
+            "directional_spread",
+            "signal_transfer",
+            "source_pattern_preservation",
         ],
         "replication": [
             "identity_split_expected",
             "object_count_increase_expected",
             "local_shape_preserved",
+            "structural_copying",
+            "object_creation",
         ],
         "topological_growth": [
             "topology_expansion_expected",
             "growth_dependency_required",
             "shape_anchor_required",
+            "identity_preservation_under_growth",
+            "topology_splitting",
         ],
-        "object_identity_preservation": [
+        "directional_motion": [
+            "position_delta",
+            "directional_displacement",
+            "object_persistence_required",
+            "source_pattern_motion",
+        ],
+        "identity_persistence": [
             "object_persistence_required",
             "identity_continuity_required",
             "object_core_preserved",
+        ],
+        "identity_forking": [
+            "identity_split_expected",
+            "object_count_increase_expected",
+            "topology_splitting",
+            "source_lineage_required",
         ],
     }
 
     def __init__(self):
         self.nodes = {}
+        self._install_process_abstractions()
         self.build_hierarchy([])
+
+    def _install_process_abstractions(self):
+        for root, children in ProcessAbstractionLayer.hierarchy_roots().items():
+            self.ROOT_CONTEXTS.setdefault(root, set()).update(children)
+
+        for concept, dependencies in (
+            ProcessAbstractionLayer.dependency_contexts().items()
+        ):
+            merged = list(self.PROCESS_DEPENDENCY_CONTEXTS.get(concept, []))
+            merged.extend(dependencies)
+            self.PROCESS_DEPENDENCY_CONTEXTS[concept] = sorted(set(merged))
+
+        for context_name, features in (
+            ProcessAbstractionLayer.inherited_features().items()
+        ):
+            merged = list(self.INHERITED_FEATURES.get(context_name, []))
+            merged.extend(features)
+            self.INHERITED_FEATURES[context_name] = sorted(set(merged))
 
     def _parent_for_name(self, context_name):
         name = _normalize(context_name)
@@ -517,6 +722,9 @@ class ContextHierarchy:
             "root_contexts": sorted(self.ROOT_CONTEXTS),
             "process_dependency_contexts":
             dict(self.PROCESS_DEPENDENCY_CONTEXTS),
+            "process_abstraction_layer": ProcessAbstractionLayer.report(),
+            "process_context_generation_engine":
+            ProcessContextGenerationEngine.report(),
             "hierarchy_ready": True,
         }
 

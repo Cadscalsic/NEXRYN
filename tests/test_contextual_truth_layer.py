@@ -183,6 +183,52 @@ def test_contextual_truth_report_includes_context_binding_why_valid():
     ) in report["why_valid"]
 
 
+def test_process_contextual_truth_binds_growth_and_propagation():
+    engine = ContextualTruthEngine()
+
+    for concept, family, mechanism in [
+        ("growth", "growth", "topology_expansion"),
+        ("propagation", "propagation", "recursive_spread"),
+        ("replication", "replication", "structural_replication"),
+        ("topological_growth", "topological_growth", "region_expansion"),
+    ]:
+        report = engine.generate_contextual_truth_report(
+            concept,
+            {
+                "transformation_family": family,
+                "context_discovery": {
+                    "transformation_family": family,
+                    "confidence": 0.9,
+                },
+                "context_hierarchy": {
+                    "context_hierarchy_score": 1.0,
+                },
+                "semantic_context": {
+                    "properties": [
+                        "source_pattern_preserved",
+                        "expands_objects",
+                    ],
+                    "capabilities": [
+                        "pattern_extension",
+                        "topology_growth",
+                        "structural_replication",
+                    ],
+                    "confidence": 0.92,
+                },
+            },
+            {
+                "validation_score": 0.86,
+            },
+            identity_compatibility=1.0,
+        )
+
+        assert report["contextual_consistency"] is True
+        assert report["context_binding"]["binding_state"] == "CONTEXT_BOUND"
+        assert mechanism in report["context_binding"][
+            "supporting_mechanisms"
+        ]
+
+
 def test_contextual_truth_preserves_discovered_context_signature():
     signature = ContextSignature.from_context(
         {

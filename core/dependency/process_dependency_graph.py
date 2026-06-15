@@ -6,6 +6,7 @@ from typing import Any
 from core.epistemic_models import clamp
 from core.dependency.process_dependency_memory import (
     ProcessDependencyMemory,
+    REQUIRED_PROCESS_DEPENDENCY_RELATIONS,
     normalize_process_dependency_relation,
 )
 
@@ -40,11 +41,7 @@ class ProcessDependencyRelation:
             "relation": self.relation,
             "confidence": clamp(self.confidence),
             "dependency_type": "process_dependency",
-            "required": self.relation in {
-                "requires",
-                "causes",
-                "supports",
-            },
+            "required": self.relation in REQUIRED_PROCESS_DEPENDENCY_RELATIONS,
             "supported": True,
             "transfer_success": True,
             "metadata": {
@@ -56,23 +53,26 @@ class ProcessDependencyRelation:
 
 
 class ProcessDependencyGraph:
-    """Typed dependency knowledge for process concepts."""
+    """Typed dependency knowledge for process and preservation concepts."""
 
     PROCESS_RELATIONS = {
         "growth": [
-            ("growth", "requires", "object_persistence", 0.91),
-            ("object_persistence", "requires", "identity_continuity", 0.90),
-            ("identity_continuity", "supports", "object_identity_preservation", 0.88),
-            ("growth", "causes", "area_increase", 0.88),
-            ("area_increase", "may_affect", "topology_change", 0.78),
-            ("growth", "preserves", "object_core", 0.84),
-            ("object_core", "supports", "object_identity_preservation", 0.86),
+            ("growth", "requires", "identity_persistence", 0.91),
+            ("growth", "preserves", "object_core", 0.89),
+            ("growth", "modifies", "identity_continuity", 0.90),
+            ("growth", "creates", "topology_expansion", 0.90),
+            ("growth", "depends_on", "source_pattern_preserved", 0.88),
+            ("identity_persistence", "requires", "object_persistence", 0.92),
+            ("object_persistence", "requires", "identity_continuity", 0.92),
+            ("identity_continuity", "preserves", "object_core", 0.90),
+            ("object_core", "supports", "shape_preservation", 0.86),
         ],
         "topological_growth": [
-            ("topological_growth", "requires", "object_persistence", 0.90),
-            ("topological_growth", "causes", "topology_expansion", 0.91),
-            ("topology_expansion", "may_affect", "boundary_geometry", 0.80),
-            ("topology_expansion", "preserves", "local_shape", 0.84),
+            ("topological_growth", "derived_from", "growth", 0.88),
+            ("topological_growth", "depends_on", "source_pattern_preserved", 0.88),
+            ("topological_growth", "modifies", "topology_expansion", 0.90),
+            ("topological_growth", "creates", "topology_splitting", 0.87),
+            ("topology_expansion", "preserves", "local_shape", 0.86),
             ("local_shape", "supports", "shape_preservation", 0.86),
         ],
         "duplication": [
@@ -86,11 +86,15 @@ class ProcessDependencyGraph:
         ],
         "replication": [
             ("replication", "requires", "source_pattern_preserved", 0.88),
-            ("replication", "causes", "identity_split", 0.90),
+            ("replication", "preserves", "source_pattern_preserved", 0.89),
+            ("replication", "causes", "identity_forking", 0.90),
+            ("identity_forking", "causes", "identity_split", 0.90),
             ("identity_split", "causes", "object_count_increase", 0.89),
+            ("object_count_increase", "enables", "topological_growth", 0.87),
             ("object_count_increase", "causes", "topology_splitting", 0.84),
             ("topology_splitting", "preserves", "local_shape", 0.86),
             ("local_shape", "supports", "shape_preservation", 0.84),
+            ("topological_growth", "derived_from", "growth", 0.88),
         ],
         "propagation": [
             ("propagation", "requires", "source_pattern_preserved", 0.88),
@@ -99,18 +103,87 @@ class ProcessDependencyGraph:
             ("source_pattern_preserved", "preserves", "local_shape", 0.82),
             ("position", "supports", "position_preservation", 0.82),
         ],
-        "object_identity_preservation": [
-            ("object_identity_preservation", "requires", "object_persistence", 0.92),
+        "identity_persistence": [
+            ("identity_persistence", "requires", "object_persistence", 0.92),
             ("object_persistence", "requires", "identity_continuity", 0.92),
             ("identity_continuity", "preserves", "object_core", 0.90),
             ("object_core", "supports", "shape_preservation", 0.86),
             ("object_core", "supports", "topology_preservation", 0.84),
+        ],
+        "identity_forking": [
+            ("identity_forking", "causes", "identity_split", 0.92),
+            ("identity_split", "causes", "object_count_increase", 0.92),
+            ("object_count_increase", "causes", "topology_splitting", 0.86),
+            ("topology_splitting", "preserves", "local_shape", 0.86),
+            ("local_shape", "supports", "shape_preservation", 0.84),
         ],
         "directional_motion": [
             ("directional_motion", "requires", "position_delta", 0.86),
             ("directional_motion", "requires", "object_persistence", 0.84),
             ("position_delta", "causes", "position_change", 0.88),
             ("position_change", "supports", "propagation", 0.80),
+        ],
+        "color_preservation": [
+            ("color_preservation", "requires", "stable_attribute_mapping", 0.92),
+            ("stable_attribute_mapping", "supports", "identity_persistence", 0.89),
+            ("identity_persistence", "supports", "identity_continuity", 0.88),
+        ],
+        "shape_preservation": [
+            ("shape_preservation", "requires", "local_shape", 0.91),
+            ("local_shape", "supports", "identity_persistence", 0.88),
+            ("identity_persistence", "supports", "identity_continuity", 0.87),
+        ],
+        "size_preservation": [
+            ("size_preservation", "requires", "object_extent", 0.90),
+            ("object_extent", "supports", "identity_persistence", 0.87),
+            ("identity_persistence", "supports", "identity_continuity", 0.86),
+        ],
+        "position_preservation": [
+            ("position_preservation", "requires", "stable_reference_frame", 0.91),
+            ("stable_reference_frame", "supports", "identity_persistence", 0.88),
+            ("identity_persistence", "supports", "identity_continuity", 0.87),
+        ],
+        "symmetry_preservation": [
+            ("symmetry_preservation", "requires", "symmetry_axis", 0.92),
+            ("symmetry_axis", "supports", "shape_preservation", 0.89),
+            ("shape_preservation", "supports", "identity_persistence", 0.87),
+        ],
+        "topology_preservation": [
+            ("topology_preservation", "requires", "topology_structure", 0.92),
+            ("topology_structure", "supports", "identity_persistence", 0.89),
+            ("identity_persistence", "supports", "identity_continuity", 0.88),
+        ],
+                "symmetry_reasoning": [
+            (
+                "symmetry_reasoning",
+                "requires",
+                "symmetry_axis",
+                0.92,
+            ),
+            (
+                "symmetry_axis",
+                "supports",
+                "symmetry_preservation",
+                0.90,
+            ),
+            (
+                "symmetry_preservation",
+                "requires",
+                "shape_preservation",
+                0.88,
+            ),
+            (
+                "shape_preservation",
+                "supports",
+                "identity_persistence",
+                0.87,
+            ),
+            (
+                "identity_persistence",
+                "requires",
+                "identity_continuity",
+                0.86,
+            ),
         ],
     }
 
@@ -145,6 +218,9 @@ class ProcessDependencyGraph:
 
         if not self.process_relations:
             self.process_relations = dict(self.PROCESS_RELATIONS)
+
+        for process, relations in self.PROCESS_RELATIONS.items():
+            self.process_relations.setdefault(process, relations)
 
     def relations_for(self, process: str) -> list[ProcessDependencyRelation]:
         process = str(process or "").strip()
@@ -188,15 +264,32 @@ class ProcessDependencyGraph:
         process = str(process or "").strip()
 
         memory_report = self.process_dependency_memory.resolve_chain(process)
+        graph_report = self._resolve_from_graph_relations(process)
 
-        if (
-            isinstance(memory_report, dict)
-            and memory_report.get("dependency_chain_depth", 0) > 0
-        ):
+        if not isinstance(memory_report, dict):
+            return graph_report
+
+        memory_depth = memory_report.get("dependency_chain_depth", 0)
+        graph_depth = graph_report.get("dependency_chain_depth", 0)
+
+        if graph_depth > memory_depth:
+            return {
+                **graph_report,
+                "memory_dependency_chain": memory_report.get(
+                    "resolved_dependency_chain",
+                    [],
+                ),
+                "memory_dependency_confidence": memory_report.get(
+                    "dependency_confidence",
+                    0.0,
+                ),
+                "resolution_source": "process_dependency_graph_deep_fallback",
+            }
+
+        if memory_depth > 0:
             return memory_report
 
-        return self._resolve_from_graph_relations(process)
-
+        return graph_report
     def _resolve_from_graph_relations(
         self,
         process: str,

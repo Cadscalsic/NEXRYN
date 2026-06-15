@@ -303,10 +303,11 @@ def test_training_report_detects_architecture_bottleneck_plateau(capsys):
     architecture_report = report["architecture_bottleneck_report"]
 
     assert architecture_report["bottleneck_type"] == (
-        "ARCHITECTURE_BOTTLENECK"
+        "NO_ARCHITECTURE_BOTTLENECK_DETECTED"
     )
-    assert architecture_report["architecture_bottleneck"] is True
-    assert architecture_report["dependency_coherence_average"] == 0.6812
+    assert architecture_report["architecture_bottleneck"] is False
+    assert architecture_report["raw_dependency_coherence_average"] == 0.6812
+    assert architecture_report["dependency_coherence_average"] > 0.80
     assert architecture_report["context_count"] == 1
     assert architecture_report[
         "dependency_reasoning_operator_available"
@@ -318,7 +319,7 @@ def test_training_report_detects_architecture_bottleneck_plateau(capsys):
         "process_concepts_in_boundary_refinement"
     ] == ["growth"]
     assert architecture_report["recommended_next_step"] == (
-        "ingest_process_dependency_memory"
+        "continue_adaptive_training"
     )
     assert architecture_report["process_dependency_links_loaded"] >= 1
     assert architecture_report["process_dependency_links_used"] >= 1
@@ -333,7 +334,7 @@ def test_training_report_detects_architecture_bottleneck_plateau(capsys):
         "promotion_gate_blocked:context_strength",
     ]
     assert "ARCHITECTURE BOTTLENECK REPORT" in output
-    assert "bottleneck_type=ARCHITECTURE_BOTTLENECK" in output
+    assert "bottleneck_type=NO_ARCHITECTURE_BOTTLENECK_DETECTED" in output
     assert (
         "dependency_reasoning_operator_available=True"
         in output
@@ -342,10 +343,342 @@ def test_training_report_detects_architecture_bottleneck_plateau(capsys):
         "process_dependency_memory_available=True"
         in output
     )
-    assert "recommended_next_step=ingest_process_dependency_memory" in output
+    assert "recommended_next_step=continue_adaptive_training" in output
     assert "process_dependency_links_loaded=" in output
     assert "process_dependency_links_used=" in output
     assert "dependency_chain_depth=" in output
     assert "dependency_chain_coverage=" in output
     assert "boundary_refinement_dependency concept=growth" in output
     assert "dependency_ready_boundary_refinement_blocker concept=growth" in output
+
+
+def test_architecture_bottleneck_uses_typed_process_dependency_evidence():
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_growth.json",
+            "status": "completed",
+            "result": {
+                "truth_candidate_report": {
+                    "evaluations": [{
+                        "concept": "growth",
+                        "eligible_for_truth_candidate": False,
+                        "eligibility_reason":
+                        "promotion_gate_blocked:context_strength",
+                        "blocked_metrics": ["context_strength"],
+                        "promotion_dependency_score": 0.9548,
+                        "promotion_dependency_bonus": 0.0387,
+                        "dependency_confidence": 0.9017,
+                        "dependency_chain_depth": 5,
+                        "dependency_chain_coverage": 0.8556,
+                        "missing_dependencies": [],
+                    }],
+                },
+                "epistemic_cognition_report": {
+                    "causal_validation_engine": {
+                        "evaluations": [{
+                            "hypothesis": {
+                                "target_concept": "growth",
+                            },
+                            "validation_score": 0.8861,
+                            "cross_task_stability": 1.0,
+                            "dependency_coherence": 0.6812,
+                            "context_consistency": 0.94,
+                            "identity_compatibility": 1.0,
+                        }],
+                    },
+                    "contextual_truth_engine": {
+                        "evaluations": [{
+                            "truth": "growth",
+                            "contextual_truth_score": 0.80,
+                            "contextual_consistency": True,
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [{
+                            "task": "growth",
+                            "transformation_family": "growth",
+                            "confidence": 0.86,
+                        }],
+                    },
+                    "semantic_context_reasoner": {
+                        "evaluations": [{
+                            "context": "growth",
+                            "semantic_context_score": 0.92,
+                            "status": "SEMANTICALLY_VALIDATED",
+                        }],
+                    },
+                },
+            },
+        }],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "BOUNDARY_REFINEMENT",
+                "preliminary_truth_candidate_ready": False,
+            }],
+        },
+    )
+
+    architecture_report = report["architecture_bottleneck_report"]
+
+    assert architecture_report["raw_dependency_coherence_average"] == 0.6812
+    assert architecture_report["effective_dependency_evidence_average"] > 0.80
+    assert architecture_report["dependency_plateau"] is False
+    assert architecture_report["architecture_bottleneck"] is False
+    assert {
+        "concept": "growth",
+        "source": "typed_process_dependency_memory",
+        "promotion_dependency_score": 0.9548,
+        "dependency_confidence": 0.9017,
+        "dependency_chain_depth": 5,
+        "dependency_chain_coverage": 0.8556,
+    } in architecture_report["process_dependency_evidence_sources"]
+    assert any(
+        source["source"] == "typed_process_dependency_memory_relations"
+        and source["relation_semantics_score"] > 0.80
+        for source in architecture_report["process_dependency_evidence_sources"]
+    )
+
+
+def test_architecture_bottleneck_uses_typed_relation_semantics_from_memory():
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_growth.json",
+            "status": "completed",
+            "result": {
+                "epistemic_cognition_report": {
+                    "causal_validation_engine": {
+                        "evaluations": [{
+                            "hypothesis": {
+                                "target_concept": "growth",
+                            },
+                            "validation_score": 0.8861,
+                            "cross_task_stability": 1.0,
+                            "dependency_coherence": 0.6737,
+                            "context_consistency": 0.94,
+                            "identity_compatibility": 1.0,
+                        }],
+                    },
+                    "contextual_truth_engine": {
+                        "evaluations": [{
+                            "truth": "growth",
+                            "contextual_truth_score": 0.80,
+                            "contextual_consistency": True,
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [{
+                            "task": "growth",
+                            "transformation_family": "growth",
+                            "confidence": 0.86,
+                        }],
+                    },
+                    "semantic_context_reasoner": {
+                        "evaluations": [{
+                            "context": "growth",
+                            "semantic_context_score": 0.92,
+                            "status": "SEMANTICALLY_VALIDATED",
+                        }],
+                    },
+                },
+            },
+        }],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "BOUNDARY_REFINEMENT",
+                "preliminary_truth_candidate_ready": False,
+            }],
+        },
+    )
+
+    architecture_report = report["architecture_bottleneck_report"]
+    typed_source = architecture_report["process_dependency_evidence_sources"][0]
+
+    assert architecture_report["raw_dependency_coherence_average"] == 0.6737
+    assert architecture_report["effective_dependency_evidence_average"] > 0.80
+    assert architecture_report["architecture_bottleneck"] is False
+    assert architecture_report["dependency_plateau"] is False
+    assert typed_source["source"] == "typed_process_dependency_memory_relations"
+    assert typed_source["relation_semantics_score"] > 0.80
+    assert typed_source["typed_dependency_relation_count"] >= 1
+
+
+def test_architecture_bottleneck_reconciles_dependency_ready_blockers():
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_101.json",
+            "status": "completed",
+            "result": {
+                "epistemic_cognition_report": {
+                    "causal_validation_engine": {
+                        "evaluations": [{
+                            "hypothesis": {
+                                "target_concept": "growth",
+                            },
+                            "validation_score": 0.8861,
+                            "cross_task_stability": 1.0,
+                            "contradiction_resistance": 0.8093,
+                            "dependency_coherence": 0.6812,
+                            "context_consistency": 0.94,
+                            "identity_compatibility": 1.0,
+                            "validation_state": "VALIDATED",
+                        }],
+                    },
+                    "contextual_truth_engine": {
+                        "evaluations": [{
+                            "truth": "growth",
+                            "context_confidence": 0.9024,
+                            "status": "CONTEXT_REVIEW_REQUIRED",
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [{
+                            "task": "growth",
+                            "transformation_family": "growth",
+                            "confidence": 0.76,
+                        }],
+                    },
+                    "semantic_context_reasoner": {
+                        "evaluations": [{
+                            "context": "growth",
+                            "semantic_context_score": 0.90,
+                            "status": "SEMANTICALLY_VALIDATED",
+                        }],
+                    },
+                },
+            },
+        }],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "BOUNDARY_REFINEMENT",
+                "preliminary_truth_candidate_ready": False,
+                "truth_candidate_promotion": {
+                    "promotion_dependency_score": 0.0,
+                    "promotion_dependency_bonus": 0.0,
+                    "dependency_confidence": 0.0,
+                    "dependency_chain_depth": 0,
+                    "dependency_chain_coverage": 0.0,
+                    "dependency_promotion_blockers": [
+                        "dependency_confidence_below_promotion_floor",
+                        "dependency_chain_depth_below_promotion_floor",
+                    ],
+                    "failed_gates": [],
+                },
+            }],
+        },
+    )
+
+    blocker = report["architecture_bottleneck_report"][
+        "dependency_ready_boundary_refinement_blockers"
+    ][0]
+
+    assert blocker["dependency_confidence"] > 0.85
+    assert blocker["dependency_chain_depth"] >= 4
+    assert blocker["promotion_dependency_score"] > 0.0
+    assert blocker["promotion_dependency_bonus"] > 0.0
+    assert blocker["exact_blocker"] == []
+    assert "dependency_confidence_below_promotion_floor" not in blocker[
+        "exact_blocker"
+    ]
+    assert "dependency_chain_depth_below_promotion_floor" not in blocker[
+        "exact_blocker"
+    ]
+    assert blocker["dependency_promotion_metrics_source"] == (
+        "process_dependency_memory"
+    )
+
+
+def test_training_report_extracts_process_context_strength_from_runtime():
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_202.json",
+            "status": "completed",
+            "result": {
+                "epistemic_cognition_report": {
+                    "truth_candidate_engine": {
+                        "evaluations": [{
+                            "concept": "growth",
+                            "candidate_state": "ADVANCING_TO_TRUTH_CANDIDATE",
+                            "eligible_for_truth_candidate": False,
+                            "blocked_metrics": [],
+                            "context_discovery": {
+                                "task": "growth",
+                                "transformation_family": "growth",
+                                "confidence": 0.86,
+                            },
+                            "context_hierarchy": {
+                                "context_hierarchy_score": 0.752,
+                                "hierarchy_ready": True,
+                            },
+                            "semantic_context": {
+                                "context": "growth",
+                                "semantic_context_score": 0.9,
+                                "semantically_validated": True,
+                            },
+                            "contextual_truth": {
+                                "truth": "growth",
+                                "contextual_truth_score": 0.71,
+                            },
+                            "contextual_truth_authority": {
+                                "effective_contextual_truth": 0.71,
+                                "contextual_truth_supported": True,
+                            },
+                            "promotion_dependency_score": 0.9548,
+                            "promotion_dependency_bonus": 0.0387,
+                            "dependency_promotion_blockers": [],
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [],
+                    },
+                    "context_hierarchy_engine": {
+                        "evaluations": [],
+                    },
+                    "semantic_context_reasoner": {
+                        "evaluations": [],
+                    },
+                    "contextual_truth_engine": {
+                        "evaluations": [],
+                    },
+                },
+            },
+        }],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "BOUNDARY_REFINEMENT",
+                "preliminary_truth_candidate_ready": False,
+                "truth_candidate_promotion": {
+                    "failed_gates": ["context_strength"],
+                    "dependency_promotion_blockers": [
+                        "promotion_gate_blocked:context_strength",
+                    ],
+                },
+            }],
+        },
+    )
+
+    candidate = report["truth_candidate_evaluations"]["growth"]
+
+    assert candidate["context_strength"] == 0.9
+    assert candidate["context_strength_source"] == (
+        "epistemic_cognition_report.truth_candidate_engine"
+    )
+    assert candidate["context_discovery"]["transformation_family"] == "growth"
+    assert candidate["context_hierarchy"]["context_hierarchy_score"] == 0.752
+    assert candidate["semantic_context"]["semantic_context_score"] == 0.9
+    assert candidate["contextual_truth"]["contextual_truth_score"] == 0.71
+    assert report["context_discovery_reports"]["growth"][
+        "transformation_family"
+    ] == "growth"
+    assert report["context_hierarchy_reports"]["growth"][
+        "context_hierarchy_score"
+    ] == 0.752
+    assert report["semantic_context_reports"]["growth"][
+        "semantic_context_score"
+    ] == 0.9
+    assert report["contextual_truth_reports"]["growth"][
+        "contextual_truth_score"
+    ] == 0.71

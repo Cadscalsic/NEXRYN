@@ -74,13 +74,17 @@ class TruthCandidateEngine:
             "action": "differentiate_context_hierarchy_before_promotion",
         },
     ]
+
     PROCESS_CONCEPTS = {
         "growth",
         "propagation",
         "replication",
         "topological_growth",
         "directional_motion",
-        "object_identity_preservation",
+        "identity_persistence",
+        "identity_forking",
+        "duplication",
+        "symmetry_reasoning",
     }
 
     def __init__(self):
@@ -161,8 +165,10 @@ class TruthCandidateEngine:
         explicit = context.get("context_consistency", {})
         if isinstance(explicit, dict):
             return dict(explicit)
+
         causal_validation = self._causal_validation_report(context)
         contextual_truth = self._contextual_truth_report(context)
+
         return {
             "context_consistency": causal_validation.get(
                 "context_consistency",
@@ -183,6 +189,7 @@ class TruthCandidateEngine:
         report = context.get("causal_graph_alignment", {})
         if not isinstance(report, dict):
             return aggregate.causal_alignment
+
         return clamp(
             report.get(
                 "alignment_score",
@@ -195,6 +202,7 @@ class TruthCandidateEngine:
 
     def _causal_validation_score(self, context, aggregate):
         report = self._causal_validation_report(context)
+
         return clamp(
             report.get(
                 "validation_score",
@@ -204,6 +212,79 @@ class TruthCandidateEngine:
                 ),
             )
         )
+
+    def _causal_validation_ready(self, report):
+        report = report if isinstance(report, dict) else {}
+        state = str(
+            report.get(
+                "validation_state",
+                report.get("status", ""),
+            )
+            or ""
+        ).upper()
+        score = self._nested_score(
+            report,
+            ["validation_score", "causal_validation_score"],
+            0.0,
+        )
+        return (
+            report.get("validation_ready") is True
+            or (
+                state == "VALIDATED"
+                and score >= 0.75
+            )
+        )
+
+    def _effective_causal_alignment(
+        self,
+        context,
+        aggregate,
+        causal_validation,
+        dependency_promotion,
+    ):
+        validation_score = self._causal_validation_score(context, aggregate)
+        validation_ready = self._causal_validation_ready(causal_validation)
+        values = [
+            aggregate.causal_alignment,
+            self._causal_graph_alignment_score(context, aggregate),
+        ]
+        if validation_ready:
+            values.append(validation_score)
+        if (
+            dependency_promotion["dependency_chain_complete_for_promotion"]
+            and dependency_promotion["dependency_aware_promotion_applicable"]
+        ):
+            values.append(dependency_promotion["promotion_dependency_score"])
+        return clamp(max(values))
+
+    def _stage_eligibility_report(self, belief, causal_validation):
+        lifecycle_stage_eligible = belief.state in [
+            BeliefState.VALIDATED,
+            BeliefState.TRUTH_CANDIDATE,
+            BeliefState.TRUTH_COMMITTED,
+        ]
+        causal_validation_stage_eligible = (
+            self._causal_validation_ready(causal_validation)
+        )
+        stage_eligible = (
+            lifecycle_stage_eligible
+            or causal_validation_stage_eligible
+        )
+        if lifecycle_stage_eligible:
+            source = "belief_lifecycle"
+        elif causal_validation_stage_eligible:
+            source = "causal_validation"
+        else:
+            source = "unvalidated"
+        return {
+            "stage_eligible": stage_eligible,
+            "stage_eligibility_source": source,
+            "belief_lifecycle_stage": belief.state.value,
+            "belief_lifecycle_stage_eligible":
+            lifecycle_stage_eligible,
+            "causal_validation_stage_eligible":
+            causal_validation_stage_eligible,
+        }
 
     def _dependency_promotion(self, concept, context):
         causal_validation = self._causal_validation_report(context)
@@ -223,11 +304,6 @@ class TruthCandidateEngine:
 
         alignment = context.get("dependency_chain_alignment", {})
         alignment = alignment if isinstance(alignment, dict) else {}
-
-        alignment_ready = alignment.get("alignment_ready", False)
-        alignment_confidence = clamp(
-            alignment.get("alignment_confidence", 0.0)
-        )
 
         confidence = clamp(
             process_memory.get(
@@ -272,6 +348,14 @@ class TruthCandidateEngine:
                 ),
             )
             or []
+        )
+
+        alignment_ready = alignment.get("alignment_ready", False)
+        alignment_confidence = clamp(
+            alignment.get(
+                "alignment_confidence",
+                0.0,
+            )
         )
 
         blockers = []
@@ -331,6 +415,7 @@ class TruthCandidateEngine:
             "dependency_chain_complete_for_promotion": complete,
             "dependency_aware_promotion_applicable": applicable,
         }
+
     def _contextual_truth_authority_report(
         self,
         concept,
@@ -349,6 +434,7 @@ class TruthCandidateEngine:
                 aggregate.causal_alignment,
             )
         )
+
         authority = self.contextual_truth_authority_engine.analyze(
             concept,
             truth_candidate_report={
@@ -370,10 +456,12 @@ class TruthCandidateEngine:
                 {},
             ),
         )
+
         effective_score = max(
             raw_contextual_truth_score,
             clamp(authority.get("contextual_truth_authority", 0.0)),
         )
+
         support = self.contextual_truth_support_policy.evaluate(
             contextual_truth=contextual_truth,
             contextual_truth_authority=authority,
@@ -381,6 +469,7 @@ class TruthCandidateEngine:
             semantic_context=semantic_context,
             effective_score=effective_score,
         )
+
         return {
             **authority,
             "raw_contextual_truth_score": raw_contextual_truth_score,
@@ -395,22 +484,26 @@ class TruthCandidateEngine:
     def _metric(self, concept, specification, current_value):
         threshold = specification["threshold"]
         comparator = specification["comparator"]
+
         effective_threshold = specification.get(
             "effective_threshold",
             self.contextual_truth_support_policy.STRONG_CONTEXT_SUPPORT_FLOOR
             if specification["name"] == "contextual_truth_score"
-            else threshold
+            else threshold,
         )
+
         passed = (
             current_value >= effective_threshold
             if comparator == ">="
             else current_value < effective_threshold
         )
+
         gap = (
             max(effective_threshold - current_value, 0.0)
             if comparator == ">="
             else max(current_value - effective_threshold, 0.0)
         )
+
         return {
             "concept": concept,
             "metric": specification["name"],
@@ -443,7 +536,9 @@ class TruthCandidateEngine:
             "identity_stability",
             {},
         )
+
         report = semantic_spine or semantic_anchor
+
         state = report.get(
             "semantic_spine_state",
             report.get(
@@ -451,6 +546,7 @@ class TruthCandidateEngine:
                 "unknown",
             ),
         )
+
         recovery_streak = report.get("recovery_streak", 0)
         required_cycles = report.get("required_recovery_cycles", 3)
         recovery_pending = state == "semantic_spine_recovering"
@@ -478,17 +574,21 @@ class TruthCandidateEngine:
             for item in self.METRICS
             if item["name"] == "contradiction_score"
         )
+
         governance = self.adaptive_contradiction_governance.evaluate(
             contradiction_score,
             context,
             stable_truth_authority_locked=stable_truth_authority_locked,
         )
+
         dynamic_threshold = governance["dynamic_threshold"]
+
         review = classify_contradiction_review(
             contradiction_score,
             threshold=dynamic_threshold,
             soft_review_zone=self.CONTRADICTION_REVIEW_ZONE,
         )
+
         return {
             "effective_contradiction_score": contradiction_score,
             "contradiction_threshold": dynamic_threshold,
@@ -502,9 +602,11 @@ class TruthCandidateEngine:
 
     def evaluate(self, belief, aggregate, context=None):
         context = context if isinstance(context, dict) else {}
+
         causal_boundary_alignment = context.get(
             "causal_boundary_alignment",
         )
+
         if not isinstance(causal_boundary_alignment, dict):
             causal_boundary_alignment = (
                 self.runtime_causal_alignment_engine.evaluate(
@@ -513,24 +615,30 @@ class TruthCandidateEngine:
                     context,
                 )
             )
+
         raw_contradiction_score = aggregate.contradiction_score
         effective_contradiction_score = causal_boundary_alignment[
             "adjusted_contradiction_score"
         ]
+
         contradiction_review = self._contradiction_review(
             effective_contradiction_score,
             context,
             belief.state == BeliefState.TRUTH_COMMITTED,
         )
+
         context_hierarchy = self._context_hierarchy_report(context)
         semantic_context = self._semantic_context_report(context)
         contextual_truth = self._contextual_truth_report(context)
         causal_validation = self._causal_validation_report(context)
+
         dependency_promotion = self._dependency_promotion(
             belief.concept,
             context,
         )
+
         context_consistency = self._context_consistency_report(context)
+
         contextual_truth_authority = (
             self._contextual_truth_authority_report(
                 belief.concept,
@@ -544,9 +652,11 @@ class TruthCandidateEngine:
                 causal_validation,
             )
         )
+
         contextual_truth_score = contextual_truth_authority[
             "effective_contextual_truth"
         ]
+
         contextual_truth = {
             **contextual_truth,
             "contextual_truth_score": contextual_truth_score,
@@ -566,6 +676,7 @@ class TruthCandidateEngine:
             "support_grace_margin":
             self.CONTEXTUAL_TRUTH_SUPPORT_GRACE,
         }
+
         if belief.state == BeliefState.TRUTH_COMMITTED:
             return {
                 "system": "truth_candidate_engine",
@@ -590,14 +701,26 @@ class TruthCandidateEngine:
                 "required_actions": [],
                 **contradiction_review,
                 "raw_contradiction_score": raw_contradiction_score,
-                "causal_boundary_alignment":
-                causal_boundary_alignment,
+                "causal_boundary_alignment": causal_boundary_alignment,
                 "causal_graph_alignment":
                 context.get("causal_graph_alignment", {}),
                 "causal_explanation":
                 context.get("causal_explanation", {}),
-                "causal_validation":
-                causal_validation,
+                "causal_validation": causal_validation,
+                "process_dependency_memory":
+                context.get("process_dependency_memory", {}),
+                "dependency_chain_alignment":
+                context.get("dependency_chain_alignment", {}),
+                "promotion_dependency_score":
+                dependency_promotion["promotion_dependency_score"],
+                "promotion_dependency_bonus":
+                dependency_promotion["promotion_dependency_bonus"],
+                "dependency_confidence":
+                dependency_promotion["dependency_confidence"],
+                "dependency_chain_depth":
+                dependency_promotion["dependency_chain_depth"],
+                "dependency_chain_coverage":
+                dependency_promotion["dependency_chain_coverage"],
                 "contextual_truth": contextual_truth,
                 "contextual_truth_authority":
                 contextual_truth_authority,
@@ -616,14 +739,20 @@ class TruthCandidateEngine:
                     "truth_state_locked": True,
                 },
             }
+
         generalization = context.get("knowledge_generalization", {})
+
         values = {
             "evidence_strength": aggregate.evidence_strength,
             "confidence": belief.confidence,
             "contradiction_score": effective_contradiction_score,
-            "causal_alignment": aggregate.causal_alignment,
-            "causal_graph_alignment":
-            max(
+            "causal_alignment": self._effective_causal_alignment(
+                context,
+                aggregate,
+                causal_validation,
+                dependency_promotion,
+            ),
+            "causal_graph_alignment": max(
                 self._causal_graph_alignment_score(context, aggregate),
                 clamp(
                     self._causal_graph_alignment_score(context, aggregate)
@@ -640,8 +769,7 @@ class TruthCandidateEngine:
                     else 0.0
                 ),
             ),
-            "causal_validation_score":
-            max(
+            "causal_validation_score": max(
                 self._causal_validation_score(context, aggregate),
                 clamp(
                     self._causal_validation_score(context, aggregate)
@@ -665,9 +793,11 @@ class TruthCandidateEngine:
                 aggregate.causal_alignment,
             ),
         }
+
         dynamic_contradiction_threshold = contradiction_review[
             "dynamic_contradiction_threshold"
         ]
+
         metric_specifications = [
             {
                 **specification,
@@ -717,6 +847,7 @@ class TruthCandidateEngine:
                 ).get("hierarchy_required", True)
             )
         ]
+
         metrics = [
             self._metric(
                 belief.concept,
@@ -725,7 +856,9 @@ class TruthCandidateEngine:
             )
             for specification in metric_specifications
         ]
+
         used_task_count = generalization.get("used_task_count", 0)
+
         if used_task_count:
             metrics.append({
                 "concept": belief.concept,
@@ -752,16 +885,19 @@ class TruthCandidateEngine:
                     else "collect_independent_cross_task_replications"
                 ),
             })
+
         blocked_metrics = [
             item["metric"]
             for item in metrics
             if not item["passed"]
         ]
+
         required_actions = [
             item["required_action"]
             for item in metrics
             if item["required_action"]
         ]
+
         ranked_bottlenecks = sorted(
             (
                 item
@@ -770,6 +906,7 @@ class TruthCandidateEngine:
             ),
             key=lambda item: item["gap"],
         )
+
         dominant_bottleneck = (
             ranked_bottlenecks[-1]
             if ranked_bottlenecks
@@ -810,21 +947,21 @@ class TruthCandidateEngine:
             "qualified": qualified,
             "promotion_qualified": promotion_qualified,
             "promotion_override_review_candidate":
-                promotion_override_review_candidate,
+            promotion_override_review_candidate,
             "dependency_promotion_override_candidate":
-                dependency_promotion_override_candidate,
+            dependency_promotion_override_candidate,
             "promotion_dependency_score":
-                dependency_promotion["promotion_dependency_score"],
+            dependency_promotion["promotion_dependency_score"],
             "promotion_dependency_bonus":
-                dependency_promotion["promotion_dependency_bonus"],
+            dependency_promotion["promotion_dependency_bonus"],
             "dependency_chain_complete_for_promotion":
-                dependency_promotion[
-                    "dependency_chain_complete_for_promotion"
-                ],
+            dependency_promotion[
+                "dependency_chain_complete_for_promotion"
+            ],
             "dependency_aware_promotion_applicable":
-                dependency_promotion[
-                    "dependency_aware_promotion_applicable"
-                ],
+            dependency_promotion[
+                "dependency_aware_promotion_applicable"
+            ],
             "blocked_metrics": blocked_metrics,
             "blocked_metric_details": [
                 {
@@ -840,11 +977,12 @@ class TruthCandidateEngine:
         }
 
         current_state = belief.state.value
-        stage_eligible = belief.state in [
-            BeliefState.VALIDATED,
-            BeliefState.TRUTH_CANDIDATE,
-            BeliefState.TRUTH_COMMITTED,
-        ]
+
+        stage_eligibility = self._stage_eligibility_report(
+            belief,
+            causal_validation,
+        )
+        stage_eligible = stage_eligibility["stage_eligible"]
 
         eligible = (
             promotion_qualified
@@ -863,6 +1001,15 @@ class TruthCandidateEngine:
             "stage_eligible"
         ] = stage_eligible
         dependency_promotion_audit[
+            "stage_eligibility_source"
+        ] = stage_eligibility["stage_eligibility_source"]
+        dependency_promotion_audit[
+            "causal_validation_stage_eligible"
+        ] = stage_eligibility["causal_validation_stage_eligible"]
+        dependency_promotion_audit[
+            "belief_lifecycle_stage_eligible"
+        ] = stage_eligibility["belief_lifecycle_stage_eligible"]
+        dependency_promotion_audit[
             "eligible_for_truth_candidate"
         ] = eligible
         dependency_promotion_audit[
@@ -872,6 +1019,7 @@ class TruthCandidateEngine:
         dependency_promotion_blockers = list(
             dependency_promotion["dependency_promotion_blockers"]
         )
+
         if (
             dependency_promotion["dependency_chain_complete_for_promotion"]
             and dependency_promotion[
@@ -883,19 +1031,24 @@ class TruthCandidateEngine:
                 f"promotion_metric_blocked:{metric}"
                 for metric in blocked_metrics
             )
+
             if not stage_eligible:
                 dependency_promotion_blockers.append(
                     "promotion_stage_blocked:validated_stage_required"
                 )
+
             if override_review_ready:
                 dependency_promotion_blockers.append(
                     "promotion_override_review_ready"
                 )
+
         metrics_passed = len(metrics) - len(blocked_metrics)
+
         progress_ratio = round(
             metrics_passed / max(len(metrics), 1),
             4,
         )
+
         eligibility_reason = (
             "dependency_promotion_override"
             if override_review_ready
@@ -916,6 +1069,7 @@ class TruthCandidateEngine:
             if blocked_metrics
             else "validated_stage_required"
         )
+
         candidate_state = (
             "REJECTED"
             if belief.state == BeliefState.REJECTED
@@ -935,7 +1089,7 @@ class TruthCandidateEngine:
                 BeliefState.TRUTH_COMMITTED,
             ]
             else "ADVANCING_TO_TRUTH_CANDIDATE"
-            if belief.state == BeliefState.VALIDATED
+            if stage_eligible
             else "PRE_VALIDATION"
         )
 
@@ -945,15 +1099,13 @@ class TruthCandidateEngine:
             "current_state": current_state,
             "candidate_state": candidate_state,
             "validated_knowledge":
-            belief.state
-            in [
-                BeliefState.VALIDATED,
-                BeliefState.TRUTH_CANDIDATE,
-                BeliefState.TRUTH_COMMITTED,
-            ],
+            stage_eligible,
             "qualified_metrics": promotion_qualified,
             "strict_qualified_metrics": qualified,
             "stage_eligible_for_truth_candidate": stage_eligible,
+            "stage_eligibility_source":
+            stage_eligibility["stage_eligibility_source"],
+            "stage_eligibility": stage_eligibility,
             "metrics_eligible_for_truth_candidate": promotion_qualified,
             "eligible_for_truth_candidate": eligible,
             "eligibility_reason": eligibility_reason,
@@ -973,12 +1125,46 @@ class TruthCandidateEngine:
             dependency_promotion["promotion_dependency_bonus"],
             "dependency_promotion_audit":
             dependency_promotion_audit,
+            "causal_alignment_audit": {
+                "raw_aggregate_causal_alignment":
+                aggregate.causal_alignment,
+                "effective_causal_alignment":
+                values["causal_alignment"],
+                "causal_validation_score":
+                self._causal_validation_score(context, aggregate),
+                "causal_validation_ready":
+                self._causal_validation_ready(causal_validation),
+                "causal_graph_alignment":
+                self._causal_graph_alignment_score(context, aggregate),
+                "effective_alignment_sources": [
+                    "aggregate.causal_alignment",
+                    "causal_graph_alignment",
+                    *(
+                        ["causal_validation"]
+                        if self._causal_validation_ready(
+                            causal_validation
+                        )
+                        else []
+                    ),
+                    *(
+                        ["dependency_promotion"]
+                        if (
+                            dependency_promotion[
+                                "dependency_chain_complete_for_promotion"
+                            ]
+                            and dependency_promotion[
+                                "dependency_aware_promotion_applicable"
+                            ]
+                        )
+                        else []
+                    ),
+                ],
+            },
             "dependency_promotion_override_candidate":
             dependency_promotion_override_candidate,
             "promotion_override_review_candidate":
             promotion_override_review_candidate,
-            "override_review_ready":
-            override_review_ready,
+            "override_review_ready": override_review_ready,
             "dependency_promotion_blockers":
             dependency_promotion_blockers,
             "dependency_confidence":
@@ -1003,8 +1189,11 @@ class TruthCandidateEngine:
             context.get("causal_graph_alignment", {}),
             "causal_explanation":
             context.get("causal_explanation", {}),
-            "causal_validation":
-            causal_validation,
+            "causal_validation": causal_validation,
+            "process_dependency_memory":
+            context.get("process_dependency_memory", {}),
+            "dependency_chain_alignment":
+            context.get("dependency_chain_alignment", {}),
             "contextual_truth": contextual_truth,
             "contextual_truth_authority":
             contextual_truth_authority,

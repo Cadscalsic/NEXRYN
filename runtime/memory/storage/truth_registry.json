@@ -15818,6 +15818,3651 @@
           }
         ]
       }
+    },
+    {
+      "truth_id": "truth:ce3e1e9fd99848a488251b1c24d3d38e",
+      "concept": "object_identity_preservation",
+      "claim": "object_identity_preservation is a reusable cognitive invariant",
+      "status": "ACTIVE",
+      "evidence_strength": 0.9248,
+      "calibrated_confidence": 0.8863,
+      "contradiction_score": 0.1095,
+      "causal_alignment": 0.7667,
+      "trial_count": 1,
+      "creation_time": "2026-06-14T01:24:16.715128",
+      "reviewed_at": "2026-06-14T01:24:16.715128",
+      "commit_timestamp": "2026-06-14T01:24:16.715128",
+      "lineage": {
+        "parent_truths": [],
+        "evidence_sources": [
+          "causal_attestation",
+          "constructive_reasoning",
+          "evolutionary_trait_observation",
+          "evolutionary_trait_survival_history",
+          "execution_validation",
+          "independent_execution_replication",
+          "mutation_rehearsal",
+          "semantic_abstraction_observation"
+        ]
+      },
+      "evidence": [
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 0.8438,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 0.9098,
+          "observed_at": "2026-06-01T17:53:58.026971",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_031.json",
+            "task_id": "data/training/task_031.json",
+            "task_path": "data/training\\task_031.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9549,
+          "contradiction_score": 0.049,
+          "reliability": 0.8969,
+          "causal_alignment": 0.9469,
+          "semantic_consistency": 0.9549,
+          "observed_at": "2026-06-01T17:53:59.512118",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_032.json",
+            "task_id": "data/training/task_032.json",
+            "task_path": "data/training\\task_032.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 1,
+            "reinforcement_bonus": 0.045,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 0.95,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T17:54:01.522257",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_034.json",
+            "task_id": "data/training/task_034.json",
+            "task_path": "data/training\\task_034.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 2,
+            "reinforcement_bonus": 0.09,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 0.9788,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 0.9098,
+          "observed_at": "2026-06-01T17:54:03.161825",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_035.json",
+            "task_id": "data/training/task_035.json",
+            "task_path": "data/training\\task_035.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 3,
+            "reinforcement_bonus": 0.135,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9549,
+          "contradiction_score": 0.049,
+          "reliability": 1.0,
+          "causal_alignment": 0.9469,
+          "semantic_consistency": 0.9549,
+          "observed_at": "2026-06-01T17:54:06.832384",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_036.json",
+            "task_id": "data/training/task_036.json",
+            "task_path": "data/training\\task_036.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 4,
+            "reinforcement_bonus": 0.18,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 0.9098,
+          "observed_at": "2026-06-01T17:54:09.114079",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_002.json",
+            "task_id": "data/training/task_002.json",
+            "task_path": "data/training\\task_002.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 5,
+            "reinforcement_bonus": 0.225,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 0.9098,
+          "observed_at": "2026-06-01T17:54:10.775553",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_003.json",
+            "task_id": "data/training/task_003.json",
+            "task_path": "data/training\\task_003.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 6,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T17:54:13.556151",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_004.json",
+            "task_id": "data/training/task_004.json",
+            "task_path": "data/training\\task_004.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 7,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T17:55:22.068633",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_006.json",
+            "task_id": "data/training/task_006.json",
+            "task_path": "data/training\\task_006.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 8,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 0.9098,
+          "observed_at": "2026-06-01T17:55:23.269234",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_007.json",
+            "task_id": "data/training/task_007.json",
+            "task_path": "data/training\\task_007.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 9,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T17:55:24.875994",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_008.json",
+            "task_id": "data/training/task_008.json",
+            "task_path": "data/training\\task_008.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 10,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 0.9098,
+          "observed_at": "2026-06-01T17:55:26.576428",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_009.json",
+            "task_id": "data/training/task_009.json",
+            "task_path": "data/training\\task_009.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 11,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9549,
+          "contradiction_score": 0.049,
+          "reliability": 1.0,
+          "causal_alignment": 0.9469,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:02:56.221682",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_010.json",
+            "task_id": "data/training/task_010.json",
+            "task_path": "data/training\\task_010.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 12,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9549,
+          "contradiction_score": 0.049,
+          "reliability": 1.0,
+          "causal_alignment": 0.9469,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:02:57.427791",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_011.json",
+            "task_id": "data/training/task_011.json",
+            "task_path": "data/training\\task_011.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 13,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:02:59.135117",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_012.json",
+            "task_id": "data/training/task_012.json",
+            "task_path": "data/training\\task_012.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 14,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:03:01.548703",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_013.json",
+            "task_id": "data/training/task_013.json",
+            "task_path": "data/training\\task_013.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 15,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:03:04.297173",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_014.json",
+            "task_id": "data/training/task_014.json",
+            "task_path": "data/training\\task_014.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 16,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:04:20.993027",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_015.json",
+            "task_id": "data/training/task_015.json",
+            "task_path": "data/training\\task_015.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 17,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:04:22.353592",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_016.json",
+            "task_id": "data/training/task_016.json",
+            "task_path": "data/training\\task_016.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 18,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:04:24.788222",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_017.json",
+            "task_id": "data/training/task_017.json",
+            "task_path": "data/training\\task_017.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 19,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:05:19.647247",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_022.json",
+            "task_id": "data/training/task_022.json",
+            "task_path": "data/training\\task_022.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 20,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:05:21.739728",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_023.json",
+            "task_id": "data/training/task_023.json",
+            "task_path": "data/training\\task_023.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 21,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:05:25.086309",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_024.json",
+            "task_id": "data/training/task_024.json",
+            "task_path": "data/training\\task_024.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 22,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9619,
+          "contradiction_score": 0.0382,
+          "reliability": 1.0,
+          "causal_alignment": 0.9611,
+          "semantic_consistency": 0.96,
+          "observed_at": "2026-06-01T18:09:15.173756",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_025.json",
+            "task_id": "data/training/task_025.json",
+            "task_path": "data/training\\task_025.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 23,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9619,
+          "contradiction_score": 0.0382,
+          "reliability": 1.0,
+          "causal_alignment": 0.9611,
+          "semantic_consistency": 0.96,
+          "observed_at": "2026-06-01T18:09:16.657201",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_026.json",
+            "task_id": "data/training/task_026.json",
+            "task_path": "data/training\\task_026.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 24,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9549,
+          "contradiction_score": 0.049,
+          "reliability": 1.0,
+          "causal_alignment": 0.9469,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:09:20.422653",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_027.json",
+            "task_id": "data/training/task_027.json",
+            "task_path": "data/training\\task_027.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 25,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:09:23.112451",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_028.json",
+            "task_id": "data/training/task_028.json",
+            "task_path": "data/training\\task_028.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 26,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:09:26.036982",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_029.json",
+            "task_id": "data/training/task_029.json",
+            "task_path": "data/training\\task_029.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 27,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9098,
+          "contradiction_score": 0.0979,
+          "reliability": 1.0,
+          "causal_alignment": 0.8938,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-01T18:10:47.593802",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_030.json",
+            "task_id": "data/training/task_030.json",
+            "task_path": "data/training\\task_030.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 28,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9619,
+          "contradiction_score": 0.0382,
+          "reliability": 1.0,
+          "causal_alignment": 0.9611,
+          "semantic_consistency": 0.96,
+          "observed_at": "2026-06-02T15:01:32.250968",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_037.json",
+            "task_id": "data/training/task_037.json",
+            "task_path": "data/training\\task_037.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 29,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.9619,
+          "contradiction_score": 0.0382,
+          "reliability": 1.0,
+          "causal_alignment": 0.9611,
+          "semantic_consistency": 0.96,
+          "observed_at": "2026-06-02T15:01:38.199309",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_038.json",
+            "task_id": "data/training/task_038.json",
+            "task_path": "data/training\\task_038.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 30,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 0.8928,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-02T19:52:16.754197",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_087.json",
+            "task_id": "data/training/task_087.json",
+            "task_path": "data/training\\task_087.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-02T19:52:22.212264",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_079.json",
+            "task_id": "data/training/task_079.json",
+            "task_path": "data/training\\task_079.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 31,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 0.9378,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-02T19:52:39.297490",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_089.json",
+            "task_id": "data/training/task_089.json",
+            "task_path": "data/training\\task_089.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 1,
+            "reinforcement_bonus": 0.045,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8467,
+          "contradiction_score": 0.1548,
+          "reliability": 1.0,
+          "causal_alignment": 0.8505,
+          "semantic_consistency": 0.92,
+          "observed_at": "2026-06-02T20:14:36.925114",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_080.json",
+            "task_id": "data/training/task_080.json",
+            "task_path": "data/training\\task_080.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "task_score_below_success_threshold",
+            "reinforcement_count": 20,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.6954,
+          "contradiction_score": 0.3059,
+          "reliability": 0.9604,
+          "causal_alignment": 0.689,
+          "semantic_consistency": 0.68,
+          "observed_at": "2026-06-02T20:14:46.604289",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_093.json",
+            "task_id": "data/training/task_093.json",
+            "task_path": "data/training\\task_093.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "task_score_below_success_threshold",
+            "reinforcement_count": 2,
+            "reinforcement_bonus": 0.09,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 1.0,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-02T20:14:53.092826",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_094.json",
+            "task_id": "data/training/task_094.json",
+            "task_path": "data/training\\task_094.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 4,
+            "reinforcement_bonus": 0.18,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 1.0,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-02T22:31:59.348796",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_095.json",
+            "task_id": "data/training/task_095.json",
+            "task_path": "data/training\\task_095.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 5,
+            "reinforcement_bonus": 0.225,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7334,
+          "contradiction_score": 0.2677,
+          "reliability": 1.0,
+          "causal_alignment": 0.7278,
+          "semantic_consistency": 0.72,
+          "observed_at": "2026-06-02T22:32:02.116147",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_086.json",
+            "task_id": "data/training/task_086.json",
+            "task_path": "data/training\\task_086.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "task_score_below_success_threshold",
+            "reinforcement_count": 6,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7334,
+          "contradiction_score": 0.2677,
+          "reliability": 1.0,
+          "causal_alignment": 0.7278,
+          "semantic_consistency": 0.72,
+          "observed_at": "2026-06-02T23:02:06.858010",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_100.json",
+            "task_id": "data/training/task_100.json",
+            "task_path": "data/training\\task_100.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "task_score_below_success_threshold",
+            "reinforcement_count": 7,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 1.0,
+          "contradiction_score": 0.0,
+          "reliability": 1.0,
+          "causal_alignment": 1.0,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-02T23:07:17.202097",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_057.json",
+            "task_id": "data/training/task_057.json",
+            "task_path": "data/training\\task_057.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 32,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8858,
+          "contradiction_score": 0.1147,
+          "reliability": 1.0,
+          "causal_alignment": 0.8834,
+          "semantic_consistency": 0.88,
+          "observed_at": "2026-06-02T23:12:17.683459",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_058.json",
+            "task_id": "data/training/task_058.json",
+            "task_path": "data/training\\task_058.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 38,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8858,
+          "contradiction_score": 0.1147,
+          "reliability": 1.0,
+          "causal_alignment": 0.8834,
+          "semantic_consistency": 0.88,
+          "observed_at": "2026-06-02T23:17:23.801087",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_059.json",
+            "task_id": "data/training/task_059.json",
+            "task_path": "data/training\\task_059.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 39,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8477,
+          "contradiction_score": 0.153,
+          "reliability": 1.0,
+          "causal_alignment": 0.8445,
+          "semantic_consistency": 0.84,
+          "observed_at": "2026-06-02T23:18:44.159064",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_060.json",
+            "task_id": "data/training/task_060.json",
+            "task_path": "data/training\\task_060.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 27,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8477,
+          "contradiction_score": 0.153,
+          "reliability": 1.0,
+          "causal_alignment": 0.8445,
+          "semantic_consistency": 0.84,
+          "observed_at": "2026-06-02T23:25:50.678321",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_061.json",
+            "task_id": "data/training/task_061.json",
+            "task_path": "data/training\\task_061.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 28,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8477,
+          "contradiction_score": 0.153,
+          "reliability": 1.0,
+          "causal_alignment": 0.8445,
+          "semantic_consistency": 0.84,
+          "observed_at": "2026-06-02T23:39:42.119777",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_062.json",
+            "task_id": "data/training/task_062.json",
+            "task_path": "data/training\\task_062.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 29,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8096,
+          "contradiction_score": 0.1912,
+          "reliability": 1.0,
+          "causal_alignment": 0.8056,
+          "semantic_consistency": 0.8,
+          "observed_at": "2026-06-02T23:43:28.607517",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_063.json",
+            "task_id": "data/training/task_063.json",
+            "task_path": "data/training\\task_063.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 22,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.8096,
+          "contradiction_score": 0.1912,
+          "reliability": 1.0,
+          "causal_alignment": 0.8056,
+          "semantic_consistency": 0.8,
+          "observed_at": "2026-06-03T00:00:26.529783",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_064.json",
+            "task_id": "data/training/task_064.json",
+            "task_path": "data/training\\task_064.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 23,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 1.0,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-03T00:01:55.990381",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_065.json",
+            "task_id": "data/training/task_065.json",
+            "task_path": "data/training\\task_065.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 15,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 1.0,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-03T00:16:36.449497",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_066.json",
+            "task_id": "data/training/task_066.json",
+            "task_path": "data/training\\task_066.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "",
+            "reinforcement_count": 16,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "independent_execution_replication",
+          "support_score": 0.6573,
+          "contradiction_score": 0.3442,
+          "reliability": 1.0,
+          "causal_alignment": 0.6501,
+          "semantic_consistency": 0.64,
+          "observed_at": "2026-06-06T15:11:44.806029",
+          "metadata": {
+            "evidence_id": "cross_task_replication:object_identity_preservation:data/training/task_101.json",
+            "task_id": "data/training/task_101.json",
+            "task_path": "data/training\\task_101.json",
+            "collector": "knowledge_replication_ledger_hydration",
+            "independent_task": true,
+            "replication_is_evidence_not_truth": true,
+            "hydrated_from_persistent_ledger": true,
+            "conditions": {},
+            "failure_reason": "task_score_below_success_threshold",
+            "reinforcement_count": 9,
+            "reinforcement_bonus": 0.27,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "evolutionary_trait_observation",
+          "support_score": 0.4141,
+          "contradiction_score": 0.5629,
+          "reliability": 0.54,
+          "causal_alignment": 0.3656,
+          "semantic_consistency": 0.5023,
+          "observed_at": "2026-06-14T01:24:11.849656",
+          "metadata": {
+            "evidence_id": "evolutionary_trait_observation:object_identity_preservation:2:0.4141",
+            "trait_state": "decaying",
+            "survival_is_not_truth": true,
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "evolutionary_trait_survival_history",
+          "support_score": 0.4454,
+          "contradiction_score": 0.552,
+          "reliability": 0.62,
+          "causal_alignment": 0.42,
+          "semantic_consistency": 0.5016,
+          "observed_at": "2026-06-14T01:23:53.043572",
+          "metadata": {
+            "evidence_id": "trait_survival:object_identity_preservation:0:0.3929:0.492",
+            "trait_state": "decaying",
+            "semantic_key": "object_identity_preservation",
+            "survival_is_not_truth": true,
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "evolutionary_trait_survival_history",
+          "support_score": 0.4325,
+          "contradiction_score": 0.5662,
+          "reliability": 0.77,
+          "causal_alignment": 0.3656,
+          "semantic_consistency": 0.501,
+          "observed_at": "2026-06-14T01:24:01.215711",
+          "metadata": {
+            "evidence_id": "trait_survival:object_identity_preservation:1:0.3929:0.4857",
+            "trait_state": "decaying",
+            "semantic_key": "object_identity_preservation",
+            "survival_is_not_truth": true,
+            "reinforcement_count": 1,
+            "reinforcement_bonus": 0.045,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "semantic_abstraction_observation",
+          "support_score": 0.72,
+          "contradiction_score": 0.0,
+          "reliability": 0.58,
+          "causal_alignment": 0.5,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-14T01:24:11.780869",
+          "metadata": {
+            "evidence_id": "semantic_abstraction:object_identity_preservation:0:1.0",
+            "raw_confidence": 1.0,
+            "semantic_key": "object_identity_preservation",
+            "confidence_is_not_truth": true,
+            "semantic_observation_is_not_causal_proof": true,
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "semantic_abstraction_observation",
+          "support_score": 0.6552,
+          "contradiction_score": 0.0315,
+          "reliability": 0.67,
+          "causal_alignment": 0.5,
+          "semantic_consistency": 0.91,
+          "observed_at": "2026-06-14T01:24:11.780869",
+          "metadata": {
+            "evidence_id": "semantic_abstraction:object_identity_preservation:1:0.91",
+            "raw_confidence": 0.91,
+            "semantic_key": "object_identity_preservation",
+            "confidence_is_not_truth": true,
+            "semantic_observation_is_not_causal_proof": true,
+            "reinforcement_count": 1,
+            "reinforcement_bonus": 0.045,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "semantic_abstraction_observation",
+          "support_score": 0.72,
+          "contradiction_score": 0.0,
+          "reliability": 0.76,
+          "causal_alignment": 0.5,
+          "semantic_consistency": 1.0,
+          "observed_at": "2026-06-14T01:24:11.780869",
+          "metadata": {
+            "evidence_id": "semantic_abstraction:object_identity_preservation:2:1.0",
+            "raw_confidence": 1.0,
+            "semantic_key": "object_identity_preservation",
+            "confidence_is_not_truth": true,
+            "semantic_observation_is_not_causal_proof": true,
+            "reinforcement_count": 2,
+            "reinforcement_bonus": 0.09,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "semantic_abstraction_observation",
+          "support_score": 0.6552,
+          "contradiction_score": 0.0315,
+          "reliability": 0.85,
+          "causal_alignment": 0.5,
+          "semantic_consistency": 0.91,
+          "observed_at": "2026-06-14T01:24:11.780869",
+          "metadata": {
+            "evidence_id": "semantic_abstraction:object_identity_preservation:3:0.91",
+            "raw_confidence": 0.91,
+            "semantic_key": "object_identity_preservation",
+            "confidence_is_not_truth": true,
+            "semantic_observation_is_not_causal_proof": true,
+            "reinforcement_count": 3,
+            "reinforcement_bonus": 0.135,
+            "reinforcement_applied": true,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "execution_validation",
+          "support_score": 0.7715,
+          "contradiction_score": 0.2294,
+          "reliability": 0.8632,
+          "causal_alignment": 0.7667,
+          "semantic_consistency": 0.76,
+          "observed_at": "2026-06-14T01:24:11.780869",
+          "metadata": {
+            "evidence_id": "execution_validation:object_identity_preservation:{'value': 'data/training\\\\task_089.json', 'priority': 'medium', 'timestamp': '2026-06-14 01:24:09.119147'}",
+            "semantic_key": "object_identity_preservation",
+            "task_path": "{'value': 'data/training\\\\task_089.json', 'priority': 'medium', 'timestamp': '2026-06-14 01:24:09.119147'}",
+            "accuracy": 0.76,
+            "structural_score": 0.76,
+            "final_score": 0.808,
+            "execution_validation_is_not_truth": true,
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "mutation_rehearsal",
+          "support_score": 0.3654,
+          "contradiction_score": 0.5227,
+          "reliability": 0.62,
+          "causal_alignment": 0.2205,
+          "semantic_consistency": 0.5399,
+          "observed_at": "2026-06-14T01:24:11.849656",
+          "metadata": {
+            "evidence_id": "mutation_rehearsal:mutation_rehearsal:53",
+            "simulation_state": "ambiguous",
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "causal_attestation",
+          "support_score": 0.5588,
+          "contradiction_score": 0.4412,
+          "reliability": 0.78,
+          "causal_alignment": 0.5234,
+          "semantic_consistency": 0.6076,
+          "observed_at": "2026-06-14T01:24:11.849656",
+          "metadata": {
+            "evidence_id": "causal_attestation:mutation_rehearsal:53",
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        },
+        {
+          "concept": "object_identity_preservation",
+          "source": "constructive_reasoning",
+          "support_score": 0.3115,
+          "contradiction_score": 0.4901,
+          "reliability": 0.72,
+          "causal_alignment": 0.2205,
+          "semantic_consistency": 0.5375,
+          "observed_at": "2026-06-14T01:24:11.849656",
+          "metadata": {
+            "evidence_id": "constructive_reasoning:mutation_rehearsal:53",
+            "reinforcement_count": 0,
+            "reinforcement_bonus": 0.0,
+            "reinforcement_applied": false,
+            "reinforcement_is_not_truth": true
+          }
+        }
+      ],
+      "causal_history": [
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T17:53:58.026971"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9469,
+          "support_score": 0.9549,
+          "observed_at": "2026-06-01T17:53:59.512118"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T17:54:01.522257"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T17:54:03.161825"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9469,
+          "support_score": 0.9549,
+          "observed_at": "2026-06-01T17:54:06.832384"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T17:54:09.114079"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T17:54:10.775553"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T17:54:13.556151"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T17:55:22.068633"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T17:55:23.269234"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T17:55:24.875994"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T17:55:26.576428"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9469,
+          "support_score": 0.9549,
+          "observed_at": "2026-06-01T18:02:56.221682"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9469,
+          "support_score": 0.9549,
+          "observed_at": "2026-06-01T18:02:57.427791"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:02:59.135117"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:03:01.548703"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:03:04.297173"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:04:20.993027"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:04:22.353592"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T18:04:24.788222"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:05:19.647247"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:05:21.739728"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:05:25.086309"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9611,
+          "support_score": 0.9619,
+          "observed_at": "2026-06-01T18:09:15.173756"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9611,
+          "support_score": 0.9619,
+          "observed_at": "2026-06-01T18:09:16.657201"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9469,
+          "support_score": 0.9549,
+          "observed_at": "2026-06-01T18:09:20.422653"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-01T18:09:23.112451"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T18:09:26.036982"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8938,
+          "support_score": 0.9098,
+          "observed_at": "2026-06-01T18:10:47.593802"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9611,
+          "support_score": 0.9619,
+          "observed_at": "2026-06-02T15:01:32.250968"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.9611,
+          "support_score": 0.9619,
+          "observed_at": "2026-06-02T15:01:38.199309"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-02T19:52:16.754197"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-02T19:52:22.212264"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-02T19:52:39.297490"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8505,
+          "support_score": 0.8467,
+          "observed_at": "2026-06-02T20:14:36.925114"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.689,
+          "support_score": 0.6954,
+          "observed_at": "2026-06-02T20:14:46.604289"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-02T20:14:53.092826"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-02T22:31:59.348796"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7278,
+          "support_score": 0.7334,
+          "observed_at": "2026-06-02T22:32:02.116147"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7278,
+          "support_score": 0.7334,
+          "observed_at": "2026-06-02T23:02:06.858010"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 1.0,
+          "support_score": 1.0,
+          "observed_at": "2026-06-02T23:07:17.202097"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8834,
+          "support_score": 0.8858,
+          "observed_at": "2026-06-02T23:12:17.683459"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8834,
+          "support_score": 0.8858,
+          "observed_at": "2026-06-02T23:17:23.801087"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8445,
+          "support_score": 0.8477,
+          "observed_at": "2026-06-02T23:18:44.159064"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8445,
+          "support_score": 0.8477,
+          "observed_at": "2026-06-02T23:25:50.678321"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8445,
+          "support_score": 0.8477,
+          "observed_at": "2026-06-02T23:39:42.119777"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8056,
+          "support_score": 0.8096,
+          "observed_at": "2026-06-02T23:43:28.607517"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.8056,
+          "support_score": 0.8096,
+          "observed_at": "2026-06-03T00:00:26.529783"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-03T00:01:55.990381"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-03T00:16:36.449497"
+        },
+        {
+          "source": "independent_execution_replication",
+          "causal_alignment": 0.6501,
+          "support_score": 0.6573,
+          "observed_at": "2026-06-06T15:11:44.806029"
+        },
+        {
+          "source": "evolutionary_trait_observation",
+          "causal_alignment": 0.3656,
+          "support_score": 0.4141,
+          "observed_at": "2026-06-14T01:24:11.849656"
+        },
+        {
+          "source": "evolutionary_trait_survival_history",
+          "causal_alignment": 0.42,
+          "support_score": 0.4454,
+          "observed_at": "2026-06-14T01:23:53.043572"
+        },
+        {
+          "source": "evolutionary_trait_survival_history",
+          "causal_alignment": 0.3656,
+          "support_score": 0.4325,
+          "observed_at": "2026-06-14T01:24:01.215711"
+        },
+        {
+          "source": "semantic_abstraction_observation",
+          "causal_alignment": 0.5,
+          "support_score": 0.72,
+          "observed_at": "2026-06-14T01:24:11.780869"
+        },
+        {
+          "source": "semantic_abstraction_observation",
+          "causal_alignment": 0.5,
+          "support_score": 0.6552,
+          "observed_at": "2026-06-14T01:24:11.780869"
+        },
+        {
+          "source": "execution_validation",
+          "causal_alignment": 0.7667,
+          "support_score": 0.7715,
+          "observed_at": "2026-06-14T01:24:11.780869"
+        },
+        {
+          "source": "mutation_rehearsal",
+          "causal_alignment": 0.2205,
+          "support_score": 0.3654,
+          "observed_at": "2026-06-14T01:24:11.849656"
+        },
+        {
+          "source": "causal_attestation",
+          "causal_alignment": 0.5234,
+          "support_score": 0.5588,
+          "observed_at": "2026-06-14T01:24:11.849656"
+        },
+        {
+          "source": "constructive_reasoning",
+          "causal_alignment": 0.2205,
+          "support_score": 0.3115,
+          "observed_at": "2026-06-14T01:24:11.849656"
+        },
+        {
+          "source": "truth_commit_aggregate",
+          "causal_alignment": 0.7667,
+          "evidence_strength": 0.9248
+        }
+      ],
+      "generalization_score": 0.9458,
+      "identity_impact": {
+        "integration_state": "IDENTITY_REINFORCING_TRUTH",
+        "integration_safe": true,
+        "strengthens_identity": true,
+        "identity_stability_state": "stable",
+        "identity_continuity": 0.8533,
+        "identity_delta": 0.0,
+        "semantic_drift": 0.0,
+        "adaptive_identity_integration": {
+          "system": "adaptive_identity_integration_engine",
+          "phase": "6.6",
+          "concept": "object_identity_preservation",
+          "adaptive_tolerance_enabled": false,
+          "truth_candidate_count": 0,
+          "truth_candidate_pressure_threshold": 2,
+          "semantic_consistency": 0.8839,
+          "adaptive_contradiction_governance": {
+            "system": "adaptive_contradiction_governance",
+            "phase": "5.7",
+            "base_threshold": 0.1,
+            "dynamic_threshold": 0.12,
+            "threshold_cap": 0.12000000000000001,
+            "threshold_bonus": 0.02,
+            "observed_count": 51,
+            "validation_count": 54,
+            "causal_stability": 0.8976,
+            "contextual_authority": 0.7506,
+            "recovery_streak": 0,
+            "maturity_bonus": 0.0159,
+            "validation_bonus": 0.0135,
+            "causal_bonus": 0.0035,
+            "context_bonus": 0.0012,
+            "recovery_bonus": 0.0,
+            "contradiction_score": 0.1095,
+            "contradiction_below_dynamic_threshold": true,
+            "contradiction_gap": 0.0,
+            "contradiction_review_required": false,
+            "within_soft_review_zone": false,
+            "contradiction_review_severity": null
+          },
+          "contradiction_supported_by_adaptive_governance": true,
+          "generalization_score": 0.9458,
+          "concept_strengthens_existing_truths": false,
+          "identity_tolerance_bonus": 0.0,
+          "identity_continuity_tolerance_bonus": 0.0,
+          "identity_resistance_reduction": 0.0,
+          "effective_maximum_semantic_drift": 0.58,
+          "effective_minimum_identity_continuity": 0.62,
+          "identity_integration_reward": 0.0146,
+          "bounded_adaptation_only": true,
+          "semantic_containment_bypass_forbidden": true,
+          "high_drift_rehearsal_bypass_forbidden": true,
+          "high_drift_recovery_bypass_forbidden": true,
+          "automatic_truth_commit_forbidden": true
+        }
+      },
+      "parent_truths": [],
+      "evidence_sources": [
+        "causal_attestation",
+        "constructive_reasoning",
+        "evolutionary_trait_observation",
+        "evolutionary_trait_survival_history",
+        "execution_validation",
+        "independent_execution_replication",
+        "mutation_rehearsal",
+        "semantic_abstraction_observation"
+      ],
+      "verification_history": [
+        {
+          "decision": "TRUTH_COMMITTED",
+          "reasons": [],
+          "revision": 1,
+          "timestamp": "2026-06-14T01:24:16.715128"
+        }
+      ],
+      "revision": 1,
+      "reusable": true,
+      "metadata": {
+        "constitutional_invariants": {
+          "survival_is_not_truth": true,
+          "high_reputation_is_not_truth": true,
+          "confidence_is_not_truth": true,
+          "truth_requires_evidence": true,
+          "truth_requires_trials": true,
+          "truth_requires_validation": true
+        },
+        "truth_requires_reviewable_evidence": true,
+        "counterevidence_can_revoke_truth": true,
+        "knowledge_generalization_state": "CROSS_TASK_GENERALIZED",
+        "causal_graph_alignment": {
+          "system": "causal_graph",
+          "concept": "object_identity_preservation",
+          "alignment_score": 0.8321,
+          "causal_spine_alignment": 0.8321,
+          "components": {
+            "evidence_consistency": 0.8401,
+            "cross_task_stability": 1.0,
+            "contradiction_resistance": 0.863,
+            "dependency_coherence": 0.6253
+          },
+          "evidence_count": 124,
+          "originating_task_count": 51,
+          "explanation_path": [
+            "concept:object_identity_preservation",
+            "truth:object_identity_preservation"
+          ],
+          "alignment_ready": true
+        },
+        "causal_graph_validation": {
+          "system": "causal_graph_validator",
+          "concept": "object_identity_preservation",
+          "graph_observed": true,
+          "required_relationships": [
+            {
+              "source": "symmetry_preservation",
+              "target": "object_identity_preservation"
+            }
+          ],
+          "downstream_relationships": [],
+          "downstream_relationships_are_diagnostic_only": true,
+          "relationship_checks": [
+            {
+              "source": "symmetry_preservation",
+              "target": "object_identity_preservation",
+              "minimum_causal_strength": 0.3,
+              "causal_strength": 0.888,
+              "edge_observed": false,
+              "current_edge_supported": false,
+              "accumulated_support_ready": false,
+              "dependency_proof_ready": true,
+              "process_dependency_proof": {
+                "proof_source": "TYPED_PROCESS_DEPENDENCY_MEMORY",
+                "typed_process_dependency_chain_supported": true,
+                "resolved_dependency_chain": [
+                  "object_identity_preservation",
+                  "object_persistence",
+                  "identity_continuity",
+                  "object_core",
+                  "shape_preservation"
+                ],
+                "dependency_confidence": 0.888,
+                "dependency_chain_depth": 4,
+                "dependency_chain_coverage": 1.0,
+                "missing_dependencies": [],
+                "minimum_dependency_confidence": 0.85,
+                "minimum_dependency_chain_depth": 4
+              },
+              "support_source": "TYPED_PROCESS_DEPENDENCY_MEMORY",
+              "passed": true,
+              "causal_support": {
+                "source": "symmetry_preservation",
+                "target": "object_identity_preservation",
+                "observation_count": 0,
+                "supporting_observation_count": 0,
+                "conflicting_observation_count": 0,
+                "cumulative_causal_strength": 0.0,
+                "support_maturity": 0.0,
+                "support_reliability": 0.0,
+                "causal_support_score": 0.0,
+                "average_causal_strength": 0.0,
+                "minimum_supporting_observations": 3,
+                "remaining_supporting_observations": 3,
+                "causal_support_ready": false
+              },
+              "causal_support_score": 0.0,
+              "causal_support_ready": false,
+              "matched_edge": null
+            }
+          ],
+          "causal_consistency_score": 0.888,
+          "causal_support_score": 0.0,
+          "minimum_causal_strength": 0.3,
+          "validation_ready": true,
+          "blocked_relationships": [],
+          "accumulating_relationships": [],
+          "process_dependency_proof_chains": [
+            {
+              "proof_source": "TYPED_PROCESS_DEPENDENCY_MEMORY",
+              "typed_process_dependency_chain_supported": true,
+              "resolved_dependency_chain": [
+                "object_identity_preservation",
+                "object_persistence",
+                "identity_continuity",
+                "object_core",
+                "shape_preservation"
+              ],
+              "dependency_confidence": 0.888,
+              "dependency_chain_depth": 4,
+              "dependency_chain_coverage": 1.0,
+              "missing_dependencies": [],
+              "minimum_dependency_confidence": 0.85,
+              "minimum_dependency_chain_depth": 4
+            }
+          ],
+          "causal_support_accumulator": {
+            "system": "causal_evidence_accumulator",
+            "minimum_supporting_observations": 3,
+            "persistent_storage_enabled": true,
+            "storage_path": "runtime_data\\causal_evidence_ledger.json",
+            "relationships": [
+              {
+                "source": "density_preservation",
+                "target": "topology_preservation",
+                "observation_count": 80,
+                "supporting_observation_count": 80,
+                "conflicting_observation_count": 0,
+                "cumulative_causal_strength": 48.00000000000007,
+                "support_maturity": 1.0,
+                "support_reliability": 1.0,
+                "causal_support_score": 1.0,
+                "average_causal_strength": 0.6,
+                "minimum_supporting_observations": 3,
+                "remaining_supporting_observations": 0,
+                "causal_support_ready": true
+              },
+              {
+                "source": "topology_preservation",
+                "target": "symmetry_preservation",
+                "observation_count": 52,
+                "supporting_observation_count": 52,
+                "conflicting_observation_count": 0,
+                "cumulative_causal_strength": 31.20000000000003,
+                "support_maturity": 1.0,
+                "support_reliability": 1.0,
+                "causal_support_score": 1.0,
+                "average_causal_strength": 0.6,
+                "minimum_supporting_observations": 3,
+                "remaining_supporting_observations": 0,
+                "causal_support_ready": true
+              }
+            ]
+          },
+          "validation_state": "CAUSAL_GRAPH_VALIDATED",
+          "semantic_sequence_is_not_causal_proof": true,
+          "automatic_truth_commit_forbidden": true
+        },
+        "causal_explanation": {
+          "concept": "object_identity_preservation",
+          "why": [
+            "observed in 51 tasks",
+            "contradiction requires review",
+            "dependency coherence requires more evidence",
+            "causal explanation path is preserved"
+          ],
+          "causal_alignment": {
+            "system": "causal_graph",
+            "concept": "object_identity_preservation",
+            "alignment_score": 0.8321,
+            "causal_spine_alignment": 0.8321,
+            "components": {
+              "evidence_consistency": 0.8401,
+              "cross_task_stability": 1.0,
+              "contradiction_resistance": 0.863,
+              "dependency_coherence": 0.6253
+            },
+            "evidence_count": 124,
+            "originating_task_count": 51,
+            "explanation_path": [
+              "concept:object_identity_preservation",
+              "truth:object_identity_preservation"
+            ],
+            "alignment_ready": true
+          },
+          "explanation_path": [
+            "concept:object_identity_preservation",
+            "truth:object_identity_preservation"
+          ]
+        },
+        "causal_validation": {
+          "system": "causal_validation_engine",
+          "hypothesis": {
+            "hypothesis_id": "causal:object_identity_preservation->object_identity_preservation",
+            "source_concept": "object_identity_preservation",
+            "target_concept": "object_identity_preservation",
+            "evidence_count": 62,
+            "confidence": 0.8659,
+            "validation_state": "VALIDATED",
+            "contradiction_score": 0.137,
+            "supporting_tasks": [
+              "causal_attestation",
+              "data/training/task_002.json",
+              "data/training/task_003.json",
+              "data/training/task_004.json",
+              "data/training/task_006.json",
+              "data/training/task_007.json",
+              "data/training/task_008.json",
+              "data/training/task_009.json",
+              "data/training/task_010.json",
+              "data/training/task_011.json",
+              "data/training/task_012.json",
+              "data/training/task_013.json",
+              "data/training/task_014.json",
+              "data/training/task_015.json",
+              "data/training/task_016.json",
+              "data/training/task_017.json",
+              "data/training/task_022.json",
+              "data/training/task_023.json",
+              "data/training/task_024.json",
+              "data/training/task_025.json",
+              "data/training/task_026.json",
+              "data/training/task_027.json",
+              "data/training/task_028.json",
+              "data/training/task_029.json",
+              "data/training/task_030.json",
+              "data/training/task_031.json",
+              "data/training/task_032.json",
+              "data/training/task_034.json",
+              "data/training/task_035.json",
+              "data/training/task_036.json",
+              "data/training/task_037.json",
+              "data/training/task_038.json",
+              "data/training/task_057.json",
+              "data/training/task_058.json",
+              "data/training/task_059.json",
+              "data/training/task_060.json",
+              "data/training/task_061.json",
+              "data/training/task_062.json",
+              "data/training/task_063.json",
+              "data/training/task_064.json",
+              "data/training/task_065.json",
+              "data/training/task_066.json",
+              "data/training/task_079.json",
+              "data/training/task_080.json",
+              "data/training/task_086.json",
+              "data/training/task_087.json",
+              "data/training/task_089.json",
+              "data/training/task_093.json",
+              "data/training/task_094.json",
+              "data/training/task_095.json",
+              "data/training/task_100.json",
+              "data/training/task_101.json",
+              "execution_validation",
+              "semantic_abstraction_observation"
+            ],
+            "rejecting_tasks": [
+              "constructive_reasoning",
+              "evolutionary_trait_observation",
+              "evolutionary_trait_survival_history",
+              "mutation_rehearsal"
+            ]
+          },
+          "validation_score": 0.8659,
+          "validation_ready": true,
+          "validation_state": "VALIDATED",
+          "minimum_validation_score": 0.75,
+          "cross_task_stability": 1.0,
+          "contradiction_resistance": 0.863,
+          "dependency_coherence": 0.6667,
+          "promotion_dependency_score": 0.9085,
+          "promotion_dependency_bonus": 0.0271,
+          "dependency_promotion_blockers": [],
+          "dependency_promotion_evidence": {
+            "dependency_confidence": 0.888,
+            "dependency_chain_depth": 4,
+            "dependency_chain_coverage": 1.0,
+            "missing_dependencies": [],
+            "dependency_chain_complete_for_promotion": true
+          },
+          "context_consistency": 0.8,
+          "identity_compatibility": 1.0,
+          "counterfactual_validation": {
+            "hypothesis_id": "causal:object_identity_preservation->object_identity_preservation",
+            "counterfactual_score": 0.7,
+            "counterfactual_state": "COUNTERFACTUAL_PENDING_GRAPH_RELATION_OBSERVED",
+            "tested_question": "if object_identity_preservation disappears, does object_identity_preservation remain?"
+          },
+          "spurious_causality": {
+            "hypothesis_id": "causal:object_identity_preservation->object_identity_preservation",
+            "relationship_state": "VALID_CAUSAL_RELATIONSHIP",
+            "spurious": false,
+            "explicit_graph_relation_observed": true,
+            "counterfactual_validation": {
+              "hypothesis_id": "causal:object_identity_preservation->object_identity_preservation",
+              "counterfactual_score": 0.7,
+              "counterfactual_state": "COUNTERFACTUAL_PENDING_GRAPH_RELATION_OBSERVED",
+              "tested_question": "if object_identity_preservation disappears, does object_identity_preservation remain?"
+            },
+            "diagnostic_metrics": {
+              "cross_task_stability": 1.0,
+              "contradiction_resistance": 0.863,
+              "dependency_coherence": 0.6524,
+              "promotion_dependency_score": 0.9085,
+              "promotion_dependency_bonus": 0.0271,
+              "dependency_promotion_blockers": [],
+              "dependency_promotion_evidence": {
+                "dependency_confidence": 0.888,
+                "dependency_chain_depth": 4,
+                "dependency_chain_coverage": 1.0,
+                "missing_dependencies": [],
+                "dependency_chain_complete_for_promotion": true
+              },
+              "context_consistency": 0.8,
+              "identity_compatibility": 1.0,
+              "scene_context_consistency": 0.8
+            }
+          },
+          "supporting_tasks": [
+            "causal_attestation",
+            "data/training/task_002.json",
+            "data/training/task_003.json",
+            "data/training/task_004.json",
+            "data/training/task_006.json",
+            "data/training/task_007.json",
+            "data/training/task_008.json",
+            "data/training/task_009.json",
+            "data/training/task_010.json",
+            "data/training/task_011.json",
+            "data/training/task_012.json",
+            "data/training/task_013.json",
+            "data/training/task_014.json",
+            "data/training/task_015.json",
+            "data/training/task_016.json",
+            "data/training/task_017.json",
+            "data/training/task_022.json",
+            "data/training/task_023.json",
+            "data/training/task_024.json",
+            "data/training/task_025.json",
+            "data/training/task_026.json",
+            "data/training/task_027.json",
+            "data/training/task_028.json",
+            "data/training/task_029.json",
+            "data/training/task_030.json",
+            "data/training/task_031.json",
+            "data/training/task_032.json",
+            "data/training/task_034.json",
+            "data/training/task_035.json",
+            "data/training/task_036.json",
+            "data/training/task_037.json",
+            "data/training/task_038.json",
+            "data/training/task_057.json",
+            "data/training/task_058.json",
+            "data/training/task_059.json",
+            "data/training/task_060.json",
+            "data/training/task_061.json",
+            "data/training/task_062.json",
+            "data/training/task_063.json",
+            "data/training/task_064.json",
+            "data/training/task_065.json",
+            "data/training/task_066.json",
+            "data/training/task_079.json",
+            "data/training/task_080.json",
+            "data/training/task_086.json",
+            "data/training/task_087.json",
+            "data/training/task_089.json",
+            "data/training/task_093.json",
+            "data/training/task_094.json",
+            "data/training/task_095.json",
+            "data/training/task_100.json",
+            "data/training/task_101.json",
+            "execution_validation",
+            "semantic_abstraction_observation"
+          ],
+          "rejecting_tasks": [
+            "constructive_reasoning",
+            "evolutionary_trait_observation",
+            "evolutionary_trait_survival_history",
+            "mutation_rehearsal"
+          ],
+          "how_we_know": [
+            "validated across 54 tasks",
+            "survived contradiction review",
+            "counterfactual testing remains provisional",
+            "dependency coherence requires more evidence",
+            "validated by causal graph analysis"
+          ],
+          "context_binding": {
+            "system": "context_binding_engine",
+            "concept": "object_identity_preservation",
+            "context": "identity_preservation",
+            "mechanisms": [
+              "attribute_remapping",
+              "identity_continuity",
+              "lineage_continuity",
+              "shape_equivalence",
+              "topology_continuity"
+            ],
+            "supporting_mechanisms": [
+              "identity_continuity",
+              "lineage_continuity"
+            ],
+            "binding_chain": [
+              "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+              "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+            ],
+            "why_valid": [
+              "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+              "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+            ],
+            "why_invalid": [],
+            "mechanism_coverage": 0.6667,
+            "semantic_context_score": 0.9175,
+            "context_hierarchy_score": 1.0,
+            "contextual_truth_score": 0.7263,
+            "causal_validation_score": 0.8659,
+            "context_binding_score": 0.7957,
+            "binding_state": "CONTEXT_BOUND"
+          }
+        },
+        "contextual_truth": {
+          "system": "contextual_truth_engine",
+          "truth": "object_identity_preservation",
+          "context_signature": "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent",
+          "context_signature_fields": {
+            "signature_id": "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent",
+            "task_cluster": "identity_preservation",
+            "transformation_family": "identity_preservation",
+            "object_count": "1",
+            "topology_behavior": "topology_preserved",
+            "color_behavior": "color_reassigned",
+            "symmetry_behavior": "unknown",
+            "size_behavior": "size_preserved",
+            "identity_behavior": "identity_preserved",
+            "propagation_behavior": "propagation_absent"
+          },
+          "valid_contexts": [
+            "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent"
+          ],
+          "invalid_contexts": [],
+          "context_confidence": 0.8631,
+          "contextual_truth_score": 0.7506,
+          "base_contextual_truth_score": 0.7263,
+          "context_binding_score": 0.7957,
+          "transfer_reliability": 1.0,
+          "status": "CONTEXT_VALIDATED",
+          "contextual_consistency": true,
+          "confidence_components": {
+            "truth": "object_identity_preservation",
+            "contextual_truth_score": 0.7506,
+            "contextual_confidence": 0.8631,
+            "causal_validation_score": 0.8659,
+            "context_stability": 0.3333,
+            "contradiction_resistance": 1.0,
+            "transfer_reliability": 1.0,
+            "identity_compatibility": 0.706,
+            "contextual_consistency": false,
+            "status": "CONTEXT_REVIEW_REQUIRED",
+            "base_contextual_truth_score": 0.7263,
+            "context_binding_score": 0.7957,
+            "context_binding_state": "CONTEXT_BOUND"
+          },
+          "when_valid": [
+            "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent"
+          ],
+          "when_invalid": [],
+          "why_valid": [
+            "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+            "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+          ],
+          "why_invalid": [],
+          "context_binding": {
+            "system": "context_binding_engine",
+            "concept": "object_identity_preservation",
+            "context": "identity_preservation",
+            "mechanisms": [
+              "attribute_remapping",
+              "identity_continuity",
+              "lineage_continuity",
+              "shape_equivalence",
+              "topology_continuity"
+            ],
+            "supporting_mechanisms": [
+              "identity_continuity",
+              "lineage_continuity"
+            ],
+            "binding_chain": [
+              "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+              "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+            ],
+            "why_valid": [
+              "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+              "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+            ],
+            "why_invalid": [],
+            "mechanism_coverage": 0.6667,
+            "semantic_context_score": 0.9175,
+            "context_hierarchy_score": 1.0,
+            "contextual_truth_score": 0.7263,
+            "causal_validation_score": 0.8659,
+            "context_binding_score": 0.7957,
+            "binding_state": "CONTEXT_BOUND"
+          },
+          "explainability": {
+            "why": [
+              "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+              "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+            ],
+            "how_do_we_know": "Validated through causal and contextual analysis.",
+            "when_is_it_valid": [
+              "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent"
+            ],
+            "when_is_it_invalid": [],
+            "binding_chain": [
+              "identity_preservation -> identity_continuity -> preserves_object_identity -> object_identity_preservation",
+              "identity_preservation -> lineage_continuity -> preserves_object_identity -> object_identity_preservation"
+            ]
+          },
+          "context_confidence_history": [
+            {
+              "truth": "object_identity_preservation",
+              "contextual_truth_score": 0.7263,
+              "contextual_confidence": 0.8631,
+              "causal_validation_score": 0.8659,
+              "context_stability": 0.3333,
+              "contradiction_resistance": 1.0,
+              "transfer_reliability": 1.0,
+              "identity_compatibility": 0.706,
+              "contextual_consistency": false,
+              "status": "CONTEXT_REVIEW_REQUIRED"
+            }
+          ],
+          "context_evolution_history": [
+            {
+              "truth_name": "object_identity_preservation",
+              "valid_contexts": [
+                {
+                  "signature_id": "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent",
+                  "task_cluster": "identity_preservation",
+                  "transformation_family": "identity_preservation",
+                  "object_count": "1",
+                  "topology_behavior": "topology_preserved",
+                  "color_behavior": "color_reassigned",
+                  "symmetry_behavior": "unknown",
+                  "size_behavior": "size_preserved",
+                  "identity_behavior": "identity_preserved",
+                  "propagation_behavior": "propagation_absent"
+                }
+              ],
+              "invalid_contexts": [],
+              "confidence": 1.0,
+              "stability": 0.3333,
+              "contradiction_profile": {
+                "support_count": 1,
+                "contradiction_count": 0,
+                "contradiction_resistance": 1.0
+              },
+              "causal_support": {}
+            }
+          ],
+          "raw_contextual_truth_score": 0.7506,
+          "effective_contextual_truth": 0.7506,
+          "contextual_truth_authority": 0.7289,
+          "contextual_truth_supported": true,
+          "authority_status": "PROVISIONAL_CONTEXTUAL_TRUTH",
+          "truth_governance_action": "HOLD_FOR_CONTEXT_REVIEW",
+          "support_threshold": 0.7,
+          "support_grace_margin": 0.015
+        },
+        "context_hierarchy": {
+          "system": "context_hierarchy_engine",
+          "phase": "5.6",
+          "contexts": [
+            {
+              "context_id": "identity_preservation",
+              "context_name": "identity_preservation",
+              "confidence": 1.0,
+              "stability": 1.0,
+              "parent_context": "structural_transformation",
+              "child_contexts": [
+                "identity_continuity",
+                "object_core",
+                "object_identity_preservation",
+                "object_persistence",
+                "shape_preservation",
+                "topology_preservation"
+              ],
+              "originating_tasks": [
+                "object_identity_preservation"
+              ],
+              "inherited_features": [
+                "object_core_preserved",
+                "object_creation_or_removal",
+                "object_identity_consistent",
+                "semantic_anchor_stable",
+                "structural_identity_preserved",
+                "structure_delta",
+                "topology_change"
+              ],
+              "features": {
+                "task_cluster": "identity_preservation",
+                "transformation_family": "identity_preservation",
+                "object_count": "1",
+                "object_dynamics": "object_preserved",
+                "topology_behavior": "topology_preserved",
+                "color_behavior": "color_reassigned",
+                "symmetry_behavior": "unknown",
+                "size_behavior": "size_preserved",
+                "identity_behavior": "identity_preserved",
+                "propagation_behavior": "propagation_absent",
+                "confidence": 0.82,
+                "classification_reasons": [
+                  "object identity concept anchors identity context",
+                  "no split or merge evidence requires structural context"
+                ]
+              }
+            }
+          ],
+          "hierarchy": {
+            "system": "context_hierarchy",
+            "nodes": [
+              {
+                "context_id": "geometric_transformation",
+                "context_name": "geometric_transformation",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": null,
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "position_change",
+                  "object_count_preserved",
+                  "topology_reference_preserved"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "structural_transformation",
+                "context_name": "structural_transformation",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": null,
+                "child_contexts": [
+                  "duplication",
+                  "identity_preservation"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "object_creation_or_removal",
+                  "topology_change",
+                  "structure_delta"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "color_transformation",
+                "context_name": "color_transformation",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": null,
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "attribute_change",
+                  "topology_preserved",
+                  "identity_may_be_modified"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "propagation_transformation",
+                "context_name": "propagation_transformation",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": null,
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "recursive_spread",
+                  "multi_cell_effect",
+                  "source_pattern_preserved"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "growth",
+                "context_name": "growth",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": "topological_growth",
+                "child_contexts": [
+                  "identity_continuity",
+                  "object_core",
+                  "object_identity_preservation",
+                  "object_persistence",
+                  "shape_preservation",
+                  "topology_expansion"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "growth_dependency_required",
+                  "identity_continuity_required",
+                  "object_expansion",
+                  "process_dependency_inherited",
+                  "shape_anchor_required",
+                  "topology_expansion_expected"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "object_identity_preservation",
+                "context_name": "object_identity_preservation",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "identity_preservation",
+                "child_contexts": [
+                  "identity_continuity",
+                  "object_core",
+                  "object_persistence",
+                  "shape_preservation",
+                  "topology_preservation"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "identity_continuity_required",
+                  "object_core_preserved",
+                  "object_expansion",
+                  "object_identity_consistent",
+                  "object_persistence_required",
+                  "process_dependency_inherited",
+                  "semantic_anchor_stable",
+                  "shape_anchor_required",
+                  "structural_identity_preserved"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "growth"
+                }
+              },
+              {
+                "context_id": "object_persistence",
+                "context_name": "object_persistence",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "identity_preservation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "identity_continuity_required",
+                  "object_core_preserved",
+                  "object_expansion",
+                  "object_identity_consistent",
+                  "object_persistence_required",
+                  "process_dependency_inherited",
+                  "semantic_anchor_stable",
+                  "shape_anchor_required",
+                  "structural_identity_preserved"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "growth"
+                }
+              },
+              {
+                "context_id": "identity_continuity",
+                "context_name": "identity_continuity",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "identity_preservation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "identity_continuity_required",
+                  "object_core_preserved",
+                  "object_expansion",
+                  "object_identity_consistent",
+                  "object_persistence_required",
+                  "process_dependency_inherited",
+                  "semantic_anchor_stable",
+                  "shape_anchor_required",
+                  "structural_identity_preserved"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "growth"
+                }
+              },
+              {
+                "context_id": "object_core",
+                "context_name": "object_core",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "identity_preservation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "identity_continuity_required",
+                  "object_core_preserved",
+                  "object_expansion",
+                  "object_identity_consistent",
+                  "object_persistence_required",
+                  "process_dependency_inherited",
+                  "semantic_anchor_stable",
+                  "shape_anchor_required",
+                  "structural_identity_preserved"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "growth"
+                }
+              },
+              {
+                "context_id": "shape_preservation",
+                "context_name": "shape_preservation",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "identity_preservation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "growth_dependency_required",
+                  "identity_continuity_required",
+                  "identity_split_expected",
+                  "local_shape_preserved",
+                  "object_core_preserved",
+                  "object_count_increase_expected",
+                  "object_expansion",
+                  "object_identity_consistent",
+                  "object_persistence_required",
+                  "process_dependency_inherited",
+                  "semantic_anchor_stable",
+                  "shape_anchor_required",
+                  "structural_identity_preserved",
+                  "topology_expansion_expected"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "growth"
+                }
+              },
+              {
+                "context_id": "topology_expansion",
+                "context_name": "topology_expansion",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "topological_growth",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "dependency_chain_supported",
+                  "growth_dependency_required",
+                  "identity_continuity_required",
+                  "object_expansion",
+                  "process_dependency_inherited",
+                  "shape_anchor_required",
+                  "topology_expansion_expected"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "growth"
+                }
+              },
+              {
+                "context_id": "propagation",
+                "context_name": "propagation",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": "directional_motion",
+                "child_contexts": [
+                  "directional_motion",
+                  "local_shape",
+                  "position_change",
+                  "position_preservation",
+                  "source_pattern_preserved"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "directional_dependency",
+                  "position_change_expected",
+                  "process_dependency_inherited",
+                  "source_pattern_required"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "source_pattern_preserved",
+                "context_name": "source_pattern_preserved",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "propagation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "directional_dependency",
+                  "position_change_expected",
+                  "process_dependency_inherited",
+                  "source_pattern_required"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "propagation"
+                }
+              },
+              {
+                "context_id": "directional_motion",
+                "context_name": "directional_motion",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "propagation",
+                "child_contexts": [
+                  "object_identity_preservation",
+                  "position_change",
+                  "position_delta",
+                  "propagation"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "directional_dependency",
+                  "position_change_expected",
+                  "process_dependency_inherited",
+                  "source_pattern_required"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "propagation"
+                }
+              },
+              {
+                "context_id": "position_change",
+                "context_name": "position_change",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "directional_motion",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "directional_dependency",
+                  "position_change_expected",
+                  "process_dependency_inherited",
+                  "source_pattern_required"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "propagation"
+                }
+              },
+              {
+                "context_id": "position_preservation",
+                "context_name": "position_preservation",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "propagation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "directional_dependency",
+                  "position_change_expected",
+                  "process_dependency_inherited",
+                  "source_pattern_required"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "propagation"
+                }
+              },
+              {
+                "context_id": "local_shape",
+                "context_name": "local_shape",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "topological_growth",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "directional_dependency",
+                  "growth_dependency_required",
+                  "identity_split_expected",
+                  "local_shape_preserved",
+                  "object_count_increase_expected",
+                  "position_change_expected",
+                  "process_dependency_inherited",
+                  "shape_anchor_required",
+                  "source_pattern_required",
+                  "topology_expansion_expected"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "propagation"
+                }
+              },
+              {
+                "context_id": "replication",
+                "context_name": "replication",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": null,
+                "child_contexts": [
+                  "identity_split",
+                  "local_shape",
+                  "object_count_increase",
+                  "shape_preservation",
+                  "topology_splitting"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "identity_split_expected",
+                  "object_count_increase_expected",
+                  "local_shape_preserved"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "identity_split",
+                "context_name": "identity_split",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "replication",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "identity_split_expected",
+                  "local_shape_preserved",
+                  "object_count_increase_expected",
+                  "process_dependency_inherited"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "replication"
+                }
+              },
+              {
+                "context_id": "object_count_increase",
+                "context_name": "object_count_increase",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "replication",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "identity_split_expected",
+                  "local_shape_preserved",
+                  "object_count_increase_expected",
+                  "process_dependency_inherited"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "replication"
+                }
+              },
+              {
+                "context_id": "topology_splitting",
+                "context_name": "topology_splitting",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "replication",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "identity_split_expected",
+                  "local_shape_preserved",
+                  "object_count_increase_expected",
+                  "process_dependency_inherited"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "replication"
+                }
+              },
+              {
+                "context_id": "topological_growth",
+                "context_name": "topological_growth",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": null,
+                "child_contexts": [
+                  "growth",
+                  "local_shape",
+                  "shape_preservation",
+                  "topology_expansion"
+                ],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "topology_expansion_expected",
+                  "growth_dependency_required",
+                  "shape_anchor_required"
+                ],
+                "features": {}
+              },
+              {
+                "context_id": "identity_preservation",
+                "context_name": "identity_preservation",
+                "confidence": 1.0,
+                "stability": 1.0,
+                "parent_context": "structural_transformation",
+                "child_contexts": [
+                  "identity_continuity",
+                  "object_core",
+                  "object_identity_preservation",
+                  "object_persistence",
+                  "shape_preservation",
+                  "topology_preservation"
+                ],
+                "originating_tasks": [
+                  "object_identity_preservation"
+                ],
+                "inherited_features": [
+                  "object_core_preserved",
+                  "object_creation_or_removal",
+                  "object_identity_consistent",
+                  "semantic_anchor_stable",
+                  "structural_identity_preserved",
+                  "structure_delta",
+                  "topology_change"
+                ],
+                "features": {
+                  "task_cluster": "identity_preservation",
+                  "transformation_family": "identity_preservation",
+                  "object_count": "1",
+                  "object_dynamics": "object_preserved",
+                  "topology_behavior": "topology_preserved",
+                  "color_behavior": "color_reassigned",
+                  "symmetry_behavior": "unknown",
+                  "size_behavior": "size_preserved",
+                  "identity_behavior": "identity_preserved",
+                  "propagation_behavior": "propagation_absent",
+                  "confidence": 0.82,
+                  "classification_reasons": [
+                    "object identity concept anchors identity context",
+                    "no split or merge evidence requires structural context"
+                  ]
+                }
+              },
+              {
+                "context_id": "topology_preservation",
+                "context_name": "topology_preservation",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "identity_preservation",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "identity_continuity_required",
+                  "object_core_preserved",
+                  "object_identity_consistent",
+                  "object_persistence_required",
+                  "process_dependency_inherited",
+                  "semantic_anchor_stable",
+                  "structural_identity_preserved"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "identity_preservation"
+                }
+              },
+              {
+                "context_id": "position_delta",
+                "context_name": "position_delta",
+                "confidence": 0.86,
+                "stability": 0.86,
+                "parent_context": "directional_motion",
+                "child_contexts": [],
+                "originating_tasks": [],
+                "inherited_features": [
+                  "process_dependency_inherited"
+                ],
+                "features": {
+                  "process_dependency_context": true,
+                  "required_by": "directional_motion"
+                }
+              },
+              {
+                "context_id": "unknown",
+                "context_name": "unknown",
+                "confidence": 0.2,
+                "stability": 0.2,
+                "parent_context": null,
+                "child_contexts": [],
+                "originating_tasks": [
+                  "color_preservation",
+                  "shape_preservation",
+                  "symmetry_preservation"
+                ],
+                "inherited_features": [],
+                "features": {
+                  "task_cluster": "unknown",
+                  "transformation_family": "unknown",
+                  "object_count": "1",
+                  "object_dynamics": "object_preserved",
+                  "topology_behavior": "topology_preserved",
+                  "color_behavior": "color_reassigned",
+                  "symmetry_behavior": "unknown",
+                  "size_behavior": "size_preserved",
+                  "identity_behavior": "identity_preserved",
+                  "propagation_behavior": "propagation_absent",
+                  "confidence": 0.2,
+                  "classification_reasons": [
+                    "insufficient transformation evidence"
+                  ]
+                }
+              },
+              {
+                "context_id": "duplication",
+                "context_name": "duplication",
+                "confidence": 0.76,
+                "stability": 0.76,
+                "parent_context": "structural_transformation",
+                "child_contexts": [],
+                "originating_tasks": [
+                  "color_preservation",
+                  "position_preservation",
+                  "shape_preservation",
+                  "symmetry_preservation",
+                  "symmetry_reasoning"
+                ],
+                "inherited_features": [
+                  "object_creation_or_removal",
+                  "structure_delta",
+                  "topology_change"
+                ],
+                "features": {
+                  "task_cluster": "duplication",
+                  "transformation_family": "duplication",
+                  "object_count": "2",
+                  "object_dynamics": "object_created",
+                  "topology_behavior": "topology_splitting",
+                  "color_behavior": "color_reassigned",
+                  "symmetry_behavior": "unknown",
+                  "size_behavior": "size_preserved",
+                  "identity_behavior": "identity_split",
+                  "propagation_behavior": "propagation_absent",
+                  "confidence": 0.76,
+                  "classification_reasons": [
+                    "output contains additional objects"
+                  ]
+                }
+              }
+            ],
+            "root_contexts": [
+              "color_transformation",
+              "geometric_transformation",
+              "propagation_transformation",
+              "structural_transformation"
+            ],
+            "process_dependency_contexts": {
+              "growth": [
+                "object_identity_preservation",
+                "object_persistence",
+                "identity_continuity",
+                "object_core",
+                "shape_preservation",
+                "topology_expansion"
+              ],
+              "propagation": [
+                "source_pattern_preserved",
+                "directional_motion",
+                "position_change",
+                "position_preservation",
+                "local_shape"
+              ],
+              "replication": [
+                "identity_split",
+                "object_count_increase",
+                "topology_splitting",
+                "local_shape",
+                "shape_preservation"
+              ],
+              "topological_growth": [
+                "growth",
+                "topology_expansion",
+                "local_shape",
+                "shape_preservation"
+              ],
+              "identity_preservation": [
+                "object_identity_preservation",
+                "object_persistence",
+                "identity_continuity",
+                "object_core",
+                "shape_preservation",
+                "topology_preservation"
+              ],
+              "object_identity_preservation": [
+                "object_persistence",
+                "identity_continuity",
+                "object_core",
+                "shape_preservation",
+                "topology_preservation"
+              ],
+              "directional_motion": [
+                "position_delta",
+                "position_change",
+                "propagation",
+                "object_identity_preservation"
+              ]
+            },
+            "hierarchy_ready": true
+          },
+          "differentiation": {
+            "system": "context_differentiation_engine",
+            "differentiators": [
+              {
+                "context": "identity_preservation",
+                "parent_context": "structural_transformation",
+                "differentiators": [
+                  "topology_preserved",
+                  "color_reassigned",
+                  "identity_preserved"
+                ],
+                "process_dependency_contexts": [
+                  "object_identity_preservation",
+                  "object_persistence",
+                  "identity_continuity",
+                  "object_core",
+                  "shape_preservation",
+                  "topology_preservation"
+                ],
+                "process_dependency_context_ready": true
+              }
+            ],
+            "differentiation_confidence": 1.0
+          },
+          "specialization": {
+            "specializations": [
+              "identity_preservation"
+            ],
+            "specialization_consistency": 1.0
+          },
+          "inheritance": [
+            {
+              "context": "identity_preservation",
+              "parent_context": "structural_transformation",
+              "ancestors": [
+                "structural_transformation"
+              ],
+              "descendants": [
+                "identity_continuity",
+                "object_core",
+                "object_identity_preservation",
+                "object_persistence",
+                "shape_preservation",
+                "topology_preservation"
+              ],
+              "process_dependency_contexts": [
+                "object_identity_preservation",
+                "object_persistence",
+                "identity_continuity",
+                "object_core",
+                "shape_preservation",
+                "topology_preservation"
+              ],
+              "inherited_features": [
+                "object_core_preserved",
+                "object_creation_or_removal",
+                "object_identity_consistent",
+                "semantic_anchor_stable",
+                "structural_identity_preserved",
+                "structure_delta",
+                "topology_change"
+              ],
+              "inheritance_integrity": 1.0
+            }
+          ],
+          "context_stability": 1.0,
+          "specialization_consistency": 1.0,
+          "differentiation_confidence": 1.0,
+          "inheritance_integrity": 1.0,
+          "dependency_context_support": 1.0,
+          "context_hierarchy_score": 1.0,
+          "hierarchy_required": true,
+          "hierarchy_ready": true,
+          "advanced_contextual_truth_promotion_ready": true
+        },
+        "semantic_context": {
+          "system": "semantic_context_reasoner",
+          "phase": "5.7",
+          "context": "identity_preservation",
+          "semantic_profile": {
+            "context_name": "identity_preservation",
+            "semantic_definition": "Maintains object identity across observed transformations.",
+            "properties": [
+              {
+                "property_name": "changes_color",
+                "confidence": 0.86,
+                "evidence_count": 62
+              },
+              {
+                "property_name": "preserves_identity",
+                "confidence": 0.86,
+                "evidence_count": 62
+              },
+              {
+                "property_name": "preserves_shape",
+                "confidence": 0.82,
+                "evidence_count": 62
+              },
+              {
+                "property_name": "preserves_topology",
+                "confidence": 0.86,
+                "evidence_count": 62
+              }
+            ],
+            "capabilities": [
+              "attribute_remapping",
+              "identity_tracking",
+              "structure_preservation"
+            ],
+            "constraints": [
+              "color_mapping_changes",
+              "identity_must_remain_traceable"
+            ],
+            "implications": [
+              "color_change",
+              "identity_continuity_expected",
+              "shape_preservation_expected"
+            ],
+            "confidence": 0.9175,
+            "supporting_evidence": [
+              "context classified as identity_preservation",
+              "object identity concept anchors identity context",
+              "no split or merge evidence requires structural context"
+            ],
+            "explanation": {
+              "what_is_this_context": "Maintains object identity across observed transformations.",
+              "what_does_it_do": [
+                "attribute_remapping",
+                "identity_tracking",
+                "structure_preservation"
+              ],
+              "what_properties_define_it": [
+                "changes_color",
+                "preserves_identity",
+                "preserves_shape",
+                "preserves_topology"
+              ],
+              "what_limits_does_it_have": [
+                "color_mapping_changes",
+                "identity_must_remain_traceable"
+              ],
+              "what_consequences_follow": [
+                "color_change",
+                "identity_continuity_expected",
+                "shape_preservation_expected"
+              ],
+              "why_it_exists": [
+                "context classified as identity_preservation",
+                "object identity concept anchors identity context",
+                "no split or merge evidence requires structural context"
+              ]
+            }
+          },
+          "properties": [
+            {
+              "property_name": "changes_color",
+              "confidence": 0.86,
+              "evidence_count": 62
+            },
+            {
+              "property_name": "preserves_identity",
+              "confidence": 0.86,
+              "evidence_count": 62
+            },
+            {
+              "property_name": "preserves_shape",
+              "confidence": 0.82,
+              "evidence_count": 62
+            },
+            {
+              "property_name": "preserves_topology",
+              "confidence": 0.86,
+              "evidence_count": 62
+            }
+          ],
+          "capabilities": [
+            "attribute_remapping",
+            "identity_tracking",
+            "structure_preservation"
+          ],
+          "constraints": [
+            "color_mapping_changes",
+            "identity_must_remain_traceable"
+          ],
+          "implications": [
+            "color_change",
+            "identity_continuity_expected",
+            "shape_preservation_expected"
+          ],
+          "semantic_definition": "Maintains object identity across observed transformations.",
+          "confidence": 0.9175,
+          "semantic_context_score": 0.9175,
+          "semantic_required": true,
+          "semantically_validated": true,
+          "status": "SEMANTICALLY_VALIDATED",
+          "property_confidence_history": [
+            [
+              {
+                "property_name": "changes_color",
+                "confidence": 0.86,
+                "evidence_count": 62
+              },
+              {
+                "property_name": "preserves_identity",
+                "confidence": 0.86,
+                "evidence_count": 62
+              },
+              {
+                "property_name": "preserves_shape",
+                "confidence": 0.82,
+                "evidence_count": 62
+              },
+              {
+                "property_name": "preserves_topology",
+                "confidence": 0.86,
+                "evidence_count": 62
+              }
+            ]
+          ],
+          "explainability": {
+            "what_is_this_context": "Maintains object identity across observed transformations.",
+            "what_does_it_do": [
+              "attribute_remapping",
+              "identity_tracking",
+              "structure_preservation"
+            ],
+            "what_properties_define_it": [
+              "changes_color",
+              "preserves_identity",
+              "preserves_shape",
+              "preserves_topology"
+            ],
+            "what_limits_does_it_have": [
+              "color_mapping_changes",
+              "identity_must_remain_traceable"
+            ],
+            "what_consequences_follow": [
+              "color_change",
+              "identity_continuity_expected",
+              "shape_preservation_expected"
+            ],
+            "why_it_exists": [
+              "context classified as identity_preservation",
+              "object identity concept anchors identity context",
+              "no split or merge evidence requires structural context"
+            ]
+          }
+        },
+        "stable_truth_semantic_context": {
+          "context_name": "identity_preservation",
+          "semantic_definition": "Maintains object identity across observed transformations.",
+          "properties": [
+            {
+              "property_name": "changes_color",
+              "confidence": 0.86,
+              "evidence_count": 62
+            },
+            {
+              "property_name": "preserves_identity",
+              "confidence": 0.86,
+              "evidence_count": 62
+            },
+            {
+              "property_name": "preserves_shape",
+              "confidence": 0.82,
+              "evidence_count": 62
+            },
+            {
+              "property_name": "preserves_topology",
+              "confidence": 0.86,
+              "evidence_count": 62
+            }
+          ],
+          "capabilities": [
+            "attribute_remapping",
+            "identity_tracking",
+            "structure_preservation"
+          ],
+          "constraints": [
+            "color_mapping_changes",
+            "identity_must_remain_traceable"
+          ],
+          "implications": [
+            "color_change",
+            "identity_continuity_expected",
+            "shape_preservation_expected"
+          ],
+          "confidence": 0.9175,
+          "supporting_evidence": [
+            "context classified as identity_preservation",
+            "object identity concept anchors identity context",
+            "no split or merge evidence requires structural context"
+          ],
+          "explanation": {
+            "what_is_this_context": "Maintains object identity across observed transformations.",
+            "what_does_it_do": [
+              "attribute_remapping",
+              "identity_tracking",
+              "structure_preservation"
+            ],
+            "what_properties_define_it": [
+              "changes_color",
+              "preserves_identity",
+              "preserves_shape",
+              "preserves_topology"
+            ],
+            "what_limits_does_it_have": [
+              "color_mapping_changes",
+              "identity_must_remain_traceable"
+            ],
+            "what_consequences_follow": [
+              "color_change",
+              "identity_continuity_expected",
+              "shape_preservation_expected"
+            ],
+            "why_it_exists": [
+              "context classified as identity_preservation",
+              "object identity concept anchors identity context",
+              "no split or merge evidence requires structural context"
+            ]
+          }
+        },
+        "stable_truth_why_chain": [
+          "observed in 51 tasks",
+          "contradiction requires review",
+          "dependency coherence requires more evidence",
+          "causal explanation path is preserved"
+        ],
+        "stable_truth_how_we_know": [
+          "validated across 54 tasks",
+          "survived contradiction review",
+          "counterfactual testing remains provisional",
+          "dependency coherence requires more evidence",
+          "validated by causal graph analysis"
+        ],
+        "stable_truth_when_valid": [
+          "task_cluster:identity_preservation|transformation_family:identity_preservation|object_count:1|topology_behavior:topology_preserved|color_behavior:color_reassigned|symmetry_behavior:unknown|size_behavior:size_preserved|identity_behavior:identity_preserved|propagation_behavior:propagation_absent"
+        ],
+        "stable_truth_when_invalid": [],
+        "stable_truth_context_inheritance": [
+          {
+            "context": "identity_preservation",
+            "parent_context": "structural_transformation",
+            "ancestors": [
+              "structural_transformation"
+            ],
+            "descendants": [
+              "identity_continuity",
+              "object_core",
+              "object_identity_preservation",
+              "object_persistence",
+              "shape_preservation",
+              "topology_preservation"
+            ],
+            "process_dependency_contexts": [
+              "object_identity_preservation",
+              "object_persistence",
+              "identity_continuity",
+              "object_core",
+              "shape_preservation",
+              "topology_preservation"
+            ],
+            "inherited_features": [
+              "object_core_preserved",
+              "object_creation_or_removal",
+              "object_identity_consistent",
+              "semantic_anchor_stable",
+              "structural_identity_preserved",
+              "structure_delta",
+              "topology_change"
+            ],
+            "inheritance_integrity": 1.0
+          }
+        ]
+      }
     }
   ]
 }

@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 
 from core.epistemic_models import clamp
+from core.process_abstraction import ProcessAbstractionLayer
+from core.process_context_generation import ProcessContextGenerationEngine
 
 
 def _normalize(value, default="unknown"):
@@ -174,6 +176,293 @@ class SemanticContext:
 
 
 class SemanticContextReasoner:
+    PROCESS_ABSTRACTIONS = ProcessContextGenerationEngine.semantic_contexts()
+    PRESERVATION_CONTEXTS = {
+        "color_context",
+        "shape_context",
+        "topology_context",
+        "position_context",
+        "symmetry_context",
+        "identity_preservation",
+        "identity_persistence",
+    }
+    PROCESS_TRAIT_PROPERTIES = {
+        "creates_objects",
+        "modifies_topology",
+        "expands_objects",
+        "modifies_identity",
+        "removes_objects",
+    }
+    PROCESS_TRAIT_CAPABILITIES = {
+        "object_creation",
+        "structural_replication",
+        "identity_split_reasoning",
+        "topology_growth",
+    }
+    PROCESS_TRAIT_CONSTRAINTS = {
+        "object_count_changes",
+        "identity_continuity_may_split",
+        "identity_continuity_may_change",
+    }
+    PROCESS_TRAIT_IMPLICATIONS = {
+        "object_count_increase",
+        "object_count_decrease",
+        "identity_split_expected",
+        "topology_modification_possible",
+    }
+    TRUTH_NATIVE_CONTEXTS = {
+        "shape_context": {
+            "properties": [
+                "shape_stability",
+                "local_shape_preservation",
+                "boundary_geometry_preservation",
+            ],
+            "capabilities": [
+                "shape_preservation_reasoning",
+                "local_geometry_tracking",
+                "boundary_consistency_check",
+            ],
+            "constraints": [
+                "requires_shape_observation",
+                "invalid_under_untracked_shape_transform",
+            ],
+            "implications": [
+                "shape_preservation_expected",
+                "local_shape_preservation_expected",
+            ],
+        },
+        "topology_context": {
+            "properties": [
+                "topology_stability",
+                "connectivity_preservation",
+                "region_relation_preservation",
+            ],
+            "capabilities": [
+                "topology_preservation_reasoning",
+                "connectivity_tracking",
+                "region_relation_check",
+            ],
+            "constraints": [
+                "requires_topology_observation",
+                "invalid_under_untracked_topology_transform",
+            ],
+            "implications": [
+                "topology_preservation_expected",
+                "connectivity_preservation_expected",
+            ],
+        },
+        "position_context": {
+            "properties": [
+                "position_stability",
+                "coordinate_anchor_preservation",
+                "relative_position_preservation",
+            ],
+            "capabilities": [
+                "position_preservation_reasoning",
+                "coordinate_anchor_tracking",
+                "relative_position_check",
+            ],
+            "constraints": [
+                "requires_position_observation",
+                "invalid_under_untracked_translation",
+            ],
+            "implications": [
+                "position_preservation_expected",
+                "coordinate_anchor_preservation_expected",
+            ],
+        },
+        "color_context": {
+            "properties": [
+                "color_stability",
+                "attribute_mapping_preservation",
+                "no_color_reassignment",
+            ],
+            "capabilities": [
+                "color_preservation_reasoning",
+                "attribute_mapping",
+                "contextual_color_stability",
+            ],
+            "constraints": [
+                "requires_color_observation",
+                "invalid_under_unmapped_recoloring",
+            ],
+            "implications": [
+                "color_preservation_expected",
+                "attribute_mapping_preservation_expected",
+            ],
+        },
+        "symmetry_context": {
+            "properties": [
+                "symmetry_relation",
+                "axis_consistency",
+                "mirror_consistency",
+            ],
+            "capabilities": [
+                "symmetry_reasoning",
+                "mirror_consistency_check",
+                "axis_based_generalization",
+            ],
+            "constraints": [
+                "requires_symmetry_evidence",
+                "requires_axis_or_pair_relation",
+            ],
+            "implications": [
+                "symmetry_preservation_expected",
+                "mirror_consistency_expected",
+            ],
+        },
+        "identity_persistence": {
+            "properties": [
+                "identity_persistence",
+                "object_persistence",
+                "identity_continuity",
+            ],
+            "capabilities": [
+                "identity_persistence_reasoning",
+                "object_lineage_tracking",
+                "attribute_change_tolerance",
+            ],
+            "constraints": [
+                "requires_identity_anchor",
+                "identity_split_absent",
+                "topology_splitting_absent",
+            ],
+            "implications": [
+                "identity_preserved",
+                "identity_split_false",
+                "topology_splitting_false",
+            ],
+        },
+        "identity_forking": {
+            "properties": [
+                "identity_forking",
+                "identity_split",
+                "object_count_increase",
+                "topology_splitting",
+            ],
+            "capabilities": [
+                "identity_forking_reasoning",
+                "source_lineage_tracking",
+                "new_identity_derivation",
+            ],
+            "constraints": [
+                "requires_source_identity",
+                "requires_new_identity_instance",
+                "preserves_identity_false",
+            ],
+            "implications": [
+                "identity_split_expected",
+                "topology_splitting_expected",
+                "object_count_increase_expected",
+            ],
+        },
+    }
+    PROCESS_NATIVE_CONTEXTS = {
+        "growth": {
+            "properties": [
+                "topology_expansion",
+                "object_count_growth",
+                "identity_preservation_under_growth",
+            ],
+            "capabilities": [
+                "region_expansion",
+                "topology_growth",
+                "identity_preserving_growth",
+            ],
+            "constraints": [
+                "requires_identity_anchor",
+                "requires_source_pattern",
+            ],
+            "implications": [
+                "topology_expansion_expected",
+                "object_count_or_area_growth_expected",
+                "identity_continuity_under_growth_expected",
+            ],
+        },
+        "topological_growth": {
+            "properties": [
+                "topology_expansion",
+                "region_expansion",
+                "topology_splitting",
+                "identity_preservation_under_growth",
+            ],
+            "capabilities": [
+                "region_expansion",
+                "topology_growth",
+                "topology_split_reasoning",
+                "identity_preserving_growth",
+            ],
+            "constraints": [
+                "requires_growth_dependency",
+                "requires_shape_anchor",
+            ],
+            "implications": [
+                "topology_expansion_expected",
+                "growth_dependency_required",
+            ],
+        },
+        "directional_motion": {
+            "properties": [
+                "position_delta",
+                "directional_displacement",
+                "source_pattern_motion",
+            ],
+            "capabilities": [
+                "spatial_relocation",
+                "directional_transfer",
+                "source_pattern_preservation",
+            ],
+            "constraints": [
+                "requires_position_reference",
+                "requires_object_persistence",
+            ],
+            "implications": [
+                "position_change_expected",
+                "identity_continuity_expected",
+            ],
+        },
+        "propagation": {
+            "properties": [
+                "directional_spread",
+                "source_pattern_preservation",
+                "signal_transfer",
+            ],
+            "capabilities": [
+                "pattern_extension",
+                "directional_transfer",
+                "source_pattern_preservation",
+            ],
+            "constraints": [
+                "requires_source_pattern",
+                "requires_directional_path",
+            ],
+            "implications": [
+                "directional_motion_expected",
+                "source_pattern_preservation_expected",
+            ],
+        },
+        "replication": {
+            "properties": [
+                "object_creation",
+                "identity_split",
+                "structural_copying",
+            ],
+            "capabilities": [
+                "object_creation",
+                "structural_replication",
+                "identity_split_reasoning",
+            ],
+            "constraints": [
+                "requires_source_object",
+                "requires_shape_anchor",
+            ],
+            "implications": [
+                "object_count_increase",
+                "identity_split_expected",
+                "structural_copy_expected",
+            ],
+        },
+    }
     DEFINITIONS = {
         "duplication": (
             "Creates one or more additional object instances while partially "
@@ -202,13 +491,41 @@ class SemanticContextReasoner:
             "Changes symbolic attributes while preserving the role of the "
             "underlying object or pattern."
         ),
+        "color_context": (
+            "Evaluates whether color or attribute mappings remain stable "
+            "inside a task context."
+        ),
+        "shape_context": (
+            "Evaluates whether local shape and boundary geometry remain "
+            "stable inside a task context."
+        ),
+        "topology_context": (
+            "Evaluates whether connectivity and region relations remain "
+            "stable inside a task context."
+        ),
+        "position_context": (
+            "Evaluates whether absolute and relative position anchors remain "
+            "stable inside a task context."
+        ),
+        "symmetry_context": (
+            "Evaluates axis, mirror, and relational symmetry evidence inside "
+            "a task context."
+        ),
         "propagation": (
-            "Extends a pattern from a source through adjacent or repeated "
-            "structure."
+            "Transfers a source pattern through directional spread while "
+            "preserving the pattern's causal lineage."
         ),
         "growth": (
-            "Expands an object or occupied region while preserving a source "
-            "pattern."
+            "Expands object count, occupied region, or topology while "
+            "maintaining identity anchors under growth."
+        ),
+        "topological_growth": (
+            "Expands occupied topology through growth dependencies while "
+            "preserving shape and identity anchors."
+        ),
+        "directional_motion": (
+            "Changes object position along a direction while preserving "
+            "identity and a source pattern reference."
         ),
         "deletion": "Removes objects or structure from the scene.",
         "insertion": "Introduces new objects or structure into the scene.",
@@ -248,12 +565,62 @@ class SemanticContextReasoner:
             "preserves_topology",
             "modifies_symbolic_attributes",
         ],
+        "color_context": [
+            "color_stability",
+            "attribute_mapping_preservation",
+            "no_color_reassignment",
+        ],
+        "shape_context": [
+            "shape_stability",
+            "local_shape_preservation",
+            "boundary_geometry_preservation",
+        ],
+        "topology_context": [
+            "topology_stability",
+            "connectivity_preservation",
+            "region_relation_preservation",
+        ],
+        "position_context": [
+            "position_stability",
+            "coordinate_anchor_preservation",
+            "relative_position_preservation",
+        ],
+        "symmetry_context": [
+            "symmetry_relation",
+            "axis_consistency",
+            "mirror_consistency",
+        ],
         "propagation": [
             "propagates_structure",
             "expands_objects",
             "modifies_topology",
+            "source_pattern_preserved",
+            "directional_spread",
+            "signal_transfer",
         ],
-        "growth": ["expands_objects", "modifies_topology"],
+        "growth": [
+            "expands_objects",
+            "modifies_topology",
+            "source_pattern_preserved",
+            "topology_expansion",
+            "object_count_growth",
+            "identity_preservation_under_growth",
+        ],
+        "topological_growth": [
+            "expands_objects",
+            "modifies_topology",
+            "source_pattern_preserved",
+            "topology_expansion",
+            "region_expansion",
+            "topology_splitting",
+            "identity_preservation_under_growth",
+        ],
+        "directional_motion": [
+            "position_delta",
+            "directional_displacement",
+            "source_pattern_motion",
+            "preserves_identity",
+        ],
         "deletion": ["removes_objects", "modifies_topology"],
         "insertion": ["creates_objects", "modifies_topology"],
         "identity_preservation": [
@@ -263,7 +630,11 @@ class SemanticContextReasoner:
     }
     CAPABILITIES = {
         "duplication": ["object_creation", "structural_replication"],
-        "replication": ["object_creation", "structural_replication"],
+        "replication": [
+            "object_creation",
+            "structural_replication",
+            "identity_split_reasoning",
+        ],
         "reflection": ["symmetry_generation", "spatial_inversion"],
         "translation": ["spatial_relocation", "structure_preservation"],
         "rotation": ["orientation_change", "structure_preservation"],
@@ -272,8 +643,53 @@ class SemanticContextReasoner:
             "attribute_remapping",
             "symbolic_role_transfer",
         ],
-        "propagation": ["pattern_extension", "topology_growth"],
-        "growth": ["region_expansion", "topology_growth"],
+        "color_context": [
+            "color_preservation_reasoning",
+            "attribute_mapping",
+            "contextual_color_stability",
+        ],
+        "shape_context": [
+            "shape_preservation_reasoning",
+            "local_geometry_tracking",
+            "boundary_consistency_check",
+        ],
+        "topology_context": [
+            "topology_preservation_reasoning",
+            "connectivity_tracking",
+            "region_relation_check",
+        ],
+        "position_context": [
+            "position_preservation_reasoning",
+            "coordinate_anchor_tracking",
+            "relative_position_check",
+        ],
+        "symmetry_context": [
+            "symmetry_reasoning",
+            "mirror_consistency_check",
+            "axis_based_generalization",
+        ],
+        "propagation": [
+            "pattern_extension",
+            "topology_growth",
+            "directional_transfer",
+            "source_pattern_preservation",
+        ],
+        "growth": [
+            "region_expansion",
+            "topology_growth",
+            "identity_preserving_growth",
+        ],
+        "topological_growth": [
+            "region_expansion",
+            "topology_growth",
+            "source_pattern_preservation",
+            "topology_split_reasoning",
+        ],
+        "directional_motion": [
+            "spatial_relocation",
+            "directional_transfer",
+            "source_pattern_preservation",
+        ],
         "deletion": ["object_removal"],
         "insertion": ["object_creation"],
         "identity_preservation": ["identity_tracking"],
@@ -289,8 +705,36 @@ class SemanticContextReasoner:
         "rotation": ["requires_orientation_reference"],
         "recoloring": ["color_cannot_be_preserved", "color_mapping_changes"],
         "symbolic_remapping": ["symbolic_value_changes"],
+        "color_context": [
+            "requires_color_observation",
+            "invalid_under_unmapped_recoloring",
+        ],
+        "shape_context": [
+            "requires_shape_observation",
+            "invalid_under_untracked_shape_transform",
+        ],
+        "topology_context": [
+            "requires_topology_observation",
+            "invalid_under_untracked_topology_transform",
+        ],
+        "position_context": [
+            "requires_position_observation",
+            "invalid_under_untracked_translation",
+        ],
+        "symmetry_context": [
+            "requires_symmetry_evidence",
+            "requires_axis_or_pair_relation",
+        ],
         "propagation": ["requires_source_pattern"],
         "growth": ["occupied_area_changes"],
+        "topological_growth": [
+            "occupied_area_changes",
+            "topology_must_expand",
+        ],
+        "directional_motion": [
+            "requires_position_reference",
+            "requires_object_persistence",
+        ],
         "deletion": ["object_count_decreases"],
         "insertion": ["object_count_increases"],
         "identity_preservation": ["identity_must_remain_traceable"],
@@ -307,8 +751,36 @@ class SemanticContextReasoner:
         "rotation": ["orientation_change", "shape_preservation_expected"],
         "recoloring": ["color_change", "identity_may_be_modified"],
         "symbolic_remapping": ["attribute_change", "role_preservation"],
+        "color_context": [
+            "color_preservation_expected",
+            "attribute_mapping_preservation_expected",
+        ],
+        "shape_context": [
+            "shape_preservation_expected",
+            "local_shape_preservation_expected",
+        ],
+        "topology_context": [
+            "topology_preservation_expected",
+            "connectivity_preservation_expected",
+        ],
+        "position_context": [
+            "position_preservation_expected",
+            "coordinate_anchor_preservation_expected",
+        ],
+        "symmetry_context": [
+            "symmetry_preservation_expected",
+            "mirror_consistency_expected",
+        ],
         "propagation": ["pattern_extension", "topology_growth_possible"],
         "growth": ["object_expansion", "topology_growth_possible"],
+        "topological_growth": [
+            "object_expansion",
+            "topology_growth_possible",
+        ],
+        "directional_motion": [
+            "position_change",
+            "identity_continuity_expected",
+        ],
         "deletion": ["object_count_decrease"],
         "insertion": ["object_count_increase"],
         "identity_preservation": ["identity_continuity_expected"],
@@ -324,33 +796,131 @@ class SemanticContextReasoner:
     def _property(self, property_name, confidence, evidence_count):
         return ContextProperty(property_name, confidence, evidence_count)
 
+    def _is_preservation_context(self, context_name):
+        return _normalize(context_name) in self.PRESERVATION_CONTEXTS
+
+    def _process_traits(self, context=None):
+        signature = _signature(context)
+        process_operator = _normalize(signature.get("process_operator", ""))
+        if not process_operator:
+            return {
+                "process_operator": "unknown",
+                "properties": [],
+                "capabilities": [],
+                "constraints": [],
+                "implications": [],
+                "stored_separately": True,
+            }
+        return {
+            "process_operator": process_operator,
+            "properties": list(self.BASE_PROPERTIES.get(process_operator, [])),
+            "capabilities": list(self.CAPABILITIES.get(process_operator, [])),
+            "constraints": list(self.CONSTRAINTS.get(process_operator, [])),
+            "implications": list(self.IMPLICATIONS.get(process_operator, [])),
+            "stored_separately": True,
+        }
+
+    def _purify_preservation_profile(
+        self,
+        context_name,
+        properties,
+        capabilities,
+        constraints,
+        implications,
+    ):
+        if not self._is_preservation_context(context_name):
+            return properties, capabilities, constraints, implications
+
+        properties = [
+            item
+            for item in properties
+            if item.property_name not in self.PROCESS_TRAIT_PROPERTIES
+        ]
+        capabilities = sorted(
+            set(capabilities) - self.PROCESS_TRAIT_CAPABILITIES
+        )
+        constraints = sorted(
+            set(constraints) - self.PROCESS_TRAIT_CONSTRAINTS
+        )
+        implications = sorted(
+            set(implications) - self.PROCESS_TRAIT_IMPLICATIONS
+        )
+        return properties, capabilities, constraints, implications
+
     def infer_properties(self, context=None, evidence=None):
         context_name = _context_name(context)
         signature = _signature(context)
+        process_operator = _normalize(signature.get("process_operator", ""))
         evidence = list(evidence or [])
         evidence_count = max(len(evidence), 1)
         properties = {
             name: self._property(name, _confidence(context, 0.70), evidence_count)
             for name in self.BASE_PROPERTIES.get(context_name, [])
         }
-        if signature.get("object_dynamics") == "object_created":
+        if not self._is_preservation_context(context_name):
+            for name in self.BASE_PROPERTIES.get(process_operator, []):
+                properties[name] = self._property(
+                    name,
+                    _confidence(context, 0.70),
+                    evidence_count,
+                )
+        process_context = {
+            **self.PROCESS_NATIVE_CONTEXTS.get(context_name, {}),
+            **self.PROCESS_ABSTRACTIONS.get(context_name, {}),
+        }
+        truth_context = self.TRUTH_NATIVE_CONTEXTS.get(context_name, {})
+        process_native_contexts = set(
+            _normalize(item)
+            for item in _as_list(signature.get("process_native_contexts"))
+        )
+        process_native_contexts.update(process_context.get("properties", []))
+        process_native_contexts.update(
+            _normalize(item)
+            for item in _as_list(signature.get("truth_native_contexts"))
+        )
+        process_native_contexts.update(truth_context.get("properties", []))
+        process_native_contexts.update(
+            _normalize(item)
+            for item in _as_list(signature.get("native_contexts"))
+        )
+        if signature.get("process_context_surface") not in {None, "none"}:
+            process_native_contexts.add(
+                _normalize(signature["process_context_surface"])
+            )
+        for name in process_native_contexts:
+            properties[name] = self._property(
+                name,
+                max(_confidence(context, 0.70), 0.88),
+                evidence_count,
+            )
+        preservation_context = self._is_preservation_context(context_name)
+        if (
+            not preservation_context
+            and signature.get("object_dynamics") == "object_created"
+        ):
             properties["creates_objects"] = self._property(
                 "creates_objects",
                 0.90,
                 evidence_count,
             )
-        if signature.get("object_dynamics") == "object_removed":
+        if (
+            not preservation_context
+            and signature.get("object_dynamics") == "object_removed"
+        ):
             properties["removes_objects"] = self._property(
                 "removes_objects",
                 0.90,
                 evidence_count,
             )
-        if signature.get("topology_behavior") in [
+        if (
+            not preservation_context
+            and signature.get("topology_behavior") in [
             "topology_splitting",
             "topology_merging",
             "topology_expanding",
             "topology_restructured",
-        ]:
+            ]
+        ):
             properties["modifies_topology"] = self._property(
                 "modifies_topology",
                 0.86,
@@ -385,16 +955,22 @@ class SemanticContextReasoner:
                 0.86,
                 evidence_count,
             )
-        if signature.get("identity_behavior") in [
+        if (
+            not preservation_context
+            and signature.get("identity_behavior") in [
             "identity_split",
             "identity_merged",
-        ]:
+            ]
+        ):
             properties["modifies_identity"] = self._property(
                 "modifies_identity",
                 0.82,
                 evidence_count,
             )
-        if signature.get("size_behavior") == "size_expanded":
+        if (
+            not preservation_context
+            and signature.get("size_behavior") == "size_expanded"
+        ):
             properties["expands_objects"] = self._property(
                 "expands_objects",
                 0.84,
@@ -419,7 +995,31 @@ class SemanticContextReasoner:
 
     def infer_capabilities(self, context=None, properties=None):
         context_name = _context_name(context)
+        process_operator = _normalize(_signature(context).get(
+            "process_operator",
+            "",
+        ))
         capabilities = set(self.CAPABILITIES.get(context_name, []))
+        if not self._is_preservation_context(context_name):
+            capabilities.update(self.CAPABILITIES.get(process_operator, []))
+        capabilities.update(
+            self.PROCESS_NATIVE_CONTEXTS.get(context_name, {}).get(
+                "capabilities",
+                [],
+            )
+        )
+        capabilities.update(
+            self.PROCESS_ABSTRACTIONS.get(context_name, {}).get(
+                "capabilities",
+                [],
+            )
+        )
+        capabilities.update(
+            self.TRUTH_NATIVE_CONTEXTS.get(context_name, {}).get(
+                "capabilities",
+                [],
+            )
+        )
         property_names = {
             item.property_name if isinstance(item, ContextProperty) else str(item)
             for item in list(properties or [])
@@ -430,13 +1030,53 @@ class SemanticContextReasoner:
             capabilities.add("structure_preservation")
         if "propagates_structure" in property_names:
             capabilities.add("pattern_extension")
+        if "directional_spread" in property_names:
+            capabilities.add("directional_transfer")
+        if "directional_displacement" in property_names:
+            capabilities.add("directional_transfer")
+        if "position_delta" in property_names:
+            capabilities.add("spatial_relocation")
+        if "source_pattern_preservation" in property_names:
+            capabilities.add("source_pattern_preservation")
+        if "structural_copying" in property_names:
+            capabilities.add("structural_replication")
+        if "topology_expansion" in property_names:
+            capabilities.add("topology_growth")
         if "changes_color" in property_names:
             capabilities.add("attribute_remapping")
+        if "color_stability" in property_names:
+            capabilities.add("color_preservation_reasoning")
+        if "mirror_consistency" in property_names:
+            capabilities.add("mirror_consistency_check")
         return sorted(capabilities)
 
     def infer_constraints(self, context=None, properties=None):
         context_name = _context_name(context)
+        process_operator = _normalize(_signature(context).get(
+            "process_operator",
+            "",
+        ))
         constraints = set(self.CONSTRAINTS.get(context_name, []))
+        if not self._is_preservation_context(context_name):
+            constraints.update(self.CONSTRAINTS.get(process_operator, []))
+        constraints.update(
+            self.PROCESS_NATIVE_CONTEXTS.get(context_name, {}).get(
+                "constraints",
+                [],
+            )
+        )
+        constraints.update(
+            self.PROCESS_ABSTRACTIONS.get(context_name, {}).get(
+                "constraints",
+                [],
+            )
+        )
+        constraints.update(
+            self.TRUTH_NATIVE_CONTEXTS.get(context_name, {}).get(
+                "constraints",
+                [],
+            )
+        )
         property_names = {
             item.property_name if isinstance(item, ContextProperty) else str(item)
             for item in list(properties or [])
@@ -451,7 +1091,31 @@ class SemanticContextReasoner:
 
     def infer_implications(self, context=None, properties=None):
         context_name = _context_name(context)
+        process_operator = _normalize(_signature(context).get(
+            "process_operator",
+            "",
+        ))
         implications = set(self.IMPLICATIONS.get(context_name, []))
+        if not self._is_preservation_context(context_name):
+            implications.update(self.IMPLICATIONS.get(process_operator, []))
+        implications.update(
+            self.PROCESS_NATIVE_CONTEXTS.get(context_name, {}).get(
+                "implications",
+                [],
+            )
+        )
+        implications.update(
+            self.PROCESS_ABSTRACTIONS.get(context_name, {}).get(
+                "implications",
+                [],
+            )
+        )
+        implications.update(
+            self.TRUTH_NATIVE_CONTEXTS.get(context_name, {}).get(
+                "implications",
+                [],
+            )
+        )
         property_names = {
             item.property_name if isinstance(item, ContextProperty) else str(item)
             for item in list(properties or [])
@@ -464,10 +1128,21 @@ class SemanticContextReasoner:
             implications.add("shape_preservation_expected")
         if "modifies_topology" in property_names:
             implications.add("topology_modification_possible")
+        if "topology_expansion" in property_names:
+            implications.add("topology_expansion_expected")
+        if "directional_spread" in property_names:
+            implications.add("directional_motion_expected")
+        if "directional_displacement" in property_names:
+            implications.add("position_change_expected")
+        if "structural_copying" in property_names:
+            implications.add("structural_copy_expected")
         return sorted(implications)
 
     def generate_semantic_definition(self, context=None, properties=None):
         context_name = _context_name(context)
+        abstraction = self.PROCESS_ABSTRACTIONS.get(context_name, {})
+        if abstraction.get("definition"):
+            return abstraction["definition"]
         if context_name in self.DEFINITIONS:
             return self.DEFINITIONS[context_name]
         property_names = [
@@ -482,10 +1157,22 @@ class SemanticContextReasoner:
 
     def generate_semantic_profile(self, context=None, evidence=None):
         context_name = _context_name(context)
+        process_context_report = ProcessContextGenerationEngine().generate_context(
+            context_name,
+        )
         properties = self.infer_properties(context, evidence)
         capabilities = self.infer_capabilities(context, properties)
         constraints = self.infer_constraints(context, properties)
         implications = self.infer_implications(context, properties)
+        properties, capabilities, constraints, implications = (
+            self._purify_preservation_profile(
+                context_name,
+                properties,
+                capabilities,
+                constraints,
+                implications,
+            )
+        )
         definition = self.generate_semantic_definition(context, properties)
         confidence = clamp(
             (
@@ -528,6 +1215,51 @@ class SemanticContextReasoner:
             "capabilities": capabilities,
             "constraints": constraints,
             "implications": implications,
+            "process_traits": self._process_traits(context),
+            "process_traits_stored_separately": True,
+            "preservation_context": self._is_preservation_context(
+                context_name,
+            ),
+            "preservation_context_pure": (
+                not self._is_preservation_context(context_name)
+                or (
+                    not (
+                        {
+                            item.property_name
+                            for item in properties
+                        }
+                        & self.PROCESS_TRAIT_PROPERTIES
+                    )
+                    and not (
+                        set(capabilities)
+                        & self.PROCESS_TRAIT_CAPABILITIES
+                    )
+                    and not (
+                        set(constraints)
+                        & self.PROCESS_TRAIT_CONSTRAINTS
+                    )
+                )
+            ),
+            "transfer_conditions": self.PROCESS_ABSTRACTIONS.get(
+                context_name,
+                {},
+            ).get("transfer_conditions", []),
+            "validation_criteria": self.PROCESS_ABSTRACTIONS.get(
+                context_name,
+                {},
+            ).get("validation_criteria", []),
+            "process_abstraction": (
+                ProcessAbstractionLayer.get(context_name).as_dict()
+                if ProcessAbstractionLayer.get(context_name)
+                else {}
+            ),
+            "process_abstraction_ready": bool(
+                ProcessAbstractionLayer.get(context_name)
+            ),
+            "process_context_generation": process_context_report,
+            "process_context_generated": bool(
+                process_context_report.get("process_context_generated")
+            ),
             "semantic_definition": definition,
             "confidence": confidence,
             "semantic_context_score": confidence,

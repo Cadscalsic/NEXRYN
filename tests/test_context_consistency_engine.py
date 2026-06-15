@@ -297,17 +297,37 @@ def test_color_preservation_requires_mapping_rule_without_mapping_signal():
     assert report["recommended_action"] == "REQUIRE_MAPPING_RULE"
 
 
-def test_object_identity_preservation_with_identity_split():
+def test_identity_persistence_rejects_identity_split():
     engine = ContextConsistencyEngine()
 
     report = engine.analyze(
-        "object_identity_preservation",
+        "identity_persistence",
         context_report={"identity": "identity_split", "confidence": 0.8},
         semantic_context_report={"properties": ["modifies_identity"]},
     )
 
     assert report["context_mismatch"]["mismatch_detected"] is True
-    assert report["recommended_action"] == "REQUIRE_IDENTITY_LINEAGE"
+    assert "identity_split_invalid_for_identity_persistence" in (
+        report["context_mismatch"]["mismatch_reasons"]
+    )
+
+
+def test_identity_forking_accepts_identity_split_with_lineage():
+    engine = ContextConsistencyEngine()
+
+    report = engine.analyze(
+        "identity_forking",
+        context_report={"identity": "identity_split", "confidence": 0.8},
+        semantic_context_report={
+            "properties": [
+                "identity_split_with_lineage",
+                "object_count_increase",
+            ],
+        },
+    )
+
+    assert report["context_mismatch"]["mismatch_detected"] is False
+    assert report["context_support_strength"] > 0.70
 
 
 def test_topology_preservation_with_topology_splitting():

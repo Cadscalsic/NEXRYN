@@ -51,7 +51,9 @@ class DependencyReasoningOperator:
         "replication",
         "topological_growth",
         "directional_motion",
-        "object_identity_preservation",
+        "identity_persistence",
+        "identity_forking",
+        "symmetry_reasoning"
     }
 
     DUPLICATION_CHAIN = [
@@ -95,6 +97,7 @@ class DependencyReasoningOperator:
     ]
     REPLICATION_CHAIN = [
         "replication",
+        "identity_forking",
         "identity_split",
         "object_count_increase",
         "topology_splitting",
@@ -102,7 +105,7 @@ class DependencyReasoningOperator:
         "shape_preservation",
     ]
     IDENTITY_PRESERVATION_CHAIN = [
-        "object_identity_preservation",
+        "identity_persistence",
         "identity_preserved",
         "local_shape",
         "shape_preservation",
@@ -118,9 +121,10 @@ class DependencyReasoningOperator:
         ("growth", "topology_expansion"): "cell_count_increase",
         ("topology_expansion", "shape_preservation"): "local_shape",
         ("propagation", "directional_motion"): "source_pattern_preserved",
-        ("replication", "identity_split"): "object_count_increase",
+        ("replication", "identity_forking"): "identity_split",
+        ("identity_forking", "identity_split"): "object_count_increase",
         ("topology_splitting", "shape_preservation"): "local_shape",
-        ("object_identity_preservation", "shape_preservation"): "local_shape",
+        ("identity_persistence", "shape_preservation"): "local_shape",
     }
 
     def __init__(

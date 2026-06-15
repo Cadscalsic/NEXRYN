@@ -15,6 +15,9 @@ DEFAULT_PROCESS_DEPENDENCY_MEMORY_PATH = (
 
 SUPPORTED_PROCESS_DEPENDENCY_RELATIONS = {
     "causes",
+    "creates",
+    "depends_on",
+    "derived_from",
     "enables",
     "requires",
     "preserves",
@@ -26,8 +29,34 @@ SUPPORTED_PROCESS_DEPENDENCY_RELATIONS = {
 }
 
 RELATION_ALIASES = {
+    "depends": "depends_on",
+    "depends upon": "depends_on",
+    "derived": "derived_from",
     "may_cause": "causes",
     "may_affect": "modifies",
+}
+
+REQUIRED_PROCESS_DEPENDENCY_RELATIONS = {
+    "causes",
+    "creates",
+    "depends_on",
+    "derived_from",
+    "enables",
+    "requires",
+    "preserves",
+    "modifies",
+    "supports",
+}
+
+TRUTH_GRADE_PROCESS_DEPENDENCY_RELATIONS = {
+    "causes",
+    "creates",
+    "depends_on",
+    "derived_from",
+    "enables",
+    "requires",
+    "preserves",
+    "modifies",
 }
 
 DEFAULT_PROCESS_DEPENDENCY_CHAINS = {
@@ -40,25 +69,32 @@ DEFAULT_PROCESS_DEPENDENCY_CHAINS = {
         ("topology_splitting", "preserves", "local_shape", 0.86),
         ("local_shape", "supports", "shape_preservation", 0.86),
         ("topological_growth", "supports", "growth", 0.88),
-        ("growth", "requires", "object_identity_preservation", 0.91),
+        ("growth", "requires", "identity_persistence", 0.91),
     ],
     "growth": [
-        ("growth", "supports", "identity_continuity", 0.90),
-        ("growth", "requires", "object_identity_preservation", 0.91),
-        ("object_identity_preservation", "requires", "object_persistence", 0.92),
+        ("growth", "requires", "identity_persistence", 0.91),
+        ("growth", "preserves", "object_core", 0.89),
+        ("growth", "modifies", "identity_continuity", 0.90),
+        ("growth", "creates", "topology_expansion", 0.90),
+        ("growth", "depends_on", "source_pattern_preserved", 0.88),
+        ("identity_persistence", "requires", "object_persistence", 0.92),
         ("object_persistence", "requires", "identity_continuity", 0.92),
         ("identity_continuity", "preserves", "object_core", 0.90),
         ("object_core", "supports", "shape_preservation", 0.86),
     ],
     "topological_growth": [
-        ("topological_growth", "supports", "growth", 0.88),
+        ("topological_growth", "derived_from", "growth", 0.88),
+        ("topological_growth", "depends_on", "source_pattern_preserved", 0.88),
         ("topological_growth", "modifies", "topology_expansion", 0.90),
+        ("topological_growth", "creates", "topology_splitting", 0.87),
         ("topology_expansion", "preserves", "local_shape", 0.86),
         ("local_shape", "supports", "shape_preservation", 0.86),
     ],
     "replication": [
         ("replication", "requires", "source_pattern_preserved", 0.89),
-        ("replication", "causes", "identity_split", 0.91),
+        ("replication", "preserves", "source_pattern_preserved", 0.89),
+        ("replication", "causes", "identity_forking", 0.91),
+        ("identity_forking", "causes", "identity_split", 0.92),
         ("identity_split", "causes", "object_count_increase", 0.92),
         ("object_count_increase", "enables", "topological_growth", 0.87),
         ("object_count_increase", "enables", "topology_splitting", 0.86),
@@ -74,16 +110,23 @@ DEFAULT_PROCESS_DEPENDENCY_CHAINS = {
     ],
     "directional_motion": [
         ("directional_motion", "requires", "position_delta", 0.87),
-        ("directional_motion", "requires", "object_identity_preservation", 0.86),
+        ("directional_motion", "requires", "identity_persistence", 0.86),
         ("position_delta", "causes", "position_change", 0.88),
         ("position_change", "supports", "propagation", 0.82),
     ],
-    "object_identity_preservation": [
-        ("object_identity_preservation", "requires", "object_persistence", 0.92),
+    "identity_persistence": [
+        ("identity_persistence", "requires", "object_persistence", 0.92),
         ("object_persistence", "requires", "identity_continuity", 0.92),
         ("identity_continuity", "preserves", "object_core", 0.90),
         ("object_core", "supports", "shape_preservation", 0.86),
         ("object_core", "supports", "topology_preservation", 0.84),
+    ],
+    "identity_forking": [
+        ("identity_forking", "causes", "identity_split", 0.92),
+        ("identity_split", "causes", "object_count_increase", 0.92),
+        ("object_count_increase", "causes", "topology_splitting", 0.86),
+        ("topology_splitting", "preserves", "local_shape", 0.86),
+        ("local_shape", "supports", "shape_preservation", 0.84),
     ],
 }
 
@@ -138,7 +181,7 @@ class ProcessDependencyLink:
             "relation": self.relation,
             "confidence": self.confidence,
             "dependency_type": "typed_process_dependency_memory",
-            "required": self.relation in {"causes", "requires", "supports"},
+            "required": self.relation in REQUIRED_PROCESS_DEPENDENCY_RELATIONS,
             "supported": True,
             "transfer_success": True,
             "metadata": {
@@ -246,11 +289,34 @@ class ProcessDependencyMemory:
         expected = {
             link.target
             for link in self.links_for(concept)
-            if link.source == concept and link.relation in {"causes", "requires", "supports"}
+            if link.source == concept
+            and link.relation in REQUIRED_PROCESS_DEPENDENCY_RELATIONS
         }
-        present = set(best_chain[1:])
+        present = {
+            node
+            for chain in chains
+            for node in chain[1:]
+        }
         missing = sorted(expected - present)
         confidences = [link.confidence for link in self.links_for(concept)]
+        typed_relations = [
+            link.as_dependency()
+            for link in self.links_for(concept)
+        ]
+        semantic_relations = [
+            link
+            for link in self.links_for(concept)
+            if link.relation in TRUTH_GRADE_PROCESS_DEPENDENCY_RELATIONS
+        ]
+        relation_semantics_score = (
+            round(
+                sum(link.confidence for link in semantic_relations)
+                / len(semantic_relations),
+                4,
+            )
+            if semantic_relations
+            else 0.0
+        )
         confidence = (
             round(sum(confidences) / len(confidences), 4)
             if confidences
@@ -268,14 +334,19 @@ class ProcessDependencyMemory:
                 else 0.0
             ),
             "process_dependency_links_used": max(len(best_chain) - 1, 0),
+            "typed_dependency_relations": typed_relations,
+            "typed_dependency_relation_count": len(typed_relations),
+            "relation_semantics_score": relation_semantics_score,
         }
 
     def report(self) -> dict[str, Any]:
         return {
             "system": "process_dependency_memory",
-            "schema_version": 1,
+            "schema_version": 2,
+            "memory_type": "typed_process_dependency_memory",
             "generated_at": _timestamp(),
             "supported_relations": sorted(SUPPORTED_PROCESS_DEPENDENCY_RELATIONS),
+            "required_relations": sorted(REQUIRED_PROCESS_DEPENDENCY_RELATIONS),
             "relation_aliases": dict(RELATION_ALIASES),
             "process_dependency_links_loaded": self.links_loaded,
             "loaded_from_storage": self.loaded_from_storage,
@@ -344,6 +415,8 @@ __all__ = [
     "ProcessDependencyLink",
     "ProcessDependencyMemory",
     "RELATION_ALIASES",
+    "REQUIRED_PROCESS_DEPENDENCY_RELATIONS",
     "SUPPORTED_PROCESS_DEPENDENCY_RELATIONS",
+    "TRUTH_GRADE_PROCESS_DEPENDENCY_RELATIONS",
     "normalize_process_dependency_relation",
 ]

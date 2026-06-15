@@ -1,4 +1,5 @@
 from core.belief_engine import EpistemicCognitionLayer
+from core.context_discovery import ContextDiscoveryEngine
 from core.epistemic_models import (
     Belief,
     BeliefState,
@@ -45,6 +46,150 @@ def recoloring_context():
             "confidence": 0.95,
         },
     }
+
+
+def test_process_context_discovery_preserves_process_families():
+    engine = ContextDiscoveryEngine()
+
+    replication = engine.discover_context({
+        "concept": "replication",
+        "active_concepts": ["replication"],
+        "input_grid": [[1, 0, 0]],
+        "output_grid": [[1, 0, 1]],
+    })
+    topological_growth = engine.discover_context({
+        "concept": "topological_growth",
+        "active_concepts": ["topological_growth"],
+        "input_grid": [[1, 0], [0, 0]],
+        "output_grid": [[1, 1], [1, 1]],
+    })
+
+    assert replication["semantic_context"] == "replication_context"
+    assert replication["process_operator"] == "replication"
+    assert replication["cluster"] == "Replication Context"
+    assert replication["context_signature"]["process_context_surface"] == (
+        "structural_copying"
+    )
+    assert topological_growth["semantic_context"] == (
+        "topological_growth_context"
+    )
+    assert topological_growth["process_operator"] == "topological_growth"
+    assert topological_growth["cluster"] == "Topological Growth Context"
+    assert topological_growth["context_signature"][
+        "process_context_surface"
+    ] == "topology_expansion"
+
+
+def test_process_semantic_context_generates_source_pattern_evidence():
+    reasoner = SemanticContextReasoner()
+
+    profile = reasoner.generate_semantic_profile({
+        "transformation_family": "propagation_context",
+        "process_operator": "propagation",
+        "confidence": 0.90,
+        "context_signature": {
+            "transformation_family": "propagation_context",
+            "semantic_context": "propagation_context",
+            "process_operator": "propagation",
+            "object_dynamics": "object_expanded",
+            "topology_behavior": "topology_expanding",
+            "propagation_behavior": "propagation_detected",
+            "size_behavior": "size_expanded",
+            "confidence": 0.90,
+        },
+    })
+    properties = {
+        item["property_name"]
+        for item in profile["properties"]
+    }
+
+    assert profile["semantically_validated"] is True
+    assert "source_pattern_preserved" in properties
+    assert "directional_spread" in properties
+    assert "signal_transfer" in properties
+    assert "pattern_extension" in profile["capabilities"]
+
+
+def test_process_semantic_context_generates_native_surface_strength():
+    reasoner = SemanticContextReasoner()
+
+    contexts = [
+        ("growth", "topology_expansion"),
+        ("propagation", "directional_spread"),
+        ("replication", "structural_copying"),
+        ("topological_growth", "topology_expansion"),
+        ("directional_motion", "position_delta"),
+    ]
+
+    for concept, surface in contexts:
+        discovery = ContextDiscoveryEngine().discover_context({
+            "concept": concept,
+            "active_concepts": [concept],
+        })
+        profile = reasoner.generate_semantic_profile(discovery)
+        properties = {
+            item["property_name"]
+            for item in profile["properties"]
+        }
+
+        assert profile["semantic_context_score"] >= 0.90
+        assert profile["semantically_validated"] is True
+        assert surface in properties
+
+
+def test_preservation_contexts_do_not_absorb_process_traits():
+    process_traits = {
+        "creates_objects",
+        "modifies_topology",
+        "expands_objects",
+        "modifies_identity",
+    }
+    process_capabilities = {
+        "object_creation",
+        "structural_replication",
+        "identity_split_reasoning",
+        "topology_growth",
+    }
+    process_constraints = {
+        "object_count_changes",
+        "identity_continuity_may_split",
+        "identity_continuity_may_change",
+    }
+
+    for concept, expected_context in {
+        "shape_preservation": "shape_context",
+        "color_preservation": "color_context",
+        "symmetry_preservation": "symmetry_context",
+        "position_preservation": "position_context",
+        "topology_preservation": "topology_context",
+    }.items():
+        discovery = ContextDiscoveryEngine().discover_context({
+            "concept": concept,
+            "active_concepts": [concept, "duplication"],
+            "identity_behavior": "identity_split",
+            "topology_behavior": "topology_splitting",
+            "color_behavior": "color_reassigned",
+            "input_grid": [[1, 0]],
+            "output_grid": [[1, 0], [1, 0]],
+        })
+        profile = SemanticContextReasoner().generate_semantic_profile(
+            discovery
+        )
+        properties = {
+            item["property_name"]
+            for item in profile["properties"]
+        }
+
+        assert discovery["semantic_context"] == expected_context
+        assert discovery["process_operator"] == "duplication"
+        assert discovery["identity_behavior"] == "identity_preserved"
+        assert profile["preservation_context"] is True
+        assert profile["preservation_context_pure"] is True
+        assert not (properties & process_traits)
+        assert not (set(profile["capabilities"]) & process_capabilities)
+        assert not (set(profile["constraints"]) & process_constraints)
+        assert profile["process_traits"]["process_operator"] == "duplication"
+        assert "creates_objects" in profile["process_traits"]["properties"]
 
 
 def strong_evidence(concept, source):
@@ -147,7 +292,10 @@ def test_runtime_report_exposes_semantic_context_report():
     semantic = report["semantic_context_reasoner"]["evaluations"][0]
     candidate = report["evaluations"][0]["truth_candidate"]
 
-    assert semantic["context"] == "duplication"
+    discovery = report["context_discovery_engine"]["evaluations"][0]
+
+    assert semantic["context"] == "structural_transformation_context"
+    assert discovery["process_operator"] == "duplication"
     assert semantic["semantically_validated"] is True
     assert "object_creation" in semantic["capabilities"]
     assert candidate["semantic_context"]["status"] == "SEMANTICALLY_VALIDATED"
@@ -168,7 +316,9 @@ def test_semantic_memory_stores_context_semantic_profile():
     )
     stored = memory.retrieve_concept("duplication_rule")
 
-    assert stored["semantic_context_profile"]["context_name"] == "duplication"
+    assert stored["semantic_context_profile"]["context_name"] == (
+        "structural_transformation_context"
+    )
     assert "object_creation" in stored["context_capabilities"]
     assert stored["property_confidence_history"]
 

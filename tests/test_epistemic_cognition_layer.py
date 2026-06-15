@@ -1204,6 +1204,180 @@ def test_truth_candidate_engine_ranks_causal_alignment_as_dominant_gap():
     }
 
 
+def test_truth_candidate_uses_validated_causal_report_for_alignment_metric():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="object_identity_preservation",
+            claim="object_identity_preservation",
+            state=BeliefState.VALIDATED,
+            confidence=0.92,
+        ),
+        EvidenceAggregate(
+            concept="object_identity_preservation",
+            evidence_count=3,
+            evidence_strength=0.94,
+            contradiction_score=0.02,
+            semantic_consistency=0.94,
+            causal_alignment=0.58,
+        ),
+        {
+            "causal_validation": {
+                "validation_score": 0.8661,
+                "validation_state": "VALIDATED",
+                "validation_ready": True,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.72,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 1.0,
+                "contextual_truth_supported": True,
+            },
+            "context_hierarchy": {
+                "context_hierarchy_score": 1.0,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "semantic_context_score": 0.9175,
+                "semantically_validated": True,
+            },
+        },
+    )
+
+    causal_metric = next(
+        item
+        for item in report["metrics"]
+        if item["metric"] == "causal_alignment"
+    )
+
+    assert causal_metric["current_value"] == 0.8661
+    assert causal_metric["passed"] is True
+    assert "causal_alignment" not in report["blocked_metrics"]
+    assert report["causal_alignment_audit"][
+        "raw_aggregate_causal_alignment"
+    ] == 0.58
+    assert report["causal_alignment_audit"][
+        "causal_validation_ready"
+    ] is True
+
+
+def test_truth_candidate_stage_accepts_validated_causal_lifecycle():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="object_identity_preservation",
+            claim="object_identity_preservation",
+            state=BeliefState.SUPPORTED,
+            confidence=0.92,
+        ),
+        EvidenceAggregate(
+            concept="object_identity_preservation",
+            evidence_count=3,
+            evidence_strength=0.94,
+            contradiction_score=0.02,
+            semantic_consistency=0.94,
+            causal_alignment=0.58,
+        ),
+        {
+            "causal_validation": {
+                "validation_score": 0.8661,
+                "validation_state": "VALIDATED",
+                "validation_ready": True,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.90,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 1.0,
+                "contextual_truth_supported": True,
+            },
+            "context_hierarchy": {
+                "context_hierarchy_score": 1.0,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "semantic_context_score": 0.9175,
+                "semantically_validated": True,
+            },
+            "process_dependency_memory": {
+                "dependency_confidence": 0.91,
+                "dependency_chain_depth": 5,
+                "dependency_chain_coverage": 0.86,
+                "missing_dependencies": [],
+            },
+            "dependency_chain_alignment": {
+                "alignment_ready": True,
+                "alignment_confidence": 0.91,
+            },
+        },
+    )
+
+    assert report["eligible_for_truth_candidate"] is True
+    assert report["eligibility_reason"] == "truth_candidate_ready"
+    assert report["stage_eligible_for_truth_candidate"] is True
+    assert report["stage_eligibility_source"] == "causal_validation"
+    assert report["stage_eligibility"]["belief_lifecycle_stage"] == "SUPPORTED"
+    assert report["blocked_metrics"] == []
+    assert report["dependency_promotion_blockers"] == []
+
+
+def test_truth_candidate_stage_still_requires_validation_source():
+    report = TruthCandidateEngine().evaluate(
+        Belief(
+            concept="object_identity_preservation",
+            claim="object_identity_preservation",
+            state=BeliefState.SUPPORTED,
+            confidence=0.92,
+        ),
+        EvidenceAggregate(
+            concept="object_identity_preservation",
+            evidence_count=3,
+            evidence_strength=0.94,
+            contradiction_score=0.02,
+            semantic_consistency=0.94,
+            causal_alignment=0.90,
+        ),
+        {
+            "causal_validation": {
+                "validation_score": 0.70,
+                "validation_state": "PARTIALLY_VALIDATED",
+                "validation_ready": False,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.90,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 1.0,
+                "contextual_truth_supported": True,
+            },
+            "context_hierarchy": {
+                "context_hierarchy_score": 1.0,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "semantic_context_score": 0.9175,
+                "semantically_validated": True,
+            },
+            "process_dependency_memory": {
+                "dependency_confidence": 0.91,
+                "dependency_chain_depth": 5,
+                "dependency_chain_coverage": 0.86,
+                "missing_dependencies": [],
+            },
+            "dependency_chain_alignment": {
+                "alignment_ready": True,
+                "alignment_confidence": 0.91,
+            },
+        },
+    )
+
+    assert report["eligible_for_truth_candidate"] is False
+    assert report["eligibility_reason"] == "validated_stage_required"
+    assert report["stage_eligibility_source"] == "unvalidated"
+    assert "promotion_stage_blocked:validated_stage_required" in (
+        report["dependency_promotion_blockers"]
+    )
+
+
 def test_truth_candidate_engine_marks_soft_contradiction_review_zone():
     report = TruthCandidateEngine().evaluate(
         Belief(
@@ -3297,6 +3471,62 @@ def test_identity_safe_truth_integration_does_not_bypass_strength_gap():
     assert integration["allow_fragile_semantic_spine_integration"] is False
 
 
+def test_identity_safe_truth_integration_uses_validated_causal_alignment():
+    belief = Belief(
+        concept="object_identity_preservation",
+        claim="object_identity_preservation",
+        state=BeliefState.VALIDATED,
+        confidence=0.90,
+    )
+    aggregate = EvidenceAggregate(
+        concept="object_identity_preservation",
+        evidence_count=5,
+        evidence_strength=0.90,
+        contradiction_score=0.02,
+        semantic_consistency=0.90,
+        causal_alignment=0.58,
+    )
+    candidate = {
+        "eligible_for_truth_candidate": True,
+    }
+
+    integration = IdentitySafeTruthIntegrationEngine().evaluate(
+        belief,
+        aggregate,
+        candidate,
+        {
+            "causal_validation": {
+                "validation_score": 0.8661,
+                "validation_state": "VALIDATED",
+                "validation_ready": True,
+            },
+            "causal_graph_alignment": {
+                "alignment_score": 0.72,
+            },
+            "contextual_truth": {
+                "contextual_truth_score": 1.0,
+                "contextual_truth_supported": True,
+            },
+            "context_hierarchy": {
+                "context_hierarchy_score": 1.0,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "semantic_context_score": 0.9175,
+                "semantically_validated": True,
+            },
+            "identity_continuity": 0.82,
+            "identity_stable": True,
+            "semantic_drift": 0.0,
+        },
+    )
+
+    assert integration["checks"]["causal_alignment_supported"] is True
+    assert integration["effective_causal_alignment"] == 0.8661
+    assert integration["raw_aggregate_causal_alignment"] == 0.58
+    assert integration["causal_validation_ready"] is True
+
+
 def test_identity_safe_truth_integration_respects_explicit_identity_block():
     belief = Belief(
         concept="identity_blocked_claim",
@@ -3599,7 +3829,6 @@ def test_semantic_spine_recovery_requires_three_safe_rehearsal_cycles():
             "identity_stability_state": "fragile_semantic_spine",
         },
     }
-    layer.run_cycle(context)
     first = layer.run_cycle(context)
     second = layer.run_cycle(context)
     third = layer.run_cycle(context)
@@ -3626,6 +3855,71 @@ def test_semantic_spine_recovery_requires_three_safe_rehearsal_cycles():
     assert rehearsal["result"]["rehearsal_cycle_id"] == (
         "truth_internalization:recoverable_truth:cycle_3"
     )
+
+
+def test_growth_truth_commit_after_process_identity_recovery_cycles():
+    layer = EpistemicCognitionLayer()
+    context = {
+        "task_id": "growth_split_recovery",
+        "active_concepts": ["growth"],
+        "concept": "growth",
+        "input_grid": [[1, 1, 0], [0, 0, 0]],
+        "output_grid": [[1, 0, 1], [0, 0, 0]],
+        "identity_behavior": "identity_split",
+        "epistemic_hypotheses": [{
+            "concept": "growth",
+            "claim": "growth",
+            "prior_confidence": 0.98,
+            "semantic_consistency": 1.0,
+            "causal_alignment": 0.91,
+        }],
+        "epistemic_evidence": [
+            strong_evidence("growth", source)
+            for source in [
+                "causal_observation",
+                "semantic_anchor_graph",
+                "mutation_rehearsal",
+                "process_dependency_memory",
+                "contextual_truth",
+                "identity_lineage_probe",
+            ]
+        ],
+    }
+
+    first = layer.run_cycle(context)
+    second = layer.run_cycle(context)
+    third = layer.run_cycle(context)
+
+    first_evaluation = first["evaluations"][0]
+    third_evaluation = third["evaluations"][0]
+    first_runtime = first_evaluation["identity_runtime_report"]
+    first_recovery = first_evaluation["semantic_spine_recovery"]
+    third_recovery = third_evaluation["semantic_spine_recovery"]
+
+    assert first_evaluation["truth_candidate"][
+        "eligible_for_truth_candidate"
+    ] is True
+    assert first_runtime["runtime_state"] == "IDENTITY_RUNTIME_TRANSFORMED"
+    assert first_runtime["runtime_ready"] is True
+    assert first_runtime["identity_split"] is True
+    assert first_runtime["process_identity_branching_supported"] is True
+    assert first_runtime["identity_continuity"] >= 0.62
+    assert first_evaluation["identity_safe_truth_integration"][
+        "failed_checks"
+    ] == ["identity_stable"]
+    assert first_recovery["recovery_state"] == "RECOVERY_MONITORING"
+    assert first_recovery["recovery_streak"] == 1
+
+    assert second["evaluations"][0]["semantic_spine_recovery"][
+        "recovery_streak"
+    ] == 2
+    assert third_recovery["recovery_state"] == "STABLE_SEMANTIC_SPINE"
+    assert third_recovery["semantic_spine_recovery_confirmed"] is True
+    assert third_recovery["failed_checks"] == []
+    assert third_evaluation["identity_safe_truth_integration"][
+        "integration_safe"
+    ] is True
+    assert third_evaluation["truth_commit"]["decision"] == "TRUTH_COMMITTED"
 
 
 def test_semantic_spine_recovery_ignores_duplicate_rehearsal_cycle():

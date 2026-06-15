@@ -121,9 +121,24 @@ class ConceptMaturityTracker:
                 else 1.0
             )
             cross_task_support = item.get("cross_task_support", 0.0)
+            runtime_candidate_report = {
+                **truth_candidate_report,
+                "evaluations": [
+                    evaluation
+                    for evaluation in truth_candidate_report.get(
+                        "evaluations",
+                        [],
+                    )
+                    if (
+                        isinstance(evaluation, dict)
+                        and str(evaluation.get("concept")) == concept
+                    )
+                ],
+            }
+
             promotion = self.truth_candidate_promotion_engine.evaluate(
                 item,
-                truth_candidate_report,
+                runtime_candidate_report,
             )
             if concept in stable_truths:
                 state = "STABLE_TRUTH"

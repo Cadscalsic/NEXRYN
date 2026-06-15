@@ -40,6 +40,13 @@ class ContextualTruthSupportPolicy:
         semantic_context = (
             semantic_context if isinstance(semantic_context, dict) else {}
         )
+        explicit_contextual_truth_available = (
+            contextual_truth.get("effective_contextual_truth") is not None
+            or contextual_truth.get("contextual_truth_score") is not None
+            or authority.get("effective_contextual_truth") is not None
+            or authority.get("contextual_truth_authority") is not None
+            or effective_score is not None
+        )
         effective_contextual_truth = max(
             clamp(effective_score if effective_score is not None else 0.0),
             self._score(
@@ -52,6 +59,16 @@ class ContextualTruthSupportPolicy:
                 ["effective_contextual_truth", "contextual_truth_authority"],
                 0.0,
             ),
+        )
+        transfer_reliability = self._score(
+            contextual_truth,
+            ["transfer_reliability", "context_transfer_reliability"],
+            0.0,
+        )
+        context_confidence = self._score(
+            contextual_truth,
+            ["context_confidence", "confidence"],
+            0.0,
         )
         hierarchy_score = self._score(
             context_hierarchy,
@@ -73,12 +90,38 @@ class ContextualTruthSupportPolicy:
                 support_floor,
                 self.STRONG_CONTEXT_SUPPORT_FLOOR,
             )
+        context_transfer_support = (
+            strong_context
+            and transfer_reliability >= 0.85
+            and context_confidence >= 0.75
+        )
+        derived_contextual_support = (
+            clamp(
+                context_confidence * 0.45
+                + transfer_reliability * 0.35
+                + semantic_score * 0.10
+                + hierarchy_score * 0.10
+            )
+            if context_transfer_support
+            else 0.0
+        )
+        if not explicit_contextual_truth_available:
+            effective_contextual_truth = max(
+                effective_contextual_truth,
+                derived_contextual_support,
+            )
+        evidence_supported = (
+            context_transfer_support
+            and derived_contextual_support >= support_floor
+        )
         explicit_support = (
             authority.get("contextual_truth_supported") is True
             or contextual_truth.get("contextual_truth_supported") is True
         )
-        supported = explicit_support or effective_contextual_truth >= (
-            support_floor
+        supported = (
+            explicit_support
+            or effective_contextual_truth >= support_floor
+            or evidence_supported
         )
         return {
             "system": "contextual_truth_support_policy",
@@ -89,6 +132,13 @@ class ContextualTruthSupportPolicy:
             "support_grace_margin": self.SUPPORT_GRACE,
             "effective_support_floor": support_floor,
             "strong_context_floor_applied": strong_context,
+            "context_transfer_support": context_transfer_support,
+            "derived_contextual_support": derived_contextual_support,
+            "evidence_supported": evidence_supported,
+            "explicit_contextual_truth_available":
+            explicit_contextual_truth_available,
+            "transfer_reliability": transfer_reliability,
+            "context_confidence": context_confidence,
             "context_hierarchy_score": hierarchy_score,
             "semantic_context_score": semantic_score,
             "explicit_contextual_truth_support": explicit_support,

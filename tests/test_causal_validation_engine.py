@@ -215,6 +215,62 @@ def test_causal_validation_reports_dependency_promotion_diagnostics(tmp_path):
     ] is True
 
 
+def test_causal_validation_uses_typed_relation_semantics_for_coherence(tmp_path):
+    engine = CausalValidationEngine(
+        storage_path=Path(tmp_path) / "causal_ledger.json"
+    )
+
+    report = engine.validate_hypothesis(
+        {
+            "source_concept": "growth",
+            "target_concept": "growth",
+        },
+        [
+            evidence("task_a", context="growth"),
+            evidence("task_b", context="growth"),
+            evidence("task_c", context="growth"),
+        ],
+        {
+            "dependency_coherence": 0.6742,
+            "identity_compatibility": 1.0,
+            "process_dependency_memory": {
+                "dependency_confidence": 0.9017,
+                "dependency_chain_depth": 5,
+                "dependency_chain_coverage": 1.0,
+                "missing_dependencies": [],
+                "typed_dependency_relations": [
+                    {
+                        "source": "growth",
+                        "target": "object_identity_preservation",
+                        "relation": "requires",
+                        "confidence": 0.91,
+                    },
+                    {
+                        "source": "growth",
+                        "target": "topology_expansion",
+                        "relation": "creates",
+                        "confidence": 0.90,
+                    },
+                    {
+                        "source": "growth",
+                        "target": "shape_preservation",
+                        "relation": "preserves",
+                        "confidence": 0.89,
+                    },
+                ],
+            },
+        },
+    )
+
+    assert report["dependency_coherence"] >= 0.89
+    assert report["dependency_promotion_evidence"][
+        "relation_semantics_score"
+    ] >= 0.89
+    assert report["dependency_promotion_evidence"][
+        "typed_dependency_relations"
+    ]
+
+
 def test_truth_commit_requires_causal_validation_score():
     engine = TruthCommitEngine()
     belief = Belief(

@@ -28,6 +28,14 @@ def _as_list(value):
     return [value]
 
 
+def _identity_failures_for_contextual_truth(value):
+    return [
+        item
+        for item in _as_list(value)
+        if str(item) != "contextual_truth_supported"
+    ]
+
+
 def _read_number(report, keys, default=0.0):
     report = report if isinstance(report, dict) else {}
     for key in keys:
@@ -58,7 +66,8 @@ class ContextualTruthAuthorityEngine:
             "shape_preservation": 0.04,
             "position_preservation": 0.04,
             "symmetry_preservation": 0.03,
-            "object_identity_preservation": 0.03,
+            "identity_persistence": 0.03,
+            "identity_forking": 0.03,
             "identity_preservation": 0.03,
             "color_preservation": 0.02,
             "topology_preservation": 0.02,
@@ -105,6 +114,41 @@ class ContextualTruthAuthorityEngine:
         )
         if _normalize(semantic_context.get("status")) == "SEMANTICALLY_VALIDATED":
             semantic_score = max(semantic_score, 0.85)
+        transfer_reliability = _read_number(
+            contextual_truth,
+            ["transfer_reliability", "context_transfer_reliability"],
+            0.5,
+        )
+        context_confidence = _read_number(
+            contextual_truth,
+            ["context_confidence", "confidence"],
+            0.5,
+        )
+        explicit_contextual_truth_score = _read_number(
+            contextual_truth,
+            ["effective_contextual_truth", "contextual_truth_score"],
+            truth_candidate.get("contextual_truth_score", 0.5),
+        )
+        explicit_contextual_truth_available = (
+            contextual_truth.get("effective_contextual_truth") is not None
+            or contextual_truth.get("contextual_truth_score") is not None
+            or truth_candidate.get("effective_contextual_truth") is not None
+            or truth_candidate.get("contextual_truth_score") is not None
+        )
+        derived_contextual_support = 0.0
+        context_transfer_support = (
+            hierarchy_score >= 0.90
+            and semantic_score >= 0.85
+            and transfer_reliability >= 0.85
+            and context_confidence >= 0.75
+        )
+        if context_transfer_support:
+            derived_contextual_support = clamp(
+                context_confidence * 0.45
+                + transfer_reliability * 0.35
+                + semantic_score * 0.10
+                + hierarchy_score * 0.10
+            )
         causal_graph_alignment = _read_number(
             causal_validation,
             ["causal_graph_alignment", "alignment_score"],
@@ -132,23 +176,24 @@ class ContextualTruthAuthorityEngine:
                 ["context_consistency", "consistency_score"],
                 contextual_truth.get("context_binding_score", 0.5),
             ),
-            "contextual_truth_score": _read_number(
-                contextual_truth,
-                ["contextual_truth_score"],
-                truth_candidate.get("contextual_truth_score", 0.5),
+            "contextual_truth_score": (
+                explicit_contextual_truth_score
+                if explicit_contextual_truth_available
+                else max(
+                    explicit_contextual_truth_score,
+                    derived_contextual_support,
+                )
             ),
             "semantic_context_score": semantic_score,
             "context_hierarchy_score": hierarchy_score,
-            "transfer_reliability": _read_number(
-                contextual_truth,
-                ["transfer_reliability", "context_transfer_reliability"],
-                0.5,
-            ),
-            "context_confidence": _read_number(
-                contextual_truth,
-                ["context_confidence", "confidence"],
-                0.5,
-            ),
+            "transfer_reliability": transfer_reliability,
+            "context_confidence": context_confidence,
+            "explicit_contextual_truth_score":
+            explicit_contextual_truth_score,
+            "explicit_contextual_truth_available":
+            explicit_contextual_truth_available,
+            "derived_contextual_support": derived_contextual_support,
+            "context_transfer_support": context_transfer_support,
             "causal_validation_score": _read_number(
                 causal_validation,
                 ["causal_validation_score", "validation_score"],
@@ -174,6 +219,10 @@ class ContextualTruthAuthorityEngine:
                 identity.get("failed_identity_governance_gates")
             ),
             "identity_failed_checks": _as_list(
+                identity.get("identity_failed_checks")
+            ),
+            "identity_failed_checks_for_contextual_truth":
+            _identity_failures_for_contextual_truth(
                 identity.get("identity_failed_checks")
             ),
             "effective_contradiction": _read_number(
@@ -267,7 +316,7 @@ class ContextualTruthAuthorityEngine:
             score = min(score, 0.78)
         failures = (
             len(data["failed_identity_governance_gates"])
-            + len(data["identity_failed_checks"])
+            + len(data["identity_failed_checks_for_contextual_truth"])
         )
         score -= min(failures * 0.08, 0.32)
         return clamp(score)
@@ -320,7 +369,11 @@ class ContextualTruthAuthorityEngine:
         return "BLOCKED_CONTEXTUAL_TRUTH"
 
     def recommend_truth_governance_action(self, authority_status, data):
-        if data["identity_failed_checks"] or (
+        identity_failed_checks = data.get(
+            "identity_failed_checks_for_contextual_truth",
+            data["identity_failed_checks"],
+        )
+        if identity_failed_checks or (
             data["failed_identity_governance_gates"]
             and data["identity_safety_score"] < 0.60
         ):
@@ -378,11 +431,33 @@ class ContextualTruthAuthorityEngine:
             "AUTHORITATIVE_CONTEXTUAL_TRUTH",
             "SUPPORTED_CONTEXTUAL_TRUTH",
         }
+        evidence_supported = (
+            data.get("context_transfer_support") is True
+            and data.get("derived_contextual_support", 0.0)
+            >= self.authority_thresholds["supported"]
+            and causal_score >= 0.75
+            and identity_score >= 0.75
+            and contradiction_penalty < 0.25
+        )
+        contextual_truth_supported = (
+            contextual_truth_supported
+            or evidence_supported
+        )
+        if (
+            evidence_supported
+            and authority_status == "PROVISIONAL_CONTEXTUAL_TRUTH"
+        ):
+            authority_status = "SUPPORTED_CONTEXTUAL_TRUTH"
+            recommended_action = "COMMIT_CONTEXTUAL_TRUTH"
         explanation = [
             f"context_authority_score={round(context_score, 4)}",
             f"causal_support_score={round(causal_score, 4)}",
             f"identity_safety_score={round(identity_score, 4)}",
             f"contradiction_penalty={round(contradiction_penalty, 4)}",
+            "derived_contextual_support="
+            f"{round(data.get('derived_contextual_support', 0.0), 4)}",
+            "context_transfer_support="
+            f"{data.get('context_transfer_support')}",
             f"authority_status={authority_status}",
             f"truth_governance_action={recommended_action}",
         ]
@@ -407,6 +482,14 @@ class ContextualTruthAuthorityEngine:
                 "context_hierarchy_score": data["context_hierarchy_score"],
                 "transfer_reliability": data["transfer_reliability"],
                 "context_confidence": data["context_confidence"],
+                "explicit_contextual_truth_score":
+                data["explicit_contextual_truth_score"],
+                "explicit_contextual_truth_available":
+                data["explicit_contextual_truth_available"],
+                "derived_contextual_support":
+                data["derived_contextual_support"],
+                "context_transfer_support":
+                data["context_transfer_support"],
                 "causal_validation_score":
                 data["causal_validation_score"],
                 "causal_graph_alignment": data["causal_graph_alignment"],
