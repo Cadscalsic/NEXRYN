@@ -87,8 +87,10 @@ DEFAULT_PROCESS_DEPENDENCY_CHAINS = {
         ("topological_growth", "depends_on", "source_pattern_preserved", 0.88),
         ("topological_growth", "modifies", "topology_expansion", 0.90),
         ("topological_growth", "creates", "topology_splitting", 0.87),
+        ("topology_splitting", "preserves", "local_shape", 0.86),
         ("topology_expansion", "preserves", "local_shape", 0.86),
         ("local_shape", "supports", "shape_preservation", 0.86),
+        ("shape_preservation", "supports", "topology_preservation", 0.84),
     ],
     "replication": [
         ("replication", "requires", "source_pattern_preserved", 0.89),
@@ -112,6 +114,8 @@ DEFAULT_PROCESS_DEPENDENCY_CHAINS = {
         ("directional_motion", "requires", "position_delta", 0.87),
         ("directional_motion", "requires", "identity_persistence", 0.86),
         ("position_delta", "causes", "position_change", 0.88),
+        ("position_change", "supports", "position_preservation", 0.84),
+        ("position_preservation", "requires", "object_persistence", 0.84),
         ("position_change", "supports", "propagation", 0.82),
     ],
     "identity_persistence": [

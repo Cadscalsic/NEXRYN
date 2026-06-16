@@ -15,9 +15,13 @@ CORE_CAUSAL_RELATIONSHIPS = [
     },
     {
         "source": "symmetry_preservation",
-        "target": "object_identity_preservation",
+        "target": "identity_persistence",
     },
 ]
+
+DEPRECATED_CONCEPT_ALIASES = {
+    "object_identity_preservation": "identity_persistence",
+}
 
 
 class CausalGraphValidator:
@@ -72,6 +76,7 @@ class CausalGraphValidator:
         )
 
     def _requirements(self, concept, context):
+        concept = DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
         return [
             dict(relationship)
             for relationship in self._relationships(context)
@@ -79,6 +84,7 @@ class CausalGraphValidator:
         ]
 
     def _downstream_relationships(self, concept, context):
+        concept = DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
         relationships = context.get(
             "core_causal_relationships",
             self.relationships,
@@ -100,6 +106,11 @@ class CausalGraphValidator:
         depth = int(memory.get("dependency_chain_depth", 0) or 0)
         coverage = clamp(memory.get("dependency_chain_coverage", 0.0))
         target = str(requirement.get("target", ""))
+        concept = DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
+        chain = [
+            DEPRECATED_CONCEPT_ALIASES.get(str(item), str(item))
+            for item in chain
+        ]
 
         typed_chain_supported = (
             target == str(concept)

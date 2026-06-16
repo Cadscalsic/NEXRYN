@@ -36,6 +36,9 @@ from runtime.execution.execution_integrity_guard import (
 from runtime.execution.world_model_gate import (
     world_model_gate,
 )
+from runtime.kernel.cognitive_blackboard import (
+    cognitive_blackboard_from_context,
+)
 
 # ============================================
 # GLOBAL TRANSFORMATION ENGINE
@@ -199,6 +202,10 @@ def transformation_stage(context):
 
         context = {}
 
+    blackboard = cognitive_blackboard_from_context(
+        context
+    )
+
     # ========================================
     # STAGE REPORT
     # ========================================
@@ -237,6 +244,10 @@ def transformation_stage(context):
         {}
     )
 
+    if blackboard.synthesized_program:
+
+        synthesized_program = blackboard.synthesized_program
+
     ranked_primitives = safe_list(
 
         context.get(
@@ -255,10 +266,42 @@ def transformation_stage(context):
         {}
     )
 
+    if blackboard.execution_plan:
+
+        execution_plan = blackboard.execution_plan
+
     world_model_anticipation = context.get(
         "world_model_anticipation",
         {}
     )
+
+    if blackboard.world_model.get("anticipation"):
+
+        world_model_anticipation = blackboard.world_model.get(
+            "anticipation"
+        )
+
+    with blackboard.transaction():
+
+        if context.get("graph_reasoning"):
+
+            blackboard.synchronize_from_graph_reasoning(
+                context.get("graph_reasoning")
+            )
+
+        if world_model_anticipation:
+
+            blackboard.synchronize_from_world_model(
+                world_model_anticipation
+            )
+
+        if execution_plan:
+
+            execution_plan = blackboard.synchronize_execution_plan(
+                execution_plan
+            )
+
+    blackboard.assert_synchronized()
 
     # ========================================
     # VALIDATION
@@ -386,6 +429,24 @@ def transformation_stage(context):
         world_model_gate.evaluate(
             world_model_anticipation
         )
+    )
+
+    blackboard.update(
+        "world_model",
+        {
+            "gate_report": world_model_gate_report,
+            "execution_authorized": world_model_gate_report[
+                "execution_authorized"
+            ],
+            "prediction_report": prediction_report,
+            "prediction_accuracy": prediction_report.get(
+                "prediction_accuracy",
+                prediction_report.get(
+                    "accuracy",
+                    0.0
+                )
+            ),
+        }
     )
 
     sandbox_execution_result = None
@@ -547,6 +608,19 @@ def transformation_stage(context):
     strategy_count = len(
         planned_primitives
     )
+
+    blackboard.update(
+        "execution_plan",
+        {
+            "executed_steps": executed_steps,
+            "execution_trace": execution_trace,
+            "execution_authorized": world_model_gate_report[
+                "execution_authorized"
+            ],
+        }
+    )
+
+    blackboard.assert_synchronized()
 
     # ========================================
     # EXECUTION METRICS
@@ -745,6 +819,10 @@ def transformation_stage(context):
     context[
         "world_model_gate_report"
     ] = world_model_gate_report
+
+    context[
+        "cognitive_blackboard_state"
+    ] = blackboard.snapshot()
 
     context[
         "execution_integrity_report"

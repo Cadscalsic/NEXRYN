@@ -1,4 +1,4 @@
-from core.epistemic_models import BeliefState, TruthCommit
+from core.epistemic_models import BeliefState, TruthCommit, clamp
 from core.epistemic_drift_regulator import (
     identity_continuity_score,
     semantic_drift_score,
@@ -20,6 +20,10 @@ from core.knowledge.knowledge_promotion_policy import (
 from core.knowledge.contextual_truth_support_policy import (
     ContextualTruthSupportPolicy,
 )
+from runtime.semantic.semantic_boundary_engine import SemanticBoundaryEngine
+from runtime.semantic.invariant_boundary_engine import InvariantBoundaryEngine
+from runtime.causal.causal_alignment_engine import RuntimeCausalAlignmentEngine
+from runtime.relational import RelationalReasoningEngine
 
 
 class TruthCommitEngine:
@@ -56,6 +60,10 @@ class TruthCommitEngine:
         self.contextual_truth_support_policy = (
             ContextualTruthSupportPolicy()
         )
+        self.semantic_boundary_engine = SemanticBoundaryEngine()
+        self.invariant_boundary_engine = InvariantBoundaryEngine()
+        self.runtime_causal_alignment_engine = RuntimeCausalAlignmentEngine()
+        self.relational_reasoning_engine = RelationalReasoningEngine()
 
     def evaluate(self, belief, aggregate, trials, context=None):
         context = context if isinstance(context, dict) else {}
@@ -122,10 +130,223 @@ class TruthCommitEngine:
         contextual_truth_supported = (
             contextual_truth_support_policy["contextual_truth_supported"]
         )
+        relational_reasoning = context.get("relational_reasoning_report", {})
+        relational_reasoning = (
+            relational_reasoning
+            if isinstance(relational_reasoning, dict)
+            else {}
+        )
+        if not relational_reasoning and (
+            belief.concept == "symmetry_reasoning"
+            or "symmetry" in str(belief.concept).lower()
+        ):
+            relational_reasoning = self.relational_reasoning_engine.evaluate(
+                belief.concept,
+                scene_graph_report=context.get("scene_graph_comparison", {}),
+                semantic_context=context.get("semantic_context", {}),
+                runtime_context=context,
+            )
+            context = {
+                **context,
+                "relational_reasoning_report": relational_reasoning,
+            }
+        if relational_reasoning.get("relation_ready") is True:
+            causal_graph_alignment = context.get("causal_graph_alignment", {})
+            causal_graph_alignment = (
+                causal_graph_alignment
+                if isinstance(causal_graph_alignment, dict)
+                else {}
+            )
+            causal_components = causal_graph_alignment.get("components", {})
+            causal_components = (
+                causal_components
+                if isinstance(causal_components, dict)
+                else {}
+            )
+            relation_score = clamp(
+                relational_reasoning.get("relation_consistency", 0.0)
+            )
+            aligned_score = max(
+                clamp(causal_graph_alignment.get("alignment_score", 0.0)),
+                relation_score,
+            )
+            context = {
+                **context,
+                "causal_graph_alignment": {
+                    **causal_graph_alignment,
+                    "alignment_score": aligned_score,
+                    "causal_graph_alignment": aligned_score,
+                    "relational_alignment": relation_score,
+                    "alignment_ready": aligned_score > 0.82,
+                    "components": {
+                        **causal_components,
+                        "relational_consistency": relation_score,
+                    },
+                    "relational_explanation_path": [
+                        "object_observation",
+                        "symmetry_relation",
+                        "symmetry_axis",
+                        "object_pair_mapping",
+                        "relation_consistency",
+                    ],
+                },
+            }
+        semantic_boundary = context.get("semantic_boundary_report", {})
+        semantic_boundary = (
+            semantic_boundary
+            if isinstance(semantic_boundary, dict)
+            else {}
+        )
+        invariant_boundary = context.get("invariant_boundary_report", {})
+        invariant_boundary = (
+            invariant_boundary
+            if isinstance(invariant_boundary, dict)
+            else {}
+        )
+        if not invariant_boundary:
+            invariant_boundary = self.invariant_boundary_engine.evaluate(
+                belief.concept,
+                semantic_context=context.get("semantic_context", {}),
+                runtime_context=context,
+                evidence=[
+                    contextual_truth,
+                    contextual_truth_authority,
+                    context_hierarchy,
+                ],
+            )
+            context = {
+                **context,
+                "invariant_boundary_report": invariant_boundary,
+            }
+        if not semantic_boundary:
+            semantic_boundary = self.semantic_boundary_engine.evaluate(
+                belief.concept,
+                semantic_context=context.get("semantic_context", {}),
+                context_hierarchy=context_hierarchy,
+                contextual_truth_report={
+                    "contextual_truth": contextual_truth,
+                    "contextual_truth_authority": contextual_truth_authority,
+                },
+                task_metadata=context.get("task_metadata", {}),
+                transformation_traces=context.get(
+                    "transformation_execution_trace",
+                    context.get("execution_trace", []),
+                ),
+                runtime_context=context,
+            )
+        if (
+            semantic_boundary.get("known_boundary") is True
+            and
+            semantic_boundary.get("review_required") is False
+            and semantic_boundary.get("boundary_integrity", 0.0) >= 0.80
+        ):
+            context = {
+                **context,
+                "semantic_boundary_report": semantic_boundary,
+                "invariant_boundary_report": invariant_boundary,
+                "semantic_drift_report": {
+                    **(
+                        context.get("semantic_drift_report", {})
+                        if isinstance(context.get("semantic_drift_report"), dict)
+                        else {}
+                    ),
+                    "semantic_drift_score":
+                    semantic_boundary.get("semantic_drift_score", 0.0),
+                    "boundary_integrity":
+                    semantic_boundary.get("boundary_integrity", 0.0),
+                    "source": "semantic_boundary_engine",
+                },
+            }
         passed_trials = sum(trial.trial_result.value == "PASSED" for trial in trials)
         semantic_stable = context.get("semantic_consistency", True) is not False
         rehearsal_safe = context.get("mutation_rehearsal_safe", True) is not False
         semantic_drift = semantic_drift_score(context)
+        if (
+            semantic_boundary.get("known_boundary") is True
+            and
+            semantic_boundary.get("review_required") is False
+            and semantic_boundary.get("boundary_integrity", 0.0) >= 0.80
+        ):
+            semantic_drift = min(
+                semantic_drift,
+                semantic_boundary.get("semantic_drift_score", semantic_drift),
+            )
+        causal_explainability_report = context.get(
+            "causal_explainability_report",
+            context.get("runtime_causal_alignment_report", {}),
+        )
+        causal_explainability_report = (
+            causal_explainability_report
+            if isinstance(causal_explainability_report, dict)
+            else {}
+        )
+        if not causal_explainability_report:
+            causal_explainability_report = (
+                self.runtime_causal_alignment_engine
+                .build_explicit_causal_alignment(
+                    belief.concept,
+                    context.get("process_dependency_memory", {}),
+                    context,
+                )
+            )
+        if (
+            causal_explainability_report.get("alignment_ready") is True
+            and causal_explainability_report.get("causal_gaps") == []
+            and causal_explainability_report.get("causal_reliability", 0.0)
+            > 0.82
+        ):
+            causal_graph_alignment = context.get(
+                "causal_graph_alignment",
+                {},
+            )
+            causal_graph_alignment = (
+                causal_graph_alignment
+                if isinstance(causal_graph_alignment, dict)
+                else {}
+            )
+            causal_components = causal_graph_alignment.get("components", {})
+            causal_components = (
+                causal_components
+                if isinstance(causal_components, dict)
+                else {}
+            )
+            aligned_score = max(
+                clamp(causal_graph_alignment.get("alignment_score", 0.0)),
+                clamp(causal_explainability_report["causal_alignment"]),
+            )
+            context = {
+                **context,
+                "causal_explainability_report":
+                causal_explainability_report,
+                "causal_graph_alignment": {
+                    **causal_graph_alignment,
+                    "alignment_score": aligned_score,
+                    "causal_graph_alignment": aligned_score,
+                    "causal_spine_alignment": aligned_score,
+                    "alignment_ready": aligned_score >= 0.80,
+                    "components": {
+                        **causal_components,
+                        "dependency_coherence": max(
+                            clamp(
+                                causal_components.get(
+                                    "dependency_coherence",
+                                    0.0,
+                                )
+                            ),
+                            clamp(
+                                causal_explainability_report.get(
+                                    "dependency_coherence",
+                                    0.0,
+                                )
+                            ),
+                        ),
+                        "causal_explainability":
+                        causal_explainability_report["causal_alignment"],
+                    },
+                    "explicit_causal_path":
+                    causal_explainability_report["causal_path"],
+                },
+            }
         identity_continuity = identity_continuity_score(context)
         drift_regulation = context.get("epistemic_drift_regulation", {})
         identity_safe_truth_integration = context.get(
@@ -446,11 +667,15 @@ class TruthCommitEngine:
                 "knowledge_promotion_policy":
                 knowledge_promotion_policy,
                 "semantic_drift": semantic_drift,
+                "semantic_boundary_report": semantic_boundary,
+                "invariant_boundary_report": invariant_boundary,
                 "identity_continuity": identity_continuity,
                 "identity_safe_truth_integration":
                 identity_safe_truth_integration,
                 "adaptive_identity_integration":
                 adaptive_identity_integration,
+                "relational_reasoning_report":
+                relational_reasoning,
                 "effective_maximum_semantic_drift":
                 effective_maximum_semantic_drift,
                 "effective_minimum_identity_continuity":
@@ -477,6 +702,8 @@ class TruthCommitEngine:
                 context.get("causal_graph_validation", {}),
                 "causal_graph_alignment":
                 context.get("causal_graph_alignment", {}),
+                "causal_explainability_report":
+                causal_explainability_report,
                 "causal_explanation":
                 context.get("causal_explanation", {}),
                 "causal_validation":

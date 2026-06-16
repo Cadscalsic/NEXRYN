@@ -194,6 +194,12 @@ from runtime.transforms import (
 from runtime.world import (
     world_model_engine
 )
+from core.scene_graph import (
+    GraphReasoner,
+)
+from runtime.kernel.cognitive_blackboard import (
+    cognitive_blackboard_from_context,
+)
 from runtime.execution.execution_integrity_guard import (
     execution_integrity_guard,
 )
@@ -282,6 +288,8 @@ inference_debugger = (
 temporal_memory = (
     TemporalEpisodicMemory()
 )
+
+graph_reasoner = GraphReasoner()
 
 # ============================================
 # SAFE GRID EXTRACTION
@@ -782,6 +790,19 @@ def inference_stage(context):
 
     output_array = extract_grid_array(
         output_grid
+    )
+
+    blackboard = cognitive_blackboard_from_context(
+        context
+    )
+
+    graph_reasoning = (
+        graph_reasoner
+        .reason_about_placement(
+            input_array,
+            output_array,
+            operation="duplicate_object"
+        )
     )
 
     task_complexity = estimate_task_complexity(
@@ -1659,14 +1680,36 @@ def inference_stage(context):
     # EXECUTION PLAN
     # ========================================
 
-    execution_plan = (
+    with blackboard.transaction():
 
-        planning_engine
-        .build_plan(
+        blackboard.synchronize_from_graph_reasoning(
+            graph_reasoning
+        )
 
+        blackboard.synchronize_from_world_model(
+            anticipation_report
+        )
+
+        synthesized_program = (
+            blackboard.synthesized_program
+            or
             synthesized_program
         )
-    )
+
+        execution_plan = (
+
+            planning_engine
+            .build_plan(
+
+                synthesized_program
+            )
+        )
+
+        execution_plan = blackboard.synchronize_execution_plan(
+            execution_plan
+        )
+
+    blackboard.assert_synchronized()
 
     planned_primitives = (
         execution_integrity_guard
@@ -2144,6 +2187,18 @@ def inference_stage(context):
     ] = primitive_result
 
     context[
+        "graph_reasoning"
+    ] = graph_reasoning
+
+    context[
+        "placement_rules"
+    ] = blackboard.placement_rules
+
+    context[
+        "position_rule"
+    ] = blackboard.position_rule
+
+    context[
         "execution_result"
     ] = execution_result
 
@@ -2174,6 +2229,10 @@ def inference_stage(context):
     context[
         "world_model_anticipation"
     ] = anticipation_report
+
+    context[
+        "cognitive_blackboard_state"
+    ] = blackboard.snapshot()
 
     context[
         "hypothesis_arbitration_report"

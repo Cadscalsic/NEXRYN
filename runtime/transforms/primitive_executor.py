@@ -8,6 +8,8 @@ from datetime import datetime
 import copy
 import numpy as np
 
+from core.perception import ObjectExtractor
+
 
 # ============================================
 # PRIMITIVE EXECUTOR
@@ -92,11 +94,87 @@ class PrimitiveExecutor:
             copy=True
         )
 
+        parameters = parameters or {}
+
         non_zero = np.argwhere(
             output != 0
         )
 
         if len(non_zero) == 0:
+
+            return output
+
+        relative_offset = parameters.get(
+            "relative_offset"
+        )
+
+        placement_vector = parameters.get(
+            "placement_vector",
+            {}
+        )
+
+        if relative_offset or placement_vector:
+
+            if relative_offset:
+
+                delta_row = int(
+                    relative_offset[0]
+                )
+
+                delta_col = int(
+                    relative_offset[1]
+                )
+
+            else:
+
+                delta_row = int(
+                    placement_vector.get(
+                        "delta_row",
+                        0
+                    )
+                )
+
+                delta_col = int(
+                    placement_vector.get(
+                        "delta_col",
+                        0
+                    )
+                )
+
+            source_object = parameters.get(
+                "source_object",
+                parameters.get(
+                    "anchor_object"
+                )
+            )
+
+            source_cells = self._source_object_cells(
+                output,
+                source_object
+            )
+
+            for row, col in source_cells:
+
+                target_row = row + delta_row
+
+                target_col = col + delta_col
+
+                if (
+
+                    0 <= target_row < output.shape[0]
+
+                    and
+
+                    0 <= target_col < output.shape[1]
+                ):
+
+                    output[
+                        target_row,
+                        target_col
+                    ] = output[
+                        row,
+                        col
+                    ]
 
             return output
 
@@ -139,6 +217,68 @@ class PrimitiveExecutor:
             ]
 
         return output
+
+    def _source_object_cells(
+
+        self,
+
+        grid,
+
+        source_object=None
+    ):
+
+        try:
+
+            extractor = ObjectExtractor()
+
+            objects = extractor.extract_objects(
+                extractor.normalize_grid(
+                    grid
+                )
+            )
+
+            selected = None
+
+            for candidate in objects:
+
+                if candidate.get(
+                    "id"
+                ) == source_object:
+
+                    selected = candidate
+
+                    break
+
+            if selected is None and objects:
+
+                selected = objects[0]
+
+            if selected is not None:
+
+                return [
+                    (
+                        int(row),
+                        int(col)
+                    )
+                    for row, col in selected.get(
+                        "cells",
+                        []
+                    )
+                ]
+
+        except Exception:
+
+            pass
+
+        return [
+            (
+                int(row),
+                int(col)
+            )
+            for row, col in np.argwhere(
+                grid != 0
+            )
+        ]
 
     # ========================================
     # EXPAND OBJECT

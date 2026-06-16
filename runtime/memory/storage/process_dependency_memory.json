@@ -58,6 +58,44 @@
         "confidence": 0.91
       }
     ],
+    "directional_motion": [
+      {
+        "source": "directional_motion",
+        "relation": "requires",
+        "target": "position_delta",
+        "confidence": 0.87
+      },
+      {
+        "source": "directional_motion",
+        "relation": "requires",
+        "target": "identity_persistence",
+        "confidence": 0.86
+      },
+      {
+        "source": "position_delta",
+        "relation": "causes",
+        "target": "position_change",
+        "confidence": 0.88
+      },
+      {
+        "source": "position_change",
+        "relation": "supports",
+        "target": "position_preservation",
+        "confidence": 0.84
+      },
+      {
+        "source": "position_preservation",
+        "relation": "requires",
+        "target": "object_persistence",
+        "confidence": 0.84
+      },
+      {
+        "source": "position_change",
+        "relation": "supports",
+        "target": "propagation",
+        "confidence": 0.82
+      }
+    ],
     "growth": [
       {
         "source": "growth",
@@ -292,6 +330,12 @@
         "confidence": 0.87
       },
       {
+        "source": "topology_splitting",
+        "relation": "preserves",
+        "target": "local_shape",
+        "confidence": 0.86
+      },
+      {
         "source": "topology_expansion",
         "relation": "preserves",
         "target": "local_shape",
@@ -302,6 +346,12 @@
         "relation": "supports",
         "target": "shape_preservation",
         "confidence": 0.86
+      },
+      {
+        "source": "shape_preservation",
+        "relation": "supports",
+        "target": "topology_preservation",
+        "confidence": 0.84
       }
     ]
   },

@@ -84,6 +84,7 @@ from core.semantic_context import SemanticContextReasoner
 from core.identity.identity_continuity_engine import IdentityContinuityEngine
 from core.perception import SceneGraphEngine
 from runtime.causal import RuntimeCausalAlignmentEngine
+from runtime.relational import RelationalReasoningEngine
 from core.dependency.process_dependency_graph import ProcessDependencyGraph
 
 
@@ -282,6 +283,7 @@ class EpistemicCognitionLayer:
         )
         self.semantic_context_reasoner = SemanticContextReasoner()
         self.scene_graph_engine = SceneGraphEngine()
+        self.relational_reasoning_engine = RelationalReasoningEngine()
         self.identity_continuity_engine = IdentityContinuityEngine()
         self.causal_graph_validator = CausalGraphValidator(
             evidence_accumulator=CausalEvidenceAccumulator(
@@ -736,6 +738,46 @@ class EpistemicCognitionLayer:
                     concept_evidence,
                 )
             )
+            relational_reasoning = (
+                self.relational_reasoning_engine.evaluate(
+                    hypothesis.concept,
+                    scene_graph_report=scene_graph_comparison,
+                    semantic_context=semantic_context,
+                    runtime_context={
+                        **discovered_context_context,
+                        "context_discovery": context_discovery,
+                        "scene_graph_comparison": scene_graph_comparison,
+                    },
+                )
+            )
+            if relational_reasoning.get("relation_ready") is True:
+                relation_score = clamp(
+                    relational_reasoning.get("relation_consistency", 0.0)
+                )
+                causal_components = causal_graph_alignment.get(
+                    "components",
+                    {},
+                )
+                causal_components = (
+                    causal_components
+                    if isinstance(causal_components, dict)
+                    else {}
+                )
+                aligned_score = max(
+                    clamp(causal_graph_alignment.get("alignment_score", 0.0)),
+                    relation_score,
+                )
+                causal_graph_alignment = {
+                    **causal_graph_alignment,
+                    "alignment_score": aligned_score,
+                    "causal_graph_alignment": aligned_score,
+                    "relational_alignment": relation_score,
+                    "alignment_ready": aligned_score > 0.82,
+                    "components": {
+                        **causal_components,
+                        "relational_consistency": relation_score,
+                    },
+                }
             context_consistency = {}
             if scene_graph_comparison:
                 context_consistency = self.context_consistency_engine.analyze(
@@ -754,6 +796,9 @@ class EpistemicCognitionLayer:
             discovered_context_context[
                 "semantic_context"
             ] = semantic_context
+            discovered_context_context[
+                "relational_reasoning_report"
+            ] = relational_reasoning
             if context_consistency:
                 discovered_context_context[
                     "context_consistency"
@@ -805,13 +850,23 @@ class EpistemicCognitionLayer:
                     "context_discovery": context_discovery,
                     "context_hierarchy": context_hierarchy,
                     "semantic_context": semantic_context,
+                    "relational_reasoning_report":
+                    relational_reasoning,
                 },
             )
             causal_boundary_alignment = (
                 self.runtime_causal_alignment_engine.evaluate(
                     hypothesis.concept,
                     aggregate,
-                    concept_context,
+                    {
+                        **concept_context,
+                        "relational_reasoning_report":
+                        relational_reasoning,
+                        "causal_graph_alignment":
+                        causal_graph_alignment,
+                        "semantic_context": semantic_context,
+                        "scene_graph_comparison": scene_graph_comparison,
+                    },
                 )
             )
             causal_graph_validation = self.causal_graph_validator.evaluate(
@@ -828,6 +883,8 @@ class EpistemicCognitionLayer:
                     "context_discovery": context_discovery,
                     "context_hierarchy": context_hierarchy,
                     "semantic_context": semantic_context,
+                    "relational_reasoning_report":
+                    relational_reasoning,
                 },
             )
             contradiction_resolution = (
@@ -900,6 +957,8 @@ class EpistemicCognitionLayer:
                     context_hierarchy,
                     "semantic_context":
                     semantic_context,
+                    "relational_reasoning_report":
+                    relational_reasoning,
                 },
             )
             contextual_truth = candidate.get(
@@ -1219,6 +1278,8 @@ class EpistemicCognitionLayer:
                     context_hierarchy,
                     "semantic_context":
                     semantic_context,
+                    "relational_reasoning_report":
+                    relational_reasoning,
                     "causal_spine":
                     causal_spine,
                 },
@@ -1242,6 +1303,7 @@ class EpistemicCognitionLayer:
                 "context_discovery": context_discovery,
                 "context_hierarchy": context_hierarchy,
                 "semantic_context": semantic_context,
+                "relational_reasoning_report": relational_reasoning,
                 "causal_spine": causal_spine,
                 "dependency_chain_alignment": dependency_chain_alignment,
                 "epistemic_evidence_fusion": evidence_fusion,

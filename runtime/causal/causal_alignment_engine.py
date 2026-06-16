@@ -64,6 +64,78 @@ class RuntimeCausalAlignmentEngine:
                 "object_core",
             },
         },
+        "identity_persistence": {
+            "family": "identity",
+            "transform_concepts": {
+                "object_identity_transform",
+                "object_persistence",
+            },
+        },
+        "identity_forking": {
+            "family": "identity",
+            "transform_concepts": {
+                "object_split",
+                "object_merge",
+                "identity_continuity",
+                "identity_tracking",
+                "identity_preservation",
+                "object_persistence",
+                "object_core",
+            },
+        },
+    }
+
+    CAUSAL_PATH_TEMPLATES = {
+        "color_preservation": [
+            "color_observation",
+            "color_behavior",
+            "color_mapping_rule",
+            "no_color_reassignment",
+            "color_preservation",
+        ],
+        "object_identity_preservation": [
+            "object_observation",
+            "identity_behavior",
+            "lineage_continuity",
+            "object_persistence",
+            "object_identity_preservation",
+        ],
+        "identity_persistence": [
+            "object_observation",
+            "identity_behavior",
+            "lineage_continuity",
+            "object_persistence",
+            "identity_persistence",
+        ],
+        "growth": [
+            "source_object",
+            "identity_persistence",
+            "topology_expansion",
+            "shape_preservation",
+            "growth",
+        ],
+        "replication": [
+            "source_pattern_preserved",
+            "identity_forking",
+            "identity_split",
+            "object_count_increase",
+            "replication",
+        ],
+        "topological_growth": [
+            "growth",
+            "topology_expansion",
+            "local_shape",
+            "topology_preservation",
+            "topological_growth",
+        ],
+        "symmetry_reasoning": [
+            "object_observation",
+            "symmetry_relation",
+            "symmetry_axis",
+            "object_pair_mapping",
+            "relation_consistency",
+            "symmetry_reasoning",
+        ],
     }
 
     def __init__(
@@ -206,9 +278,225 @@ class RuntimeCausalAlignmentEngine:
             "boundary_observation_confidence": confidence,
         }
 
+    def _as_items(self, value):
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            return [value]
+        if isinstance(value, (str, bytes)):
+            return [value]
+        try:
+            return list(value)
+        except TypeError:
+            return [value]
+
+    def _tokens(self, value):
+        tokens = set()
+        if value is None:
+            return tokens
+        if isinstance(value, dict):
+            for key, item in value.items():
+                key_token = self._normalize(key)
+                if key_token:
+                    tokens.add(key_token)
+                tokens.update(self._tokens(item))
+        elif isinstance(value, (list, tuple, set)):
+            for item in value:
+                tokens.update(self._tokens(item))
+        else:
+            token = self._normalize(value)
+            if token:
+                tokens.add(token)
+        return tokens
+
+    def _normalize(self, value):
+        return str(value or "").strip().lower().replace(" ", "_")
+
+    def _dependency_nodes(self, process_dependency_memory):
+        nodes = set()
+        if not isinstance(process_dependency_memory, dict):
+            return nodes
+        for item in self._as_items(
+            process_dependency_memory.get("resolved_dependency_chain", [])
+        ):
+            if isinstance(item, dict):
+                nodes.update(self._tokens(item))
+            else:
+                nodes.add(self._normalize(item))
+        for relation in self._as_items(
+            process_dependency_memory.get("typed_dependency_relations", [])
+        ):
+            if isinstance(relation, dict):
+                nodes.add(self._normalize(relation.get("source")))
+                nodes.add(self._normalize(relation.get("target")))
+                nodes.add(self._normalize(relation.get("relation")))
+        return {node for node in nodes if node}
+
+    def _context_nodes(self, context):
+        nodes = set()
+        for key in (
+            "semantic_context",
+            "context_hierarchy",
+            "contextual_truth",
+            "causal_validation",
+            "causal_graph_alignment",
+            "causal_explanation",
+            "context_discovery",
+            "dependency_chain_alignment",
+            "semantic_boundary_report",
+            "relational_reasoning_report",
+        ):
+            nodes.update(self._tokens(context.get(key)))
+        return nodes
+
+    def _template_for(self, concept, process_dependency_memory):
+        concept = self._normalize(concept)
+        if concept in self.CAUSAL_PATH_TEMPLATES:
+            return list(self.CAUSAL_PATH_TEMPLATES[concept])
+        chain = [
+            self._normalize(item)
+            for item in process_dependency_memory.get(
+                "resolved_dependency_chain",
+                [],
+            )
+            if not isinstance(item, dict)
+        ] if isinstance(process_dependency_memory, dict) else []
+        if chain:
+            return chain
+        return [concept]
+
+    def build_explicit_causal_alignment(
+        self,
+        concept,
+        dependency_chain=None,
+        context=None,
+    ):
+        context = context if isinstance(context, dict) else {}
+        process_dependency_memory = (
+            dependency_chain
+            if isinstance(dependency_chain, dict)
+            else context.get("process_dependency_memory", {})
+        )
+        process_dependency_memory = (
+            process_dependency_memory
+            if isinstance(process_dependency_memory, dict)
+            else {}
+        )
+        concept = self._normalize(concept)
+        causal_path = self._template_for(concept, process_dependency_memory)
+        available_nodes = set()
+        available_nodes.update(self._dependency_nodes(process_dependency_memory))
+        available_nodes.update(self._context_nodes(context))
+        explanation_path = context.get("causal_graph_alignment", {}).get(
+            "explanation_path",
+            context.get("causal_explanation", {}).get("explanation_path", []),
+        )
+        available_nodes.update(self._tokens(explanation_path))
+        causal_gaps = [
+            node
+            for node in causal_path
+            if node not in available_nodes
+        ]
+        weak_links = []
+        graph_alignment = context.get("causal_graph_alignment", {})
+        graph_alignment = graph_alignment if isinstance(graph_alignment, dict) else {}
+        components = graph_alignment.get("components", {})
+        components = components if isinstance(components, dict) else {}
+        chain_confidence = clamp(
+            process_dependency_memory.get(
+                "dependency_confidence",
+                process_dependency_memory.get("dependency_chain_coverage", 0.0),
+            )
+        )
+        chain_coverage = clamp(
+            process_dependency_memory.get("dependency_chain_coverage", 0.0)
+        )
+        dependency_coherence_report = context.get(
+            "dependency_coherence_report",
+            {},
+        )
+        dependency_coherence = clamp(
+            dependency_coherence_report.get(
+                "dependency_coherence",
+                components.get("dependency_coherence", chain_confidence),
+            )
+        ) if isinstance(dependency_coherence_report, dict) else clamp(
+            components.get("dependency_coherence", chain_confidence)
+        )
+        effective_components = {
+            **components,
+            "dependency_coherence": max(
+                clamp(components.get("dependency_coherence", 0.0)),
+                dependency_coherence,
+            ),
+        }
+        component_scores = [
+            clamp(effective_components.get("evidence_consistency", 0.0)),
+            clamp(effective_components.get("cross_task_stability", 0.0)),
+            clamp(effective_components.get("contradiction_resistance", 0.0)),
+            clamp(effective_components.get("dependency_coherence", 0.0)),
+        ]
+        component_scores = [score for score in component_scores if score > 0.0]
+        for name, score in effective_components.items():
+            if isinstance(score, (int, float)) and clamp(score) < 0.80:
+                weak_links.append(str(name))
+        validation = context.get("causal_validation", {})
+        validation = validation if isinstance(validation, dict) else {}
+        validation_score = clamp(
+            validation.get(
+                "validation_score",
+                validation.get("causal_validation_score", 0.0),
+            )
+        )
+        path_coverage = clamp(
+            (len(causal_path) - len(causal_gaps)) / max(len(causal_path), 1)
+        )
+        component_average = (
+            sum(component_scores) / len(component_scores)
+            if component_scores
+            else 0.0
+        )
+        causal_reliability = clamp(
+            path_coverage * 0.30
+            + dependency_coherence * 0.25
+            + chain_confidence * 0.18
+            + max(validation_score, component_average) * 0.17
+            + chain_coverage * 0.10
+        )
+        causal_alignment = clamp(
+            causal_reliability * 0.62
+            + path_coverage * 0.23
+            + dependency_coherence * 0.15
+            - min(len(weak_links) * 0.025, 0.10)
+        )
+        unexplained_nodes = sorted(set(causal_gaps + weak_links))
+        return {
+            "system": "runtime_causal_alignment_engine",
+            "concept": concept,
+            "causal_alignment": round(causal_alignment, 4),
+            "causal_path": causal_path,
+            "causal_gaps": causal_gaps,
+            "unexplained_nodes": unexplained_nodes,
+            "weak_causal_links": weak_links,
+            "causal_reliability": round(causal_reliability, 4),
+            "dependency_coherence": round(dependency_coherence, 4),
+            "path_coverage": round(path_coverage, 4),
+            "alignment_ready": (
+                causal_alignment > 0.82
+                and causal_reliability > 0.82
+                and not causal_gaps
+            ),
+            "causal_explainability_required": True,
+        }
+
     def evaluate(self, concept, aggregate=None, context=None):
         context = context if isinstance(context, dict) else {}
         aggregate = aggregate or {}
+        explicit_alignment = self.build_explicit_causal_alignment(
+            concept,
+            context.get("process_dependency_memory", {}),
+            context,
+        )
         raw_contradiction = clamp(
             getattr(
                 aggregate,
@@ -223,6 +511,15 @@ class RuntimeCausalAlignmentEngine:
             return {
                 "system": "runtime_causal_alignment_engine",
                 "concept": concept,
+                "causal_alignment":
+                explicit_alignment["causal_alignment"],
+                "causal_path": explicit_alignment["causal_path"],
+                "causal_gaps": explicit_alignment["causal_gaps"],
+                "unexplained_nodes":
+                explicit_alignment["unexplained_nodes"],
+                "causal_reliability":
+                explicit_alignment["causal_reliability"],
+                "explicit_causal_alignment": explicit_alignment,
                 "alignment_state": "NO_RUNTIME_BOUNDARY_MODEL",
                 "contradiction_interpretable": False,
                 "raw_contradiction_score": raw_contradiction,
@@ -320,6 +617,15 @@ class RuntimeCausalAlignmentEngine:
         return {
             "system": "runtime_causal_alignment_engine",
             "concept": concept,
+            "causal_alignment":
+            explicit_alignment["causal_alignment"],
+            "causal_path": explicit_alignment["causal_path"],
+            "causal_gaps": explicit_alignment["causal_gaps"],
+            "unexplained_nodes":
+            explicit_alignment["unexplained_nodes"],
+            "causal_reliability":
+            explicit_alignment["causal_reliability"],
+            "explicit_causal_alignment": explicit_alignment,
             "property_family": boundary["family"],
             "preservation_concept": concept,
             "transform_concepts": sorted(boundary["transform_concepts"]),
@@ -356,5 +662,9 @@ class RuntimeCausalAlignmentEngine:
 
 
 __all__ = [
+    "CausalAlignmentEngine",
     "RuntimeCausalAlignmentEngine",
 ]
+
+
+CausalAlignmentEngine = RuntimeCausalAlignmentEngine

@@ -417,7 +417,52 @@ def build_training_report(
             for item in causal_values
         )
 
-        context_count = len(context_reports)
+        governance_reports = [
+            evaluation.get("context_governance_report", {})
+            for evaluation in candidate_evaluations.values()
+            if isinstance(
+                evaluation.get("context_governance_report", {}),
+                dict,
+            )
+            and evaluation.get("context_governance_report", {})
+        ]
+        governance_visible_context_ids = sorted({
+            context_id
+            for report in governance_reports
+            for context_id in report.get("visible_context_ids", [])
+        })
+        governance_runtime_context_count = max(
+            [
+                int(report.get("runtime_context_count", 0) or 0)
+                for report in governance_reports
+            ]
+            or [0]
+        )
+        governance_context_count = (
+            len(governance_visible_context_ids)
+            if governance_reports
+            else 0
+        )
+        context_registration_gap = (
+            max(governance_runtime_context_count - governance_context_count, 0)
+            if governance_reports
+            else None
+        )
+        registration_coverage = (
+            round(
+                governance_context_count / governance_runtime_context_count,
+                4,
+            )
+            if governance_reports and governance_runtime_context_count
+            else 1.0
+            if governance_reports
+            else None
+        )
+        context_count = (
+            governance_context_count
+            if governance_reports
+            else len(context_reports)
+        )
         semantic_context_count = len(semantic_reports)
         contextual_truth_count = len(contextual_reports)
         context_surface_established = (
@@ -498,6 +543,11 @@ def build_training_report(
             "context_consistency_average": context_consistency_average,
             "identity_compatibility_average": identity_average,
             "context_count": context_count,
+            "raw_runtime_context_count": len(context_reports),
+            "governance_context_count": governance_context_count,
+            "governance_visible_contexts": governance_visible_context_ids,
+            "context_registration_gap": context_registration_gap,
+            "registration_coverage": registration_coverage,
             "semantic_context_count": semantic_context_count,
             "contextual_truth_count": contextual_truth_count,
             "dependency_reasoning_operator_available":
@@ -741,6 +791,8 @@ def build_training_report(
             evaluation.get("contextual_truth_authority", {}),
             "context_discovery":
             evaluation.get("context_discovery", {}),
+            "context_governance_report":
+            evaluation.get("context_governance_report", {}),
             "context_hierarchy":
             evaluation.get("context_hierarchy", {}),
             "semantic_context":

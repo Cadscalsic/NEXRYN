@@ -2,6 +2,10 @@ from dataclasses import asdict, dataclass, field
 from uuid import uuid4
 
 from core.epistemic_models import clamp
+from core.context.process_context_generation import (
+    PROCESS_CONTEXT_STATUSES,
+    PROCESS_CONTEXTS,
+)
 from core.process_context_generation import ProcessContextGenerationEngine
 from core.process_abstraction import ProcessAbstractionLayer
 
@@ -92,6 +96,8 @@ def _active_concepts(context):
         value = context.get(key)
         if value:
             concepts.add(_normalize(value))
+    if "object_identity_preservation" in concepts:
+        concepts.add("identity_persistence")
     return concepts
 
 
@@ -548,7 +554,6 @@ class ContextDiscoveryEngine:
         if (
             (
                 "identity_forking" in features["active_concepts"]
-                or "object_identity_preservation" in features["active_concepts"]
             )
             and (
                 identity_behavior in {"identity_split", "object_split"}
@@ -568,7 +573,6 @@ class ContextDiscoveryEngine:
             }
         if (
             "identity_persistence" in features["active_concepts"]
-            or "object_identity_preservation" in features["active_concepts"]
         ):
             return {
                 "value": "identity_preservation",
@@ -635,6 +639,19 @@ class ContextDiscoveryEngine:
                 "reasons": [
                     f"active truth concept indicates {context_name}",
                     "truth-native semantic context surface available",
+                ],
+            }
+        process_context = self._process_context_for_observation(context)
+        if process_context:
+            return {
+                "value": process_context["context_name"],
+                "confidence": max(
+                    clamp(process_context.get("confidence", 0.0)),
+                    0.90,
+                ),
+                "reasons": [
+                    "math reasoning process context supplied",
+                    f"process context status {process_context.get('status')}",
                 ],
             }
         operator = self.discover_process_operator(context)
@@ -967,6 +984,28 @@ class ContextDiscoveryEngine:
             if concept in features.get("active_concepts", []):
                 return surface
         return None
+
+    def _process_context_for_observation(self, observation=None):
+        context = observation if isinstance(observation, dict) else {}
+        report = context.get("process_context_report", {})
+        if not isinstance(report, dict):
+            return None
+        status = report.get("status")
+        if status not in PROCESS_CONTEXT_STATUSES:
+            return None
+        context_name = _normalize(report.get("context_name"))
+        source_concept = _normalize(
+            report.get("source_concept", report.get("concept"))
+        )
+        active_concepts = set(self.extract_context_features(context).get("active_concepts", []))
+        if source_concept not in PROCESS_CONTEXTS:
+            return None
+        if source_concept not in active_concepts:
+            return None
+        expected = f"{source_concept}_context"
+        if context_name != expected:
+            return None
+        return report
 
     def cluster_contexts(self, contexts=None):
         contexts = list(contexts or self.discovered_contexts)

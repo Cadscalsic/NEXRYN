@@ -86,7 +86,7 @@ class IdentityContinuityEngine:
         self,
         input_grid: Any,
         output_grid: Any,
-        source: str = "object_identity_preservation",
+        source: str = "identity_persistence",
     ) -> dict[str, Any]:
         """Evaluate whether perceived objects preserve identity across states."""
 
@@ -126,7 +126,7 @@ class IdentityContinuityEngine:
     def evaluate_sequence(
         self,
         states: list[Any],
-        source: str = "object_identity_preservation",
+        source: str = "identity_persistence",
         concept: str | None = None,
     ) -> dict[str, Any]:
         """Evaluate Object(t0) -> Object(t1) -> ... identity continuity."""
@@ -261,8 +261,8 @@ class IdentityContinuityEngine:
     def run_identity_runtime(
         self,
         states: list[Any],
-        concept: str = "object_identity_preservation",
-        source: str = "object_identity_preservation",
+        concept: str = "identity_persistence",
+        source: str = "identity_persistence",
     ) -> dict[str, Any]:
         """Produce a governance-ready identity runtime report."""
 
@@ -594,7 +594,7 @@ class IdentityContinuityEngine:
         self,
         report: Mapping[str, Any],
     ) -> list[dict[str, Any]]:
-        source = str(report.get("source", "object_identity_preservation"))
+        source = str(report.get("source", "identity_persistence"))
         evidence = [
             self._dependency(
                 source,
@@ -869,7 +869,7 @@ class IdentityContinuityEngine:
         self,
         report: Mapping[str, Any],
     ) -> list[dict[str, Any]]:
-        source = str(report.get("source", "object_identity_preservation"))
+        source = str(report.get("source", "identity_persistence"))
         evidence = [
             self._dependency(
                 source,
