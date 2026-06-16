@@ -3,6 +3,7 @@
 # ============================================
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -90,6 +91,40 @@ def print_training_batch_summary(training_batch, verbose=False):
     print("selected_task_count:", training_batch.get("selected_task_count", 0))
     print("selected_task_files:", training_batch.get("selected_task_files", []))
     print("prioritized_concepts:", training_batch.get("prioritized_concepts", []))
+
+
+# ============================================
+# OPTIONAL MATH REASONING HOOK
+# ============================================
+
+def build_passive_math_reasoning_report(
+    task_path,
+    concept=None,
+    context=None,
+):
+    with open(task_path, "r", encoding="utf-8") as task_file:
+        task_payload = json.load(task_file)
+
+    train_pairs = task_payload.get("train", [])
+    if not train_pairs:
+        return {
+            "system": "mathematical_reasoning_pipeline",
+            "task_id": os.path.basename(task_path),
+            "math_reasoning_available": False,
+            "reason": "no_training_pairs_available",
+        }
+
+    first_pair = train_pairs[0]
+
+    from core.math_reasoning import MathematicalReasoningPipeline
+
+    return MathematicalReasoningPipeline().analyze_task(
+        task_id=os.path.basename(task_path),
+        input_grid=first_pair.get("input", []),
+        output_grid=first_pair.get("output"),
+        concept=concept,
+        context=context,
+    )
 
 
 # ============================================
@@ -220,6 +255,18 @@ parser.add_argument(
     "--reset-training-assistant",
     action="store_true",
     help="Reset the persistent training batch cursor before execution",
+)
+
+parser.add_argument(
+    "--math-reasoning",
+    action="store_true",
+    help="Enable passive mathematical reasoning evidence reports",
+)
+
+parser.add_argument(
+    "--export-typed-dependencies",
+    action="store_true",
+    help="Export math reasoning typed dependencies when math reasoning is enabled",
 )
 
 # ============================================
@@ -407,6 +454,40 @@ try:
                     if candidate_file != task_file
                 ],
             )
+
+            if args.math_reasoning:
+                math_report = build_passive_math_reasoning_report(
+                    task_path,
+                    concept=None,
+                    context=None,
+                )
+                task_result[
+                    "math_reasoning_report"
+                ] = math_report
+
+                if args.export_typed_dependencies:
+                    from core.math_reasoning import MathematicalReasoningPipeline
+
+                    process_memory = getattr(
+                        getattr(
+                            pipeline,
+                            "process_dependency_graph",
+                            None,
+                        ),
+                        "process_dependency_memory",
+                        None,
+                    )
+                    if process_memory is not None:
+                        task_result[
+                            "math_reasoning_dependency_export"
+                        ] = (
+                            MathematicalReasoningPipeline()
+                            .export_to_process_dependency_memory(
+                                process_memory,
+                                math_report,
+                                export_typed_dependencies=True,
+                            )
+                        )
 
             successful_tasks += 1
 

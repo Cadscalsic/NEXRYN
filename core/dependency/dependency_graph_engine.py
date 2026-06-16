@@ -38,6 +38,7 @@ from core.dependency.process_dependency_memory import (
     ProcessDependencyMemory,
     REQUIRED_PROCESS_DEPENDENCY_RELATIONS,
 )
+from core.process import ProcessSignatureEngine
 from core.perception.color_analyzer import ColorAnalyzer
 from core.perception.identity_tracker import IdentityTracker
 from core.perception.scene_graph_engine import SceneGraphEngine
@@ -93,11 +94,34 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
                 process_dependency_graph=self.process_dependency_graph,
             )
         )
+        self.process_signature_engine = ProcessSignatureEngine()
         if placement_reasoner is None:
             from core.world_model.placement_reasoner import PlacementReasoner
 
             placement_reasoner = PlacementReasoner()
         self.placement_reasoner = placement_reasoner
+
+    def find_dependency_paths(
+        self,
+        source: str,
+        target: str | None = None,
+        max_depth: int = 4,
+        minimum_confidence: float = 0.0,
+    ) -> dict[str, Any]:
+        resolution = self.process_dependency_graph.resolve_dependency_chain(
+            source,
+        )
+        process_depth = int(
+            resolution.get("dependency_chain_depth", 0)
+            or 0
+        )
+        max_depth = max(int(max_depth or 1), process_depth, 1)
+        return super().find_dependency_paths(
+            source,
+            target=target,
+            max_depth=max_depth,
+            minimum_confidence=minimum_confidence,
+        )
 
     def ingest_scene_graph(
         self,
@@ -227,7 +251,7 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
         self,
         input_grid: Any,
         output_grid: Any,
-        source: str = "object_identity_preservation",
+        source: str = "identity_persistence",
     ) -> dict[str, Any]:
         """Ingest identity continuity and lineage evidence."""
 
@@ -256,7 +280,7 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
         self,
         input_grid: Any,
         output_grid: Any,
-        source: str = "object_identity_preservation",
+        source: str = "identity_persistence",
         required_dependencies: Iterable[str] | None = None,
     ) -> dict[str, Any]:
         """Build dependency coherence from object identity evidence."""
@@ -625,8 +649,34 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
             or self.process_dependency_graph.process_relations
         ))
         process_report = self.process_dependency_graph.build_report(process_list)
+        signature_reports = {}
+        signature_dependencies = []
+        for process in process_list:
+            process_memory = (
+                process_report
+                .get("processes", {})
+                .get(process, {})
+                .get("resolved_dependency_chain", {})
+            )
+            signature_report = (
+                self.process_signature_engine
+                .extract_signature(
+                    process,
+                    process_dependency_memory=process_memory,
+                )
+            )
+            signature_reports[process] = signature_report
+            if signature_report.get("process_signature_generated"):
+                signature_dependencies.append(
+                    self.process_signature_engine.signature_dependency(
+                        process,
+                        signature_report,
+                    )
+                )
         ingest = self.ingest_dependencies(
-            process_report["dependency_evidence"],
+            process_report["dependency_evidence"]
+            +
+            signature_dependencies,
         )
         ledger_records = []
         for record in process_report["chain_records"]:
@@ -683,6 +733,8 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
             "system": "dependency_graph_engine",
             "mode": "process_dependency_graph_ingestion",
             "process_dependency_graph": process_report,
+            "process_signature_reports": signature_reports,
+            "process_signature_dependency_count": len(signature_dependencies),
             "ingest": ingest,
             "ledger_records": ledger_records,
             "coherence_reports": coherence_reports,
@@ -827,7 +879,6 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
         runtime = record.get("identity_runtime_report", {})
         runtime = runtime if isinstance(runtime, dict) else {}
         if runtime.get("identity_split") is True:
-            add("identity_forking")
             add("identity_split")
             add("object_count_increase")
         if runtime.get("identity_merged") is True:
@@ -866,7 +917,6 @@ class ObjectCentricDependencyGraphEngine(CausalDependencyGraphEngine):
             add("directional_motion")
             add("position_preservation")
         elif family in {"replication", "duplication"}:
-            add("identity_forking")
             add("identity_split")
             add("object_count_increase")
             add("topology_splitting")

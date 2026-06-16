@@ -1,0 +1,2264 @@
+{
+  "contexts": {
+    "color_context": {
+      "confidence": 0.9525,
+      "context_id": "color_context",
+      "context_type": "STATIC_CONTEXT",
+      "first_discovered_at": "2026-06-16T22:33:41.958127+00:00",
+      "governance_visible": true,
+      "identity_compatible": true,
+      "last_observed_at": "2026-06-16T22:38:35.949617+00:00",
+      "observation_count": 8,
+      "runtime_cycles_survived": 17,
+      "semantic_validation": true,
+      "source_concept": "",
+      "source_context": {
+        "capabilities": [
+          "attribute_mapping",
+          "color_preservation_reasoning",
+          "contextual_color_stability"
+        ],
+        "confidence": 0.9525,
+        "constraints": [
+          "invalid_under_unmapped_recoloring",
+          "requires_color_observation"
+        ],
+        "context": "color_context",
+        "explainability": {
+          "what_consequences_follow": [
+            "attribute_mapping_preservation_expected",
+            "color_preservation_expected"
+          ],
+          "what_does_it_do": [
+            "attribute_mapping",
+            "color_preservation_reasoning",
+            "contextual_color_stability"
+          ],
+          "what_is_this_context": "Evaluates whether color or attribute mappings remain stable inside a task context.",
+          "what_limits_does_it_have": [
+            "invalid_under_unmapped_recoloring",
+            "requires_color_observation"
+          ],
+          "what_properties_define_it": [
+            "attribute_mapping_preservation",
+            "color_stability",
+            "no_color_reassignment",
+            "preserves_color",
+            "preserves_identity",
+            "preserves_topology"
+          ],
+          "why_it_exists": [
+            "context classified as color_context",
+            "active truth concept indicates color_context",
+            "truth-native semantic context surface available"
+          ]
+        },
+        "implications": [
+          "attribute_mapping_preservation_expected",
+          "color_preservation_expected"
+        ],
+        "phase": "5.7",
+        "preservation_context": true,
+        "preservation_context_pure": true,
+        "process_abstraction": {},
+        "process_abstraction_ready": false,
+        "process_context_generated": false,
+        "process_context_generation": {
+          "concept": "color_context",
+          "process_context_generated": false,
+          "process_context_ready": false,
+          "reason": "unsupported_process_concept",
+          "status": "PROCESS_CONTEXT_REJECTED",
+          "system": "process_context_generation_engine"
+        },
+        "process_traits": {
+          "capabilities": [
+            "object_creation",
+            "structural_replication"
+          ],
+          "constraints": [
+            "object_count_cannot_remain_constant",
+            "identity_continuity_may_split"
+          ],
+          "implications": [
+            "object_count_increase",
+            "replication_behavior",
+            "topology_change_possible"
+          ],
+          "process_operator": "duplication",
+          "properties": [
+            "creates_objects",
+            "preserves_shape",
+            "modifies_topology"
+          ],
+          "stored_separately": true
+        },
+        "process_traits_stored_separately": true,
+        "properties": [
+          {
+            "confidence": 0.92,
+            "evidence_count": 129,
+            "property_name": "attribute_mapping_preservation"
+          },
+          {
+            "confidence": 0.92,
+            "evidence_count": 129,
+            "property_name": "color_stability"
+          },
+          {
+            "confidence": 0.92,
+            "evidence_count": 129,
+            "property_name": "no_color_reassignment"
+          },
+          {
+            "confidence": 0.86,
+            "evidence_count": 129,
+            "property_name": "preserves_color"
+          },
+          {
+            "confidence": 0.86,
+            "evidence_count": 129,
+            "property_name": "preserves_identity"
+          },
+          {
+            "confidence": 0.86,
+            "evidence_count": 129,
+            "property_name": "preserves_topology"
+          }
+        ],
+        "property_confidence_history": [
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 90,
+              "property_name": "attribute_mapping_preservation"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 90,
+              "property_name": "color_stability"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 90,
+              "property_name": "no_color_reassignment"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 90,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 90,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 90,
+              "property_name": "preserves_topology"
+            }
+          ],
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 103,
+              "property_name": "attribute_mapping_preservation"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 103,
+              "property_name": "color_stability"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 103,
+              "property_name": "no_color_reassignment"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 103,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 103,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 103,
+              "property_name": "preserves_topology"
+            }
+          ],
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 116,
+              "property_name": "attribute_mapping_preservation"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 116,
+              "property_name": "color_stability"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 116,
+              "property_name": "no_color_reassignment"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 116,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 116,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 116,
+              "property_name": "preserves_topology"
+            }
+          ],
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 129,
+              "property_name": "attribute_mapping_preservation"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 129,
+              "property_name": "color_stability"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 129,
+              "property_name": "no_color_reassignment"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 129,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 129,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 129,
+              "property_name": "preserves_topology"
+            }
+          ]
+        ],
+        "semantic_context_score": 0.9525,
+        "semantic_definition": "Evaluates whether color or attribute mappings remain stable inside a task context.",
+        "semantic_profile": {
+          "capabilities": [
+            "attribute_mapping",
+            "color_preservation_reasoning",
+            "contextual_color_stability"
+          ],
+          "confidence": 0.9525,
+          "constraints": [
+            "invalid_under_unmapped_recoloring",
+            "requires_color_observation"
+          ],
+          "context_name": "color_context",
+          "explanation": {
+            "what_consequences_follow": [
+              "attribute_mapping_preservation_expected",
+              "color_preservation_expected"
+            ],
+            "what_does_it_do": [
+              "attribute_mapping",
+              "color_preservation_reasoning",
+              "contextual_color_stability"
+            ],
+            "what_is_this_context": "Evaluates whether color or attribute mappings remain stable inside a task context.",
+            "what_limits_does_it_have": [
+              "invalid_under_unmapped_recoloring",
+              "requires_color_observation"
+            ],
+            "what_properties_define_it": [
+              "attribute_mapping_preservation",
+              "color_stability",
+              "no_color_reassignment",
+              "preserves_color",
+              "preserves_identity",
+              "preserves_topology"
+            ],
+            "why_it_exists": [
+              "context classified as color_context",
+              "active truth concept indicates color_context",
+              "truth-native semantic context surface available"
+            ]
+          },
+          "implications": [
+            "attribute_mapping_preservation_expected",
+            "color_preservation_expected"
+          ],
+          "properties": [
+            {
+              "confidence": 0.92,
+              "evidence_count": 129,
+              "property_name": "attribute_mapping_preservation"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 129,
+              "property_name": "color_stability"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 129,
+              "property_name": "no_color_reassignment"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 129,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 129,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 129,
+              "property_name": "preserves_topology"
+            }
+          ],
+          "semantic_definition": "Evaluates whether color or attribute mappings remain stable inside a task context.",
+          "supporting_evidence": [
+            "context classified as color_context",
+            "active truth concept indicates color_context",
+            "truth-native semantic context surface available"
+          ]
+        },
+        "semantic_required": true,
+        "semantically_validated": true,
+        "status": "SEMANTICALLY_VALIDATED",
+        "system": "semantic_context_reasoner",
+        "transfer_conditions": [],
+        "validation_criteria": []
+      },
+      "status": "GOVERNANCE_VISIBLE"
+    },
+    "symmetry_context": {
+      "confidence": 0.9525,
+      "context_id": "symmetry_context",
+      "context_type": "STATIC_CONTEXT",
+      "first_discovered_at": "2026-06-16T22:33:42.174438+00:00",
+      "governance_visible": true,
+      "identity_compatible": true,
+      "last_observed_at": "2026-06-16T22:38:36.374028+00:00",
+      "observation_count": 8,
+      "runtime_cycles_survived": 4,
+      "semantic_validation": true,
+      "source_concept": "",
+      "source_context": {
+        "capabilities": [
+          "axis_based_generalization",
+          "mirror_consistency_check",
+          "symmetry_reasoning"
+        ],
+        "confidence": 0.9525,
+        "constraints": [
+          "requires_axis_or_pair_relation",
+          "requires_symmetry_evidence"
+        ],
+        "context": "symmetry_context",
+        "explainability": {
+          "what_consequences_follow": [
+            "mirror_consistency_expected",
+            "symmetry_preservation_expected"
+          ],
+          "what_does_it_do": [
+            "axis_based_generalization",
+            "mirror_consistency_check",
+            "symmetry_reasoning"
+          ],
+          "what_is_this_context": "Evaluates axis, mirror, and relational symmetry evidence inside a task context.",
+          "what_limits_does_it_have": [
+            "requires_axis_or_pair_relation",
+            "requires_symmetry_evidence"
+          ],
+          "what_properties_define_it": [
+            "axis_consistency",
+            "mirror_consistency",
+            "preserves_color",
+            "preserves_identity",
+            "preserves_topology",
+            "symmetry_relation"
+          ],
+          "why_it_exists": [
+            "context classified as symmetry_context",
+            "active truth concept indicates symmetry_context",
+            "truth-native semantic context surface available"
+          ]
+        },
+        "implications": [
+          "mirror_consistency_expected",
+          "symmetry_preservation_expected"
+        ],
+        "phase": "5.7",
+        "preservation_context": true,
+        "preservation_context_pure": true,
+        "process_abstraction": {},
+        "process_abstraction_ready": false,
+        "process_context_generated": false,
+        "process_context_generation": {
+          "concept": "symmetry_context",
+          "process_context_generated": false,
+          "process_context_ready": false,
+          "reason": "unsupported_process_concept",
+          "status": "PROCESS_CONTEXT_REJECTED",
+          "system": "process_context_generation_engine"
+        },
+        "process_traits": {
+          "capabilities": [
+            "object_creation",
+            "structural_replication"
+          ],
+          "constraints": [
+            "object_count_cannot_remain_constant",
+            "identity_continuity_may_split"
+          ],
+          "implications": [
+            "object_count_increase",
+            "replication_behavior",
+            "topology_change_possible"
+          ],
+          "process_operator": "duplication",
+          "properties": [
+            "creates_objects",
+            "preserves_shape",
+            "modifies_topology"
+          ],
+          "stored_separately": true
+        },
+        "process_traits_stored_separately": true,
+        "properties": [
+          {
+            "confidence": 0.92,
+            "evidence_count": 55,
+            "property_name": "axis_consistency"
+          },
+          {
+            "confidence": 0.92,
+            "evidence_count": 55,
+            "property_name": "mirror_consistency"
+          },
+          {
+            "confidence": 0.86,
+            "evidence_count": 55,
+            "property_name": "preserves_color"
+          },
+          {
+            "confidence": 0.86,
+            "evidence_count": 55,
+            "property_name": "preserves_identity"
+          },
+          {
+            "confidence": 0.86,
+            "evidence_count": 55,
+            "property_name": "preserves_topology"
+          },
+          {
+            "confidence": 0.92,
+            "evidence_count": 55,
+            "property_name": "symmetry_relation"
+          }
+        ],
+        "property_confidence_history": [
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "axis_consistency"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "mirror_consistency"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_topology"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "symmetry_relation"
+            }
+          ],
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "axis_consistency"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "mirror_consistency"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_topology"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "symmetry_relation"
+            }
+          ],
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "axis_consistency"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "mirror_consistency"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_topology"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "symmetry_relation"
+            }
+          ],
+          [
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "axis_consistency"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "mirror_consistency"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_topology"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "symmetry_relation"
+            }
+          ]
+        ],
+        "semantic_context_score": 0.9525,
+        "semantic_definition": "Evaluates axis, mirror, and relational symmetry evidence inside a task context.",
+        "semantic_profile": {
+          "capabilities": [
+            "axis_based_generalization",
+            "mirror_consistency_check",
+            "symmetry_reasoning"
+          ],
+          "confidence": 0.9525,
+          "constraints": [
+            "requires_axis_or_pair_relation",
+            "requires_symmetry_evidence"
+          ],
+          "context_name": "symmetry_context",
+          "explanation": {
+            "what_consequences_follow": [
+              "mirror_consistency_expected",
+              "symmetry_preservation_expected"
+            ],
+            "what_does_it_do": [
+              "axis_based_generalization",
+              "mirror_consistency_check",
+              "symmetry_reasoning"
+            ],
+            "what_is_this_context": "Evaluates axis, mirror, and relational symmetry evidence inside a task context.",
+            "what_limits_does_it_have": [
+              "requires_axis_or_pair_relation",
+              "requires_symmetry_evidence"
+            ],
+            "what_properties_define_it": [
+              "axis_consistency",
+              "mirror_consistency",
+              "preserves_color",
+              "preserves_identity",
+              "preserves_topology",
+              "symmetry_relation"
+            ],
+            "why_it_exists": [
+              "context classified as symmetry_context",
+              "active truth concept indicates symmetry_context",
+              "truth-native semantic context surface available"
+            ]
+          },
+          "implications": [
+            "mirror_consistency_expected",
+            "symmetry_preservation_expected"
+          ],
+          "properties": [
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "axis_consistency"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "mirror_consistency"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_color"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_identity"
+            },
+            {
+              "confidence": 0.86,
+              "evidence_count": 55,
+              "property_name": "preserves_topology"
+            },
+            {
+              "confidence": 0.92,
+              "evidence_count": 55,
+              "property_name": "symmetry_relation"
+            }
+          ],
+          "semantic_definition": "Evaluates axis, mirror, and relational symmetry evidence inside a task context.",
+          "supporting_evidence": [
+            "context classified as symmetry_context",
+            "active truth concept indicates symmetry_context",
+            "truth-native semantic context surface available"
+          ]
+        },
+        "semantic_required": true,
+        "semantically_validated": true,
+        "status": "SEMANTICALLY_VALIDATED",
+        "system": "semantic_context_reasoner",
+        "transfer_conditions": [],
+        "validation_criteria": []
+      },
+      "status": "GOVERNANCE_VISIBLE"
+    }
+  },
+  "lifecycle_events": [
+    {
+      "context_id": "color_context",
+      "event": "registered",
+      "timestamp": "2026-06-16T22:33:41.958127+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.033689+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.033689+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.041448+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.060566+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.068649+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.084358+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.097883+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.113623+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.137504+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.145706+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.154058+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.170181+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "registered",
+      "timestamp": "2026-06-16T22:33:42.174438+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.185995+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.249361+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.249361+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.267127+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.267127+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.275140+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.275140+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.291275+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:42.291275+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:33:53.800702+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.816323+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.848736+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.848736+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.856943+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.856943+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.865271+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.865271+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.873590+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.873590+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.890031+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.890031+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.914708+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.914708+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.922028+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.922028+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.950325+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.950325+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.970233+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.970233+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.986506+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.986506+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.997429+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:53.997429+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.011813+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.011813+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:33:54.029899+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.033599+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.089538+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.089538+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.106609+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.106609+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.120057+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.120057+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.129415+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:33:54.129415+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:34:06.018584+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.018584+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.057757+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.057757+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.075347+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.075347+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.090146+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.090146+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.095190+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.095190+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.126741+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.126741+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.146431+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.146431+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.154591+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.154591+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.171151+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.171151+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.187540+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.187540+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.203577+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.203577+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.219844+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.219844+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.233443+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.233443+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:34:06.258296+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.258296+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.346294+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.346294+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.367011+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.367011+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.379070+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.379070+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.394287+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:06.394287+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:34:20.966462+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:20.966462+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:20.989758+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:20.989758+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:20.989758+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:20.989758+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.009249+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.009249+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.024434+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.024434+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.040610+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.040610+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.066083+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.066083+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.082416+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.082416+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.106498+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.106498+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.116669+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.116669+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.138495+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.138495+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.155003+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.155003+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.171059+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.171059+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:34:21.186755+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.186755+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.265485+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.265485+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.273584+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.273584+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.307787+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.307787+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.321901+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:34:21.321901+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.712974+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.712974+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.735782+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.735782+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.752069+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.752069+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.768621+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.768621+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.801470+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.801470+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.842928+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.842928+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.869996+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.869996+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.892369+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.892369+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.920171+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.920171+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.946773+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.946773+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.972427+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.972427+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.991459+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:23.991459+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.007995+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.007995+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.033149+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.033149+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.049337+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.049337+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.065604+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.065604+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.097901+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.097901+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.113480+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:24.113480+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:37:41.627723+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.635931+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.686259+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.686259+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.697236+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.697236+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.711512+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.711512+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.731495+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.731495+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.758518+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.758518+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.767534+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.767534+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.791982+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.791982+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.818782+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.818782+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.835018+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.835018+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.849625+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.849625+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.865934+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.865934+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.882149+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.882149+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:37:41.906444+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.913501+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.963397+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.963397+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.983542+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:41.983542+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:42.013348+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:42.013348+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:42.028967+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:42.028967+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:37:58.595435+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.600383+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.666306+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.666306+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.690310+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.690310+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.712842+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.712842+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.747685+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.747685+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.766382+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.766382+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.781414+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.781414+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.797805+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.797805+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.821822+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.821822+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.847780+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.847780+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.870496+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.870496+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.886640+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.886640+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.905095+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.905095+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:37:58.927508+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.931079+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.997791+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:58.997791+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:59.009597+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:59.009597+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:59.031089+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:59.031089+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:59.050702+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:37:59.050702+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:38:17.812003+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.818701+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.870226+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.870226+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.897833+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.897833+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.919516+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.919516+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.962665+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.962665+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.984175+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:17.984175+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.016886+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.016886+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.049777+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.049777+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.073969+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.073969+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.115203+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.115203+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.130968+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.130968+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.156073+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.156073+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.181473+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.181473+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:38:18.213794+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.230250+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.330892+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.330892+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.352447+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.352447+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.399131+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.399131+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.420600+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:18.420600+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:38:35.949617+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:35.957648+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.031727+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.031727+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.051604+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.051604+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.081068+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.081068+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.130602+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.130602+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.163393+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.163393+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.197364+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.197364+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.234532+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.234532+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.280060+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.280060+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.312886+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.312886+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.333312+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.333312+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.346782+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.346782+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.357879+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.357879+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "observed",
+      "timestamp": "2026-06-16T22:38:36.374028+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.382189+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.456429+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.456429+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.478264+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.478264+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.505025+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.505025+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.530193+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-06-16T22:38:36.530193+00:00"
+    }
+  ],
+  "system": "persistent_context_memory"
+}

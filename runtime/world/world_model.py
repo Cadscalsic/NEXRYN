@@ -13,6 +13,9 @@ from runtime.world.acceptance_calibrator import (
 from runtime.evaluation.partial_success_engine import (
     PartialSuccessEngine,
 )
+from runtime.spatial import (
+    transformation_localization_engine,
+)
 
 
 # ============================================
@@ -36,6 +39,9 @@ class WorldModelEngine:
             or WorldModelAcceptanceCalibrator()
         )
         self.partial_success_engine = PartialSuccessEngine()
+        self.transformation_localization_engine = (
+            transformation_localization_engine
+        )
 
     # ============================================
     # SIMULATE TRANSFORMATION
@@ -142,11 +148,25 @@ class WorldModelEngine:
         minimum_accuracy=0.75
     ):
 
+        localization_report = (
+            self.transformation_localization_engine
+            .localize_program(
+                input_grid,
+                target_grid,
+                synthesized_program,
+            )
+        )
+
+        localized_program = localization_report.get(
+            "localized_program",
+            synthesized_program,
+        )
+
         simulation = self.simulate_transformation(
 
             input_grid,
 
-            synthesized_program
+            localized_program
         )
 
         predicted_grid = simulation.get(
@@ -162,7 +182,7 @@ class WorldModelEngine:
 
         uncertainty_report = self.estimate_simulation_uncertainty(
 
-            synthesized_program,
+            localized_program,
 
             simulation.get(
                 "simulation_trace",
@@ -196,7 +216,13 @@ class WorldModelEngine:
             uncertainty_report,
 
             "simulation":
-            simulation
+            simulation,
+
+            "transformation_localization":
+            localization_report,
+
+            "localized_synthesized_program":
+            localized_program
         }
 
     # ============================================

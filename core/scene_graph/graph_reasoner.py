@@ -96,6 +96,8 @@ class GraphReasoner:
             "source_object": event.get("source_candidate"),
             "target_object": event.get("output_object"),
             "placement_vector": vector,
+            "delta_row": vector.get("delta_row", 0),
+            "delta_col": vector.get("delta_col", 0),
             "direction": vector.get("direction", "unknown"),
             "axis": vector.get("axis", "unknown"),
             "confidence": clamp(event.get("confidence", 0.0)),
@@ -135,7 +137,7 @@ class GraphReasoner:
             ))
         if tracking.get("identity_continuity") is not None:
             evidence.append(self._dependency(
-                "object_identity_preservation",
+                "identity_persistence",
                 f"identity_continuity:{tracking.get('identity_continuity_state')}",
                 tracking.get("identity_continuity", 0.0),
                 {

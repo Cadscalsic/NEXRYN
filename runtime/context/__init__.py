@@ -180,6 +180,55 @@ from runtime.context.semantic_context_graph import (
     semantic_context_graph
 )
 
+from runtime.context.context_surface_engine import (
+
+    ContextSurfaceEngine,
+
+    context_surface_engine
+)
+
+from runtime.context.process_context_engine import (
+
+    ProcessContextEngine,
+
+    process_context_engine
+)
+
+from runtime.context.process_context_discovery_engine import (
+
+    ProcessContextDiscoveryEngine,
+
+    process_context_discovery_engine
+)
+
+from runtime.context.context_governance_registry import (
+
+    ContextGovernanceRegistry,
+
+    context_governance_registry
+)
+
+from runtime.context.persistent_context_memory import (
+
+    PersistentContextMemory,
+
+    persistent_context_memory
+)
+
+from runtime.context.process_context_registry import (
+
+    ProcessContextRegistry,
+
+    process_context_registry
+)
+
+from runtime.context.temporal_process_context_engine import (
+
+    TemporalProcessContextEngine,
+
+    temporal_process_context_engine
+)
+
 # ============================================
 # HIERARCHICAL CONTEXT CONSOLIDATOR
 # ============================================
@@ -316,5 +365,33 @@ __all__ = [
 
     "SemanticContextGraph",
 
-    "semantic_context_graph"
+    "semantic_context_graph",
+
+    "ContextSurfaceEngine",
+
+    "context_surface_engine",
+
+    "ProcessContextEngine",
+
+    "process_context_engine",
+
+    "ProcessContextDiscoveryEngine",
+
+    "process_context_discovery_engine",
+
+    "ContextGovernanceRegistry",
+
+    "context_governance_registry",
+
+    "PersistentContextMemory",
+
+    "persistent_context_memory",
+
+    "ProcessContextRegistry",
+
+    "process_context_registry",
+
+    "TemporalProcessContextEngine",
+
+    "temporal_process_context_engine"
 ]

@@ -3,6 +3,7 @@
 # ============================================
 
 from runtime.evolution.promotion_registry import PromotionRegistry
+from runtime.context.process_context_registry import ProcessContextRegistry
 
 
 # ============================================
@@ -16,6 +17,8 @@ class EvolutionValidator:
         self.validation_history = []
 
         self.promotion_registry = PromotionRegistry()
+
+        self.process_context_registry = ProcessContextRegistry()
 
         self.rejected_strategies = []
 
@@ -426,10 +429,20 @@ class EvolutionValidator:
             promoted
         )
 
+        process_context_registration = (
+            self.process_context_registry.register_promoted_strategy(
+                registered
+            )
+        )
+
         return {
             **registered,
             "newly_promoted":
-            newly_promoted
+            newly_promoted,
+            "process_context_registration":
+            process_context_registration,
+            "process_context_registry_report":
+            self.process_context_registry.report()
         }
 
     # ============================================

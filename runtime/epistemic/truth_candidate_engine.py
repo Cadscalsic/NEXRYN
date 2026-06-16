@@ -12,6 +12,7 @@ from core.knowledge.contextual_truth_support_policy import (
 )
 from core.knowledge.truth_state_authority import TruthStateAuthority
 from runtime.causal import RuntimeCausalAlignmentEngine
+from runtime.relational import RelationalReasoningEngine
 
 
 class TruthCandidateEngine:
@@ -101,6 +102,7 @@ class TruthCandidateEngine:
         self.contextual_truth_support_policy = (
             ContextualTruthSupportPolicy()
         )
+        self.relational_reasoning_engine = RelationalReasoningEngine()
 
     def _nested_score(self, report, keys, default=0.0):
         report = report if isinstance(report, dict) else {}
@@ -190,14 +192,24 @@ class TruthCandidateEngine:
         if not isinstance(report, dict):
             return aggregate.causal_alignment
 
-        return clamp(
-            report.get(
-                "alignment_score",
+        relational = context.get("relational_reasoning_report", {})
+        relational_score = (
+            clamp(relational.get("relation_consistency", 0.0))
+            if isinstance(relational, dict)
+            and relational.get("relation_ready") is True
+            else 0.0
+        )
+        return max(
+            relational_score,
+            clamp(
                 report.get(
-                    "causal_graph_alignment",
-                    aggregate.causal_alignment,
+                    "alignment_score",
+                    report.get(
+                        "causal_graph_alignment",
+                        aggregate.causal_alignment,
+                    ),
                 ),
-            )
+            ),
         )
 
     def _causal_validation_score(self, context, aggregate):
@@ -602,6 +614,56 @@ class TruthCandidateEngine:
 
     def evaluate(self, belief, aggregate, context=None):
         context = context if isinstance(context, dict) else {}
+        relational_reasoning = context.get("relational_reasoning_report", {})
+        relational_reasoning = (
+            relational_reasoning
+            if isinstance(relational_reasoning, dict)
+            else {}
+        )
+        if not relational_reasoning and (
+            belief.concept == "symmetry_reasoning"
+            or "symmetry" in str(belief.concept).lower()
+        ):
+            relational_reasoning = self.relational_reasoning_engine.evaluate(
+                belief.concept,
+                scene_graph_report=context.get("scene_graph_comparison", {}),
+                semantic_context=context.get("semantic_context", {}),
+                runtime_context=context,
+            )
+            context = {
+                **context,
+                "relational_reasoning_report": relational_reasoning,
+            }
+        if relational_reasoning.get("relation_ready") is True:
+            relation_score = clamp(
+                relational_reasoning.get("relation_consistency", 0.0)
+            )
+            causal_graph_alignment = context.get("causal_graph_alignment", {})
+            causal_graph_alignment = (
+                causal_graph_alignment
+                if isinstance(causal_graph_alignment, dict)
+                else {}
+            )
+            components = causal_graph_alignment.get("components", {})
+            components = components if isinstance(components, dict) else {}
+            aligned_score = max(
+                clamp(causal_graph_alignment.get("alignment_score", 0.0)),
+                relation_score,
+            )
+            context = {
+                **context,
+                "causal_graph_alignment": {
+                    **causal_graph_alignment,
+                    "alignment_score": aligned_score,
+                    "causal_graph_alignment": aligned_score,
+                    "relational_alignment": relation_score,
+                    "alignment_ready": aligned_score > 0.82,
+                    "components": {
+                        **components,
+                        "relational_consistency": relation_score,
+                    },
+                },
+            }
 
         causal_boundary_alignment = context.get(
             "causal_boundary_alignment",
@@ -701,6 +763,7 @@ class TruthCandidateEngine:
                 "required_actions": [],
                 **contradiction_review,
                 "raw_contradiction_score": raw_contradiction_score,
+                "relational_reasoning_report": relational_reasoning,
                 "causal_boundary_alignment": causal_boundary_alignment,
                 "causal_graph_alignment":
                 context.get("causal_graph_alignment", {}),
@@ -1184,6 +1247,7 @@ class TruthCandidateEngine:
             "required_actions": required_actions,
             **contradiction_review,
             "raw_contradiction_score": raw_contradiction_score,
+            "relational_reasoning_report": relational_reasoning,
             "causal_boundary_alignment": causal_boundary_alignment,
             "causal_graph_alignment":
             context.get("causal_graph_alignment", {}),

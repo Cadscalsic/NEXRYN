@@ -37,9 +37,15 @@ class DependencyKnowledgeEngine:
             "identity_behavior",
             "lineage_continuity",
         ],
-        "object_identity_preservation": [
+        "identity_persistence": [
             "identity_behavior",
             "lineage_continuity",
+        ],
+        "identity_forking": [
+            "identity_behavior",
+            "lineage_continuity",
+            "identity_split",
+            "object_count_increase",
         ],
         "position_preservation": [
             "spatial_alignment",
@@ -60,11 +66,16 @@ class DependencyKnowledgeEngine:
         "shape_preservation": "structural_integrity",
         "topology_preservation": "topology_behavior",
         "position_preservation": "spatial_alignment",
-        "object_identity_preservation": "identity_behavior",
+        "identity_persistence": "identity_behavior",
+        "identity_forking": "identity_behavior",
         "identity_preservation": "identity_behavior",
         "symmetry_preservation": "symmetry_behavior",
         "symmetry_reasoning": "symmetry_evidence",
         "density_modulation": "density_behavior",
+    }
+
+    DEPRECATED_CONCEPT_ALIASES = {
+        "object_identity_preservation": "identity_persistence",
     }
 
     def __init__(self):
@@ -130,6 +141,7 @@ class DependencyKnowledgeEngine:
         truth_candidate_report=None,
         identity_report=None,
     ):
+        concept = self.DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
         context_report = context_report or {}
         semantic_context_report = semantic_context_report or {}
         causal_validation_report = causal_validation_report or {}
@@ -216,7 +228,8 @@ class DependencyKnowledgeEngine:
                     evidence=identity_report or context_report,
                     required=concept in {
                         "identity_preservation",
-                        "object_identity_preservation",
+                        "identity_persistence",
+                        "identity_forking",
                     },
                 )
             )
@@ -470,6 +483,7 @@ class DependencyKnowledgeEngine:
         )
 
     def identify_missing_dependencies(self, concept, dependencies):
+        concept = self.DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
         observed = {
             item.get("dependency")
             for item in dependencies
@@ -577,6 +591,7 @@ class DependencyKnowledgeEngine:
         truth_candidate_report=None,
         identity_report=None,
     ):
+        concept = self.DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
         dependencies = self.extract_dependencies(
             concept,
             context_report=context_report,

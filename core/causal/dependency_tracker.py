@@ -32,9 +32,37 @@ class DependencyTracker:
         "identity_preservation": [
             {
                 "context_key": "identity_behavior",
-                "dependency": "identity_behavior",
+                "dependency": "identity_persistence",
                 "supports_unless": {"identity_split", "identity_reassigned"},
                 "review_if": {"identity_split", "identity_reassigned"},
+            },
+        ],
+        "identity_persistence": [
+            {
+                "context_key": "identity_behavior",
+                "dependency": "identity_persistence",
+                "supports_unless": {"identity_split", "identity_reassigned"},
+                "review_if": {"identity_split", "identity_reassigned"},
+            },
+            {
+                "context_key": "object_count",
+                "dependency": "object_persistence",
+                "supports_unless": {"changed", "increased", "decreased"},
+                "review_if": {"changed", "increased", "decreased"},
+            },
+        ],
+        "identity_forking": [
+            {
+                "context_key": "identity_behavior",
+                "dependency": "identity_forking",
+                "supports_unless": {"identity_preserved", "identity_reassigned"},
+                "review_if": {"identity_preserved", "identity_reassigned"},
+            },
+            {
+                "context_key": "object_count",
+                "dependency": "object_count_increase",
+                "supports_unless": {"unchanged", "decreased"},
+                "review_if": {"unchanged", "decreased"},
             },
         ],
         "symmetry_reasoning": [
@@ -45,20 +73,10 @@ class DependencyTracker:
                 "review_if": {"asymmetric_split"},
             },
         ],
-        "object_identity_preservation": [
-            {
-                "context_key": "identity_behavior",
-                "dependency": "identity_behavior",
-                "supports_unless": {"identity_split", "identity_reassigned"},
-                "review_if": {"identity_split", "identity_reassigned"},
-            },
-            {
-                "context_key": "object_count",
-                "dependency": "object_count",
-                "supports_unless": {"changed", "increased", "decreased"},
-                "review_if": {"changed", "increased", "decreased"},
-            },
-        ],
+    }
+
+    DEPRECATED_CONCEPT_ALIASES = {
+        "object_identity_preservation": "identity_persistence",
     }
 
     def __init__(self, rules=None):
@@ -77,6 +95,7 @@ class DependencyTracker:
         return value
 
     def dependencies_for(self, concept, context=None):
+        concept = self.DEPRECATED_CONCEPT_ALIASES.get(concept, concept)
         dependencies = []
         for rule in self.rules.get(concept, []):
             key = rule["context_key"]

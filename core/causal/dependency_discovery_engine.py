@@ -37,11 +37,17 @@ class DependencyDiscoveryEngine:
                 "axis_detection",
                 "relational_balance",
             ],
-            "object_identity_preservation": [
+            "identity_persistence": [
                 "identity_behavior",
                 "lineage_continuity",
                 "causal_continuity",
                 "topology_continuity",
+            ],
+            "identity_forking": [
+                "identity_split",
+                "identity_branching",
+                "descendant_identity_mapping",
+                "object_count_increase",
             ],
             "density_modulation": [
                 "density_behavior",
@@ -104,6 +110,9 @@ class DependencyDiscoveryEngine:
             "alignment_ready": 0.85,
         }
         self.known_dependency_memory = {}
+        self.deprecated_concept_aliases = {
+            "object_identity_preservation": "identity_persistence",
+        }
 
     def _candidate(
         self,
@@ -147,6 +156,7 @@ class DependencyDiscoveryEngine:
         causal_validation_report=None,
         identity_report=None,
     ):
+        concept = self.deprecated_concept_aliases.get(concept, concept)
         context_report = dict(context_report or {})
         semantic_context_report = dict(semantic_context_report or {})
         truth_candidate_report = dict(truth_candidate_report or {})
@@ -195,6 +205,7 @@ class DependencyDiscoveryEngine:
         return self.build_report(concept, ranked, missing)
 
     def discover_concept_dependencies(self, concept):
+        concept = self.deprecated_concept_aliases.get(concept, concept)
         return [
             self._candidate(
                 concept,
@@ -455,6 +466,7 @@ class DependencyDiscoveryEngine:
         )
 
     def identify_critical_missing_dependencies(self, concept, dependencies):
+        concept = self.deprecated_concept_aliases.get(concept, concept)
         observed = {
             dependency.get("target")
             for dependency in list(dependencies or [])
