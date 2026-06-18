@@ -49,6 +49,11 @@ def build_runtime_metadata(args, execution_time, runtime_status, context_count=0
         "runtime_status": runtime_status,
         "execution_time": execution_time,
         "context_count": context_count,
+        "max_chain_depth": args.max_chain_depth,
+        "max_concepts": args.max_concepts,
+        "telemetry_enabled": not args.disable_telemetry,
+        "cache_dependencies": args.cache_dependencies,
+        "report_level": args.report_level,
         "python_version": sys.version,
         "timestamp": str(datetime.utcnow()),
     }
@@ -58,12 +63,32 @@ def build_runtime_metadata(args, execution_time, runtime_status, context_count=0
 # SAFE PRINT
 # ============================================
 
-def safe_print_context(results):
+def safe_print_context(results, report_level="normal"):
     try:
         if isinstance(results, dict):
             training_report = results.get("training_report", {})
 
-            if training_report:
+            if training_report and report_level == "minimal":
+                architecture_report = training_report.get(
+                    "architecture_bottleneck_report",
+                    {},
+                )
+                print({
+                    "tasks_executed": results.get("tasks_executed", 0),
+                    "successful_tasks": results.get("successful_tasks", 0),
+                    "failed_tasks": results.get("failed_tasks", 0),
+                    "architecture_bottleneck":
+                    architecture_report.get("architecture_bottleneck"),
+                    "recommended_next_step":
+                    architecture_report.get("recommended_next_step"),
+                    "dependency_chain_depth":
+                    architecture_report.get("dependency_chain_depth"),
+                    "dependency_chain_coverage":
+                    architecture_report.get("dependency_chain_coverage"),
+                    "performance_report":
+                    results.get("performance_report", {}),
+                })
+            elif training_report:
                 print_training_report(training_report)
             else:
                 print(results)
@@ -229,7 +254,43 @@ parser.add_argument(
     "--mode",
     type=str,
     default="adaptive",
+    choices=["fast", "adaptive", "deep"],
     help="Runtime mode",
+)
+
+parser.add_argument(
+    "--max-chain-depth",
+    type=int,
+    default=None,
+    help="Maximum dependency chain depth per concept",
+)
+
+parser.add_argument(
+    "--max-concepts",
+    type=int,
+    default=None,
+    help="Maximum dependency concepts processed per runtime cycle",
+)
+
+parser.add_argument(
+    "--disable-telemetry",
+    action="store_true",
+    help="Disable full dependency telemetry collection",
+)
+
+parser.add_argument(
+    "--cache-dependencies",
+    action="store_true",
+    default=None,
+    help="Reuse cached dependency chains when inputs are unchanged",
+)
+
+parser.add_argument(
+    "--report-level",
+    type=str,
+    default=None,
+    choices=["minimal", "normal", "full"],
+    help="Runtime report detail level",
 )
 
 parser.add_argument(
@@ -453,6 +514,16 @@ try:
                     for candidate_file in task_files
                     if candidate_file != task_file
                 ],
+                mode=args.mode,
+                max_chain_depth=args.max_chain_depth,
+                max_concepts=args.max_concepts,
+                telemetry_enabled=(
+                    False
+                    if args.disable_telemetry
+                    else None
+                ),
+                cache_dependencies=args.cache_dependencies,
+                report_level=args.report_level,
             )
 
             if args.math_reasoning:
@@ -558,6 +629,57 @@ try:
         concept_lifecycle_report=concept_lifecycle_report,
     )
 
+    task_performance_reports = [
+        item.get("result", {}).get("performance_report", {})
+        for item in all_results
+        if isinstance(item.get("result"), dict)
+        and item.get("result", {}).get("performance_report")
+    ]
+    slowest_modules = sorted(
+        [
+            module
+            for report in task_performance_reports
+            for module in report.get("slowest_modules", [])
+        ],
+        key=lambda item: item.get("seconds", 0.0),
+        reverse=True,
+    )[:5]
+    performance_report = {
+        "system": "runtime_reasoning_budget",
+        "total_runtime_seconds": round(
+            sum(
+                report.get("total_runtime_seconds", 0.0)
+                for report in task_performance_reports
+            ),
+            4,
+        ),
+        "concepts_processed": sum(
+            report.get("concepts_processed", 0)
+            for report in task_performance_reports
+        ),
+        "cache_hits": sum(
+            report.get("cache_hits", 0)
+            for report in task_performance_reports
+        ),
+        "cache_misses": sum(
+            report.get("cache_misses", 0)
+            for report in task_performance_reports
+        ),
+        "dependency_chains_executed": sum(
+            report.get("dependency_chains_executed", 0)
+            for report in task_performance_reports
+        ),
+        "telemetry_enabled": not args.disable_telemetry
+        and args.mode != "fast",
+        "report_level": args.report_level
+        or {
+            "fast": "minimal",
+            "adaptive": "normal",
+            "deep": "full",
+        }.get(args.mode, "normal"),
+        "slowest_modules": slowest_modules,
+    }
+
     truth_candidate_report = collect_governance_reports(
         all_results,
         [
@@ -605,6 +727,7 @@ try:
         "training_assistant_batch": training_batch,
         "training_assistant_report": training_assistant_report,
         "training_report": training_report,
+        "performance_report": performance_report,
         "tasks_executed": len(all_results),
         "successful_tasks": successful_tasks,
         "failed_tasks": failed_tasks,
@@ -660,7 +783,22 @@ print("\n==================================================")
 print("NEXRYN :: FINAL CONTEXT")
 print("==================================================\n")
 
-safe_print_context(results)
+effective_report_level = args.report_level or {
+    "fast": "minimal",
+    "adaptive": "normal",
+    "deep": "full",
+}.get(args.mode, "normal")
+
+safe_print_context(
+    results,
+    report_level=effective_report_level,
+)
+
+if isinstance(results, dict) and results.get("performance_report"):
+    print("\n==================================================")
+    print("NEXRYN :: PERFORMANCE REPORT")
+    print("==================================================\n")
+    print(results["performance_report"])
 
 
 # ============================================

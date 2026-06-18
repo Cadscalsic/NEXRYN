@@ -4,6 +4,9 @@
 # ============================================
 
 from datetime import datetime
+import hashlib
+import json
+import time
 
 # ============================================
 # CORE
@@ -12,6 +15,8 @@ from datetime import datetime
 from runtime.kernel.runtime_kernel import RuntimeKernel
 from runtime.state.runtime_state import RuntimeState
 from runtime.scheduler.runtime_scheduler import RuntimeScheduler
+from runtime.dependency import DependencyChainExecutor
+from runtime.process import ProcessSemanticEngine
 
 # ============================================
 # GOVERNANCE
@@ -445,6 +450,12 @@ class AdaptiveCognitivePipeline:
         self.runtime = RuntimeState()
         self.kernel = RuntimeKernel()
         self.scheduler = RuntimeScheduler()
+        self.dependency_chain_executor = DependencyChainExecutor()
+        self.process_semantic_engine = ProcessSemanticEngine()
+        self.reasoning_budget = self._default_reasoning_budget()
+        self.dependency_chain_cache = {}
+        self.process_semantic_cache = {}
+        self.performance_counters = self._new_performance_counters()
 
         # ====================================
         # EXECUTION STATE
@@ -1177,6 +1188,198 @@ class AdaptiveCognitivePipeline:
         return runtime_context
 
     # ========================================
+    # REASONING BUDGETS
+    # ========================================
+
+    def _default_reasoning_budget(self):
+
+        return {
+            "mode": "adaptive",
+            "max_chain_depth": 8,
+            "max_concepts": None,
+            "telemetry_enabled": True,
+            "cache_dependencies": True,
+            "report_level": "normal",
+        }
+
+    def _new_performance_counters(self):
+
+        return {
+            "task_start": None,
+            "module_timings": [],
+            "concepts_processed": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "dependency_chains_executed": 0,
+        }
+
+    def configure_reasoning_budget(
+        self,
+        mode=None,
+        max_chain_depth=None,
+        max_concepts=None,
+        telemetry_enabled=None,
+        cache_dependencies=None,
+        report_level=None,
+    ):
+
+        mode = (mode or self.reasoning_budget.get("mode") or "adaptive")
+        mode = str(mode).lower()
+        if mode not in {"fast", "adaptive", "deep"}:
+            mode = "adaptive"
+
+        mode_defaults = {
+            "fast": {
+                "telemetry_enabled": False,
+                "cache_dependencies": True,
+                "report_level": "minimal",
+                "max_concepts": 5,
+            },
+            "adaptive": {
+                "telemetry_enabled": True,
+                "cache_dependencies": True,
+                "report_level": "normal",
+                "max_concepts": None,
+            },
+            "deep": {
+                "telemetry_enabled": True,
+                "cache_dependencies": False,
+                "report_level": "full",
+                "max_concepts": None,
+            },
+        }[mode]
+
+        budget = {
+            **self._default_reasoning_budget(),
+            **mode_defaults,
+            "mode": mode,
+        }
+        if max_chain_depth is not None:
+            budget["max_chain_depth"] = max(1, int(max_chain_depth))
+        if max_concepts is not None:
+            budget["max_concepts"] = max(1, int(max_concepts))
+        if telemetry_enabled is not None:
+            budget["telemetry_enabled"] = bool(telemetry_enabled)
+        if cache_dependencies is not None:
+            budget["cache_dependencies"] = bool(cache_dependencies)
+        if report_level is not None:
+            report_level = str(report_level).lower()
+            if report_level in {"minimal", "normal", "full"}:
+                budget["report_level"] = report_level
+
+        self.reasoning_budget = budget
+        return dict(self.reasoning_budget)
+
+    def _start_performance_cycle(self):
+
+        self.performance_counters = self._new_performance_counters()
+        self.performance_counters["task_start"] = time.perf_counter()
+
+    def _record_module_timing(self, module_name, started_at):
+
+        elapsed = round(time.perf_counter() - started_at, 4)
+        self.performance_counters["module_timings"].append({
+            "module": module_name,
+            "seconds": elapsed,
+        })
+
+    def _stable_hash(self, payload):
+
+        try:
+            encoded = json.dumps(
+                payload,
+                sort_keys=True,
+                default=str,
+            )
+        except TypeError:
+            encoded = str(payload)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _runtime_signature(self, runtime_context):
+
+        task_path = runtime_context.get("task_path")
+        candidates = runtime_context.get("arc_replication_candidates", [])
+        task_batch = [
+            task_path,
+            *[
+                item.get("task_path")
+                for item in candidates
+                if isinstance(item, dict)
+            ],
+        ]
+        return self._stable_hash(task_batch)
+
+    def _concept_state_for(self, concept, runtime_context):
+
+        lifecycle = runtime_context.get("concept_lifecycle_report", {})
+        if isinstance(lifecycle, dict):
+            for item in lifecycle.get("concepts", []):
+                if item.get("concept") == concept:
+                    return item.get("state", "unknown")
+        concept_states = runtime_context.get("concept_states", {})
+        if isinstance(concept_states, dict):
+            return concept_states.get(concept, "unknown")
+        return "unknown"
+
+    def _dependency_memory_signature(self):
+
+        memory = self.dependency_chain_executor.memory
+        try:
+            links = [link.as_dict() for link in memory.all_links()]
+        except Exception:
+            links = []
+        return self._stable_hash({
+            "links_loaded": getattr(memory, "links_loaded", 0),
+            "links": links,
+        })
+
+    def _dependency_cache_key(self, concept, runtime_context):
+
+        return self._stable_hash({
+            "concept": concept,
+            "concept_state": self._concept_state_for(
+                concept,
+                runtime_context,
+            ),
+            "memory_signature": self._dependency_memory_signature(),
+            "task_batch_signature": self._runtime_signature(runtime_context),
+            "max_chain_depth": self.reasoning_budget["max_chain_depth"],
+        })
+
+    def performance_report(self):
+
+        started = self.performance_counters.get("task_start")
+        total_runtime_seconds = (
+            round(time.perf_counter() - started, 4)
+            if started is not None
+            else 0.0
+        )
+        slowest_modules = sorted(
+            self.performance_counters.get("module_timings", []),
+            key=lambda item: item.get("seconds", 0.0),
+            reverse=True,
+        )[:5]
+        return {
+            "system": "runtime_reasoning_budget",
+            "mode": self.reasoning_budget["mode"],
+            "total_runtime_seconds": total_runtime_seconds,
+            "concepts_processed":
+            self.performance_counters["concepts_processed"],
+            "cache_hits": self.performance_counters["cache_hits"],
+            "cache_misses": self.performance_counters["cache_misses"],
+            "dependency_chains_executed":
+            self.performance_counters["dependency_chains_executed"],
+            "telemetry_enabled":
+            self.reasoning_budget["telemetry_enabled"],
+            "report_level": self.reasoning_budget["report_level"],
+            "max_chain_depth": self.reasoning_budget["max_chain_depth"],
+            "max_concepts": self.reasoning_budget["max_concepts"],
+            "cache_dependencies":
+            self.reasoning_budget["cache_dependencies"],
+            "slowest_modules": slowest_modules,
+        }
+
+    # ========================================
     # PREPARE TASK RUN
     # ========================================
 
@@ -1186,6 +1389,7 @@ class AdaptiveCognitivePipeline:
         self.stage_execution_history = []
         self.completed_stages = []
         self.failed_stages = []
+        self._start_performance_cycle()
 
     # ========================================
     # BOOT RUNTIME
@@ -1611,6 +1815,325 @@ class AdaptiveCognitivePipeline:
         self.runtime.bulk_update_context(
             runtime_context
         )
+
+    # ========================================
+    # DEPENDENCY REASONING
+    # ========================================
+
+    def run_dependency_reasoning_cycle(self):
+
+        module_start = time.perf_counter()
+        runtime_context = (
+            self.runtime.get_context()
+        )
+
+        concepts = self._dependency_reasoning_concepts(
+            runtime_context
+        )
+        max_concepts = self.reasoning_budget.get("max_concepts")
+        if max_concepts is not None:
+            concepts = concepts[:max_concepts]
+
+        dependency_reports = {}
+        dependency_traces = []
+
+        for concept in concepts:
+
+            cache_key = self._dependency_cache_key(
+                concept,
+                runtime_context,
+            )
+            cache_hit = (
+                self.reasoning_budget.get("cache_dependencies", False)
+                and cache_key in self.dependency_chain_cache
+            )
+            if cache_hit:
+                report = dict(self.dependency_chain_cache[cache_key])
+                report["cache_hit"] = True
+                self.performance_counters["cache_hits"] += 1
+            else:
+                report = (
+                    self.dependency_chain_executor
+                    .execute(
+                        concept,
+                        max_depth=self.reasoning_budget[
+                            "max_chain_depth"
+                        ],
+                    )
+                )
+                report["cache_hit"] = False
+                self.performance_counters["cache_misses"] += 1
+                self.performance_counters[
+                    "dependency_chains_executed"
+                ] += 1
+                if self.reasoning_budget.get(
+                    "cache_dependencies",
+                    False,
+                ):
+                    self.dependency_chain_cache[cache_key] = dict(report)
+
+            dependency_reports[concept] = report
+            self.performance_counters["concepts_processed"] += 1
+
+            trace = {
+                "concept": concept,
+                "cache_hit": cache_hit,
+                "memory_loaded": (
+                    report.get(
+                        "process_dependency_links_loaded",
+                        0,
+                    ) > 0
+                ),
+                "operator_available": True,
+                "reasoning_invoked": True,
+                "bypass_reason": None,
+                "process_dependency_links_used":
+                report.get("process_dependency_links_used", 0),
+                "dependency_chain_depth":
+                report.get("dependency_chain_depth", 0),
+                "dependency_chain_coverage":
+                report.get("dependency_chain_coverage", 0.0),
+            }
+            if self.reasoning_budget.get("telemetry_enabled", True):
+                trace["dependency_explanation_quality"] = report.get(
+                    "dependency_explanation_quality",
+                    report.get("explanation_quality", 0.0),
+                )
+                trace["resolved_dependency_chain"] = report.get(
+                    "resolved_dependency_chain",
+                    report.get("chain", []),
+                )
+            dependency_traces.append(trace)
+
+        if dependency_reports:
+
+            primary_concept = concepts[0]
+            primary_report = dependency_reports[primary_concept]
+
+            runtime_context[
+                "process_dependency_memory"
+            ] = primary_report
+
+            runtime_context[
+                "dependency_chain_depth"
+            ] = primary_report.get(
+                "dependency_chain_depth",
+                0,
+            )
+
+            runtime_context[
+                "dependency_chain_coverage"
+            ] = primary_report.get(
+                "dependency_chain_coverage",
+                0.0,
+            )
+
+            runtime_context[
+                "dependency_coherence_average"
+            ] = primary_report.get(
+                "dependency_coherence_average",
+                primary_report.get(
+                    "dependency_coherence",
+                    0.0,
+                ),
+            )
+
+        runtime_context[
+            "process_dependency_chains"
+        ] = dependency_reports
+
+        runtime_context[
+            "dependency_execution_trace"
+        ] = (
+            dependency_traces
+            if self.reasoning_budget.get("telemetry_enabled", True)
+            else [
+                {
+                    "concept": item["concept"],
+                    "cache_hit": item.get("cache_hit", False),
+                    "reasoning_invoked": item["reasoning_invoked"],
+                    "dependency_chain_depth":
+                    item["dependency_chain_depth"],
+                }
+                for item in dependency_traces
+            ]
+        )
+
+        runtime_context[
+            "dependency_reasoning_report"
+        ] = {
+            "system": "dependency_execution_pipeline",
+            "operator_available": True,
+            "memory_loaded": (
+                self.dependency_chain_executor
+                .memory
+                .links_loaded > 0
+            ),
+            "concepts": concepts,
+            "reasoning_invoked": bool(dependency_reports),
+            "max_chain_depth":
+            self.reasoning_budget["max_chain_depth"],
+            "max_concepts":
+            self.reasoning_budget["max_concepts"],
+            "cache_dependencies":
+            self.reasoning_budget["cache_dependencies"],
+            "cache_hits":
+            self.performance_counters["cache_hits"],
+            "cache_misses":
+            self.performance_counters["cache_misses"],
+            "telemetry_enabled":
+            self.reasoning_budget["telemetry_enabled"],
+            "report_level":
+            self.reasoning_budget["report_level"],
+            "bypass_reason": (
+                None
+                if dependency_reports
+                else "no_dependency_concepts_available"
+            ),
+        }
+
+        self.runtime.bulk_update_context(
+            runtime_context
+        )
+        self._record_module_timing(
+            "dependency_reasoning",
+            module_start,
+        )
+
+    # ========================================
+    # PROCESS SEMANTICS
+    # ========================================
+
+    def run_process_semantic_cycle(self):
+
+        module_start = time.perf_counter()
+        runtime_context = (
+            self.runtime.get_context()
+        )
+
+        dependency_contexts = runtime_context.get(
+            "process_dependency_chains",
+            {},
+        )
+
+        cache_key = self._stable_hash({
+            "dependency_contexts": dependency_contexts,
+            "task_batch_signature": self._runtime_signature(
+                runtime_context,
+            ),
+            "report_level": self.reasoning_budget["report_level"],
+        })
+        cache_hit = (
+            self.reasoning_budget.get("cache_dependencies", False)
+            and cache_key in self.process_semantic_cache
+        )
+        if cache_hit:
+            report = dict(self.process_semantic_cache[cache_key])
+            report["cache_hit"] = True
+            self.performance_counters["cache_hits"] += 1
+        else:
+            report = (
+                self.process_semantic_engine
+                .synthesize_all(dependency_contexts)
+            )
+            report["cache_hit"] = False
+            self.performance_counters["cache_misses"] += 1
+            if self.reasoning_budget.get("cache_dependencies", False):
+                self.process_semantic_cache[cache_key] = dict(report)
+
+        runtime_context[
+            "process_semantic_report"
+        ] = report
+
+        runtime_context[
+            "process_semantic_models"
+        ] = report.get(
+            "process_semantic_models",
+            {},
+        )
+
+        runtime_context[
+            "dependency_completeness_audit"
+        ] = (
+            self.process_semantic_engine
+            .dependency_completeness_audit()
+        )
+
+        self.runtime.bulk_update_context(
+            runtime_context
+        )
+        self._record_module_timing(
+            "process_semantic_synthesis",
+            module_start,
+        )
+
+    def _dependency_reasoning_concepts(self, runtime_context):
+
+        concepts = []
+
+        def add(value):
+
+            if value is None:
+                return
+
+            concept = str(value).strip()
+
+            if concept and concept not in concepts:
+                concepts.append(concept)
+
+        for item in runtime_context.get(
+            "epistemic_hypotheses",
+            [],
+        ):
+
+            if isinstance(item, dict):
+                add(item.get("concept"))
+
+        for item in runtime_context.get(
+            "semantic_abstractions",
+            [],
+        ):
+
+            if isinstance(item, dict):
+                add(
+                    item.get("concept")
+                    or item.get("concept_id")
+                    or item.get("name")
+                    or item.get("type")
+                )
+            else:
+                add(item)
+
+        for concept in runtime_context.get(
+            "prioritized_concepts",
+            [],
+        ):
+
+            add(concept)
+
+        available_processes = sorted(
+            self.dependency_chain_executor
+            .memory
+            .report()
+            .get("process_families", [])
+        )
+
+        if not concepts:
+
+            for concept in available_processes:
+                add(concept)
+
+        runnable_concepts = [
+            concept
+            for concept in concepts
+            if concept in available_processes
+        ]
+
+        if not runnable_concepts:
+
+            runnable_concepts = available_processes
+
+        return runnable_concepts
 
     # ========================================
     # GOVERNANCE
@@ -5072,8 +5595,23 @@ class AdaptiveCognitivePipeline:
     def run(
         self,
         task_path=None,
-        arc_replication_candidates=None
+        arc_replication_candidates=None,
+        mode=None,
+        max_chain_depth=None,
+        max_concepts=None,
+        telemetry_enabled=None,
+        cache_dependencies=None,
+        report_level=None,
     ):
+
+        self.configure_reasoning_budget(
+            mode=mode,
+            max_chain_depth=max_chain_depth,
+            max_concepts=max_concepts,
+            telemetry_enabled=telemetry_enabled,
+            cache_dependencies=cache_dependencies,
+            report_level=report_level,
+        )
 
         self.prepare_task_run()
 
@@ -5115,17 +5653,33 @@ class AdaptiveCognitivePipeline:
             .report()
         )
 
+        module_start = time.perf_counter()
         self.boot_runtime()
+        self._record_module_timing("runtime_boot", module_start)
 
+        module_start = time.perf_counter()
         self.run_stage_cycle()
+        self._record_module_timing("stage_cycle", module_start)
 
+        module_start = time.perf_counter()
         self.run_reasoning_cycle()
+        self._record_module_timing("reasoning_cycle", module_start)
 
+        self.run_dependency_reasoning_cycle()
+
+        self.run_process_semantic_cycle()
+
+        module_start = time.perf_counter()
         self.run_governance_cycle()
+        self._record_module_timing("governance_cycle", module_start)
 
+        module_start = time.perf_counter()
         self.run_health_cycle()
+        self._record_module_timing("health_cycle", module_start)
 
+        module_start = time.perf_counter()
         self.finalize_runtime()
+        self._record_module_timing("finalize_runtime", module_start)
 
         reusable_truths = (
             self.epistemic_decision_engine
@@ -5140,6 +5694,9 @@ class AdaptiveCognitivePipeline:
         context[
             "truth_commitments"
         ] = reusable_truths
+        context[
+            "performance_report"
+        ] = self.performance_report()
         return context
 
 

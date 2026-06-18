@@ -1,0 +1,313 @@
+{
+  "concept_family": "color_mapping",
+  "concept_labels": [
+    "color_mapping",
+    "color_transformation"
+  ],
+  "difficulty": "mixed",
+  "train": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          9,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          3,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          8,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    }
+  ],
+  "test": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    }
+  ],
+  "expected_transformations": [
+    "map_colors",
+    "preserve_structure"
+  ],
+  "negative_controls": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          9,
+          9,
+          0,
+          0
+        ],
+        [
+          0,
+          9,
+          9,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "reason": "counterexample_for_color_mapping"
+    }
+  ],
+  "nexryn_metadata": {
+    "curriculum": "arc_concept_coverage_expansion_alpha_01",
+    "task_id": "arc_concept_color_mapping_14",
+    "concept_family": "color_mapping",
+    "target_concepts": [
+      "color_mapping",
+      "color_transformation"
+    ],
+    "concept_labels": [
+      "color_mapping",
+      "color_transformation"
+    ],
+    "difficulty": "mixed",
+    "expected_transformations": [
+      "map_colors",
+      "preserve_structure"
+    ],
+    "positive_examples": 2,
+    "counterexample_examples": 1,
+    "metadata_is_targeting_not_runtime_observation": true,
+    "governance_constraints": {
+      "force_truth_promotion": false,
+      "lower_thresholds": false,
+      "manual_stable_truth": false,
+      "evidence_only": true
+    }
+  }
+}

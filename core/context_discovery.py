@@ -8,6 +8,7 @@ from core.context.process_context_generation import (
 )
 from core.process_context_generation import ProcessContextGenerationEngine
 from core.process_abstraction import ProcessAbstractionLayer
+from runtime.context.context_taxonomy_engine import ContextTaxonomyEngine
 
 
 def _normalize(value, default="unknown"):
@@ -666,6 +667,19 @@ class ContextDiscoveryEngine:
                     "process abstraction context surface available",
                 ],
             }
+        taxonomy = ContextTaxonomyEngine().classify({
+            **context,
+            **self.generate_context_signature_without_taxonomy(context),
+        })
+        if taxonomy.get("known_context"):
+            return {
+                "value": taxonomy["context_name"],
+                "confidence": taxonomy["context_confidence"],
+                "reasons": [
+                    "semantic taxonomy reclassified unknown context",
+                    f"taxonomy family {taxonomy['context_family']}",
+                ],
+            }
         if operator["value"] == "translation":
             return {
                 "value": "position_context",
@@ -710,6 +724,43 @@ class ContextDiscoveryEngine:
             "value": "unknown",
             "confidence": operator["confidence"],
             "reasons": ["insufficient semantic context evidence"],
+        }
+
+    def generate_context_signature_without_taxonomy(self, observation=None):
+        context = observation if isinstance(observation, dict) else {}
+        features = self.extract_context_features(context)
+        return {
+            "active_concepts": features.get("active_concepts", []),
+            "topology_behavior": _normalize(
+                context.get(
+                    "topology_behavior",
+                    "topology_preserved"
+                    if features.get("cell_count_delta", 0) == 0
+                    else "topology_restructured",
+                )
+            ),
+            "color_behavior": _normalize(
+                context.get(
+                    "color_behavior",
+                    "color_preserved"
+                    if features.get("colors_preserved") is True
+                    else "color_reassigned"
+                    if features.get("colors_preserved") is False
+                    else "unknown",
+                )
+            ),
+            "identity_behavior": _normalize(
+                context.get("identity_behavior", "identity_preserved")
+            ),
+            "size_behavior": _normalize(
+                context.get(
+                    "size_behavior",
+                    "size_expanded"
+                    if features.get("grid_shape_changed")
+                    or features.get("cell_count_delta", 0) != 0
+                    else "size_preserved",
+                )
+            ),
         }
 
     def discover_object_dynamics(self, observation=None):
@@ -965,6 +1016,12 @@ class ContextDiscoveryEngine:
             return "Color Context"
         if family == "symmetry_context":
             return "Symmetry Context"
+        if family == "density_context":
+            return "Density Context"
+        if family == "scale_context":
+            return "Scale Context"
+        if family == "mapping_context":
+            return "Mapping Context"
         if family == "position_context":
             return "Position Context"
         if family == "shape_context":

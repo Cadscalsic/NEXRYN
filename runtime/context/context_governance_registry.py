@@ -10,7 +10,18 @@ from runtime.context.persistent_context_memory import (
 )
 
 
-STATIC_CONTEXTS = {"color_context", "symmetry_context"}
+STATIC_CONTEXTS = {
+    "color_context",
+    "symmetry_context",
+    "density_context",
+    "scale_context",
+    "mapping_context",
+}
+TAXONOMY_CONTEXTS = {
+    "density_context",
+    "scale_context",
+    "mapping_context",
+}
 PROCESS_CONTEXTS = {
     "growth_context",
     "propagation_context",
@@ -83,6 +94,12 @@ class ContextGovernanceRegistry:
             if runtime_ids or not candidates
             else []
         )
+        if runtime_ids:
+            persistent_records = [
+                context
+                for context in persistent_records
+                if context.get("context_id") in runtime_ids
+            ]
         for context in persistent_records:
             record = self._governance_record(
                 self._candidate_from_context(
@@ -122,7 +139,7 @@ class ContextGovernanceRegistry:
         governance_context_count = len(visible_contexts)
         gap = max(runtime_context_count - governance_context_count, 0)
         coverage = (
-            governance_context_count / runtime_context_count
+            min(governance_context_count / runtime_context_count, 1.0)
             if runtime_context_count
             else 1.0
         )
@@ -184,8 +201,12 @@ class ContextGovernanceRegistry:
         candidates: list[dict[str, Any]] = []
         for key in (
             "semantic_context",
+            "context_taxonomy_report",
             "context_hierarchy",
             "context_surface_report",
+            "process_semantic_context_report",
+            "process_semantic_models",
+            "process_semantic_report",
             "process_context_discovery_report",
             "process_context_engine_report",
             "temporal_process_context_report",
@@ -208,6 +229,18 @@ class ContextGovernanceRegistry:
                 )
             )
 
+        process_semantic_models = runtime_context.get(
+            "process_semantic_models",
+            {},
+        )
+        if isinstance(process_semantic_models, Mapping):
+            candidates.extend(
+                self._contexts_from_value(
+                    process_semantic_models.values(),
+                    source_key="process_semantic_models",
+                )
+            )
+
         discovery_report = runtime_context.get("process_context_discovery_report", {})
         if isinstance(discovery_report, Mapping):
             candidates.extend(
@@ -216,6 +249,15 @@ class ContextGovernanceRegistry:
                     source_key="process_context_discovery_engine",
                 )
             )
+        taxonomy_report = runtime_context.get("context_taxonomy_report", {})
+        if isinstance(taxonomy_report, Mapping):
+            for key in ("known_contexts", "reclassified_contexts"):
+                candidates.extend(
+                    self._contexts_from_value(
+                        taxonomy_report.get(key, []),
+                        source_key="context_taxonomy_engine",
+                    )
+                )
         return [context for context in candidates if context.get("context_id")]
 
     def _contexts_from_value(self, value, source_key):
@@ -321,17 +363,27 @@ def governance_process_report(context: Mapping[str, Any]) -> dict[str, Any]:
     preconditions = list(
         source.get("preconditions", source.get("initial_state", [])) or []
     )
-    transitions = list(
-        source.get("transitions", source.get("transition_steps", [])) or []
+    transition_signature = list(
+        source.get(
+            "transition_signature",
+            source.get("transitions", source.get("transition_steps", [])),
+        )
+        or []
     )
     transition_steps = [
         {
             "source": item.get("from", item.get("source")),
-            "relation": item.get("transition", item.get("relation", "transitions_to")),
+            "relation": item.get(
+                "transition",
+                item.get("relation", "transitions_to"),
+            ),
             "target": item.get("to", item.get("target")),
-            "confidence": item.get("confidence", context.get("context_confidence", 0.0)),
+            "confidence": item.get(
+                "confidence",
+                context.get("context_confidence", 0.0),
+            ),
         }
-        for item in transitions
+        for item in transition_signature
         if isinstance(item, Mapping)
     ]
     outcomes = list(
@@ -351,9 +403,14 @@ def governance_process_report(context: Mapping[str, Any]) -> dict[str, Any]:
         "context_name": context.get("context_id"),
         "process_context": context.get("context_id"),
         "generated_context": context.get("context_id"),
+        "process_family": source.get(
+            "process_family",
+            source.get("concept", context.get("concept")),
+        ),
         "preconditions": preconditions,
         "initial_state": preconditions,
-        "transitions": transitions,
+        "transition_signature": transition_signature,
+        "transitions": transition_signature,
         "transition_steps": transition_steps,
         "postconditions": outcomes,
         "final_state": outcomes,
@@ -372,11 +429,13 @@ def governance_process_report(context: Mapping[str, Any]) -> dict[str, Any]:
             "process_signature_generated": True,
             "process_signature_match": True,
             "process_signature_strength": strength,
-            "transition_sequence_generated": bool(transition_steps or transitions),
+            "transition_sequence_generated": bool(
+                transition_steps or transition_signature
+            ),
             "preconditions_identified": bool(preconditions),
             "postconditions_identified": bool(outcomes),
             "temporal_state_sequence_generated": bool(
-                preconditions and transitions and outcomes
+                preconditions and transition_signature and outcomes
             ),
             "final_state_identified": bool(outcomes),
             "dependency_semantics_score": strength,
@@ -463,6 +522,8 @@ def _context_id_for_concept(concept):
 
 def _context_type(context_id, context, source_key):
     if context_id in STATIC_CONTEXTS:
+        if context_id in TAXONOMY_CONTEXTS:
+            return "TAXONOMY_CONTEXT"
         return "STATIC_CONTEXT"
     if context_id in PROCESS_CONTEXTS or _normalize(context.get("concept")) in PROCESS_CONCEPTS:
         return "PROCESS_CONTEXT"
@@ -491,6 +552,8 @@ def _semantic_validation(context, context_type):
     }:
         return True
     if context_type in {"IDENTITY_CONTEXT", "CAUSAL_CONTEXT"}:
+        return True
+    if context_type == "TAXONOMY_CONTEXT":
         return True
     return bool(context.get("properties") or context.get("capabilities"))
 

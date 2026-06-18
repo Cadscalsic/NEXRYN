@@ -343,6 +343,9 @@ class RuntimeCausalAlignmentEngine:
             "causal_explanation",
             "context_discovery",
             "dependency_chain_alignment",
+            "process_semantic_models",
+            "process_semantic_report",
+            "process_semantic_context_report",
             "semantic_boundary_report",
             "relational_reasoning_report",
         ):

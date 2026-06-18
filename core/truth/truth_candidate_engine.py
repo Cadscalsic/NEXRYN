@@ -17,6 +17,22 @@ from runtime.context.process_context_discovery_engine import (
     ProcessContextDiscoveryEngine,
 )
 from runtime.context.process_context_engine import ProcessContextEngine
+from runtime.context.process_semantic_context_engine import (
+    ProcessSemanticContextEngine,
+)
+from runtime.process.process_semantic_context_engine import (
+    ProcessSemanticContextEngine as AlphaProcessSemanticContextEngine,
+)
+from runtime.process.process_dependency_ingestion import (
+    ProcessDependencyIngestion,
+)
+from runtime.process.process_dependency_reasoner import (
+    ProcessDependencyReasoner,
+)
+from runtime.process.process_dependency_validator import (
+    ProcessDependencyValidator,
+)
+from runtime.context.context_taxonomy_engine import ContextTaxonomyEngine
 from runtime.context.temporal_process_context_engine import (
     TemporalProcessContextEngine,
 )
@@ -63,6 +79,14 @@ class TruthCandidatePromotionEngine:
         self.context_governance_registry = ContextGovernanceRegistry()
         self.process_context_discovery_engine = ProcessContextDiscoveryEngine()
         self.process_context_engine = ProcessContextEngine()
+        self.process_semantic_context_engine = ProcessSemanticContextEngine()
+        self.alpha_process_semantic_context_engine = (
+            AlphaProcessSemanticContextEngine()
+        )
+        self.process_dependency_ingestion = ProcessDependencyIngestion()
+        self.process_dependency_validator = ProcessDependencyValidator()
+        self.process_dependency_reasoner = ProcessDependencyReasoner()
+        self.context_taxonomy_engine = ContextTaxonomyEngine()
         self.temporal_process_context_engine = TemporalProcessContextEngine()
         self.dependency_coherence_engine = DependencyCoherenceEngine()
 
@@ -137,6 +161,14 @@ class TruthCandidatePromotionEngine:
         return clamp(default)
 
     def _context_strength(self, runtime):
+        process_semantic_models = runtime.get("process_semantic_models", {})
+        process_semantic_strengths = []
+        if isinstance(process_semantic_models, dict):
+            process_semantic_strengths = [
+                clamp(model.get("process_context_strength", 0.0))
+                for model in process_semantic_models.values()
+                if isinstance(model, dict)
+            ]
         return max(
             self._nested_score(
                 runtime,
@@ -157,6 +189,7 @@ class TruthCandidatePromotionEngine:
                 ("semantic_context", "confidence"),
                 default=0.0,
             ),
+            *process_semantic_strengths,
         )
 
     def _identity_strength(self, runtime, ledger_item):
@@ -272,10 +305,54 @@ class TruthCandidatePromotionEngine:
             "dependency_alignment_confidence":
             clamp(alignment.get("alignment_confidence", 0.0)),
             "process_dependency_memory": process_memory,
+            "typed_process_dependencies_enabled": bool(
+                process_memory.get("typed_dependency_relations")
+                or (
+                    runtime.get("typed_dependency_report", {}).get(
+                        "typed_process_dependencies_enabled"
+                    )
+                    if isinstance(runtime.get("typed_dependency_report"), dict)
+                    else False
+                )
+            ),
+            "typed_dependency_relation_count": len(
+                process_memory.get("typed_dependency_relations", [])
+                if isinstance(process_memory, dict)
+                else []
+            ),
+            "process_dependency_links_used":
+            process_memory.get("process_dependency_links_used", depth)
+            if isinstance(process_memory, dict)
+            else depth,
+            "process_dependency_links_loaded":
+            process_memory.get("process_dependency_links_loaded", depth)
+            if isinstance(process_memory, dict)
+            else depth,
             "dependency_chain_complete_for_promotion": complete,
             "dependency_aware_promotion_applicable":
             concept in self.PROCESS_CONCEPTS,
         }
+
+    def _consumable_process_context(self, report):
+        if not isinstance(report, dict) or not report:
+            return False
+        return bool(
+            report.get("process_context_generated")
+            and (
+                report.get("transition_steps")
+                or report.get("transition_signature")
+                or report.get("transitions")
+            )
+            and (
+                report.get("postconditions")
+                or report.get("final_state")
+                or report.get("expected_outcomes")
+            )
+            and (
+                report.get("preconditions")
+                or report.get("initial_state")
+            )
+        )
 
     def _contradiction_governance(
         self,
@@ -316,6 +393,69 @@ class TruthCandidatePromotionEngine:
             soft_review_acceptable,
             "passed": passed,
         }
+
+    def _observed_contradictions(self, records, runtime):
+        observed = []
+        for record in records:
+            for key in (
+                "contradiction_target",
+                "contradiction_concept",
+                "conflicting_dependency",
+                "conflict",
+            ):
+                if record.get(key):
+                    observed.append(str(record[key]))
+            if record.get("identity_runtime_split") is True:
+                observed.append("identity_split")
+        runtime_items = runtime.get("observed_contradictions", [])
+        if isinstance(runtime_items, str):
+            observed.append(runtime_items)
+        else:
+            try:
+                observed.extend(str(item) for item in runtime_items if item)
+            except TypeError:
+                pass
+        return observed
+
+    def _typed_dependency_report(self, concept, runtime):
+        existing = runtime.get("typed_dependency_report", {})
+        if isinstance(existing, dict) and existing.get(
+            "typed_process_dependencies_enabled"
+        ):
+            return existing
+        process_memory = runtime.get("process_dependency_memory", {})
+        if isinstance(process_memory, dict) and process_memory.get(
+            "typed_dependency_relations"
+        ):
+            links = process_memory.get("typed_dependency_relations", [])
+            return {
+                **process_memory,
+                "typed_process_dependencies": "enabled",
+                "typed_process_dependencies_enabled": True,
+                "typed_dependency_relations": links,
+                "process_dependency_links_used":
+                process_memory.get("process_dependency_links_used", len(links)),
+                "process_dependency_links_loaded":
+                process_memory.get("process_dependency_links_loaded", len(links)),
+                "relevant_process_dependency_links": len(links),
+            }
+        if concept in self.PROCESS_CONCEPTS:
+            return self.process_dependency_ingestion.resolve_for_process(concept)
+        return {}
+
+    def _dependency_aware_contradiction_score(
+        self,
+        concept,
+        contradiction_score,
+        typed_dependency_reasoning,
+    ):
+        if concept not in self.PROCESS_CONCEPTS:
+            return contradiction_score
+        if typed_dependency_reasoning.get("exact_blocker"):
+            return contradiction_score
+        if typed_dependency_reasoning.get("typed_process_dependencies") == "enabled":
+            return min(contradiction_score, 0.08)
+        return contradiction_score
 
     def _normalized_task_score(self, observed_task_count):
         return clamp(observed_task_count / self.MINIMUM_OBSERVED_TASKS)
@@ -373,6 +513,15 @@ class TruthCandidatePromotionEngine:
             if isinstance(temporal_process_context_report, dict)
             else {}
         )
+        process_semantic_context_report = runtime.get(
+            "process_semantic_context_report",
+            {},
+        )
+        process_semantic_context_report = (
+            process_semantic_context_report
+            if isinstance(process_semantic_context_report, dict)
+            else {}
+        )
         dependency_semantics_report = runtime.get(
             "dependency_semantics_report",
             math_reasoning_report.get("dependency_semantics_report", {}),
@@ -396,6 +545,70 @@ class TruthCandidatePromotionEngine:
             if isinstance(process_context_discovery_report, dict)
             else {}
         )
+        typed_dependency_report = self._typed_dependency_report(concept, runtime)
+        typed_dependency_validation_report = (
+            self.process_dependency_validator.validate(typed_dependency_report)
+            if typed_dependency_report
+            else {}
+        )
+        typed_dependency_reasoning_report = (
+            self.process_dependency_reasoner.reason(
+                concept,
+                typed_dependency_report,
+                observed_contradictions=self._observed_contradictions(
+                    records,
+                    runtime,
+                ),
+            )
+            if typed_dependency_report
+            else {}
+        )
+        if typed_dependency_report:
+            runtime = {
+                **runtime,
+                "typed_dependency_report": typed_dependency_report,
+                "typed_dependency_validation_report":
+                typed_dependency_validation_report,
+                "typed_dependency_reasoning_report":
+                typed_dependency_reasoning_report,
+                "process_dependency_memory": {
+                    **(
+                        runtime.get("process_dependency_memory", {})
+                        if isinstance(
+                            runtime.get("process_dependency_memory"),
+                            dict,
+                        )
+                        else {}
+                    ),
+                    **typed_dependency_report,
+                },
+            }
+            if not dependency_semantics_report:
+                dependency_semantics_report = {
+                    "system": "typed_process_dependency_memory",
+                    "typed_process_dependencies": "enabled",
+                    "dependency_semantics_score":
+                    typed_dependency_reasoning_report.get(
+                        "dependency_semantics_score",
+                        typed_dependency_report.get(
+                            "dependency_confidence",
+                            0.0,
+                        ),
+                    ),
+                    "typed_dependencies":
+                    typed_dependency_report.get(
+                        "typed_dependency_relations",
+                        [],
+                    ),
+                    "semantic_dependency_signature": {
+                        "typed_process_dependencies": True,
+                        "dependency_type_coverage":
+                        typed_dependency_report.get(
+                            "dependency_type_coverage",
+                            [],
+                        ),
+                    },
+                }
         if not process_context_discovery_report and process_abstraction:
             process_context_discovery_report = (
                 self.process_context_discovery_engine.discover(
@@ -411,6 +624,21 @@ class TruthCandidatePromotionEngine:
                 **runtime,
                 "process_context_discovery_report":
                 process_context_discovery_report,
+            }
+        if (
+            not self._consumable_process_context(process_context_generation)
+            and process_context_discovery_report.get(
+                "process_context_discovered"
+            )
+        ):
+            process_context_generation = (
+                self.process_context_discovery_engine.as_process_context_report(
+                    process_context_discovery_report,
+                )
+            )
+            runtime = {
+                **runtime,
+                "process_context_report": process_context_generation,
             }
         if not process_context_engine_report and process_abstraction:
             process_context_engine_report = self.process_context_engine.evaluate(
@@ -483,6 +711,123 @@ class TruthCandidatePromotionEngine:
                 **runtime,
                 "dependency_semantics_report": dependency_semantics_report,
             }
+        if not process_semantic_context_report and process_abstraction:
+            process_semantic_context_report = (
+                self.process_semantic_context_engine.synthesize(
+                    concept,
+                    dependency_chain=runtime.get("process_dependency_memory", {}),
+                    transformational_identity=runtime.get(
+                        "transformational_identity",
+                        runtime.get(
+                            "identity_runtime_report",
+                            runtime.get("identity_safe_truth_integration", {}),
+                        ),
+                    ),
+                    runtime_context={
+                        **runtime,
+                        "process_context_discovery_report":
+                        process_context_discovery_report,
+                        "process_context_engine_report":
+                        process_context_engine_report,
+                        "temporal_process_context_report":
+                        temporal_process_context_report,
+                    },
+                )
+            )
+            runtime = {
+                **runtime,
+                "process_semantic_context_report":
+                process_semantic_context_report,
+            }
+        if process_semantic_context_report.get(
+            "process_semantic_context_synthesized"
+        ):
+            process_context_generation = {
+                **process_context_generation,
+                **process_semantic_context_report,
+                "supporting_math_evidence": {
+                    **process_context_generation.get(
+                        "supporting_math_evidence",
+                        {},
+                    ),
+                    **process_semantic_context_report.get(
+                        "supporting_math_evidence",
+                        {},
+                    ),
+                },
+                "process_context_generated": True,
+            }
+            runtime = {
+                **runtime,
+                "process_context_report": process_context_generation,
+            }
+            if not dependency_semantics_report:
+                dependency_semantics_report = (
+                    self.process_semantic_context_engine
+                    .dependency_semantics_report(process_semantic_context_report)
+                )
+                runtime = {
+                    **runtime,
+                    "dependency_semantics_report": dependency_semantics_report,
+                }
+        if (
+            process_abstraction
+            and concept in self.PROCESS_CONCEPTS
+            and not self._consumable_process_context(process_context_generation)
+            and runtime.get("process_dependency_memory")
+        ):
+            dependency_signal = self._dependency_promotion(concept, runtime)
+            alpha_process_context_report = (
+                self.alpha_process_semantic_context_engine.synthesize(
+                    concept,
+                    dependency_chain=runtime.get("process_dependency_memory", {}),
+                    runtime_context={
+                        **runtime,
+                        "dependency_confidence":
+                        dependency_signal["dependency_confidence"],
+                        "promotion_dependency_score":
+                        dependency_signal["promotion_dependency_score"],
+                        "identity_runtime_continuity":
+                        self._identity_strength(runtime, ledger_item),
+                        "causal_alignment":
+                        self._causal_stability(records, ledger_item, runtime),
+                        "contradiction_score":
+                        self._average(
+                            records,
+                            "contradiction_score",
+                            runtime.get(
+                                "effective_contradiction_score",
+                                ledger_item.get(
+                                    "average_contradiction_score",
+                                    1.0,
+                                ),
+                            ),
+                        ),
+                    },
+                )
+            )
+            if alpha_process_context_report.get("process_context_generated"):
+                process_context_generation = {
+                    **process_context_generation,
+                    **alpha_process_context_report,
+                    "supporting_math_evidence": {
+                        **process_context_generation.get(
+                            "supporting_math_evidence",
+                            {},
+                        ),
+                        **alpha_process_context_report.get(
+                            "supporting_math_evidence",
+                            {},
+                        ),
+                    },
+                    "process_context_generated": True,
+                }
+                runtime = {
+                    **runtime,
+                    "process_context_report": process_context_generation,
+                    "alpha_process_context_report":
+                    alpha_process_context_report,
+                }
         context_surface_report = runtime.get("context_surface_report", {})
         context_surface_report = (
             context_surface_report
@@ -538,6 +883,31 @@ class TruthCandidatePromotionEngine:
                     context=runtime,
                 )
             )
+        context_taxonomy_report = runtime.get("context_taxonomy_report", {})
+        context_taxonomy_report = (
+            context_taxonomy_report
+            if isinstance(context_taxonomy_report, dict)
+            else {}
+        )
+        if not context_taxonomy_report:
+            context_taxonomy_report = (
+                self.context_taxonomy_engine.classify_runtime_context({
+                    **runtime,
+                    "concept": concept,
+                    "semantic_context": runtime.get("semantic_context", {}),
+                    "process_context_report": process_context_generation,
+                })
+            )
+            runtime = {
+                **runtime,
+                "context_taxonomy_report": context_taxonomy_report,
+            }
+            known_contexts = context_taxonomy_report.get("known_contexts", [])
+            if known_contexts and not runtime.get("semantic_context"):
+                runtime = {
+                    **runtime,
+                    "semantic_context": known_contexts[0],
+                }
         if (
             process_context_engine_report.get("process_context_ready") is True
         ):
@@ -700,6 +1070,12 @@ class TruthCandidatePromotionEngine:
                 ledger_item.get("average_contradiction_score", 1.0),
             ),
         )
+        raw_contradiction_score = contradiction_score
+        contradiction_score = self._dependency_aware_contradiction_score(
+            concept,
+            contradiction_score,
+            typed_dependency_reasoning_report,
+        )
         base_context_strength = max(
             self._context_strength(runtime),
             clamp(ledger_item.get("context_strength", 0.0)),
@@ -714,6 +1090,13 @@ class TruthCandidatePromotionEngine:
             )
         )
         context_strength = math_context_strength["final_context_strength"]
+        process_context_ready = (
+            concept not in self.PROCESS_CONCEPTS
+            or bool(
+                process_context_generation.get("process_context_ready")
+                and math_context_strength["process_context_strength"] > 0.0
+            )
+        )
         identity_strength = self._identity_strength(runtime, ledger_item)
         identity_observed = identity_strength > 0.0
         if not identity_observed:
@@ -768,6 +1151,8 @@ class TruthCandidatePromotionEngine:
             causal_stability >= self.MINIMUM_CAUSAL_STABILITY,
             "context_strength":
             context_strength >= self.MINIMUM_CONTEXT_STRENGTH,
+            "process_context_ready":
+            process_context_ready,
             "identity_strength":
             identity_strength >= self.MINIMUM_IDENTITY_STRENGTH,
         }
@@ -866,6 +1251,9 @@ class TruthCandidatePromotionEngine:
             "mixed_outcomes_detected": mixed_outcomes,
             "cross_task_support": cross_task_support,
             "average_contradiction_score": contradiction_score,
+            "raw_average_contradiction_score": raw_contradiction_score,
+            "typed_dependency_contradiction_adjusted":
+            contradiction_score != raw_contradiction_score,
             "causal_stability": causal_stability,
             "raw_causal_stability": raw_causal_stability,
             "context_strength": context_strength,
@@ -876,6 +1264,7 @@ class TruthCandidatePromotionEngine:
             math_context_strength["math_reasoning_consumed"],
             "process_context_status":
             math_context_strength["process_context_status"],
+            "process_context_ready": process_context_ready,
             "dependency_semantics_score":
             math_context_strength["dependency_semantics_score"],
             "context_strength_before_math":
@@ -900,11 +1289,77 @@ class TruthCandidatePromotionEngine:
             ),
             "process_context_generation": process_context_generation,
             "context_governance_report": context_governance_report,
+            "context_taxonomy_report": context_taxonomy_report,
             "process_context_discovery_report":
             process_context_discovery_report,
             "process_context_engine_report": process_context_engine_report,
             "temporal_process_context_report":
             temporal_process_context_report,
+            "process_semantic_context_report":
+            process_semantic_context_report,
+            "typed_dependency_report": typed_dependency_report,
+            "typed_dependency_validation_report":
+            typed_dependency_validation_report,
+            "typed_dependency_reasoning_report":
+            typed_dependency_reasoning_report,
+            "typed_process_dependencies":
+            typed_dependency_report.get("typed_process_dependencies"),
+            "architecture_bottleneck":
+            typed_dependency_report.get("architecture_bottleneck", False),
+            "recommended_next_step":
+            typed_dependency_report.get(
+                "recommended_next_step",
+                "consume_reasoned_dependency_chains",
+            ),
+            "exact_blocker":
+            typed_dependency_reasoning_report.get("exact_blocker", []),
+            "process_dependency_links_used":
+            typed_dependency_reasoning_report.get(
+                "process_dependency_links_used",
+                dependency_promotion.get("process_dependency_links_used", 0),
+            ),
+            "process_dependency_links_loaded":
+            typed_dependency_report.get(
+                "process_dependency_links_loaded",
+                dependency_promotion.get("process_dependency_links_loaded", 0),
+            ),
+            "process_dependency_relevance_rate":
+            typed_dependency_reasoning_report.get(
+                "process_dependency_relevance_rate",
+                0.0,
+            ),
+            "process_dependency_links_used_above_threshold":
+            typed_dependency_reasoning_report.get(
+                "process_dependency_links_used_above_threshold",
+                False,
+            ),
+            "reasoned_dependency_chain":
+            typed_dependency_report.get("reasoned_dependency_chain", {}),
+            "reasoned_dependency_chain_available":
+            bool(typed_dependency_report.get("reasoned_dependency_chain")),
+            "reasoned_dependency_coherence_average":
+            typed_dependency_report.get(
+                "dependency_coherence_average",
+                0.0,
+            ),
+            "dependency_explanation_quality":
+            typed_dependency_report.get(
+                "dependency_explanation_quality",
+                typed_dependency_reasoning_report.get(
+                    "dependency_explanation_quality",
+                    0.0,
+                ),
+            ),
+            "explanation_quality":
+            typed_dependency_report.get(
+                "explanation_quality",
+                typed_dependency_report.get(
+                    "dependency_explanation_quality",
+                    0.0,
+                ),
+            ),
+            "dependency_reasoning_report":
+            typed_dependency_report.get("dependency_reasoning_report", ""),
             "process_context_generated": bool(
                 process_context_generation.get("process_context_generated")
             ),

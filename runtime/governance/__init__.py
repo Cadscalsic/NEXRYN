@@ -102,6 +102,13 @@ from runtime.governance.cognitive_identity_layer import (
     cognitive_identity_layer
 )
 
+from runtime.process.process_semantic_engine import (
+
+    ProcessSemanticEngine,
+
+    process_semantic_engine
+)
+
 # ============================================
 # EXPORTS
 # ============================================
@@ -177,5 +184,8 @@ __all__ = [
     "CognitiveIdentityLayer",
 
     "cognitive_governance_engine",
-    "cognitive_identity_layer"
+    "cognitive_identity_layer",
+
+    "ProcessSemanticEngine",
+    "process_semantic_engine"
 ]

@@ -73,6 +73,7 @@ class DependencyCoherenceEngine:
             if process_signatures is not None
             else process_signature
         )
+        reasoned_chain = self._reasoned_chain(chains, runtime_context)
 
         dependencies = self._dependencies_from(chains, runtime_context)
         signature_report = self._first_mapping(signatures)
@@ -100,6 +101,16 @@ class DependencyCoherenceEngine:
             else runtime_context.get("signature_confidence", 0.0)
         )
         chain_confidence = self._chain_confidence(chains, runtime_context)
+        if reasoned_chain:
+            chain_confidence = max(
+                chain_confidence,
+                clamp(
+                    reasoned_chain.get(
+                        "dependency_coherence_average",
+                        reasoned_chain.get("coherence", 0.0),
+                    )
+                ),
+            )
         observations = self._dependency_observations(
             dependencies,
             chains,
@@ -163,10 +174,37 @@ class DependencyCoherenceEngine:
             + (1.0 - contextual_variance) * 0.05
             - contradiction_penalty
         )
+        dependency_explanation_quality = (
+            clamp(
+                reasoned_chain.get(
+                    "dependency_explanation_quality",
+                    reasoned_chain.get("explanation_quality", 0.0),
+                )
+            )
+            if reasoned_chain
+            else 0.0
+        )
         return {
             "system": self.system_name,
             "concept": concept,
             "dependency_coherence": round(dependency_coherence, 4),
+            "dependency_coherence_average": round(
+                max(
+                    dependency_coherence,
+                    clamp(
+                        reasoned_chain.get(
+                            "dependency_coherence_average",
+                            0.0,
+                        )
+                    )
+                    if reasoned_chain
+                    else 0.0,
+                ),
+                4,
+            ),
+            "dependency_explanation_quality":
+            round(dependency_explanation_quality, 4),
+            "reasoned_dependency_chain_available": bool(reasoned_chain),
             "stable_dependencies": stable_dependencies,
             "fragile_dependencies": fragile_dependencies,
             "contextual_variance": round(contextual_variance, 4),
@@ -177,12 +215,29 @@ class DependencyCoherenceEngine:
             "context_diversity_score": round(diversity["score"], 4),
             "dependency_count": len(dependencies),
             "dependency_coherence_ready": (
-                dependency_coherence >= 0.90
+                max(dependency_coherence, dependency_explanation_quality) >= 0.90
                 and not hidden_contradictions
                 and bool(stable_dependencies)
             ),
             "evidence_additive": True,
         }
+
+    def _reasoned_chain(self, chains, runtime_context):
+        for item in self._as_items(chains):
+            if isinstance(item, Mapping):
+                chain = item.get("reasoned_dependency_chain")
+                if isinstance(chain, Mapping):
+                    return chain
+                if item.get("reasoned_dependency_chain") is True:
+                    return item
+        process_memory = runtime_context.get("process_dependency_memory", {})
+        if isinstance(process_memory, Mapping):
+            chain = process_memory.get("reasoned_dependency_chain")
+            if isinstance(chain, Mapping):
+                return chain
+            if process_memory.get("reasoned_dependency_chain") is True:
+                return process_memory
+        return {}
 
     def _dependencies_from(self, chains, runtime_context, include_runtime=True):
         dependencies = set()
