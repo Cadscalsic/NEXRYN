@@ -41,6 +41,217 @@ def build_training_report(
     ):
         candidate_evaluations = candidate_evaluations or {}
 
+        def safe_float(value, default=0.0):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def safe_int(value, default=0):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        def explanation_path_from(report):
+            explanation_path = report.get("explanation_path")
+            if explanation_path:
+                return explanation_path
+
+            dependency_explanation = report.get(
+                "dependency_explanation",
+                {},
+            )
+            if isinstance(dependency_explanation, dict):
+                return dependency_explanation.get("explanation_path", [])
+
+            return []
+
+        def resolved_dependency_chain_from(report):
+            for key in (
+                "resolved_dependency_chain",
+                "chain",
+                "dependencies",
+            ):
+                chain = report.get(key)
+                if isinstance(chain, list):
+                    return list(chain)
+            return []
+
+        def dependency_telemetry_from_report(concept, report, source):
+            report = report if isinstance(report, dict) else {}
+            if not report:
+                return None
+
+            concept = (
+                concept
+                or report.get("concept")
+                or report.get("process_family")
+            )
+            if not concept:
+                return None
+
+            links_loaded = safe_int(
+                report.get("process_dependency_links_loaded"),
+            )
+            links_used = safe_int(
+                report.get("process_dependency_links_used"),
+            )
+            chain_depth = safe_int(
+                report.get("dependency_chain_depth"),
+            )
+            coverage = safe_float(
+                report.get("dependency_chain_coverage"),
+            )
+            coherence = safe_float(
+                report.get(
+                    "dependency_coherence_average",
+                    report.get(
+                        "dependency_coherence",
+                        report.get("dependency_confidence"),
+                    ),
+                ),
+            )
+            explanation_quality = safe_float(
+                report.get(
+                    "dependency_explanation_quality",
+                    report.get("explanation_quality"),
+                ),
+            )
+            resolved_dependency_chain = resolved_dependency_chain_from(report)
+
+            if (
+                links_loaded <= 0
+                and links_used <= 0
+                and chain_depth <= 0
+                and coverage <= 0.0
+                and coherence <= 0.0
+            ):
+                return None
+
+            return {
+                "concept": str(concept),
+                "source": source,
+                "links_loaded": links_loaded,
+                "links_used": links_used,
+                "chain_depth": chain_depth,
+                "coverage": round(coverage, 4),
+                "coherence": round(coherence, 4),
+                "dependency_explanation_quality":
+                round(explanation_quality, 4),
+                "explanation_path": explanation_path_from(report),
+                "resolved_dependency_chain": resolved_dependency_chain,
+                "reasoned_dependency_chain": bool(
+                    report.get("reasoned_dependency_chain")
+                    or resolved_dependency_chain
+                    or report.get("dependency_graph")
+                ),
+            }
+
+        def collect_dependency_telemetry():
+            telemetry = {}
+
+            def add(concept, report, source):
+                item = dependency_telemetry_from_report(
+                    concept,
+                    report,
+                    source,
+                )
+                if item is None:
+                    return
+
+                existing = telemetry.get(item["concept"])
+                if existing is None:
+                    telemetry[item["concept"]] = item
+                    return
+
+                telemetry[item["concept"]] = {
+                    **existing,
+                    **{
+                        key: max(existing.get(key, 0), item.get(key, 0))
+                        for key in [
+                            "links_loaded",
+                            "links_used",
+                            "chain_depth",
+                            "coverage",
+                            "coherence",
+                            "dependency_explanation_quality",
+                        ]
+                    },
+                    "source": (
+                        existing.get("source")
+                        if existing.get("links_used", 0)
+                        >= item.get("links_used", 0)
+                        else item.get("source")
+                    ),
+                    "explanation_path": (
+                        existing.get("explanation_path")
+                        or item.get("explanation_path", [])
+                    ),
+                    "resolved_dependency_chain": (
+                        existing.get("resolved_dependency_chain")
+                        or item.get("resolved_dependency_chain", [])
+                    ),
+                    "reasoned_dependency_chain": (
+                        existing.get("reasoned_dependency_chain", False)
+                        or item.get("reasoned_dependency_chain", False)
+                    ),
+                }
+
+            for item in multi_task_results:
+                result = item.get("result", {})
+                if not isinstance(result, dict):
+                    continue
+
+                add(
+                    None,
+                    result.get("process_dependency_memory", {}),
+                    "runtime.process_dependency_memory",
+                )
+
+                for concept, report in result.get(
+                    "process_dependency_chains",
+                    {},
+                ).items():
+                    add(
+                        concept,
+                        report,
+                        "runtime.process_dependency_chains",
+                    )
+
+                for trace in result.get("dependency_execution_trace", []):
+                    if not isinstance(trace, dict):
+                        continue
+                    add(
+                        trace.get("concept"),
+                        {
+                            "concept": trace.get("concept"),
+                            "process_dependency_links_loaded":
+                            trace.get("process_dependency_links_loaded"),
+                            "process_dependency_links_used":
+                            trace.get("process_dependency_links_used"),
+                            "dependency_chain_depth":
+                            trace.get("dependency_chain_depth"),
+                            "dependency_chain_coverage":
+                            trace.get("dependency_chain_coverage"),
+                        },
+                        "runtime.dependency_execution_trace",
+                    )
+
+                for evaluation in result.get(
+                    "epistemic_cognition_report",
+                    {},
+                ).get("evaluations", []):
+                    add(
+                        evaluation.get("concept"),
+                        evaluation.get("process_dependency_memory", {}),
+                        "epistemic_evaluation.process_dependency_memory",
+                    )
+
+            return list(telemetry.values())
+
+        dependency_telemetry_report = collect_dependency_telemetry()
+
         try:
             from core.dependency import (
                 DependencyReasoningOperator,
@@ -99,22 +310,153 @@ def build_training_report(
             if process_dependency_graph is not None
             else 0
         )
+        runtime_links_loaded = max(
+            [
+                safe_int(item.get("links_loaded"))
+                for item in dependency_telemetry_report
+            ]
+            or [0]
+        )
+        process_dependency_links_loaded = max(
+            process_dependency_links_loaded,
+            runtime_links_loaded,
+        )
         process_dependency_links_used = sum(
             int(item.get("process_dependency_links_used", 0) or 0)
             for item in boundary_refinement_dependency_debug
+        )
+        runtime_links_used = sum(
+            safe_int(item.get("links_used"))
+            for item in dependency_telemetry_report
+        )
+        process_dependency_links_used = max(
+            process_dependency_links_used,
+            runtime_links_used,
         )
         chain_depths = [
             int(item.get("dependency_chain_depth", 0) or 0)
             for item in boundary_refinement_dependency_debug
         ]
+        chain_depths.extend(
+            safe_int(item.get("chain_depth"))
+            for item in dependency_telemetry_report
+        )
         chain_coverages = [
             float(item.get("dependency_chain_coverage", 0.0) or 0.0)
             for item in boundary_refinement_dependency_debug
         ]
+        chain_coverages.extend(
+            safe_float(item.get("coverage"))
+            for item in dependency_telemetry_report
+            if safe_float(item.get("coverage")) > 0.0
+        )
         debug_by_concept = {
-            item.get("concept"): item
+            item.get("concept"): dict(item)
             for item in boundary_refinement_dependency_debug
         }
+        for telemetry in dependency_telemetry_report:
+            concept = telemetry.get("concept")
+            if not concept:
+                continue
+            telemetry_debug = {
+                "concept": concept,
+                "process_dependency_links_loaded":
+                telemetry.get("links_loaded", 0),
+                "process_dependency_links_used":
+                telemetry.get("links_used", 0),
+                "dependency_chain_depth":
+                telemetry.get("chain_depth", 0),
+                "dependency_chain_coverage":
+                telemetry.get("coverage", 0.0),
+                "dependency_confidence":
+                telemetry.get("coherence", 0.0),
+                "dependency_coherence_average":
+                telemetry.get("coherence", 0.0),
+                "dependency_explanation_quality":
+                telemetry.get("dependency_explanation_quality", 0.0),
+                "explanation_path":
+                telemetry.get("explanation_path", []),
+                "resolved_dependency_chain":
+                telemetry.get("resolved_dependency_chain", []),
+                "reasoned_dependency_chain":
+                telemetry.get("reasoned_dependency_chain", False),
+                "source": telemetry.get("source"),
+            }
+            existing = debug_by_concept.get(concept)
+            if existing is None:
+                debug_by_concept[concept] = telemetry_debug
+                continue
+
+            telemetry_is_richer = (
+                telemetry_debug.get("dependency_chain_depth", 0)
+                > int(existing.get("dependency_chain_depth", 0) or 0)
+                or (
+                    not existing.get("resolved_dependency_chain")
+                    and telemetry_debug.get("resolved_dependency_chain")
+                )
+                or (
+                    not existing.get("reasoned_dependency_chain")
+                    and telemetry_debug.get("reasoned_dependency_chain")
+                )
+            )
+            if telemetry_is_richer:
+                debug_by_concept[concept] = {
+                    **existing,
+                    **telemetry_debug,
+                    "missing_dependencies": existing.get(
+                        "missing_dependencies",
+                        [],
+                    ),
+                }
+            else:
+                debug_by_concept[concept] = {
+                    **existing,
+                    "process_dependency_links_loaded": max(
+                        int(
+                            existing.get(
+                                "process_dependency_links_loaded",
+                                0,
+                            )
+                            or 0
+                        ),
+                        telemetry_debug[
+                            "process_dependency_links_loaded"
+                        ],
+                    ),
+                    "process_dependency_links_used": max(
+                        int(
+                            existing.get(
+                                "process_dependency_links_used",
+                                0,
+                            )
+                            or 0
+                        ),
+                        telemetry_debug["process_dependency_links_used"],
+                    ),
+                    "dependency_chain_coverage": max(
+                        float(
+                            existing.get(
+                                "dependency_chain_coverage",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                        telemetry_debug["dependency_chain_coverage"],
+                    ),
+                    "dependency_explanation_quality": max(
+                        float(
+                            existing.get(
+                                "dependency_explanation_quality",
+                                0.0,
+                            )
+                            or 0.0
+                        ),
+                        telemetry_debug["dependency_explanation_quality"],
+                    ),
+                }
+        boundary_refinement_dependency_debug = list(
+            debug_by_concept.values()
+        )
         dependency_promotion_blocker_names = {
             "dependency_confidence_below_promotion_floor",
             "dependency_chain_depth_below_promotion_floor",
@@ -399,6 +741,31 @@ def build_training_report(
                 "dependency_chain_coverage":
                 round(dependency_chain_coverage, 4),
             })
+        for telemetry in dependency_telemetry_report:
+            if (
+                telemetry.get("coherence", 0.0) < 0.80
+                or telemetry.get("links_used", 0) <= 0
+                or telemetry.get("chain_depth", 0) <= 0
+                or telemetry.get("coverage", 0.0) <= 0.0
+            ):
+                continue
+            dependency_evidence_values.append(telemetry["coherence"])
+            process_dependency_evidence_sources.append({
+                "concept": telemetry["concept"],
+                "source": "dependency_execution_telemetry",
+                "dependency_coherence_average":
+                telemetry["coherence"],
+                "process_dependency_links_loaded":
+                telemetry["links_loaded"],
+                "process_dependency_links_used":
+                telemetry["links_used"],
+                "dependency_chain_depth":
+                telemetry["chain_depth"],
+                "dependency_chain_coverage":
+                telemetry["coverage"],
+                "dependency_explanation_quality":
+                telemetry["dependency_explanation_quality"],
+            })
         dependency_average = average(dependency_evidence_values)
         validation_average = average(
             item.get("validation_score")
@@ -570,6 +937,16 @@ def build_training_report(
                 if chain_coverages
                 else 0.0
             ),
+            "dependency_explanation_quality": (
+                max(
+                    item.get("dependency_explanation_quality", 0.0)
+                    for item in dependency_telemetry_report
+                )
+                if dependency_telemetry_report
+                else 0.0
+            ),
+            "dependency_telemetry_report":
+            dependency_telemetry_report,
             "boundary_refinement_dependency_debug":
             boundary_refinement_dependency_debug,
             "dependency_ready_boundary_refinement_blockers":
@@ -1294,6 +1671,8 @@ def print_training_report(report):
         f"{architecture_report.get('dependency_chain_depth')}",
         "dependency_chain_coverage="
         f"{architecture_report.get('dependency_chain_coverage')}",
+        "dependency_explanation_quality="
+        f"{architecture_report.get('dependency_explanation_quality')}",
         "evidence_saturated="
         f"{architecture_report.get('evidence_saturated')}",
         "promotion_dependency_score="
@@ -1326,6 +1705,25 @@ def print_training_report(report):
             f"{item.get('missing_dependencies', [])}",
             "dependency_confidence="
             f"{item.get('dependency_confidence')}",
+        )
+    print("DEPENDENCY TELEMETRY REPORT")
+    for item in architecture_report.get("dependency_telemetry_report", []):
+        print(
+            "dependency_telemetry",
+            "concept="
+            f"{item.get('concept')}",
+            "links_loaded="
+            f"{item.get('links_loaded')}",
+            "links_used="
+            f"{item.get('links_used')}",
+            "chain_depth="
+            f"{item.get('chain_depth')}",
+            "coverage="
+            f"{item.get('coverage')}",
+            "coherence="
+            f"{item.get('coherence')}",
+            "explanation_path="
+            f"{item.get('explanation_path')}",
         )
     for item in architecture_report.get(
         "dependency_ready_boundary_refinement_blockers",

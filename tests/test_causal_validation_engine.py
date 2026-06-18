@@ -77,6 +77,60 @@ def test_causal_validation_accepts_stable_counterfactual_link(tmp_path):
     ][0]["source_concept"] == "shape_preservation"
 
 
+def test_causal_validation_reports_reasoned_dependency_chain_for_mature_context(
+    tmp_path,
+):
+    engine = CausalValidationEngine(
+        storage_path=Path(tmp_path) / "causal_ledger.json"
+    )
+
+    report = engine.validate_hypothesis(
+        {
+            "source_concept": "growth",
+            "target_concept": "growth",
+        },
+        [
+            evidence("task_a", context="small_grid"),
+            evidence("task_b", context="large_grid"),
+            evidence("task_c", context="rotated_grid"),
+        ],
+        {
+            "dependency_coherence": 0.8862,
+            "dependency_chain_coverage": 0.9908,
+            "dependency_explanation_quality": 0.9731,
+            "process_dependency_memory": {
+                "reasoned_dependency_chain": True,
+                "resolved_dependency_chain": [
+                    "growth",
+                    "object_identity_exists",
+                    "area_increases",
+                    "identity_preserved",
+                ],
+                "dependency_chain_depth": 4,
+                "dependency_chain_coverage": 0.9908,
+                "dependency_coherence": 0.8862,
+                "dependency_explanation_quality": 0.9731,
+            },
+            "identity_compatibility": 1.0,
+            "counterfactual_results": {
+                "growth->growth": {
+                    "effect_absent_without_source": True,
+                },
+            },
+        },
+    )
+
+    assert "dependency coherence requires more evidence" not in (
+        report["how_we_know"]
+    )
+    assert any(
+        item.startswith(
+            "dependency coherence explained by reasoned chain:"
+        )
+        for item in report["how_we_know"]
+    )
+
+
 def test_spurious_causality_rejects_cooccurrence_without_dependency(tmp_path):
     engine = CausalValidationEngine(
         storage_path=Path(tmp_path) / "causal_ledger.json"

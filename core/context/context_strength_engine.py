@@ -63,25 +63,51 @@ class ContextStrengthEngine:
         if not dependency_report and process_report:
             dependency_report = self._registry_dependency_report(process_report)
 
+        fatal_reasons = []
         if self._global_identity_split(runtime_context):
             rejection_reasons.append("identity_runtime_split_is_global")
+            fatal_reasons.append("identity_runtime_split_is_global")
         if not process_report:
             rejection_reasons.append("process_context_report_missing")
         elif process_report.get("status") not in PROCESS_CONTEXT_STATUSES:
             rejection_reasons.append("process_context_status_invalid")
         elif self._process_context_conflicts(process_report, runtime_context):
             rejection_reasons.append("process_context_conflicts_with_preservation_context")
+            fatal_reasons.append("process_context_conflicts_with_preservation_context")
         elif self._identity_scope_leakage(process_report):
             rejection_reasons.append("identity_scope_leakage_detected")
+            fatal_reasons.append("identity_scope_leakage_detected")
         dependency_score = dependency_report.get("dependency_semantics_score")
+        if dependency_score is None and process_report:
+            dependency_score = process_report.get(
+                "process_context_strength",
+                process_report.get(
+                    "context_strength",
+                    process_report.get(
+                        "context_confidence",
+                        process_report.get("confidence"),
+                    ),
+                ),
+            )
         if dependency_score is None:
             rejection_reasons.append("dependency_semantics_score_missing")
         signature = math_report.get("math_reasoning_signature", {})
-        if not signature.get("typed_dependencies_generated"):
+        process_evidence = process_report.get("supporting_math_evidence", {})
+        process_evidence = (
+            process_evidence
+            if isinstance(process_evidence, Mapping)
+            else {}
+        )
+        if not (
+            signature.get("typed_dependencies_generated")
+            or process_evidence.get("typed_dependencies_generated")
+            or dependency_report.get("typed_dependencies")
+        ):
             rejection_reasons.append("typed_dependencies_not_generated")
 
         process_context_strength = 0.0
-        if not rejection_reasons:
+        graded_penalty = 0.0
+        if process_report and not fatal_reasons:
             dependency_score = clamp(dependency_score)
             context_surface_report = self._context_surface_report(runtime_context)
             dependency_coherence_report = self._dependency_coherence_report(
@@ -122,12 +148,25 @@ class ContextStrengthEngine:
                 context_surface_report,
                 dependency_coherence_report,
             )
+            graded_penalty = min(
+                len([
+                    reason
+                    for reason in rejection_reasons
+                    if reason != "process_context_report_missing"
+                ])
+                * 0.025,
+                0.12,
+            )
+            process_context_strength = clamp(
+                process_context_strength - graded_penalty
+            )
 
         final_strength = clamp(min(base + process_context_strength, 0.97))
         return {
             "system": self.system_name,
             "base_context_strength": base,
             "process_context_strength": process_context_strength,
+            "missing_process_evidence_penalty": graded_penalty,
             "final_context_strength": final_strength,
             "math_reasoning_used": process_context_strength > 0.0,
             "used_evidence": used_evidence,
@@ -196,6 +235,18 @@ class ContextStrengthEngine:
                 ),
             )
         )
+        native_context_strength = clamp(
+            process_report.get(
+                "process_context_strength",
+                process_report.get(
+                    "context_strength",
+                    process_report.get(
+                        "context_confidence",
+                        process_report.get("confidence", 0.0),
+                    ),
+                ),
+            )
+        )
         temporal_consistency = clamp(
             process_report.get("temporal_consistency", 0.0)
         )
@@ -209,8 +260,9 @@ class ContextStrengthEngine:
                 + surface_strength * 0.10
                 + coherence_strength * 0.08
                 + temporal_strength * 0.12
+                + native_context_strength * 0.34
                 + temporal_consistency * 0.04,
-                0.48,
+                0.72,
             )
         )
 
@@ -263,7 +315,10 @@ class ContextStrengthEngine:
     def _registry_dependency_report(self, process_report):
         transitions = [
             item
-            for item in process_report.get("transitions", [])
+            for item in process_report.get(
+                "transition_signature",
+                process_report.get("transitions", []),
+            )
             if isinstance(item, Mapping)
         ]
         typed_dependencies = [
@@ -333,6 +388,7 @@ class ContextStrengthEngine:
         evidence = process_report.get("supporting_math_evidence", {})
         return bool(
             process_report.get("transition_steps")
+            or process_report.get("transition_signature")
             or process_report.get("transitions")
             or evidence.get("transition_sequence_generated")
             or evidence.get("temporal_transitions_identified")
@@ -358,7 +414,10 @@ class ContextStrengthEngine:
         evidence = process_report.get("supporting_math_evidence", {})
         return bool(
             process_report.get("initial_state")
-            and process_report.get("transitions")
+            and (
+                process_report.get("transition_signature")
+                or process_report.get("transitions")
+            )
             and process_report.get("final_state")
         ) or bool(evidence.get("temporal_state_sequence_generated"))
 

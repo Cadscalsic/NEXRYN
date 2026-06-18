@@ -379,7 +379,16 @@ class CausalValidationEngine:
             ),
             "contradiction_resistance":
             clamp(1.0 - contradiction_load),
-            "dependency_coherence": clamp(dependency_coherence),
+            "dependency_coherence": clamp(
+                max(
+                    dependency_coherence,
+                    self._dependency_explanation_quality(context),
+                )
+            ),
+            "dependency_explanation_quality":
+            self._dependency_explanation_quality(context),
+            "dependency_reasoning_report":
+            self._dependency_reasoning_report(context),
             "promotion_dependency_score":
             dependency_promotion["promotion_dependency_score"],
             "promotion_dependency_bonus":
@@ -394,6 +403,161 @@ class CausalValidationEngine:
             "supporting_tasks": sorted(supporting_tasks),
             "rejecting_tasks": sorted(rejecting_tasks),
         }
+
+    def _dependency_explanation_quality(self, context):
+        context = context if isinstance(context, dict) else {}
+        for key in (
+            "dependency_explanation_quality",
+            "explanation_quality",
+        ):
+            if context.get(key) is not None:
+                return clamp(context.get(key))
+        for key in (
+            "process_dependency_memory",
+            "dependency_reasoning",
+            "dependency_chain_resolution",
+            "dependency_promotion_evidence",
+        ):
+            report = context.get(key, {})
+            if isinstance(report, dict):
+                for metric in (
+                    "dependency_explanation_quality",
+                    "explanation_quality",
+                ):
+                    if report.get(metric) is not None:
+                        return clamp(report.get(metric))
+        return 0.0
+
+    def _dependency_reasoning_report(self, context):
+        context = context if isinstance(context, dict) else {}
+        report = context.get("dependency_reasoning_report")
+        if isinstance(report, str):
+            return report
+        for key in (
+            "process_dependency_memory",
+            "dependency_reasoning",
+            "dependency_chain_resolution",
+            "dependency_promotion_evidence",
+        ):
+            nested = context.get(key, {})
+            if isinstance(nested, dict) and isinstance(
+                nested.get("dependency_reasoning_report"),
+                str,
+            ):
+                return nested["dependency_reasoning_report"]
+        return ""
+
+    def _dependency_observability(self, context, metrics=None):
+        context = context if isinstance(context, dict) else {}
+        metrics = metrics if isinstance(metrics, dict) else {}
+
+        reports = [
+            context,
+            context.get("process_dependency_memory", {}),
+            context.get("dependency_reasoning", {}),
+            context.get("dependency_chain_resolution", {}),
+            context.get("dependency_promotion_evidence", {}),
+            context.get("dependency_coherence_report", {}),
+        ]
+        reports = [report for report in reports if isinstance(report, dict)]
+
+        def max_float(*keys):
+            values = []
+            for report in reports:
+                for key in keys:
+                    if report.get(key) is not None:
+                        values.append(clamp(report.get(key)))
+            for key in keys:
+                if metrics.get(key) is not None:
+                    values.append(clamp(metrics.get(key)))
+            return max(values or [0.0])
+
+        def max_int(*keys):
+            values = []
+            for report in reports:
+                for key in keys:
+                    try:
+                        values.append(int(report.get(key, 0) or 0))
+                    except (TypeError, ValueError):
+                        pass
+            return max(values or [0])
+
+        chain = []
+        explanation_path = []
+        for report in reports:
+            if not chain:
+                for key in (
+                    "resolved_dependency_chain",
+                    "chain",
+                    "dependencies",
+                ):
+                    candidate = report.get(key)
+                    if isinstance(candidate, list):
+                        chain = list(candidate)
+                        break
+            if not explanation_path:
+                candidate = report.get("explanation_path")
+                if isinstance(candidate, list):
+                    explanation_path = list(candidate)
+                dependency_explanation = report.get(
+                    "dependency_explanation",
+                    {},
+                )
+                if (
+                    not explanation_path
+                    and isinstance(dependency_explanation, dict)
+                    and isinstance(
+                        dependency_explanation.get("explanation_path"),
+                        list,
+                    )
+                ):
+                    explanation_path = list(
+                        dependency_explanation["explanation_path"]
+                    )
+
+        return {
+            "dependency_coherence": max_float(
+                "dependency_coherence",
+                "dependency_coherence_average",
+                "dependency_confidence",
+            ),
+            "dependency_chain_coverage": max_float(
+                "dependency_chain_coverage",
+                "coverage",
+            ),
+            "dependency_explanation_quality": max_float(
+                "dependency_explanation_quality",
+                "explanation_quality",
+            ),
+            "dependency_chain_depth": max_int(
+                "dependency_chain_depth",
+                "chain_depth",
+            ),
+            "resolved_dependency_chain": chain,
+            "explanation_path": explanation_path,
+        }
+
+    def _dependency_coherence_message(self, context, metrics):
+        observability = self._dependency_observability(context, metrics)
+        mature_dependency_evidence = (
+            observability["dependency_coherence"] > 0.85
+            and observability["dependency_chain_coverage"] > 0.90
+            and observability["dependency_explanation_quality"] > 0.90
+        )
+        if mature_dependency_evidence:
+            chain = observability["resolved_dependency_chain"]
+            if chain:
+                return (
+                    "dependency coherence explained by reasoned chain: "
+                    + " -> ".join(str(node) for node in chain[:6])
+                )
+            return "dependency coherence explained by reasoned dependency evidence"
+
+        return (
+            "maintained dependency coherence"
+            if metrics["dependency_coherence"] >= 0.75
+            else "dependency coherence requires more evidence"
+        )
 
     def _dependency_promotion(self, context):
         context = context if isinstance(context, dict) else {}
@@ -772,6 +936,10 @@ class CausalValidationEngine:
                 [],
             ).append("validated_causal_relationship")
         self._persist()
+        dependency_coherence_message = self._dependency_coherence_message(
+            context,
+            metrics,
+        )
         how_we_know = [
             (
                 f"validated across "
@@ -783,9 +951,7 @@ class CausalValidationEngine:
             "passed counterfactual testing"
             if counterfactual["counterfactual_score"] >= 0.75
             else "counterfactual testing remains provisional",
-            "maintained dependency coherence"
-            if metrics["dependency_coherence"] >= 0.75
-            else "dependency coherence requires more evidence",
+            dependency_coherence_message,
             "validated by causal graph analysis"
             if not spurious_report["spurious"]
             else "rejected as spurious correlation",

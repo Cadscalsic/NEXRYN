@@ -33,6 +33,7 @@ from runtime.contradiction_resolution_engine import (
 from runtime.dependency_chain_alignment_engine import (
     DependencyChainAlignmentEngine,
 )
+from runtime.dependency import DependencyChainExecutor
 from runtime.truth_candidate_engine import TruthCandidateEngine
 from runtime.truth_advancement_planner import TruthAdvancementPlanner
 from runtime.truth_commitment_engine import TruthCommitmentEngine
@@ -267,6 +268,7 @@ class EpistemicCognitionLayer:
             RuntimeCausalAlignmentEngine()
         )
         self.process_dependency_graph = ProcessDependencyGraph()
+        self.dependency_chain_executor = DependencyChainExecutor()
         self.causal_graph = CausalGraph()
         self.causal_validation_engine = CausalValidationEngine(
             storage_path=causal_validation_ledger_path
@@ -632,6 +634,51 @@ class EpistemicCognitionLayer:
                     hypothesis.concept,
                 )
             )
+            dependency_execution_report = (
+                self.dependency_chain_executor.execute(
+                    hypothesis.concept,
+                    observed_contradictions=[
+                        item.get("target")
+                        for item in process_dependency_memory.get(
+                            "typed_dependency_relations",
+                            [],
+                        )
+                        if item.get("relation") == "forbids"
+                    ],
+                )
+            )
+            process_dependency_memory = {
+                **process_dependency_memory,
+                **dependency_execution_report,
+                "legacy_process_dependency_memory":
+                process_dependency_memory,
+                "dependency_reasoning_invoked": True,
+                "dependency_execution_trace": {
+                    "concept": hypothesis.concept,
+                    "memory_loaded": (
+                        dependency_execution_report.get(
+                            "process_dependency_links_loaded",
+                            0,
+                        ) > 0
+                    ),
+                    "operator_available": True,
+                    "reasoning_invoked": True,
+                    "bypass_reason": None,
+                },
+                "dependency_confidence": max(
+                    process_dependency_memory.get(
+                        "dependency_confidence",
+                        0.0,
+                    ),
+                    dependency_execution_report.get(
+                        "dependency_coherence_average",
+                        dependency_execution_report.get(
+                            "dependency_coherence",
+                            0.0,
+                        ),
+                    ),
+                ),
+            }
             causal_validation = (
                 self.causal_validation_engine.validate_hypothesis(
                     {

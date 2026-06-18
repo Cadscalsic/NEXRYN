@@ -11,6 +11,20 @@ TARGET_MINIMUMS = {
     "density_modulation": 20,
     "propagation": 10,
     "symbolic_remapping": 10,
+    "object_counting": 15,
+    "spatial_reasoning": 15,
+    "pattern_completion": 15,
+    "color_mapping": 15,
+    "color_transformation": 15,
+    "rotation": 15,
+    "reflection": 15,
+    "scaling": 15,
+    "inside_outside": 15,
+    "occlusion": 15,
+    "masking": 15,
+    "path_finding": 15,
+    "gravity_simulation": 15,
+    "noise_removal": 15,
 }
 
 

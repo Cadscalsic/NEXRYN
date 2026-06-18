@@ -20,6 +20,24 @@ SCARCITY_TASKS = [
     TRAINING_DIRECTORY / f"task_{sequence:03d}.json"
     for sequence in range(87, 102)
 ]
+ARC_CONCEPT_FAMILIES = [
+    "object_counting",
+    "spatial_reasoning",
+    "color_mapping",
+    "rotation_reflection",
+    "pattern_completion",
+    "inside_outside",
+    "noise_removal",
+    "occlusion_masking",
+    "scaling",
+    "path_finding",
+    "gravity_simulation",
+]
+ARC_CONCEPT_TASKS = [
+    TRAINING_DIRECTORY / f"arc_concept_{family}_{sequence:02d}.json"
+    for family in ARC_CONCEPT_FAMILIES
+    for sequence in range(1, 16)
+]
 
 
 def test_phase_7_prelude_curriculum_contains_30_valid_arc_tasks():
@@ -55,7 +73,8 @@ def test_phase_7_prelude_curriculum_contains_30_valid_arc_tasks():
 def test_training_directory_exposes_original_and_generated_tasks():
     task_paths = sorted(TRAINING_DIRECTORY.glob("*.json"))
 
-    assert len(task_paths) == 101
+    assert len(task_paths) >= len(ARC_CONCEPT_TASKS)
+    assert all(path.exists() for path in ARC_CONCEPT_TASKS)
 
 
 def test_phase_7_targeted_curriculum_covers_rare_concepts():

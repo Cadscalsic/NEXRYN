@@ -504,6 +504,139 @@ def test_architecture_bottleneck_uses_typed_relation_semantics_from_memory():
     assert typed_source["typed_dependency_relation_count"] >= 1
 
 
+def test_architecture_report_uses_executed_dependency_telemetry(capsys):
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_shape.json",
+            "status": "completed",
+            "result": {
+                "process_dependency_chains": {
+                    "shape_preservation": {
+                        "concept": "shape_preservation",
+                        "process_dependency_links_loaded": 97,
+                        "process_dependency_links_used": 96,
+                        "dependency_chain_depth": 4,
+                        "dependency_chain_coverage": 0.9897,
+                        "dependency_coherence_average": 0.8852,
+                        "dependency_explanation_quality": 0.9041,
+                        "dependency_explanation": {
+                            "explanation_path": [
+                                {
+                                    "source": "shape_preservation",
+                                    "target": "local_geometry_tracking",
+                                },
+                            ],
+                        },
+                    },
+                },
+                "epistemic_cognition_report": {
+                    "causal_validation_engine": {
+                        "evaluations": [{
+                            "hypothesis": {
+                                "target_concept": "shape_preservation",
+                            },
+                            "validation_score": 0.89,
+                            "cross_task_stability": 0.94,
+                            "dependency_coherence": 0.8071,
+                            "context_consistency": 0.92,
+                            "identity_compatibility": 0.96,
+                        }],
+                    },
+                    "contextual_truth_engine": {
+                        "evaluations": [{
+                            "truth": "shape_preservation",
+                            "contextual_truth_score": 0.86,
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [{
+                            "task": "shape_preservation",
+                            "confidence": 0.86,
+                        }],
+                    },
+                    "semantic_context_reasoner": {
+                        "evaluations": [{
+                            "context": "shape_preservation",
+                            "semantic_context_score": 0.91,
+                        }],
+                    },
+                },
+            },
+        }],
+    )
+
+    architecture_report = report["architecture_bottleneck_report"]
+    telemetry = architecture_report["dependency_telemetry_report"][0]
+
+    assert architecture_report["dependency_coherence_average"] >= 0.8
+    assert architecture_report["process_dependency_links_used"] == 96
+    assert architecture_report["dependency_chain_depth"] >= 4
+    assert architecture_report["dependency_chain_coverage"] >= 0.8
+    assert architecture_report["dependency_explanation_quality"] == 0.9041
+    assert architecture_report["architecture_bottleneck"] is False
+    assert architecture_report["recommended_next_step"] == (
+        "continue_adaptive_training"
+    )
+    assert telemetry["concept"] == "shape_preservation"
+    assert telemetry["links_loaded"] == 97
+    assert telemetry["links_used"] == 96
+    assert telemetry["chain_depth"] == 4
+    assert telemetry["coverage"] == 0.9897
+    assert telemetry["coherence"] == 0.8852
+    assert telemetry["explanation_path"]
+
+    print_training_report(report)
+    output = capsys.readouterr().out
+    assert "DEPENDENCY TELEMETRY REPORT" in output
+    assert "dependency_telemetry concept=shape_preservation" in output
+
+
+def test_boundary_refinement_prefers_reasoned_dependency_chain():
+    report = build_training_report(
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "BOUNDARY_REFINEMENT",
+            }],
+        },
+        multi_task_results=[{
+            "task": "task_growth.json",
+            "status": "completed",
+            "result": {
+                "process_dependency_chains": {
+                    "growth": {
+                        "concept": "growth",
+                        "reasoned_dependency_chain": True,
+                        "process_dependency_links_loaded": 97,
+                        "process_dependency_links_used": 96,
+                        "dependency_chain_depth": 4,
+                        "dependency_chain_coverage": 0.9897,
+                        "dependency_coherence_average": 0.8862,
+                        "dependency_explanation_quality": 0.9731,
+                        "resolved_dependency_chain": [
+                            "growth",
+                            "object_identity_exists",
+                            "area_increases",
+                            "identity_preserved",
+                            "topology_preserved",
+                        ],
+                    },
+                },
+            },
+        }],
+    )
+
+    dependency_debug = report["architecture_bottleneck_report"][
+        "boundary_refinement_dependency_debug"
+    ][0]
+
+    assert dependency_debug["concept"] == "growth"
+    assert dependency_debug["reasoned_dependency_chain"] is True
+    assert dependency_debug["resolved_dependency_chain"] != []
+    assert dependency_debug["dependency_chain_depth"] == 4
+    assert dependency_debug["dependency_chain_coverage"] == 0.9897
+
+
 def test_architecture_bottleneck_reconciles_dependency_ready_blockers():
     report = build_training_report(
         multi_task_results=[{

@@ -83,3 +83,29 @@ def test_prepare_task_run_resets_transient_execution_state():
     assert pipeline.failed_stages == []
     assert pipeline.stage_execution_history == []
     assert pipeline.runtime.get_context() == {}
+
+
+def test_dependency_reasoning_budget_reuses_unchanged_cached_chain():
+
+    pipeline = AdaptiveCognitivePipeline()
+    pipeline.configure_reasoning_budget(
+        mode="fast",
+        max_concepts=1,
+        cache_dependencies=True,
+    )
+    pipeline.prepare_task_run()
+
+    pipeline.run_dependency_reasoning_cycle()
+    first_report = pipeline.performance_report()
+
+    pipeline.run_dependency_reasoning_cycle()
+    second_report = pipeline.performance_report()
+    context = pipeline.runtime.get_context()
+
+    assert first_report["dependency_chains_executed"] == 1
+    assert second_report["dependency_chains_executed"] == 1
+    assert second_report["cache_hits"] >= 1
+    assert second_report["cache_misses"] == 1
+    assert second_report["concepts_processed"] == 2
+    assert context["dependency_reasoning_report"]["max_chain_depth"] == 8
+    assert context["dependency_reasoning_report"]["telemetry_enabled"] is False

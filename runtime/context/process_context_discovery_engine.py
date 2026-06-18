@@ -219,8 +219,12 @@ class ProcessContextDiscoveryEngine:
                 self._context_name(concept),
             ),
             "preconditions": list(report.get("preconditions", []) or []),
+            "initial_state": list(report.get("preconditions", []) or []),
+            "transitions": transition_steps,
             "transition_steps": transition_steps,
             "postconditions": postconditions,
+            "final_state": postconditions,
+            "expected_outcomes": postconditions,
             "process_context_strength": strength,
             "confidence": strength,
             "process_context_generated": bool(

@@ -229,6 +229,27 @@ from runtime.context.temporal_process_context_engine import (
     temporal_process_context_engine
 )
 
+from runtime.context.process_semantic_context_engine import (
+
+    ProcessSemanticContextEngine,
+
+    process_semantic_context_engine
+)
+
+from runtime.context.context_taxonomy_engine import (
+
+    ContextTaxonomyEngine,
+
+    context_taxonomy_engine
+)
+
+from runtime.process.process_semantic_engine import (
+
+    ProcessSemanticEngine,
+
+    process_semantic_engine
+)
+
 # ============================================
 # HIERARCHICAL CONTEXT CONSOLIDATOR
 # ============================================
@@ -393,5 +414,17 @@ __all__ = [
 
     "TemporalProcessContextEngine",
 
-    "temporal_process_context_engine"
+    "temporal_process_context_engine",
+
+    "ProcessSemanticContextEngine",
+
+    "process_semantic_context_engine",
+
+    "ProcessSemanticEngine",
+
+    "process_semantic_engine",
+
+    "ContextTaxonomyEngine",
+
+    "context_taxonomy_engine"
 ]
