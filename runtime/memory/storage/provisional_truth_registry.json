@@ -393,11 +393,11 @@
       "truth_id": "truth:000be4e89dc549f3b20338330c59aee0",
       "concept": "color_preservation",
       "truth_state": "PROVISIONAL_TRUTH_COMMITMENT",
-      "confidence": 0.9171,
-      "evidence_strength": 0.9481,
+      "confidence": 0.9165,
+      "evidence_strength": 0.9457,
       "causal_alignment": 0.8445,
-      "contradiction_score": 0.0946,
-      "semantic_consistency": 0.9416,
+      "contradiction_score": 0.0945,
+      "semantic_consistency": 0.9422,
       "generalization_score": 0.9357,
       "identity_continuity": 1.0,
       "semantic_drift": 0.0,
@@ -518,7 +518,7 @@
         "data/training\\task_099.json",
         "data/training\\task_100.json",
         "data/training\\task_101.json",
-        "{'value': 'data/training\\\\task_082.json', 'priority': 'medium', 'timestamp': '2026-06-22 00:51:22.270905'}"
+        "{'value': 'data/training\\\\task_082.json', 'priority': 'medium', 'timestamp': '2026-06-22 15:02:27.597353'}"
       ],
       "evidence_sources": [
         "causal_attestation",
@@ -532,7 +532,7 @@
       ],
       "lineage": {},
       "created_at": "2026-06-01T18:31:43.204189",
-      "revision_count": 624
+      "revision_count": 626
     },
     {
       "truth_id": "truth:2360d4b467d04deebe2374a5121c044e",

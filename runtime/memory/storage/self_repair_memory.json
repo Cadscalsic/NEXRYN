@@ -549,6 +549,72 @@
       "severity": "CRITICAL",
       "success": false,
       "timestamp": "2026-06-22 00:52:01.406114"
+    },
+    {
+      "anomaly_type": "EXECUTION_INTEGRITY_CONFLICT",
+      "repair_actions": [
+        "REQUEST_GOVERNANCE_REVIEW",
+        "WRITE_REPAIR_MEMORY"
+      ],
+      "rollback_used": false,
+      "severity": "CRITICAL",
+      "success": false,
+      "timestamp": "2026-06-22 02:06:43.154436"
+    },
+    {
+      "anomaly_type": "EXECUTION_INTEGRITY_CONFLICT",
+      "repair_actions": [
+        "REQUEST_GOVERNANCE_REVIEW",
+        "WRITE_REPAIR_MEMORY"
+      ],
+      "rollback_used": false,
+      "severity": "CRITICAL",
+      "success": false,
+      "timestamp": "2026-06-22 02:07:14.737911"
+    },
+    {
+      "anomaly_type": "EXECUTION_INTEGRITY_CONFLICT",
+      "repair_actions": [
+        "REQUEST_GOVERNANCE_REVIEW",
+        "WRITE_REPAIR_MEMORY"
+      ],
+      "rollback_used": false,
+      "severity": "CRITICAL",
+      "success": false,
+      "timestamp": "2026-06-22 02:07:14.747427"
+    },
+    {
+      "anomaly_type": "EXECUTION_INTEGRITY_CONFLICT",
+      "repair_actions": [
+        "REQUEST_GOVERNANCE_REVIEW",
+        "WRITE_REPAIR_MEMORY"
+      ],
+      "rollback_used": false,
+      "severity": "CRITICAL",
+      "success": false,
+      "timestamp": "2026-06-22 15:02:31.566404"
+    },
+    {
+      "anomaly_type": "EXECUTION_INTEGRITY_CONFLICT",
+      "repair_actions": [
+        "REQUEST_GOVERNANCE_REVIEW",
+        "WRITE_REPAIR_MEMORY"
+      ],
+      "rollback_used": false,
+      "severity": "CRITICAL",
+      "success": false,
+      "timestamp": "2026-06-22 15:03:21.161604"
+    },
+    {
+      "anomaly_type": "EXECUTION_INTEGRITY_CONFLICT",
+      "repair_actions": [
+        "REQUEST_GOVERNANCE_REVIEW",
+        "WRITE_REPAIR_MEMORY"
+      ],
+      "rollback_used": false,
+      "severity": "CRITICAL",
+      "success": false,
+      "timestamp": "2026-06-22 15:03:21.177225"
     }
   ]
 }
