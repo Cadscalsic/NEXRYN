@@ -6,6 +6,8 @@ import uuid
 
 from datetime import datetime
 
+from runtime.meta.supervisor import meta_supervisor
+
 
 # ============================================
 # STRATEGIC GOVERNOR
@@ -102,6 +104,14 @@ class StrategicGovernor:
 
         runtime_context
     ):
+
+        if not meta_supervisor.is_action_allowed("governance"):
+            return {
+                "system": "strategic_governor",
+                "status": "blocked_by_meta_supervisor",
+                "governance_invoked": False,
+                "timestamp": str(datetime.utcnow()),
+            }
 
         # ====================================
         # SAFE NORMALIZATION
@@ -899,6 +909,58 @@ class RuntimeGovernor:
 
         runtime_context=None
     ):
+
+        if not meta_supervisor.is_action_allowed("governance"):
+            return {
+                "system": "runtime_governor",
+                "governance": "blocked_by_meta_supervisor",
+                "runtime_stability": self.runtime_state[
+                    "runtime_stability"
+                ],
+                "governance_invoked": False,
+                "timestamp": str(datetime.utcnow()),
+            }
+
+        if isinstance(runtime_context, dict) and runtime_context.get(
+            "truth_validation_mode"
+        ) == "CACHE_REUSE":
+
+            governance_report = {
+
+                "governance":
+                "integrity_only",
+
+                "runtime_stability":
+                self.runtime_state[
+                    "runtime_stability"
+                ],
+
+                "truth_validation_mode":
+                "CACHE_REUSE",
+
+                "skipped_operations": [
+                    "contradiction_review",
+                    "context_discovery",
+                    "context_hierarchy_generation",
+                    "semantic_context_reconstruction",
+                    "causal_validation",
+                    "truth_candidate_evaluation",
+                    "truth_commit_review",
+                ],
+
+                "timestamp":
+                str(datetime.utcnow())
+            }
+
+            self.runtime_state[
+                "last_governance"
+            ] = governance_report
+
+            self.governance_history.append(
+                governance_report
+            )
+
+            return governance_report
 
         self.runtime_state[
             "governed_cycles"

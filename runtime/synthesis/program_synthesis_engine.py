@@ -11,6 +11,9 @@ from runtime.synthesis.transformation_operator_library import (
     transformation_operator_library
 )
 
+from runtime.meta.supervisor import meta_supervisor
+from runtime.security import execution_authority_guard
+
 
 # ============================================
 # PROGRAM SYNTHESIS ENGINE
@@ -284,6 +287,15 @@ class ProgramSynthesisEngine:
         hypotheses
     ):
 
+        if not meta_supervisor.is_action_allowed("program_synthesis"):
+            return {
+                "program_step_count": 0,
+                "program_steps": [],
+                "engine_state": self.engine_state,
+                "status": "blocked_by_meta_supervisor",
+                "timestamp": str(datetime.utcnow()),
+            }
+
         program_steps = []
 
         for hypothesis in hypotheses:
@@ -338,6 +350,43 @@ class ProgramSynthesisEngine:
 
         execution_program
     ):
+
+        security_decision = execution_authority_guard.request_permission(
+            "execute_program",
+            {
+                "execution_report": {
+                    "execution_authorized": execution_program.get(
+                        "execution_authorized",
+                        True,
+                    ),
+                    "planned_ops": [
+                        step.get("operator")
+                        for step in execution_program.get("program_steps", [])
+                        if isinstance(step, dict)
+                    ],
+                    "executed_ops": execution_program.get("executed_ops"),
+                    "execution_plan_id": execution_program.get("execution_plan_id"),
+                },
+                "allowed_ops": execution_program.get("allowed_ops", []),
+                "task_signature": execution_program.get("task_signature"),
+            },
+            {
+                **execution_program,
+                "planned_ops": [
+                    step.get("operator")
+                    for step in execution_program.get("program_steps", [])
+                    if isinstance(step, dict)
+                ],
+            },
+        )
+        if security_decision.permission == "DENY":
+            return {
+                "final_grid": deepcopy(grid),
+                "execution_trace": [],
+                "step_count": 0,
+                "execution_denied": True,
+                "security_decision": security_decision.as_dict(),
+            }
 
         current_grid = deepcopy(grid)
 

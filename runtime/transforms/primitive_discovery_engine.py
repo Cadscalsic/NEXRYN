@@ -388,7 +388,8 @@ class PrimitiveDiscoveryEngine:
             "translate_left",
             "translate_right",
             "translate_up",
-            "translate_down"
+            "translate_down",
+            "object_level_translate"
         ]
 
         if operator not in valid:
@@ -415,9 +416,19 @@ class PrimitiveDiscoveryEngine:
             parameters={
 
                 "translation":
-                report.get(
-                    "dominant_translation"
-                )
+                report.get("dominant_translation"),
+
+                "translation_per_object":
+                report.get("translation_per_object", {}),
+
+                "motion_pattern":
+                report.get("motion_pattern"),
+
+                "movable_objects":
+                report.get("movable_objects", []),
+
+                "fixed_objects":
+                report.get("fixed_objects", []),
             }
         )
 

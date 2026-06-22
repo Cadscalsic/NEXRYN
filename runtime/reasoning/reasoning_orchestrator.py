@@ -4,6 +4,8 @@
 
 from datetime import datetime
 
+from runtime.meta.supervisor import meta_supervisor
+
 # ============================================
 # REASONING ENGINES
 # ============================================
@@ -267,6 +269,29 @@ class ReasoningOrchestrator:
                     "active"
                 })
 
+        pre_budget_route_count = len(
+            reasoning_routes
+        )
+
+        active_budget = runtime_context.get(
+            "current_reasoning_budget"
+        )
+
+        max_active_routes = getattr(
+            active_budget,
+            "max_active_routes",
+            None
+        )
+
+        if max_active_routes is not None:
+
+            reasoning_routes = reasoning_routes[
+                :max(
+                    1,
+                    int(max_active_routes)
+                )
+            ]
+
         routing_report = {
 
             "routes":
@@ -277,6 +302,12 @@ class ReasoningOrchestrator:
             len(
                 reasoning_routes
             ),
+
+            "pre_budget_route_count":
+            pre_budget_route_count,
+
+            "max_active_routes":
+            max_active_routes,
 
             "routing_mode":
             "semantic_reasoning_routing",
@@ -561,6 +592,17 @@ class ReasoningOrchestrator:
 
         runtime_context
     ):
+
+        if not meta_supervisor.is_action_allowed("reasoning"):
+            return {
+                "system": "reasoning_orchestrator",
+                "status": "blocked_by_meta_supervisor",
+                "reasoning_invoked": False,
+                "reasoning_depth": 0,
+                "active_routes": 0,
+                "routes": [],
+                "timestamp": str(datetime.utcnow()),
+            }
 
         # ========================================
         # ANALYZE LOAD

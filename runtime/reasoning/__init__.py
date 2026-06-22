@@ -98,6 +98,34 @@ from runtime.reasoning.hypothesis_arbitration_engine import (
     hypothesis_arbitration_engine
 )
 
+from runtime.reasoning.change_detection_engine import (
+
+    ChangeDetectionEngine,
+
+    change_detection_engine
+)
+
+from runtime.reasoning.transformation_salience_engine import (
+
+    TransformationSalienceEngine,
+
+    transformation_salience_engine
+)
+
+from runtime.reasoning.invariant_filter import (
+
+    InvariantFilter,
+
+    invariant_filter
+)
+
+from runtime.reasoning.object_centric_reasoner import (
+
+    ObjectCentricReasoner,
+
+    object_centric_reasoner
+)
+
 # ============================================
 # COGNITIVE PRESSURE
 # ============================================
@@ -185,6 +213,22 @@ __all__ = [
     "HypothesisArbitrationEngine",
 
     "hypothesis_arbitration_engine",
+
+    "ChangeDetectionEngine",
+
+    "change_detection_engine",
+
+    "TransformationSalienceEngine",
+
+    "transformation_salience_engine",
+
+    "InvariantFilter",
+
+    "invariant_filter",
+
+    "ObjectCentricReasoner",
+
+    "object_centric_reasoner",
 
     # ========================================
     # COGNITIVE PRESSURE

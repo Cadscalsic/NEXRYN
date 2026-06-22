@@ -707,6 +707,147 @@ class PrimitiveExecutor:
         return output
 
     # ========================================
+    # OBJECT LEVEL TRANSLATE
+    # ========================================
+
+    def object_level_translate(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.array(
+            grid,
+            copy=True
+        )
+
+        parameters = parameters or {}
+
+        translation_per_object = parameters.get(
+            "translation_per_object",
+            {}
+        )
+
+        if not isinstance(translation_per_object, dict):
+
+            return output
+
+        try:
+
+            extractor = ObjectExtractor()
+
+            objects = extractor.extract_objects(
+                extractor.normalize_grid(
+                    output
+                )
+            )
+
+        except Exception:
+
+            objects = []
+
+        movable_objects = set(
+            parameters.get(
+                "movable_objects",
+                []
+            )
+        )
+
+        fixed_objects = set(
+            parameters.get(
+                "fixed_objects",
+                []
+            )
+        )
+
+        for obj in objects:
+
+            object_id = obj.get(
+                "id"
+            )
+
+            if object_id in fixed_objects:
+
+                continue
+
+            if movable_objects and object_id not in movable_objects:
+
+                continue
+
+            translation = translation_per_object.get(
+                object_id,
+                (0, 0)
+            )
+
+            if tuple(translation) == (0, 0):
+
+                continue
+
+            for row, col in obj.get(
+                "cells",
+                []
+            ):
+
+                output[
+                    int(row),
+                    int(col)
+                ] = 0
+
+        for obj in objects:
+
+            object_id = obj.get(
+                "id"
+            )
+
+            if object_id in fixed_objects:
+
+                continue
+
+            if movable_objects and object_id not in movable_objects:
+
+                continue
+
+            translation = translation_per_object.get(
+                object_id,
+                (0, 0)
+            )
+
+            delta_row, delta_col = (
+                int(translation[0]),
+                int(translation[1])
+            )
+
+            for row, col in obj.get(
+                "cells",
+                []
+            ):
+
+                target_row = int(row) + delta_row
+
+                target_col = int(col) + delta_col
+
+                if (
+                    0 <= target_row < output.shape[0]
+                    and
+                    0 <= target_col < output.shape[1]
+                ):
+
+                    output[
+                        target_row,
+                        target_col
+                    ] = int(
+                        obj.get(
+                            "color",
+                            output[int(row), int(col)]
+                        )
+                    )
+
+        return output
+
+    # ========================================
     # REPLACE COLOR
     # ========================================
 
@@ -724,6 +865,29 @@ class PrimitiveExecutor:
             copy=True
         )
 
+        parameters = parameters or {}
+
+        mapping = (
+            parameters.get("mapping")
+            or parameters.get("color_mapping")
+            or {}
+        )
+
+        if mapping:
+
+            original = np.array(
+                output,
+                copy=True
+            )
+
+            for old_color, new_color in mapping.items():
+
+                output[
+                    original == int(old_color)
+                ] = int(new_color)
+
+            return output
+
         removed_colors = []
 
         added_colors = []
@@ -739,6 +903,20 @@ class PrimitiveExecutor:
                 "added_colors",
                 []
             )
+
+            source_color = parameters.get(
+                "source_color"
+            )
+
+            target_color = parameters.get(
+                "target_color"
+            )
+
+            if source_color is not None and target_color is not None:
+
+                removed_colors = [source_color]
+
+                added_colors = [target_color]
 
         if not removed_colors:
 
@@ -965,6 +1143,9 @@ class PrimitiveExecutor:
 
             "translate_down":
             self.translate_down,
+
+            "object_level_translate":
+            self.object_level_translate,
 
             "replace_color":
             self.replace_color,

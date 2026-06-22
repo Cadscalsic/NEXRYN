@@ -4,6 +4,7 @@
 
 import argparse
 import json
+import logging
 import os
 import sys
 import time
@@ -24,6 +25,10 @@ from runtime.learning.training_report import (
 )
 
 from runtime.diagnostics import RuntimeDiagnostics
+
+from runtime.profiling import performance_reporter, telemetry
+from runtime.evaluation import EvaluationController
+from runtime.shutdown import ShutdownController
 
 
 # ============================================
@@ -54,6 +59,10 @@ def build_runtime_metadata(args, execution_time, runtime_status, context_count=0
         "telemetry_enabled": not args.disable_telemetry,
         "cache_dependencies": args.cache_dependencies,
         "report_level": args.report_level,
+        "post_success_mode": args.post_success_mode,
+        "profile_enabled": args.profile,
+        "profile_output": args.profile_output,
+        "profile_level": args.profile_level,
         "python_version": sys.version,
         "timestamp": str(datetime.utcnow()),
     }
@@ -294,6 +303,35 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--post-success-mode",
+    type=str,
+    default="fast",
+    choices=["fast", "normal", "deep"],
+    help="Post-success processing mode after exact successful execution",
+)
+
+parser.add_argument(
+    "--profile",
+    action="store_true",
+    help="Enable runtime profiling and performance intelligence output",
+)
+
+parser.add_argument(
+    "--profile-output",
+    type=str,
+    default="runtime_profile.json",
+    help="Write profiling output to this JSON file when --profile is enabled",
+)
+
+parser.add_argument(
+    "--profile-level",
+    type=str,
+    default="minimal",
+    choices=["minimal", "detailed"],
+    help="Runtime profiling detail level",
+)
+
+parser.add_argument(
     "--debug",
     action="store_true",
     help="Enable debug mode",
@@ -389,6 +427,9 @@ print_runtime_banner()
 runtime_start = time.time()
 runtime_status = "booting"
 results = {}
+shutdown_controller = ShutdownController(
+    logger=logging.getLogger("nexryn.shutdown")
+)
 
 
 # ============================================
@@ -524,6 +565,9 @@ try:
                 ),
                 cache_dependencies=args.cache_dependencies,
                 report_level=args.report_level,
+                post_success_mode=args.post_success_mode,
+                profile=args.profile,
+                profile_level=args.profile_level,
             )
 
             if args.math_reasoning:
@@ -635,6 +679,17 @@ try:
         if isinstance(item.get("result"), dict)
         and item.get("result", {}).get("performance_report")
     ]
+    task_performance_intelligence_reports = [
+        item.get("result", {}).get("PERFORMANCE_REPORT", {})
+        for item in all_results
+        if isinstance(item.get("result"), dict)
+        and item.get("result", {}).get("PERFORMANCE_REPORT")
+    ]
+    module_timings = [
+        module
+        for report in task_performance_reports
+        for module in report.get("module_timings", [])
+    ]
     slowest_modules = sorted(
         [
             module
@@ -678,7 +733,21 @@ try:
             "deep": "full",
         }.get(args.mode, "normal"),
         "slowest_modules": slowest_modules,
+        "module_timings": module_timings,
     }
+    performance_intelligence_report = performance_reporter.build_report(
+        runtime_context={
+            "COGNITIVE_REUSE_REPORT": (
+                pipeline.meta_supervisor.build_cognitive_reuse_report()
+                if hasattr(pipeline, "meta_supervisor")
+                else {}
+            ),
+            "task_performance_intelligence_reports":
+            task_performance_intelligence_reports,
+        },
+        performance_report=performance_report,
+        profile_level=args.profile_level,
+    )
 
     truth_candidate_report = collect_governance_reports(
         all_results,
@@ -728,6 +797,8 @@ try:
         "training_assistant_report": training_assistant_report,
         "training_report": training_report,
         "performance_report": performance_report,
+        "PERFORMANCE_REPORT": performance_intelligence_report,
+        "performance_intelligence_report": performance_intelligence_report,
         "tasks_executed": len(all_results),
         "successful_tasks": successful_tasks,
         "failed_tasks": failed_tasks,
@@ -776,6 +847,84 @@ execution_time = round(
 
 
 # ============================================
+# DETERMINISTIC POST-SUCCESS SHUTDOWN
+# ============================================
+
+if runtime_status == "completed" and isinstance(results, dict):
+    try:
+        total_tasks = max(1, int(results.get("tasks_executed", 0) or 0))
+        successful_tasks = int(results.get("successful_tasks", 0) or 0)
+        failed_tasks = int(results.get("failed_tasks", 0) or 0)
+        evaluation_context = {
+            **results,
+            "accuracy": successful_tasks / total_tasks,
+            "difference_count": failed_tasks,
+            "episode_completed": failed_tasks == 0,
+            "retry_allowed": failed_tasks != 0,
+            "shutdown_mode": "fast" if failed_tasks == 0 else "normal",
+            "execution_time": execution_time,
+        }
+        evaluated_context = EvaluationController(
+            logger=logging.getLogger("nexryn.evaluation")
+        ).evaluate(evaluation_context)
+        results["evaluation_result"] = evaluated_context.get(
+            "evaluation_result",
+            {},
+        )
+        results["evaluation_metrics"] = evaluated_context.get(
+            "evaluation_metrics",
+            {},
+        )
+        results["evaluation_report"] = evaluated_context.get(
+            "evaluation_report",
+            {},
+        )
+        results["deferred_reporting_queue"] = evaluated_context.get(
+            "deferred_reporting_queue",
+            [],
+        )
+        results["FAST_EVALUATION_MODE"] = evaluated_context.get(
+            "FAST_EVALUATION_MODE",
+            False,
+        )
+        shutdown_context = {
+            **results,
+            "shutdown_mode": evaluated_context.get("shutdown_mode", "fast"),
+            "evaluation_metrics": results.get("evaluation_metrics", {}),
+            "evaluation_result": results.get("evaluation_result", {}),
+            "learning_state": results.get("training_report", {}),
+            "reward_state": results.get("training_assistant_report", {}),
+            "task_outcome": {
+                "successful_tasks": results.get("successful_tasks", 0),
+                "failed_tasks": results.get("failed_tasks", 0),
+            },
+        }
+        shutdown_context = shutdown_controller.execute_shutdown(
+            shutdown_context,
+            exit_process=False,
+        )
+        results["SHUTDOWN_REPORT"] = shutdown_context.get(
+            "SHUTDOWN_REPORT",
+            {},
+        )
+        results["post_success_isolation"] = shutdown_context.get(
+            "post_success_isolation",
+            {},
+        )
+    except Exception as shutdown_error:
+        results["SHUTDOWN_REPORT"] = {
+            "cleanup_failures": [
+                {
+                    "resource_type": "shutdown_controller",
+                    "success": False,
+                    "failure_reason": str(shutdown_error),
+                }
+            ],
+            "forced_termination": False,
+        }
+
+
+# ============================================
 # FINAL CONTEXT
 # ============================================
 
@@ -799,6 +948,30 @@ if isinstance(results, dict) and results.get("performance_report"):
     print("NEXRYN :: PERFORMANCE REPORT")
     print("==================================================\n")
     print(results["performance_report"])
+
+if isinstance(results, dict) and results.get("PERFORMANCE_REPORT"):
+    print("\n==================================================")
+    print("NEXRYN :: PERFORMANCE INTELLIGENCE REPORT")
+    print("==================================================\n")
+    print(results["PERFORMANCE_REPORT"])
+
+if args.profile and isinstance(results, dict):
+    profile_payload = {
+        "PERFORMANCE_REPORT": results.get("PERFORMANCE_REPORT", {}),
+        "performance_report": results.get("performance_report", {}),
+        "telemetry": telemetry.report(),
+        "runtime_status": runtime_status,
+        "execution_time": execution_time,
+    }
+    write_report = performance_reporter.write_report(
+        profile_payload,
+        args.profile_output,
+    )
+    results["profile_output_report"] = write_report
+    print("\n==================================================")
+    print("NEXRYN :: PROFILE OUTPUT")
+    print("==================================================\n")
+    print(write_report)
 
 
 # ============================================
@@ -906,3 +1079,9 @@ except Exception as diagnostic_error:
 print("\n==================================================")
 print("NEXRYN :: EXECUTION COMPLETE")
 print("==================================================\n")
+
+if runtime_status == "completed":
+    shutdown_controller.exit_enforcer.enforce_exit(
+        exit_process=True,
+        code=0,
+    )

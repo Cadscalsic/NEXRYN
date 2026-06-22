@@ -301,6 +301,14 @@ def transformation_stage(context):
                 execution_plan
             )
 
+    if blackboard.synthesized_program:
+
+        synthesized_program = blackboard.synthesized_program
+
+    if blackboard.execution_plan:
+
+        execution_plan = blackboard.execution_plan
+
     blackboard.assert_synchronized()
 
     # ========================================
@@ -424,6 +432,32 @@ def transformation_stage(context):
             execution_plan
         )
     )
+
+    preflight_execution_trace = [
+        {
+            "primitive": primitive.get("primitive"),
+            "operation": primitive.get("primitive"),
+            "status": "completed",
+        }
+        for primitive in planned_primitives
+    ]
+    preflight_integrity_report = (
+        execution_integrity_guard.evaluate(
+            execution_plan,
+            preflight_execution_trace,
+            execution_authorized=True,
+        )
+    )
+    world_model_anticipation = {
+        **(
+            world_model_anticipation
+            if isinstance(world_model_anticipation, dict)
+            else {}
+        ),
+        "execution_integrity_report": preflight_integrity_report,
+        "execution_integrity_preserved":
+        preflight_integrity_report.get("integrity_preserved") is True,
+    }
 
     world_model_gate_report = (
         world_model_gate.evaluate(
@@ -718,6 +752,9 @@ def transformation_stage(context):
         "execution_integrity":
         execution_integrity_report,
 
+        "preflight_execution_integrity":
+        preflight_integrity_report,
+
         "sandbox_execution":
         sandbox_execution_result
     }
@@ -819,6 +856,33 @@ def transformation_stage(context):
     context[
         "world_model_gate_report"
     ] = world_model_gate_report
+
+    transformation_localization = (
+        world_model_anticipation.get(
+            "transformation_localization",
+            {},
+        )
+        if isinstance(world_model_anticipation, dict)
+        else {}
+    )
+
+    context[
+        "transformation_localization"
+    ] = transformation_localization
+
+    context[
+        "localization_ready"
+    ] = transformation_localization.get(
+        "localization_ready",
+        False,
+    )
+
+    context[
+        "localized_step_count"
+    ] = transformation_localization.get(
+        "localized_step_count",
+        0,
+    )
 
     context[
         "cognitive_blackboard_state"

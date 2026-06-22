@@ -102,6 +102,17 @@ from runtime.governance.cognitive_identity_layer import (
     cognitive_identity_layer
 )
 
+from runtime.governance.cache import (
+
+    GovernanceCache,
+
+    governance_cache,
+
+    GovernanceCacheInvalidationEngine,
+
+    governance_cache_invalidation_engine
+)
+
 from runtime.process.process_semantic_engine import (
 
     ProcessSemanticEngine,
@@ -185,6 +196,11 @@ __all__ = [
 
     "cognitive_governance_engine",
     "cognitive_identity_layer",
+
+    "GovernanceCache",
+    "governance_cache",
+    "GovernanceCacheInvalidationEngine",
+    "governance_cache_invalidation_engine",
 
     "ProcessSemanticEngine",
     "process_semantic_engine"

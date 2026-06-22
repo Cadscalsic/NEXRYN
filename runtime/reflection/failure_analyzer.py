@@ -46,10 +46,23 @@ class FailureAnalyzer:
             {}
         )
 
+        terminal_success = evaluation_result.get(
+            "success_state"
+        ) in {
+            "EXACT_SUCCESS",
+            "SUCCESS_WITH_RESIDUALS",
+            "HIGH_VALUE_PARTIAL_SUCCESS",
+            "LEARNING_PROGRESS",
+        } or evaluation_result.get(
+            "episode_completed"
+        ) is True
+
         analysis = {
 
             "failure_detected":
-            not evaluation_result.get(
+            False
+            if terminal_success
+            else not evaluation_result.get(
                 "success",
                 False
             ),
@@ -106,7 +119,11 @@ class FailureAnalyzer:
             [],
 
             "diagnostic_signals":
-            []
+            [
+                "terminal_success_state"
+            ]
+            if terminal_success
+            else []
         }
 
         # ====================================

@@ -7,6 +7,10 @@ from datetime import datetime
 
 import numpy as np
 
+from runtime.object_motion.motion_pattern_classifier import (
+    motion_pattern_classifier,
+)
+
 
 # ============================================
 # OBJECT DELTA ENGINE
@@ -427,12 +431,39 @@ class ObjectDeltaEngine:
 
         if translations:
 
+            changed_translations = [
+
+                translation
+
+                for translation in translations
+
+                if translation != (
+                    0,
+                    0
+                )
+            ]
+
+            translation_candidates = (
+
+                changed_translations
+
+                if changed_translations
+
+                else
+
+                translations
+            )
+
             dominant_translation = max(
 
-                set(translations),
+                set(translation_candidates),
 
-                key=translations.count
+                key=translation_candidates.count
             )
+
+        classification = motion_pattern_classifier.classify(
+            translations
+        )
 
         operator = (
             "preserve_position"
@@ -440,7 +471,18 @@ class ObjectDeltaEngine:
 
         confidence = 0.80
 
-        if dominant_translation != (0, 0):
+        if (
+            classification.get("motion_pattern") == "independent_translation"
+            and translations
+        ):
+
+            operator = (
+                "object_level_translate"
+            )
+
+            confidence = 0.94
+
+        elif dominant_translation != (0, 0):
 
             dy, dx = (
                 dominant_translation
@@ -484,8 +526,36 @@ class ObjectDeltaEngine:
             "translations":
             translations,
 
+            "changed_translations":
+            [
+
+                translation
+
+                for translation in translations
+
+                if translation != (
+                    0,
+                    0
+                )
+            ],
+
             "dominant_translation":
             dominant_translation,
+
+            "translation_per_object":
+            {
+                f"obj_{index + 1}": translation
+                for index, translation in enumerate(translations)
+            },
+
+            "motion_pattern":
+            classification.get("motion_pattern"),
+
+            "translation_variance":
+            classification.get("translation_variance"),
+
+            "global_translation_assumptions":
+            classification.get("global_translation_assumptions"),
 
             "operator":
             operator,

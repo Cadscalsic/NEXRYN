@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import math
 from typing import Any, Iterable, Mapping
 
 from core.perception import ObjectExtractor
@@ -192,7 +193,11 @@ class TransformationLocalizationEngine:
         localized_steps = []
         for step in steps:
             localized_step = dict(step)
-            operation = localized_step.get("operation")
+            operation = (
+                localized_step.get("operation")
+                or localized_step.get("operator")
+                or localized_step.get("primitive")
+            )
             parameters = dict(localized_step.get("parameters", {}) or {})
             if operation == "duplicate_object":
                 report = self.localize_from_grids(
@@ -219,22 +224,411 @@ class TransformationLocalizationEngine:
                         "localization_ready": True,
                     })
                     localized_step["parameters"] = parameters
+            elif self._is_attribute_mapping_operation(operation):
+                report = self.localize_attribute_deltas(
+                    input_grid,
+                    target_grid,
+                    operation=operation,
+                    parameters=parameters,
+                )
+                reports.append(report)
+                if report["localization_ready"]:
+                    primary_rule = report.get("localized_rules", [{}])[0]
+                    parameters.update({
+                        "mapping_type": primary_rule.get("mapping_type"),
+                        "mapping": primary_rule.get("mapping", {}),
+                        "color_mapping": primary_rule.get("mapping", {}),
+                        "object_mappings": report.get("object_matches", []),
+                        "attribute_deltas": report.get("attribute_deltas", []),
+                        "localization_type": primary_rule.get(
+                            "localization_type",
+                            "color_mapping",
+                        ),
+                        "localization_ready": True,
+                        "localization_confidence": report.get(
+                            "localization_confidence",
+                            0.0,
+                        ),
+                    })
+                    localized_step["operation"] = "replace_color"
+                    localized_step["parameters"] = parameters
             localized_steps.append(localized_step)
 
         program["steps"] = localized_steps
         program["step_count"] = len(localized_steps)
         ready = bool(reports) and all(report["localization_ready"] for report in reports)
+        localization_confidences = [
+            float(report.get("localization_confidence", 0.0) or 0.0)
+            for report in reports
+        ]
+        identity_confidences = [
+            float(match.get("identity_confidence", 0.0) or 0.0)
+            for report in reports
+            for match in report.get("object_matches", [])
+            if isinstance(match, dict)
+        ]
+        shape_similarities = [
+            float(match.get("shape_similarity", 0.0) or 0.0)
+            for report in reports
+            for match in report.get("object_matches", [])
+            if isinstance(match, dict)
+        ]
+        topology_preserved = bool(reports) and all(
+            bool(match.get("topology_preserved", False))
+            for report in reports
+            for match in report.get("object_matches", [])
+            if isinstance(match, dict)
+        )
         return {
             "system": self.system_name,
             "localized_program": program,
             "localization_reports": reports,
             "localization_ready": ready,
+            "localization_confidence": (
+                round(min(localization_confidences), 4)
+                if localization_confidences
+                else 0.0
+            ),
             "localized_step_count": sum(
                 1
                 for report in reports
                 if report.get("localization_ready")
             ),
+            "identity_confidence": (
+                round(min(identity_confidences), 4)
+                if identity_confidences
+                else 0.0
+            ),
+            "topology_preserved": topology_preserved,
+            "shape_similarity": (
+                round(min(shape_similarities), 4)
+                if shape_similarities
+                else 0.0
+            ),
         }
+
+    def localize_attribute_deltas(
+        self,
+        input_grid: Any,
+        target_grid: Any | None,
+        operation: str | None = None,
+        parameters: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Match input objects to output objects and derive executable deltas."""
+
+        input_objects = self._objects(input_grid)
+        output_objects = self._objects(target_grid)
+        object_matches = self._match_objects(input_objects, output_objects)
+        attribute_deltas = [
+            self._attribute_delta(match)
+            for match in object_matches
+            if match.get("output_object")
+        ]
+        localized_rules = self._localized_rules_from_deltas(
+            attribute_deltas,
+            parameters or {},
+        )
+        confidence = self._attribute_localization_confidence(
+            object_matches,
+            localized_rules,
+        )
+        ready = bool(localized_rules and confidence >= 0.75)
+        return {
+            "system": self.system_name,
+            "operation": operation or "attribute_mapping",
+            "localization_ready": ready,
+            "localized_rule_count": len(localized_rules),
+            "localized_rules": localized_rules,
+            "object_matches": object_matches,
+            "attribute_deltas": attribute_deltas,
+            "localization_confidence": confidence,
+            "matching_features": [
+                "centroid_proximity",
+                "topology_preservation",
+                "size_preservation",
+                "shape_similarity",
+                "object_identity_continuity",
+            ],
+            "causal_evidence": {
+                "input_object_count": len(input_objects),
+                "output_object_count": len(output_objects),
+                "matched_object_count": len(object_matches),
+            },
+        }
+
+    def _is_attribute_mapping_operation(self, operation: str | None) -> bool:
+        name = str(operation or "").lower()
+        return name in {
+            "replace_color",
+            "map_colors",
+            "color_mapping",
+            "color_transformation",
+            "symbolic_remapping",
+            "attribute_remapping",
+            "position_mapping",
+            "size_mapping",
+            "shape_mapping",
+            "topology_mapping",
+        }
+
+    def _match_objects(
+        self,
+        input_objects: list[Mapping[str, Any]],
+        output_objects: list[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        unmatched_outputs = list(output_objects)
+        matches = []
+        for input_object in input_objects:
+            best_output = None
+            best_score = -1.0
+            for output_object in unmatched_outputs:
+                score = self._identity_score(input_object, output_object)
+                if score > best_score:
+                    best_score = score
+                    best_output = output_object
+            if best_output is None:
+                continue
+            unmatched_outputs.remove(best_output)
+            matches.append({
+                "input_object_id": input_object.get("id"),
+                "output_object_id": best_output.get("id"),
+                "input_object": dict(input_object),
+                "output_object": dict(best_output),
+                "identity_confidence": round(self._clamp(best_score), 4),
+                "centroid_delta": self._centroid_delta(
+                    input_object,
+                    best_output,
+                ),
+                "topology_preserved": self._object_topology_preserved(
+                    input_object,
+                    best_output,
+                ),
+                "size_preserved": input_object.get("size") == best_output.get("size"),
+                "shape_similarity": self._shape_similarity(
+                    input_object,
+                    best_output,
+                ),
+            })
+        return matches
+
+    def _identity_score(
+        self,
+        input_object: Mapping[str, Any],
+        output_object: Mapping[str, Any],
+    ) -> float:
+        centroid_score = 1.0 / (1.0 + self._centroid_distance(input_object, output_object))
+        size_score = 1.0 if input_object.get("size") == output_object.get("size") else 0.45
+        shape_score = self._shape_similarity(input_object, output_object)
+        topology_score = (
+            1.0
+            if self._object_topology_preserved(input_object, output_object)
+            else 0.5
+        )
+        continuity_score = 1.0 if input_object.get("id") == output_object.get("id") else 0.65
+        return (
+            centroid_score * 0.30
+            + topology_score * 0.20
+            + size_score * 0.20
+            + shape_score * 0.20
+            + continuity_score * 0.10
+        )
+
+    def _attribute_delta(self, match: Mapping[str, Any]) -> dict[str, Any]:
+        input_object = match.get("input_object", {})
+        output_object = match.get("output_object", {})
+        centroid_delta = match.get("centroid_delta", [0, 0])
+        return {
+            "input_object_id": match.get("input_object_id"),
+            "output_object_id": match.get("output_object_id"),
+            "color": [
+                input_object.get("color"),
+                output_object.get("color"),
+            ],
+            "position": centroid_delta,
+            "size": [
+                input_object.get("size"),
+                output_object.get("size"),
+            ],
+            "shape": [
+                input_object.get("canonical_shape_signature"),
+                output_object.get("canonical_shape_signature"),
+            ],
+            "topology": {
+                "holes": [
+                    input_object.get("holes"),
+                    output_object.get("holes"),
+                ],
+                "is_solid": [
+                    input_object.get("is_solid"),
+                    output_object.get("is_solid"),
+                ],
+            },
+            "identity_confidence": match.get("identity_confidence", 0.0),
+        }
+
+    def _localized_rules_from_deltas(
+        self,
+        deltas: list[Mapping[str, Any]],
+        parameters: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        rules = []
+        color_mapping: dict[str, int] = {}
+        for delta in deltas:
+            old_color, new_color = delta.get("color", [None, None])
+            if old_color is None or new_color is None or old_color == new_color:
+                continue
+            color_mapping[str(int(old_color))] = int(new_color)
+        if not color_mapping:
+            explicit = self._explicit_color_mapping(parameters)
+            color_mapping.update(explicit)
+        if color_mapping:
+            rules.append({
+                "mapping_type": "object_color_mapping",
+                "localization_type": "color_mapping",
+                "mapping": color_mapping,
+                "confidence": 0.95,
+            })
+        position_rules = [
+            {
+                "input_object_id": delta.get("input_object_id"),
+                "output_object_id": delta.get("output_object_id"),
+                "delta": delta.get("position", [0, 0]),
+            }
+            for delta in deltas
+            if delta.get("position") != [0, 0]
+        ]
+        if position_rules:
+            rules.append({
+                "mapping_type": "object_position_mapping",
+                "localization_type": "position_mapping",
+                "mapping": position_rules,
+                "confidence": 0.9,
+            })
+        for field, mapping_type, localization_type in [
+            ("size", "object_size_mapping", "size_mapping"),
+            ("shape", "object_shape_mapping", "shape_mapping"),
+            ("topology", "object_topology_mapping", "topology_mapping"),
+        ]:
+            mapping = [
+                {
+                    "input_object_id": delta.get("input_object_id"),
+                    "output_object_id": delta.get("output_object_id"),
+                    "delta": delta.get(field),
+                }
+                for delta in deltas
+                if self._changed(delta.get(field))
+            ]
+            if mapping:
+                rules.append({
+                    "mapping_type": mapping_type,
+                    "localization_type": localization_type,
+                    "mapping": mapping,
+                    "confidence": 0.85,
+                })
+        return rules
+
+    def _explicit_color_mapping(
+        self,
+        parameters: Mapping[str, Any],
+    ) -> dict[str, int]:
+        mapping = parameters.get("mapping") or parameters.get("color_mapping")
+        if isinstance(mapping, Mapping):
+            return {
+                str(int(old)): int(new)
+                for old, new in mapping.items()
+            }
+        source = parameters.get("source_color")
+        target = parameters.get("target_color")
+        if source is not None and target is not None:
+            return {str(int(source)): int(target)}
+        removed = list(parameters.get("removed_colors", []) or [])
+        added = list(parameters.get("added_colors", []) or [])
+        return {
+            str(int(old)): int(new)
+            for old, new in zip(removed, added)
+        }
+
+    def _attribute_localization_confidence(
+        self,
+        matches: list[Mapping[str, Any]],
+        rules: list[Mapping[str, Any]],
+    ) -> float:
+        if not matches or not rules:
+            return 0.0
+        identity = sum(
+            float(match.get("identity_confidence", 0.0) or 0.0)
+            for match in matches
+        ) / len(matches)
+        rule_confidence = max(
+            float(rule.get("confidence", 0.0) or 0.0)
+            for rule in rules
+        )
+        return round(self._clamp((identity * 0.55) + (rule_confidence * 0.45)), 4)
+
+    def _centroid_distance(
+        self,
+        input_object: Mapping[str, Any],
+        output_object: Mapping[str, Any],
+    ) -> float:
+        input_center = input_object.get("center", {}) or {}
+        output_center = output_object.get("center", {}) or {}
+        return math.dist(
+            [
+                float(input_center.get("row", 0.0)),
+                float(input_center.get("col", 0.0)),
+            ],
+            [
+                float(output_center.get("row", 0.0)),
+                float(output_center.get("col", 0.0)),
+            ],
+        )
+
+    def _centroid_delta(
+        self,
+        input_object: Mapping[str, Any],
+        output_object: Mapping[str, Any],
+    ) -> list[int]:
+        input_center = input_object.get("center", {}) or {}
+        output_center = output_object.get("center", {}) or {}
+        return [
+            int(round(float(output_center.get("row", 0.0)) - float(input_center.get("row", 0.0)))),
+            int(round(float(output_center.get("col", 0.0)) - float(input_center.get("col", 0.0)))),
+        ]
+
+    def _shape_similarity(
+        self,
+        input_object: Mapping[str, Any],
+        output_object: Mapping[str, Any],
+    ) -> float:
+        if input_object.get("canonical_shape_signature") == output_object.get(
+            "canonical_shape_signature"
+        ):
+            return 1.0
+        input_cells = set(tuple(cell) for cell in input_object.get("normalized_shape", []))
+        output_cells = set(tuple(cell) for cell in output_object.get("normalized_shape", []))
+        if not input_cells and not output_cells:
+            return 1.0
+        union = input_cells | output_cells
+        if not union:
+            return 0.0
+        return len(input_cells & output_cells) / len(union)
+
+    def _object_topology_preserved(
+        self,
+        input_object: Mapping[str, Any],
+        output_object: Mapping[str, Any],
+    ) -> bool:
+        return (
+            input_object.get("holes") == output_object.get("holes")
+            and input_object.get("is_solid") == output_object.get("is_solid")
+        )
+
+    def _changed(self, value: Any) -> bool:
+        if isinstance(value, Mapping):
+            return any(self._changed(item) for item in value.values())
+        if isinstance(value, list) and len(value) == 2:
+            return value[0] != value[1]
+        return False
 
     def _operation_from_transformation(
         self,

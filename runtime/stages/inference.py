@@ -89,6 +89,9 @@ from runtime.recursion.recursive_cognition import (
 from runtime.reasoning.hypothesis_arbitration_engine import (
     HypothesisArbitrationEngine,
 )
+from runtime.reasoning.object_centric_reasoner import (
+    object_centric_reasoner,
+)
 
 # ============================================
 # META
@@ -509,6 +512,10 @@ def adaptive_depth_limit(
     task_complexity
 ):
 
+    if task_complexity < 0.20:
+
+        return 1
+
     if task_complexity < 0.30:
 
         return 4
@@ -530,6 +537,17 @@ def allocate_reasoning_depth(
     task_complexity,
     hypotheses
 ):
+
+    if task_complexity < 0.20:
+
+        return {
+            "allocated_depth_limit": 1,
+            "regulated_depth": min(raw_depth, 1),
+            "causal_density": 0.0,
+            "average_confidence": 0.0,
+            "entropy_risk": 0.0,
+            "allocation_reason": "low_complexity_transformational_budget"
+        }
 
     causal_density = 0.0
 
@@ -816,6 +834,62 @@ def inference_stage(context):
         task_complexity
     )
 
+    active_budget = context.get(
+        "current_reasoning_budget"
+    )
+
+    max_hypotheses = getattr(
+        active_budget,
+        "max_hypotheses",
+        None
+    )
+
+    max_active_routes = getattr(
+        active_budget,
+        "max_active_routes",
+        None
+    )
+
+    max_reasoning_depth = getattr(
+        active_budget,
+        "max_reasoning_depth",
+        None
+    )
+
+    max_semantic_concepts = None
+
+    if task_complexity < 0.20:
+
+        max_hypotheses = (
+            min(max_hypotheses, 2)
+            if isinstance(max_hypotheses, int)
+            else 2
+        )
+
+        max_active_routes = (
+            min(max_active_routes, 2)
+            if isinstance(max_active_routes, int)
+            else 2
+        )
+
+        max_reasoning_depth = (
+            min(max_reasoning_depth, 1)
+            if isinstance(max_reasoning_depth, int)
+            else 1
+        )
+
+        max_semantic_concepts = 3
+
+    if max_reasoning_depth is not None:
+
+        reasoning_depth_limit = min(
+            reasoning_depth_limit,
+            max(
+                1,
+                int(max_reasoning_depth)
+            )
+        )
+
     # ========================================
     # GEOMETRIC REASONING
     # ========================================
@@ -905,6 +979,20 @@ def inference_stage(context):
         delta_hypotheses
     )
 
+    object_centric_reasoning = (
+        object_centric_reasoner
+        .reason(
+            input_objects=input_objects,
+            output_objects=output_objects,
+            hypotheses=hypotheses,
+        )
+    )
+
+    hypotheses = object_centric_reasoning.get(
+        "annotated_hypotheses",
+        hypotheses,
+    )
+
     # ========================================
     # REASONING TRACE
     # ========================================
@@ -970,6 +1058,11 @@ def inference_stage(context):
             context.get(
                 "similar_experiences",
                 []
+            ),
+
+            context.get(
+                "current_meta_decision",
+                {}
             )
         )
     )
@@ -1001,6 +1094,20 @@ def inference_stage(context):
         )
     )
 
+    object_centric_reasoning = (
+        object_centric_reasoner
+        .reason(
+            input_objects=input_objects,
+            output_objects=output_objects,
+            hypotheses=hypotheses,
+        )
+    )
+
+    hypotheses = object_centric_reasoning.get(
+        "annotated_hypotheses",
+        hypotheses,
+    )
+
     # ========================================
     # MUTATION
     # ========================================
@@ -1021,6 +1128,20 @@ def inference_stage(context):
         filter_semantic_drift(
             hypotheses
         )
+    )
+
+    object_centric_reasoning = (
+        object_centric_reasoner
+        .reason(
+            input_objects=input_objects,
+            output_objects=output_objects,
+            hypotheses=hypotheses,
+        )
+    )
+
+    hypotheses = object_centric_reasoning.get(
+        "annotated_hypotheses",
+        hypotheses,
     )
 
     executable_hypotheses = (
@@ -1100,6 +1221,24 @@ def inference_stage(context):
         )
     )
 
+    if max_reasoning_depth is not None:
+
+        regulated_reasoning_depth = min(
+            regulated_reasoning_depth,
+            max(
+                1,
+                int(max_reasoning_depth)
+            )
+        )
+
+        reasoning_depth_limit = min(
+            reasoning_depth_limit,
+            max(
+                1,
+                int(max_reasoning_depth)
+            )
+        )
+
     recursive_report[
         "raw_reasoning_depth"
     ] = raw_reasoning_depth
@@ -1119,6 +1258,20 @@ def inference_stage(context):
     recursive_report[
         "reasoning_allocation"
     ] = reasoning_allocation
+
+    if task_complexity < 0.20:
+
+        recursive_report[
+            "cognitive_complexity"
+        ] = "low"
+
+        recursive_report[
+            "max_active_routes"
+        ] = max_active_routes
+
+        recursive_report[
+            "max_semantic_concepts"
+        ] = max_semantic_concepts
 
     latent_reasoning_event = {}
 
@@ -1216,6 +1369,12 @@ def inference_stage(context):
             executable_hypotheses
         )
     )
+
+    if max_semantic_concepts is not None:
+
+        semantic_abstractions = semantic_abstractions[
+            :max_semantic_concepts
+        ]
 
     semantic_graph = (
 
@@ -1395,6 +1554,21 @@ def inference_stage(context):
         key=lambda h: (
 
             h.get(
+                "transformation_salience",
+                0.0
+            ),
+
+            h.get(
+                "explanatory_power",
+                0.0
+            ),
+
+            h.get(
+                "residual_reduction",
+                0.0
+            ),
+
+            h.get(
                 "search_final_score",
                 0.0
             ),
@@ -1407,6 +1581,21 @@ def inference_stage(context):
 
         reverse=True
     )
+
+    pre_budget_hypothesis_count = len(
+        ranked_hypotheses
+    )
+
+    if max_hypotheses is not None:
+
+        ranked_hypotheses = ranked_hypotheses[
+            :max(
+                1,
+                int(max_hypotheses)
+            )
+        ]
+
+    executable_hypotheses = ranked_hypotheses
 
     # ========================================
     # WINNER
@@ -1476,6 +1665,16 @@ def inference_stage(context):
         selected_hypotheses = [
             winner_hypothesis
         ]
+
+    object_centric_arbitration_report = (
+        execution_arbitration_report.get(
+            "ARBITRATION_REPORT",
+            object_centric_reasoning.get(
+                "ARBITRATION_REPORT",
+                {},
+            ),
+        )
+    )
 
     arbitrated_program = arbitration_winner.get(
         "program"
@@ -1992,6 +2191,21 @@ def inference_stage(context):
         "hypothesis_arbitration":
         execution_arbitration_report,
 
+        "OBJECT_CHANGE_REPORT":
+        object_centric_reasoning.get(
+            "OBJECT_CHANGE_REPORT",
+            [],
+        ),
+
+        "TRANSFORMATION_SALIENCE_REPORT":
+        object_centric_reasoning.get(
+            "TRANSFORMATION_SALIENCE_REPORT",
+            {},
+        ),
+
+        "ARBITRATION_REPORT":
+        object_centric_arbitration_report,
+
         "cognitive_pressure":
         cognitive_pressure
     }
@@ -2042,6 +2256,59 @@ def inference_stage(context):
             routing_plan
         )
     )
+
+    if max_active_routes is not None:
+
+        active_routes = routing_report.get(
+            "active_routes",
+            []
+        )
+
+        route_limit = max(
+            1,
+            int(max_active_routes)
+        )
+
+        if len(active_routes) > route_limit:
+
+            terminated_routes = active_routes[
+                route_limit:
+            ]
+
+            active_routes = active_routes[
+                :route_limit
+            ]
+
+            for route in terminated_routes:
+
+                if route in routing_plan:
+
+                    routing_plan[
+                        route
+                    ] = False
+
+            routing_report = {
+
+                **routing_report,
+
+                "active_routes":
+                active_routes,
+
+                "route_count":
+                len(active_routes),
+
+                "routing_plan":
+                routing_plan,
+
+                "max_active_routes":
+                max_active_routes,
+
+                "terminated_routes":
+                terminated_routes,
+
+                "budget_enforced":
+                True,
+            }
 
     # ========================================
     # ATTENTION
@@ -2230,6 +2497,31 @@ def inference_stage(context):
         "world_model_anticipation"
     ] = anticipation_report
 
+    transformation_localization = (
+        anticipation_report.get(
+            "transformation_localization",
+            {},
+        )
+    )
+
+    context[
+        "transformation_localization"
+    ] = transformation_localization
+
+    context[
+        "localization_ready"
+    ] = transformation_localization.get(
+        "localization_ready",
+        False,
+    )
+
+    context[
+        "localized_step_count"
+    ] = transformation_localization.get(
+        "localized_step_count",
+        0,
+    )
+
     context[
         "cognitive_blackboard_state"
     ] = blackboard.snapshot()
@@ -2237,6 +2529,28 @@ def inference_stage(context):
     context[
         "hypothesis_arbitration_report"
     ] = execution_arbitration_report
+
+    context[
+        "OBJECT_CHANGE_REPORT"
+    ] = object_centric_reasoning.get(
+        "OBJECT_CHANGE_REPORT",
+        [],
+    )
+
+    context[
+        "TRANSFORMATION_SALIENCE_REPORT"
+    ] = object_centric_reasoning.get(
+        "TRANSFORMATION_SALIENCE_REPORT",
+        {},
+    )
+
+    context[
+        "ARBITRATION_REPORT"
+    ] = object_centric_arbitration_report
+
+    context[
+        "object_centric_reasoning"
+    ] = object_centric_reasoning
 
     context[
         "operator_weights"
@@ -2359,6 +2673,16 @@ def inference_stage(context):
     context["reasoning_allocation"] = (
         reasoning_allocation
     )
+
+    context["hypothesis_budget_report"] = {
+        "max_hypotheses": max_hypotheses,
+        "max_active_routes": max_active_routes,
+        "max_semantic_concepts": max_semantic_concepts,
+        "pre_budget_hypothesis_count": pre_budget_hypothesis_count,
+        "post_budget_hypothesis_count": len(ranked_hypotheses),
+        "max_reasoning_depth": max_reasoning_depth,
+        "regulated_reasoning_depth": regulated_reasoning_depth,
+    }
 
     context["inference_report"] = (
         inference_report

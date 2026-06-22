@@ -351,6 +351,26 @@ class OperatorRewardEngine:
             color_similarity * 0.15
         )
 
+        success = bool(
+            accuracy >= self.success_threshold
+        )
+
+        if success:
+
+            outcome_class = "exact_success"
+
+        elif reward_score >= 0.90 and accuracy >= 0.97:
+
+            outcome_class = "high_value_success"
+
+        elif reward_score >= 0.70 or accuracy >= 0.80:
+
+            outcome_class = "partial_success"
+
+        else:
+
+            outcome_class = "recoverable_failure"
+
         return {
 
             "accuracy":
@@ -368,9 +388,41 @@ class OperatorRewardEngine:
             ),
 
             "success":
-            bool(
-                accuracy >= self.success_threshold
-            )
+            success,
+
+            "outcome_class":
+            outcome_class,
+
+            "reward_distribution":
+            {
+                "truth_reward": 0.0,
+                "discovery_reward": 0.0,
+                "localization_reward": 0.0,
+                "generalization_reward": 0.0,
+                "efficiency_reward": 0.0,
+                "recovery_reward": 0.0,
+                "operator_accuracy_reward": self.normalize_score(
+                    accuracy
+                ),
+                "operator_structure_reward": self.normalize_score(
+                    structural_similarity
+                ),
+                "operator_color_reward": self.normalize_score(
+                    color_similarity
+                )
+            },
+
+            "penalty_distribution":
+            {
+                "minor": 0.0
+                if reward_score >= 0.70
+                else self.normalize_score(
+                    1.0 - reward_score
+                ),
+                "moderate": 0.0,
+                "major": 0.0,
+                "critical": 0.0
+            }
         }
 
     # ========================================
@@ -504,6 +556,11 @@ class OperatorRewardEngine:
                 operator_name
             ]
 
+            outcome_class = metrics.get(
+                "outcome_class",
+                "recoverable_failure"
+            )
+
             if metrics.get(
                 "success",
                 False
@@ -518,6 +575,21 @@ class OperatorRewardEngine:
                 )
 
                 event_type = "reward"
+
+            elif outcome_class in {
+                "high_value_success",
+                "partial_success"
+            }:
+
+                self.reward_operator(
+                    operator_name,
+                    metrics.get(
+                        "reward_score",
+                        0.0
+                    ) * 0.5
+                )
+
+                event_type = "partial_reward"
 
             else:
 
@@ -579,6 +651,9 @@ class OperatorRewardEngine:
 
                 "event_type":
                 event_type,
+
+                "outcome_class":
+                outcome_class,
 
                 "weight":
                 data.get(

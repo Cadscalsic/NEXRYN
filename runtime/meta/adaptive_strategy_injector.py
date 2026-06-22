@@ -168,12 +168,29 @@ class AdaptiveStrategyInjector:
 
         hypotheses,
 
-        similar_experiences
+        similar_experiences,
+
+        meta_decision=None
     ):
 
         if not hypotheses:
 
             return hypotheses
+
+        if isinstance(meta_decision, dict):
+
+            if meta_decision.get("action") in {
+                "REUSE_MEMORY",
+                "STOP_AFTER_SUCCESS",
+            }:
+
+                return hypotheses
+
+            if meta_decision.get(
+                "enable_strategy_evolution"
+            ) is False:
+
+                return hypotheses
 
         if not similar_experiences:
 
@@ -192,6 +209,20 @@ class AdaptiveStrategyInjector:
             return hypotheses
 
         adapted = []
+
+        max_active_routes = None
+
+        if isinstance(meta_decision, dict):
+
+            max_active_routes = meta_decision.get(
+                "max_active_routes"
+            )
+
+        if isinstance(max_active_routes, int):
+
+            candidates = candidates[
+                :max(1, max_active_routes)
+            ]
 
         for hypothesis in hypotheses:
 

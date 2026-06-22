@@ -8,6 +8,10 @@ from runtime.evaluation.evaluation_engine import (
     UnifiedEvaluationEngine
 )
 
+from runtime.evaluation.success_semantics import (
+    success_semantics_engine
+)
+
 from runtime.episodic.temporal_memory import (
     TemporalEpisodicMemory
 )
@@ -181,6 +185,26 @@ def evaluation_stage(context):
         )
     )
 
+    evaluation_result, success_semantics_report = (
+        success_semantics_engine.apply(
+            evaluation_result,
+            context
+        )
+    )
+
+    residual_analysis = success_semantics_report.get(
+        "residual_analysis",
+        {}
+    )
+
+    episode_completed = (
+        success_semantics_report.get(
+            "episode_completed",
+            False
+        )
+        is True
+    )
+
     # ========================================
     # WORLD MODEL SYNCHRONIZATION
     # ========================================
@@ -255,33 +279,67 @@ def evaluation_stage(context):
     # INTROSPECTION
     # ========================================
 
-    introspection_report = (
+    if episode_completed:
 
-        introspection_engine.analyze_cycle(
+        introspection_report = {
+            "status": "skipped",
+            "reason": "episode_completed_terminal_success",
+            "success_state": evaluation_result.get(
+                "success_state"
+            ),
+            "deep_introspection_skipped": True,
+            "accuracy": evaluation_result.get(
+                "accuracy",
+                0.0
+            ),
+            "success": evaluation_result.get(
+                "success",
+                False
+            ),
+            "partial_success": evaluation_result.get(
+                "partial_success",
+                False
+            )
+        }
 
-            cognitive_cycle,
+        introspection_insights = [
+            "Terminal success reached; deep introspection skipped"
+        ]
 
-            evaluation_result
+        introspection_summary = {
+            "status": "skipped",
+            "reason": "episode_completed_terminal_success"
+        }
+
+    else:
+
+        introspection_report = (
+
+            introspection_engine.analyze_cycle(
+
+                cognitive_cycle,
+
+                evaluation_result
+            )
         )
-    )
 
-    introspection_insights = (
+        introspection_insights = (
 
-        introspection_engine.build_insights(
+            introspection_engine.build_insights(
+
+                introspection_report
+            )
+        )
+
+        introspection_engine.store_report(
 
             introspection_report
         )
-    )
 
-    introspection_engine.store_report(
+        introspection_summary = (
 
-        introspection_report
-    )
-
-    introspection_summary = (
-
-        introspection_engine.build_summary()
-    )
+            introspection_engine.build_summary()
+        )
 
     # ========================================
     # FAILURE ANALYSIS
@@ -304,6 +362,30 @@ def evaluation_stage(context):
             failure_analysis
         )
     )
+
+    if episode_completed:
+
+        failure_analysis[
+            "failure_detected"
+        ] = False
+
+        failure_analysis[
+            "failure_causes"
+        ] = []
+
+        failure_analysis[
+            "diagnostic_signals"
+        ] = [
+            "terminal_success_residuals_do_not_block_shutdown"
+        ]
+
+        recovery_plan = {
+            "failure_detected": False,
+            "recovery_actions": [],
+            "action_count": 0,
+            "retry_allowed": False,
+            "reason": "episode_completed_terminal_success"
+        }
 
     # ========================================
     # FAILURE STORAGE
@@ -367,6 +449,14 @@ def evaluation_stage(context):
             "failure_detected",
 
             False
+        ),
+
+        "episode_completed":
+        episode_completed,
+
+        "success_state":
+        evaluation_result.get(
+            "success_state"
         )
     }
 
@@ -426,6 +516,67 @@ def evaluation_stage(context):
     context[
         "evaluation_result"
     ] = evaluation_result
+
+    context[
+        "success_semantics_report"
+    ] = success_semantics_report
+
+    context[
+        "SUCCESS_SEMANTICS_AUDIT_REPORT"
+    ] = success_semantics_engine.build_audit_report()
+
+    context[
+        "residual_analysis"
+    ] = residual_analysis
+
+    context[
+        "RESIDUAL_ANALYSIS_REPORT"
+    ] = residual_analysis
+
+    context[
+        "success_state"
+    ] = evaluation_result.get(
+        "success_state"
+    )
+
+    context[
+        "episode_completed"
+    ] = episode_completed
+
+    context[
+        "termination_reason"
+    ] = success_semantics_report.get(
+        "termination_reason"
+    )
+
+    context[
+        "shutdown_mode"
+    ] = success_semantics_report.get(
+        "shutdown_mode"
+    )
+
+    context[
+        "background_task_control"
+    ] = success_semantics_report.get(
+        "background_task_control",
+        {}
+    )
+
+    context[
+        "learning_signal"
+    ] = {
+        "recorded": episode_completed,
+        "success_state": evaluation_result.get(
+            "success_state"
+        ),
+        "residual_analysis": residual_analysis,
+        "failure_history_incremented": False
+        if episode_completed
+        else failure_analysis.get(
+            "failure_detected",
+            False
+        )
+    }
 
     context[
         "world_model_sync_report"

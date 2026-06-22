@@ -1,0 +1,93 @@
+"""Memory and reuse efficiency profiling."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from typing import Any
+
+
+@dataclass
+class MemoryMetrics:
+    cache_hits: int
+    cache_misses: int
+    strategy_hits: int
+    strategy_misses: int
+    context_hits: int
+    context_misses: int
+    program_hits: int
+    program_misses: int
+    truth_hits: int
+    truth_misses: int
+    reuse_rate: float
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class MemoryProfiler:
+    def profile(
+        self,
+        performance_report: dict[str, Any] | None,
+        runtime_context: dict[str, Any] | None,
+    ) -> MemoryMetrics:
+        performance_report = performance_report or {}
+        runtime_context = runtime_context or {}
+        reuse_report = self._mapping(
+            runtime_context.get("COGNITIVE_REUSE_REPORT")
+            or runtime_context.get("cognitive_reuse_report")
+        )
+        supervisor_report = self._mapping(
+            runtime_context.get("META_SUPERVISOR_REPORT")
+            or runtime_context.get("meta_supervisor_report")
+        )
+        cache_hits = int(self._number(performance_report.get("cache_hits")))
+        cache_misses = int(self._number(performance_report.get("cache_misses")))
+        strategy_hits = int(self._number(reuse_report.get("strategy_hits")))
+        program_hits = int(self._number(reuse_report.get("program_hits")))
+        context_hits = int(self._number(reuse_report.get("context_hits")))
+        truth_hits = int(self._number(reuse_report.get("truth_hits")))
+        strategy_misses = 0 if strategy_hits else int(supervisor_report.get("selected_action") != "REUSE_KNOWN_STRATEGY")
+        program_misses = 0 if program_hits else int(supervisor_report.get("selected_action") != "REUSE_EXECUTABLE_PROGRAM")
+        context_misses = 0 if context_hits else int(supervisor_report.get("selected_action") != "REUSE_VALIDATED_CONTEXT")
+        truth_misses = 0 if truth_hits else int(supervisor_report.get("selected_action") != "REUSE_LOCKED_TRUTH")
+        reuse_events = cache_hits + strategy_hits + program_hits + context_hits + truth_hits
+        queries = (
+            reuse_events
+            + cache_misses
+            + strategy_misses
+            + program_misses
+            + context_misses
+            + truth_misses
+        )
+        return MemoryMetrics(
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+            strategy_hits=strategy_hits,
+            strategy_misses=strategy_misses,
+            context_hits=context_hits,
+            context_misses=context_misses,
+            program_hits=program_hits,
+            program_misses=program_misses,
+            truth_hits=truth_hits,
+            truth_misses=truth_misses,
+            reuse_rate=round(reuse_events / max(queries, 1), 4),
+        )
+
+    def _mapping(self, value):
+        return value if isinstance(value, dict) else {}
+
+    def _number(self, value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+
+memory_profiler = MemoryProfiler()
+
+
+__all__ = [
+    "MemoryMetrics",
+    "MemoryProfiler",
+    "memory_profiler",
+]

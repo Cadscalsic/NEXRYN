@@ -30,6 +30,16 @@ from runtime.learning.training_report import (
     print_training_report
 )
 
+from runtime.learning.saturation_detector import (
+    LearningSaturationDetector,
+    saturation_detector
+)
+
+from runtime.learning.saturation_controller import (
+    LearningSaturationController,
+    learning_saturation_controller
+)
+
 # ============================================
 # PACKAGE VERSION
 # ============================================
@@ -43,3 +53,17 @@ __version__ = "0.1.0"
 PACKAGE_NAME = (
     "NEXRYN-AMIS Learning Systems"
 )
+
+
+__all__ = [
+    "ConfidenceUpdater",
+    "OperatorRewardEngine",
+    "operator_reward_engine",
+    "TrainingAssistant",
+    "build_training_report",
+    "print_training_report",
+    "LearningSaturationDetector",
+    "saturation_detector",
+    "LearningSaturationController",
+    "learning_saturation_controller",
+]

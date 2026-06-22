@@ -16,6 +16,12 @@ from runtime.evaluation.partial_success_engine import (
 from runtime.spatial import (
     transformation_localization_engine,
 )
+from runtime.transformation_localization import (
+    localization_controller,
+)
+from runtime.object_motion import (
+    object_motion_engine,
+)
 
 
 # ============================================
@@ -42,6 +48,7 @@ class WorldModelEngine:
         self.transformation_localization_engine = (
             transformation_localization_engine
         )
+        self.object_motion_engine = object_motion_engine
 
     # ============================================
     # SIMULATE TRANSFORMATION
@@ -157,6 +164,11 @@ class WorldModelEngine:
             )
         )
 
+        object_motion_report = self.object_motion_engine.analyze(
+            input_grid,
+            target_grid,
+        )
+
         localized_program = localization_report.get(
             "localized_program",
             synthesized_program,
@@ -172,6 +184,110 @@ class WorldModelEngine:
         predicted_grid = simulation.get(
             "predicted_grid"
         )
+
+        motion_prediction = object_motion_report.get(
+            "predicted_grid"
+        )
+
+        motion_prediction_report = None
+        object_level_motion_selected = False
+
+        if motion_prediction is not None:
+
+            motion_prediction_report = self.evaluate_prediction(
+
+                motion_prediction,
+
+                target_grid
+            )
+
+            current_accuracy = self.evaluate_prediction(
+
+                predicted_grid,
+
+                target_grid
+            ).get(
+                "prediction_accuracy",
+                0.0
+            )
+
+            motion_accuracy = motion_prediction_report.get(
+                "prediction_accuracy",
+                0.0
+            )
+
+            if (
+                object_motion_report.get("motion_pattern")
+                in {
+                    "independent_translation",
+                    "gravity_motion",
+                    "constraint_driven_motion",
+                }
+                and motion_accuracy >= current_accuracy
+            ):
+
+                predicted_grid = motion_prediction
+
+                simulation = {
+
+                    **simulation,
+
+                    "predicted_grid":
+                    predicted_grid,
+
+                    "simulation_trace":
+                    simulation.get(
+                        "simulation_trace",
+                        []
+                    )
+                    +
+                    [{
+                        "operation":
+                        "object_level_translate",
+
+                        "status":
+                        "simulated",
+
+                        "motion_pattern":
+                        object_motion_report.get(
+                            "motion_pattern"
+                        ),
+                    }],
+
+                    "object_level_simulation":
+                    True,
+                }
+
+                localized_program = {
+                    "step_count": 1,
+                    "steps": [{
+                        "operation": "object_level_translate",
+                        "parameters": {
+                            "translation_per_object":
+                            object_motion_report.get(
+                                "translation_per_object",
+                                {},
+                            ),
+                            "movable_objects":
+                            object_motion_report.get(
+                                "movable_objects",
+                                [],
+                            ),
+                            "fixed_objects":
+                            object_motion_report.get(
+                                "fixed_objects",
+                                [],
+                            ),
+                            "motion_pattern":
+                            object_motion_report.get(
+                                "motion_pattern"
+                            ),
+                        },
+                    }],
+                }
+                object_level_motion_selected = True
+                localization_report["localized_program"] = localized_program
+                localization_report["localized_step_count"] = 1
 
         prediction_report = self.evaluate_prediction(
 
@@ -203,6 +319,37 @@ class WorldModelEngine:
             minimum_search_accuracy=minimum_accuracy,
         )
 
+        localization_report = localization_controller.calibrate(
+            localization_report,
+            synthesized_program=localized_program,
+            prediction_accuracy=prediction_report.get(
+                "prediction_accuracy",
+                0.0,
+            ),
+        )
+        localized_program = localization_report.get(
+            "localized_program",
+            localized_program,
+        )
+
+        if object_level_motion_selected:
+
+            localization_report["localized_program"] = localized_program
+            localization_report["localized_step_count"] = 1
+
+        localization_report.update({
+            "target_objects":
+            object_motion_report.get("movable_objects", []),
+            "translation_per_object":
+            object_motion_report.get("translation_per_object", {}),
+            "support_objects":
+            object_motion_report.get("support_objects", []),
+            "motion_constraints":
+            object_motion_report.get("motion_constraints", {}),
+            "motion_pattern":
+            object_motion_report.get("motion_pattern"),
+        })
+
         return {
 
             **acceptance,
@@ -222,7 +369,16 @@ class WorldModelEngine:
             localization_report,
 
             "localized_synthesized_program":
-            localized_program
+            localized_program,
+
+            "object_motion_report":
+            object_motion_report,
+
+            "OBJECT_MOTION_REPORT":
+            object_motion_report,
+
+            "motion_prediction_report":
+            motion_prediction_report,
         }
 
     # ============================================
