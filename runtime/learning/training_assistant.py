@@ -11,7 +11,7 @@ class TrainingAssistant:
     def __init__(
         self,
         state_path="runtime_data/training_assistant_state.json",
-        batch_size=5,
+        batch_size=3,
         curriculum_manager=None,
     ):
         self.state_path = Path(state_path)
@@ -74,9 +74,13 @@ class TrainingAssistant:
 
     def _active_batch_is_valid(self, task_files):
         active_batch = self.state.get("active_batch", [])
-        return bool(active_batch) and all(
+        return (
+            bool(active_batch)
+            and len(active_batch) == min(self.batch_size, len(task_files))
+            and all(
             task_file in task_files
             for task_file in active_batch
+            )
         )
 
     def _prioritized_tasks(

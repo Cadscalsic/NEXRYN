@@ -10,6 +10,7 @@ import numpy as np
 TERMINAL_SUCCESS_STATES = {
     "EXACT_SUCCESS",
     "SUCCESS_WITH_RESIDUALS",
+    "LEARNING_PROGRESS",
 }
 
 RETRY_SUCCESS_STATES = {
@@ -157,7 +158,9 @@ class SuccessSemanticsEngine:
         elif self._learning_progress(context, localization_report):
             success_state = "LEARNING_PROGRESS"
             termination_reason = "NEW_KNOWLEDGE_SIGNAL_RECORDED"
+            episode_completed = True
             failure_detected = False
+            partial_success_detected = False
             retry_allowed = False
 
         shutdown_mode = (

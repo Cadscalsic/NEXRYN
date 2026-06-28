@@ -4,7 +4,9 @@ def build_training_report(
     multi_task_results=None,
     ledger_report=None,
     concept_lifecycle_report=None,
+    include_truth_evaluations=False,
 ):
+    discovery_only_mode = not include_truth_evaluations
     training_batch = training_batch or {}
     training_assistant_report = training_assistant_report or {}
     multi_task_results = list(multi_task_results or [])
@@ -767,6 +769,23 @@ def build_training_report(
                 telemetry["dependency_explanation_quality"],
             })
         dependency_average = average(dependency_evidence_values)
+        promotion_candidates = []
+        for evaluation in candidate_evaluations.values():
+            try:
+                promotion_dependency_score = float(
+                    evaluation.get("promotion_dependency_score")
+                )
+            except (TypeError, ValueError):
+                continue
+            promotion_candidates.append((
+                promotion_dependency_score,
+                evaluation,
+            ))
+        strongest_promotion = (
+            max(promotion_candidates, key=lambda item: item[0])[1]
+            if promotion_candidates
+            else {}
+        )
         validation_average = average(
             item.get("validation_score")
             for item in causal_values
@@ -952,6 +971,22 @@ def build_training_report(
             "dependency_ready_boundary_refinement_blockers":
             dependency_ready_boundary_refinement_blockers,
             "evidence_saturated": evidence_saturated,
+            "candidate_ready":
+            strongest_promotion.get("candidate_ready"),
+            "promotion_score":
+            strongest_promotion.get("promotion_score"),
+            "promotion_dependency_score":
+            strongest_promotion.get("promotion_dependency_score"),
+            "promotion_dependency_bonus":
+            strongest_promotion.get("promotion_dependency_bonus"),
+            "eligible_for_truth_candidate":
+            strongest_promotion.get("eligible_for_truth_candidate"),
+            "stage_eligible_for_truth_candidate":
+            strongest_promotion.get("stage_eligible_for_truth_candidate"),
+            "blocked_metrics":
+            strongest_promotion.get("blocked_metrics"),
+            "eligibility_reason":
+            strongest_promotion.get("eligibility_reason"),
             "dependency_plateau": dependency_plateau,
             "recommended_next_step": recommended_next_step,
             "why": [
@@ -995,30 +1030,52 @@ def build_training_report(
         if item.get("concept")
     }
 
+    def average_contradiction_for_concept(concept):
+        concept_name = str(concept.get("concept", ""))
+        lifecycle = lifecycle_by_concept.get(concept_name, {})
+        for source in (concept, lifecycle):
+            for key in (
+                "ledger_average_contradiction_score",
+                "average_contradiction_score",
+                "contradiction_score",
+            ):
+                if source.get(key) is not None:
+                    try:
+                        return round(float(source.get(key)), 4)
+                    except (TypeError, ValueError):
+                        return 0.0
+        records = [
+            record
+            for record in concept.get("records", [])
+            if isinstance(record, dict)
+        ]
+        if not records:
+            return 0.0
+        total = 0.0
+        for record in records:
+            if record.get("contradiction_score") is not None:
+                total += float(record.get("contradiction_score") or 0.0)
+            elif record.get("success") is False:
+                total += 1.0
+        return round(total / len(records), 4)
+
     concept_memory = {}
     for concept in ledger_report.get("concepts", []):
         concept_name = concept.get("concept")
         if not concept_name:
             continue
-        ledger_average_contradiction = lifecycle_by_concept.get(
-            str(concept_name),
-            {},
-        ).get("average_contradiction_score", 1.0)
+        ledger_average_contradiction = average_contradiction_for_concept(
+            concept,
+        )
         concept_memory[str(concept_name)] = {
             "used_task_count": concept.get("used_task_count", 0),
             "task_ids": list(concept.get("used_task_ids", [])),
             "independent_success_rate":
             concept.get("independent_success_rate", 0.0),
             "lifecycle_state":
-            lifecycle_by_concept.get(
-                str(concept_name),
-                {},
-            ).get("state", "DISCOVERING"),
+            "DISCOVERING",
             "preliminary_truth_candidate_ready":
-            lifecycle_by_concept.get(
-                str(concept_name),
-                {},
-            ).get("preliminary_truth_candidate_ready", False),
+            False,
             "ledger_average_contradiction_score":
             ledger_average_contradiction,
             "average_contradiction_score":
@@ -1039,6 +1096,7 @@ def build_training_report(
     ]
     candidate_evaluations = {}
     truth_commit_evaluations = {}
+    candidate_context_evaluations = {}
 
     def nested_score(report, paths, default=0.0):
         for path in paths:
@@ -1082,26 +1140,68 @@ def build_training_report(
         )
 
     def candidate_report_sources(result):
-        cognition_report = result.get("epistemic_cognition_report", {})
-        return [
+        reports = []
+
+        def add_report(report, source):
+            if isinstance(report, dict) and report:
+                reports.append((report, source))
+
+        add_report(
             result.get("truth_candidate_report", {}),
-            cognition_report.get("truth_candidate_engine", {}),
-        ]
+            "truth_candidate_report",
+        )
+        for cognition_key in (
+            "epistemic_cognition_report",
+            "epistemic_cognition_layer",
+            "cognition_report",
+        ):
+            cognition_report = result.get(cognition_key, {})
+            if not isinstance(cognition_report, dict):
+                continue
+            add_report(
+                cognition_report.get("truth_candidate_engine", {}),
+                f"{cognition_key}.truth_candidate_engine",
+            )
+        return reports
 
     def record_candidate_evaluation(evaluation, source):
         concept = evaluation.get("concept")
+        if concept:
+            candidate_context_evaluations[str(concept)] = evaluation
+        if discovery_only_mode:
+            return
         if not concept:
+            return
+        if evaluation.get("candidate_state") == "TRUTH_STATE_LOCKED":
             return
         contradiction_metric = candidate_metric(
             evaluation,
             "contradiction_score",
         )
         context_strength = context_strength_for_evaluation(evaluation)
+        candidate_ready = evaluation.get(
+            "candidate_ready",
+            evaluation.get("eligible_for_truth_candidate", False),
+        )
+        candidate_ready = bool(candidate_ready)
+        eligible = bool(
+            evaluation.get("eligible_for_truth_candidate", candidate_ready)
+        )
+        stage_eligible = evaluation.get(
+            "stage_eligible_for_truth_candidate",
+            candidate_ready,
+        )
+        stage_eligible = bool(stage_eligible)
+        promotion_score = evaluation.get("promotion_score")
+        if promotion_score is None:
+            promotion_score = context_strength
         candidate_evaluations[str(concept)] = {
             "concept": str(concept),
             "candidate_state": evaluation.get("candidate_state"),
-            "eligible_for_truth_candidate":
-            evaluation.get("eligible_for_truth_candidate", False),
+            "candidate_ready": candidate_ready,
+            "promotion_score": promotion_score,
+            "eligible_for_truth_candidate": eligible,
+            "stage_eligible_for_truth_candidate": stage_eligible,
             "eligibility_reason":
             evaluation.get("eligibility_reason"),
             "blocked_metrics": list(
@@ -1176,242 +1276,685 @@ def build_training_report(
             evaluation.get("semantic_context", {}),
         }
 
-    for item in multi_task_results:
-        result = item.get("result", {})
-        for report_index, report in enumerate(candidate_report_sources(result)):
-            source = (
-                "truth_candidate_report"
-                if report_index == 0
-                else "epistemic_cognition_report.truth_candidate_engine"
-            )
-            for evaluation in report.get("evaluations", []):
-                record_candidate_evaluation(evaluation, source)
-        for evaluation in result.get(
-            "epistemic_cognition_report",
-            {},
-        ).get("evaluations", []):
-            concept = evaluation.get("concept")
-            if not concept:
-                continue
-            truth_commit = evaluation.get("truth_commit", {})
-            identity_integration = evaluation.get(
-                "identity_safe_truth_integration",
-                {},
-            )
-            identity_runtime = evaluation.get(
-                "identity_runtime_report",
-                {},
-            )
-            semantic_spine_recovery = evaluation.get(
-                "semantic_spine_recovery",
-                {},
-            )
-            final_commit = truth_commit.get(
-                "metadata",
-                {},
-            ).get(
-                "final_commit_decision",
-                {},
-            )
-            truth_commit_evaluations[str(concept)] = {
-                "concept": str(concept),
-                "decision": truth_commit.get("decision"),
-                "reason": truth_commit.get("reason"),
-                "failed_gates": list(
-                    final_commit.get(
-                        "effective_failed_gates",
-                        truth_commit.get("reasons", []),
+    def record_lifecycle_candidate_promotion(item):
+        concept = item.get("concept")
+        promotion = item.get("truth_candidate_promotion", {})
+        if not concept or not isinstance(promotion, dict) or not promotion:
+            return
+
+        concept = str(concept)
+        memory = concept_memory.setdefault(
+            concept,
+            {
+                "used_task_count": item.get("used_task_count", 0),
+                "task_ids": list(item.get("task_ids", [])),
+                "independent_success_rate":
+                item.get("independent_success_rate", 0.0),
+            },
+        )
+        context_candidate_ready = (
+            promotion.get("context_candidate_ready") is True
+        )
+        memory.update({
+            "lifecycle_state": item.get(
+                "promotion_stage",
+                item.get(
+                    "state",
+                    memory.get("lifecycle_state", "DISCOVERING"),
+                ),
+            ),
+            "promotion_stage": item.get(
+                "promotion_stage",
+                item.get("state"),
+            ),
+            "promotion_score": item.get(
+                "promotion_score",
+                promotion.get("promotion_score"),
+            ),
+            "candidate_ready": item.get(
+                "candidate_ready",
+                item.get("preliminary_truth_candidate_ready", False),
+            ),
+            "preliminary_truth_candidate_ready":
+            item.get("preliminary_truth_candidate_ready", False),
+            "eligible_for_context": item.get(
+                "eligible_for_context",
+                promotion.get("eligible_for_context", False),
+            ),
+            "eligible_for_truth_candidate": item.get(
+                "eligible_for_truth_candidate",
+                promotion.get("eligible_for_truth_candidate", False),
+            ),
+            "blocked_metrics": list(
+                item.get(
+                    "blocked_metrics",
+                    promotion.get("blocked_metrics", []),
+                )
+            ),
+            "promotion_reason": item.get(
+                "promotion_reason",
+                promotion.get("promotion_reason"),
+            ),
+            "truth_candidate_promotion": promotion,
+            "epistemic_graduation": item.get(
+                "epistemic_graduation",
+                promotion.get("epistemic_graduation", {}),
+            ),
+            "context_candidate_ready": context_candidate_ready,
+            "promotion_dependency_score":
+            promotion.get("promotion_dependency_score"),
+            "promotion_dependency_bonus":
+            promotion.get("promotion_dependency_bonus"),
+            "dependency_confidence":
+            promotion.get("dependency_confidence"),
+            "dependency_chain_coverage":
+            promotion.get("dependency_chain_coverage"),
+        })
+        candidate_ready = promotion.get(
+            "candidate_ready",
+            item.get("preliminary_truth_candidate_ready", False),
+        )
+        candidate_ready = bool(candidate_ready)
+        promotion_score = promotion.get("promotion_score")
+        if promotion_score is None:
+            promotion_score = 1.0 if candidate_ready else 0.0
+        target_evaluations = (
+            candidate_context_evaluations
+            if discovery_only_mode
+            else candidate_evaluations
+        )
+        evaluation = target_evaluations.setdefault(
+            concept,
+            {
+                "concept": concept,
+                "candidate_state": item.get("state"),
+                "candidate_ready": candidate_ready,
+                "promotion_score": promotion_score,
+                "eligible_for_truth_candidate": bool(
+                    promotion.get(
+                        "eligible_for_truth_candidate",
+                        candidate_ready,
                     )
                 ),
-                "final_commit_state":
-                final_commit.get("final_commit_state"),
-                "forbid_automatic_truth_revocation":
-                final_commit.get(
-                    "forbid_automatic_truth_revocation",
-                    False,
+                "stage_eligible_for_truth_candidate": bool(
+                    promotion.get(
+                        "stage_eligible_for_truth_candidate",
+                        candidate_ready,
+                    )
                 ),
-                "revocation_severity":
-                final_commit.get("revocation_severity"),
-                "revocation_grace_period":
-                final_commit.get("revocation_grace_period"),
-                "revocation_grace_period_active":
-                final_commit.get(
-                    "revocation_grace_period_active",
-                    False,
+                "blocked_metrics": [],
+                "dependency_promotion_blockers": [],
+                "missing_dependencies": [],
+                "causal_graph_alignment": {},
+                "causal_explanation": {},
+                "causal_validation": {},
+                "contextual_truth": {},
+                "contextual_truth_authority": {},
+                "context_discovery": {},
+                "context_governance_report": {},
+                "context_hierarchy": {},
+                "semantic_context": {},
+            },
+        )
+        lifecycle_values = {
+            "candidate_ready": candidate_ready,
+            "promotion_score": promotion_score,
+            "eligible_for_truth_candidate": promotion.get(
+                "eligible_for_truth_candidate",
+                candidate_ready,
+            ),
+            "stage_eligible_for_truth_candidate": promotion.get(
+                "stage_eligible_for_truth_candidate",
+                candidate_ready,
+            ),
+            "eligibility_reason": promotion.get(
+                "eligibility_reason",
+                promotion.get("decision"),
+            ),
+            "blocked_metrics": list(
+                promotion.get(
+                    "blocked_metrics",
+                    promotion.get("failed_gates", []),
+                )
+            ),
+            "promotion_dependency_score":
+            promotion.get("promotion_dependency_score"),
+            "promotion_dependency_bonus":
+            promotion.get("promotion_dependency_bonus"),
+            "dependency_promotion_blockers": list(
+                promotion.get("dependency_promotion_blockers", [])
+            ),
+            "dependency_confidence":
+            promotion.get("dependency_confidence"),
+            "dependency_chain_depth":
+            promotion.get("dependency_chain_depth"),
+            "dependency_chain_coverage":
+            promotion.get("dependency_chain_coverage"),
+            "missing_dependencies":
+            list(promotion.get("missing_dependencies", [])),
+        }
+        for key, value in lifecycle_values.items():
+            if evaluation.get(key) in (None, [], {}):
+                evaluation[key] = value
+
+    def build_concept_advancement_audit():
+        def greater_than(value, threshold):
+            try:
+                return float(value) > float(threshold)
+            except (TypeError, ValueError):
+                return False
+
+        audit = {}
+        for concept, memory in concept_memory.items():
+            lifecycle = lifecycle_by_concept.get(concept, {})
+            promotion = memory.get("truth_candidate_promotion", {})
+            graduation = (
+                memory.get("epistemic_graduation")
+                or promotion.get("epistemic_graduation", {})
+                or lifecycle.get("epistemic_graduation", {})
+            )
+            thresholds = graduation.get("thresholds", {})
+            blocked_metrics = list(
+                memory.get(
+                    "blocked_metrics",
+                    graduation.get("blocked_metrics", []),
+                )
+                or []
+            )
+            promotion_score = memory.get(
+                "promotion_score",
+                graduation.get("promotion_score"),
+            )
+            current_stage = memory.get(
+                "promotion_stage",
+                memory.get("lifecycle_state", "DISCOVERING"),
+            )
+            contradiction = memory.get(
+                "ledger_average_contradiction_score",
+                memory.get(
+                    "average_contradiction_score",
+                    graduation.get("contradiction_rate"),
                 ),
-                "low_risk_review_streak":
-                final_commit.get("low_risk_review_streak", 0),
-                "preventive_review_observation":
-                final_commit.get(
-                    "preventive_review_observation",
-                    False,
+            )
+            contradiction_required = thresholds.get(
+                "maximum_contradiction_rate",
+                0.10,
+            )
+            next_required_evidence = list(
+                graduation.get("next_required_evidence", [])
+            )
+            missing_promotion_score = promotion_score is None
+            missing_graduation = not bool(graduation)
+            context_block = (
+                "context_support" in blocked_metrics
+                or "context_strength" in blocked_metrics
+                or current_stage not in {
+                    "PROCESS_CONTEXT",
+                    "TRUTH_CANDIDATE",
+                    "ESTABLISHED_TRUTH",
+                }
+                and memory.get("eligible_for_context") is not True
+            )
+            audit[concept] = {
+                "concept": concept,
+                "observations": memory.get("used_task_count", 0),
+                "confidence": memory.get("independent_success_rate", 0.0),
+                "current_stage": current_stage,
+                "next_stage": graduation.get("next_stage"),
+                "candidate_ready": memory.get(
+                    "candidate_ready",
+                    memory.get("preliminary_truth_candidate_ready", False),
                 ),
-                "identity_governance_state":
-                truth_commit.get(
+                "promotion_score": promotion_score,
+                "promotion_score_required_next": (
+                    next_required_evidence[0].get("required")
+                    if next_required_evidence
+                    and next_required_evidence[0].get("metric")
+                    == "promotion_score"
+                    else None
+                ),
+                "eligible_for_context":
+                memory.get("eligible_for_context", False),
+                "eligible_for_truth_candidate":
+                memory.get("eligible_for_truth_candidate", False),
+                "blocked_by": blocked_metrics,
+                "missing_promotion_score": missing_promotion_score,
+                "missing_epistemic_graduation": missing_graduation,
+                "contradiction_block": (
+                    "contradiction_rate" in blocked_metrics
+                    or greater_than(contradiction, contradiction_required)
+                ),
+                "contradiction_current": contradiction,
+                "contradiction_required": f"<= {contradiction_required}",
+                "saturation_block": (
+                    "observations" in blocked_metrics
+                    or "cross_task_validation" in blocked_metrics
+                ),
+                "observation_saturation": thresholds.get(
+                    "observation_saturation",
+                    32,
+                ),
+                "plateau_block": any(
+                    metric in blocked_metrics
+                    for metric in [
+                        "cross_task_stability",
+                        "causal_support",
+                        "dependency_confidence",
+                    ]
+                ),
+                "context_block": context_block,
+                "dependency_confidence":
+                memory.get("dependency_confidence"),
+                "dependency_chain_coverage":
+                memory.get("dependency_chain_coverage"),
+                "next_required_evidence": next_required_evidence,
+                "promotion_reason": memory.get(
+                    "promotion_reason",
+                    graduation.get("promotion_reason"),
+                ),
+            }
+        return audit
+
+    for item in multi_task_results:
+        result = item.get("result", {})
+        for report, source in candidate_report_sources(result):
+            for evaluation in report.get("evaluations", []):
+                record_candidate_evaluation(evaluation, source)
+        for cognition_report in (
+            result.get("epistemic_cognition_report", {}),
+            result.get("epistemic_cognition_layer", {}),
+            result.get("cognition_report", {}),
+        ):
+            if not isinstance(cognition_report, dict):
+                continue
+            for evaluation in cognition_report.get("evaluations", []):
+                if discovery_only_mode:
+                    continue
+                concept = evaluation.get("concept")
+                if not concept:
+                    continue
+                truth_commit = evaluation.get("truth_commit", {})
+                identity_integration = evaluation.get(
+                    "identity_safe_truth_integration",
+                    {},
+                )
+                identity_runtime = evaluation.get(
+                    "identity_runtime_report",
+                    {},
+                )
+                semantic_spine_recovery = evaluation.get(
+                    "semantic_spine_recovery",
+                    {},
+                )
+                final_commit = truth_commit.get(
                     "metadata",
                     {},
-                ).get("identity_governance_state"),
-                "failed_identity_governance_gates": list(
+                ).get(
+                    "final_commit_decision",
+                    {},
+                )
+                if (
+                    final_commit.get("final_commit_state")
+                    == "LOCKED_TRUTH_REVIEW_REQUIRED"
+                ):
+                    continue
+                truth_commit_evaluations[str(concept)] = {
+                    "concept": str(concept),
+                    "decision": truth_commit.get("decision"),
+                    "reason": truth_commit.get("reason"),
+                    "failed_gates": list(
+                        final_commit.get(
+                            "effective_failed_gates",
+                            truth_commit.get("reasons", []),
+                        )
+                    ),
+                    "final_commit_state":
+                    final_commit.get("final_commit_state"),
+                    "forbid_automatic_truth_revocation":
+                    final_commit.get(
+                        "forbid_automatic_truth_revocation",
+                        False,
+                    ),
+                    "revocation_severity":
+                    final_commit.get("revocation_severity"),
+                    "revocation_grace_period":
+                    final_commit.get("revocation_grace_period"),
+                    "revocation_grace_period_active":
+                    final_commit.get(
+                        "revocation_grace_period_active",
+                        False,
+                    ),
+                    "low_risk_review_streak":
+                    final_commit.get("low_risk_review_streak", 0),
+                    "preventive_review_observation":
+                    final_commit.get(
+                        "preventive_review_observation",
+                        False,
+                    ),
+                    "identity_governance_state":
                     truth_commit.get(
                         "metadata",
                         {},
-                    ).get("failed_identity_governance_gates", [])
-                ),
-                "identity_integration_state":
-                identity_integration.get("integration_state"),
-                "identity_runtime_state":
-                identity_runtime.get("runtime_state"),
-                "identity_runtime_ready":
-                identity_runtime.get("runtime_ready"),
-                "identity_runtime_continuity":
-                identity_runtime.get("identity_continuity"),
-                "identity_runtime_split":
-                identity_runtime.get("identity_split"),
-                "identity_runtime_merged":
-                identity_runtime.get("identity_merged"),
-                "identity_failed_checks": list(
-                    identity_integration.get("failed_checks", [])
-                ),
-                "recovery_state":
-                semantic_spine_recovery.get("recovery_state"),
-                "recovery_streak":
-                semantic_spine_recovery.get("recovery_streak", 0),
-                "remaining_recovery_cycles":
-                semantic_spine_recovery.get(
-                    "remaining_recovery_cycles",
-                ),
-                "rehearsal_validation_pending":
-                semantic_spine_recovery.get(
-                    "rehearsal_validation_pending",
-                    False,
-                ),
-                "recovery_blocker_type":
-                semantic_spine_recovery.get("recovery_blocker_type"),
-                "recovery_failed_checks": list(
-                    semantic_spine_recovery.get("failed_checks", [])
-                ),
-                "causal_graph_alignment":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("causal_graph_alignment", {}),
-                "causal_explanation":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("causal_explanation", {}),
-                "causal_validation":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("causal_validation", {}),
-                "contextual_truth":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("contextual_truth", {}),
-                "contextual_truth_authority":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("contextual_truth_authority", {}),
-                "context_hierarchy":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("context_hierarchy", {}),
-                "semantic_context":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("semantic_context", {}),
-                "stable_truth_why_chain":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("causal_explanation", {}).get("why", []),
-                "stable_truth_how_we_know":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("causal_validation", {}).get("how_we_know", []),
-                "stable_truth_when_valid":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("contextual_truth", {}).get("when_valid", []),
-                "stable_truth_when_invalid":
-                truth_commit.get(
-                    "metadata",
-                    {},
-                ).get("contextual_truth", {}).get("when_invalid", []),
-            }
+                    ).get("identity_governance_state"),
+                    "failed_identity_governance_gates": list(
+                        truth_commit.get(
+                            "metadata",
+                            {},
+                        ).get("failed_identity_governance_gates", [])
+                    ),
+                    "identity_integration_state":
+                    identity_integration.get("integration_state"),
+                    "identity_runtime_state":
+                    identity_runtime.get("runtime_state"),
+                    "identity_runtime_ready":
+                    identity_runtime.get("runtime_ready"),
+                    "identity_runtime_continuity":
+                    identity_runtime.get("identity_continuity"),
+                    "identity_runtime_split":
+                    identity_runtime.get("identity_split"),
+                    "identity_runtime_merged":
+                    identity_runtime.get("identity_merged"),
+                    "identity_failed_checks": list(
+                        identity_integration.get("failed_checks", [])
+                    ),
+                    "recovery_state":
+                    semantic_spine_recovery.get("recovery_state"),
+                    "recovery_streak":
+                    semantic_spine_recovery.get("recovery_streak", 0),
+                    "remaining_recovery_cycles":
+                    semantic_spine_recovery.get(
+                        "remaining_recovery_cycles",
+                    ),
+                    "rehearsal_validation_pending":
+                    semantic_spine_recovery.get(
+                        "rehearsal_validation_pending",
+                        False,
+                    ),
+                    "recovery_blocker_type":
+                    semantic_spine_recovery.get("recovery_blocker_type"),
+                    "recovery_failed_checks": list(
+                        semantic_spine_recovery.get("failed_checks", [])
+                    ),
+                    "causal_graph_alignment":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("causal_graph_alignment", {}),
+                    "causal_explanation":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("causal_explanation", {}),
+                    "causal_validation":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("causal_validation", {}),
+                    "contextual_truth":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("contextual_truth", {}),
+                    "contextual_truth_authority":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("contextual_truth_authority", {}),
+                    "context_hierarchy":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("context_hierarchy", {}),
+                    "semantic_context":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("semantic_context", {}),
+                    "stable_truth_why_chain":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("causal_explanation", {}).get("why", []),
+                    "stable_truth_how_we_know":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("causal_validation", {}).get("how_we_know", []),
+                    "stable_truth_when_valid":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("contextual_truth", {}).get("when_valid", []),
+                    "stable_truth_when_invalid":
+                    truth_commit.get(
+                        "metadata",
+                        {},
+                    ).get("contextual_truth", {}).get("when_invalid", []),
+                }
+
+    for item in concept_lifecycle_report.get("concepts", []):
+        record_lifecycle_candidate_promotion(item)
+
+    def cognition_reports(result):
+        for key in (
+            "epistemic_cognition_report",
+            "epistemic_cognition_layer",
+            "cognition_report",
+        ):
+            report = result.get(key, {})
+            if isinstance(report, dict):
+                yield report
+
     causal_validation_reports = {}
     for item in multi_task_results:
         result = item.get("result", {})
-        for evaluation in result.get(
-            "epistemic_cognition_report",
-            {},
-        ).get(
-            "causal_validation_engine",
-            {},
-        ).get("evaluations", []):
-            hypothesis = evaluation.get("hypothesis", {})
-            concept = hypothesis.get("target_concept")
-            if concept:
-                causal_validation_reports[str(concept)] = evaluation
+        for cognition_report in cognition_reports(result):
+            for evaluation in cognition_report.get(
+                "causal_validation_engine",
+                {},
+            ).get("evaluations", []):
+                hypothesis = evaluation.get("hypothesis", {})
+                concept = hypothesis.get("target_concept")
+                if concept:
+                    causal_validation_reports[str(concept)] = evaluation
     contextual_truth_reports = {}
     context_discovery_reports = {}
     context_hierarchy_reports = {}
     semantic_context_reports = {}
+
+    def record_process_context_report(report):
+        if not isinstance(report, dict):
+            return
+        concept = report.get("concept")
+        context_name = (
+            report.get("context_name")
+            or report.get("semantic_context")
+            or report.get("process_context")
+            or report.get("generated_context")
+        )
+        key = str(concept or context_name or "")
+        if not key:
+            return
+
+        if (
+            report.get("system") == "process_context_discovery_engine"
+            or "transition_family" in report
+            or "expected_outcomes" in report
+        ):
+            context_discovery_reports.setdefault(key, report)
+
+        if (
+            report.get("system") == "process_semantic_context_engine"
+            or report.get("process_context_synthesis")
+            or report.get("semantic_context")
+        ):
+            semantic_context_reports.setdefault(
+                str(context_name or key),
+                {
+                    **report,
+                    "context": context_name or key,
+                    "semantic_context_score": report.get(
+                        "semantic_context_score",
+                        report.get(
+                            "context_confidence",
+                            report.get("confidence"),
+                        ),
+                    ),
+                    "confidence": report.get(
+                        "confidence",
+                        report.get("context_confidence"),
+                    ),
+                },
+            )
+
+        governance_report = report.get("context_governance_report", {})
+        if isinstance(governance_report, dict) and governance_report:
+            context_hierarchy_reports.setdefault(
+                str(context_name or key),
+                {
+                    "system": "context_governance_registry",
+                    "contexts": [{
+                        "context_name": context_name or key,
+                    }],
+                    "context_hierarchy_score":
+                    governance_report.get("registration_coverage"),
+                    "hierarchy_ready":
+                    governance_report.get("registration_coverage", 0) > 0,
+                    "context_governance_report": governance_report,
+                },
+            )
+
+    def collect_process_context_reports(value):
+        if isinstance(value, dict):
+            if value.get("system") in {
+                "process_context_discovery_engine",
+                "process_semantic_context_engine",
+            }:
+                record_process_context_report(value)
+            for key in (
+                "process_context_discovery_report",
+                "process_context_report",
+                "process_context_engine_report",
+                "temporal_process_context_report",
+                "process_semantic_context_report",
+            ):
+                nested = value.get(key)
+                if isinstance(nested, dict):
+                    record_process_context_report(nested)
+            for nested in value.values():
+                collect_process_context_reports(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                collect_process_context_reports(nested)
+
+    def record_lifecycle_generated_context(context):
+        from runtime.utils.normalization import normalize_context_object
+
+        context = normalize_context_object(context)
+        if not isinstance(context, dict):
+            return
+        concept = str(
+            context.get("concept")
+            or context.get("context_name")
+            or context.get("context_id")
+            or ""
+        )
+        if not concept:
+            return
+        context_name = (
+            context.get("context_name")
+            or context.get("context_id")
+            or concept
+        )
+        context_type = str(context.get("context_type", "")).upper()
+        confidence = context.get(
+            "confidence",
+            context.get("context_confidence"),
+        )
+        if context_type == "PROCESS_CONTEXT":
+            context_discovery_reports.setdefault(
+                concept,
+                {
+                    **context,
+                    "system": "lifecycle_process_context_generation",
+                    "transition_family": context.get("transitions", []),
+                    "confidence": confidence,
+                },
+            )
+        elif context_type == "SEMANTIC_CONTEXT":
+            semantic_context_reports.setdefault(
+                str(context_name),
+                {
+                    **context,
+                    "system": "lifecycle_semantic_context_generation",
+                    "context": context_name,
+                    "semantic_context_score": confidence,
+                    "confidence": confidence,
+                },
+            )
+        elif context_type == "DEPENDENCY_SURFACE":
+            context_hierarchy_reports.setdefault(
+                str(context_name),
+                {
+                    **context,
+                    "system": "lifecycle_dependency_surface_generation",
+                    "context_hierarchy_score": confidence,
+                    "hierarchy_ready": True,
+                },
+            )
+
+    lifecycle_contexts = list(
+        concept_lifecycle_report.get("generated_contexts", [])
+    )
+    for concept in concept_lifecycle_report.get("concepts", []):
+        lifecycle_contexts.extend(
+            concept.get("context_artifacts", {}).get("contexts", [])
+        )
+    for context in lifecycle_contexts:
+        record_lifecycle_generated_context(context)
+
     for item in multi_task_results:
         result = item.get("result", {})
-        for evaluation in result.get(
-            "epistemic_cognition_report",
-            {},
-        ).get(
-            "contextual_truth_engine",
-            {},
-        ).get("evaluations", []):
-            concept = evaluation.get("truth")
-            if concept:
-                contextual_truth_reports[str(concept)] = evaluation
-        for evaluation in result.get(
-            "epistemic_cognition_report",
-            {},
-        ).get(
-            "context_discovery_engine",
-            {},
-        ).get("evaluations", []):
-            task = evaluation.get("task")
-            if task:
-                context_discovery_reports[str(task)] = evaluation
-        for evaluation in result.get(
-            "epistemic_cognition_report",
-            {},
-        ).get(
-            "context_hierarchy_engine",
-            {},
-        ).get("evaluations", []):
-            contexts = evaluation.get("contexts", [])
-            context_name = (
-                contexts[0].get("context_name")
-                if contexts
-                else evaluation.get("system")
-            )
-            if context_name:
-                context_hierarchy_reports[str(context_name)] = evaluation
-        for evaluation in result.get(
-            "epistemic_cognition_report",
-            {},
-        ).get(
-            "semantic_context_reasoner",
-            {},
-        ).get("evaluations", []):
-            context_name = evaluation.get("context")
-            if context_name:
-                semantic_context_reports[str(context_name)] = evaluation
-    for concept, evaluation in candidate_evaluations.items():
+        collect_process_context_reports(result)
+        for cognition_report in cognition_reports(result):
+            for evaluation in cognition_report.get(
+                "contextual_truth_engine",
+                {},
+            ).get("evaluations", []):
+                concept = evaluation.get("truth")
+                if concept:
+                    contextual_truth_reports[str(concept)] = evaluation
+            for evaluation in cognition_report.get(
+                "context_discovery_engine",
+                {},
+            ).get("evaluations", []):
+                task = evaluation.get("task") or evaluation.get("concept")
+                if task:
+                    context_discovery_reports[str(task)] = evaluation
+            for evaluation in cognition_report.get(
+                "context_hierarchy_engine",
+                {},
+            ).get("evaluations", []):
+                contexts = evaluation.get("contexts", [])
+                context_name = (
+                    contexts[0].get("context_name")
+                    if contexts
+                    else evaluation.get("concept", evaluation.get("system"))
+                )
+                if context_name:
+                    context_hierarchy_reports[str(context_name)] = evaluation
+            for evaluation in cognition_report.get(
+                "semantic_context_reasoner",
+                {},
+            ).get("evaluations", []):
+                context_name = (
+                    evaluation.get("context")
+                    or evaluation.get("concept")
+                )
+                if context_name:
+                    semantic_context_reports[str(context_name)] = evaluation
+    for concept, evaluation in candidate_context_evaluations.items():
+        collect_process_context_reports(evaluation)
         context_discovery = evaluation.get("context_discovery", {})
         if context_discovery:
             context_discovery_reports.setdefault(str(concept), context_discovery)
@@ -1429,8 +1972,11 @@ def build_training_report(
         context_discovery_reports,
         semantic_context_reports,
         contextual_truth_reports,
-        candidate_evaluations,
+        candidate_evaluations
+        if not discovery_only_mode
+        else candidate_context_evaluations,
     )
+    concept_advancement_audit = build_concept_advancement_audit()
     return {
         "system": "training_report",
         "tasks_selected": training_batch.get("selected_task_count", 0),
@@ -1452,6 +1998,7 @@ def build_training_report(
             for concept, stats in concept_memory.items()
         },
         "concept_memory": concept_memory,
+        "concept_advancement_audit": concept_advancement_audit,
         "concept_lifecycle": concept_lifecycle_report,
         "truth_candidate_evaluations":
         candidate_evaluations,
@@ -1475,29 +2022,134 @@ def build_training_report(
     }
 
 
-def print_training_report(report):
+def _recent_items(items, limit=5):
+    items = list(items or [])
+    return items[-limit:]
+
+
+def _count(items):
+    try:
+        return len(items or [])
+    except TypeError:
+        return 0
+
+
+def print_training_report(report, report_level="normal"):
+    from runtime.reporting.compact_report_builder import (
+        MAX_DEPENDENCIES_DISPLAYED,
+        MAX_HISTORY_DISPLAYED,
+        MAX_TASKS_DISPLAYED,
+    )
+
+    report_level = str(report_level or "normal").lower()
+    detail_limit = (
+        MAX_HISTORY_DISPLAYED
+        if report_level != "full"
+        else min(20, MAX_DEPENDENCIES_DISPLAYED * 2)
+    )
+    task_results = report.get("multi_task_results", [])
+    tasks_executed = report.get("tasks_executed", [])
+    failed_tasks = report.get("failed_tasks", 0)
+    successful_tasks = report.get("successful_tasks", 0)
     print("TRAINING REPORT")
     print()
-    print("tasks_selected:", report.get("tasks_selected", 0))
-    print("tasks_executed:", report.get("tasks_executed", []))
-    print("successful_tasks:", report.get("successful_tasks", 0))
-    print("failed_tasks:", report.get("failed_tasks", 0))
-    print("multi_task_results:", report.get("multi_task_results", []))
-    print("concepts_discovered:", report.get("concepts_discovered", {}))
+    print("selected_tasks:", report.get("tasks_selected", 0))
+    print("tasks_completed:", successful_tasks)
+    print("tasks_failed:", failed_tasks)
+    print(
+        "tasks_remaining:",
+        max(report.get("tasks_selected", 0) - successful_tasks - failed_tasks, 0),
+    )
+    print("current_batch_size:", report.get("tasks_selected", 0))
+    print("tasks_executed_count:", _count(tasks_executed))
+    print("recent_tasks:", _recent_items(tasks_executed, MAX_TASKS_DISPLAYED))
+    print("multi_task_result_count:", _count(task_results))
+    print("recent_task_results:", _recent_items(task_results, MAX_TASKS_DISPLAYED))
+    print("concept_count:", _count(report.get("concepts_discovered", {})))
     print()
     print("CONCEPT DEBUG REPORT")
     print()
     for concept, stats in report.get("concept_memory", {}).items():
+        used_task_count = stats.get("used_task_count", 0)
+        current_stage = stats.get("lifecycle_state", "DISCOVERING")
         print(
             concept,
-            stats.get("used_task_count", 0),
-            stats.get("lifecycle_state", "DISCOVERING"),
+            used_task_count,
+            current_stage,
+            "concept_name=",
+            concept,
+            "observations="
+            f"{used_task_count}",
+            "current_stage="
+            f"{current_stage}",
             "candidate_ready="
-            f"{stats.get('preliminary_truth_candidate_ready', False)}",
+            f"{stats.get('candidate_ready', stats.get('preliminary_truth_candidate_ready', False))}",
+            "promotion_score="
+            f"{stats.get('promotion_score')}",
+            "promotion_stage="
+            f"{stats.get('promotion_stage', current_stage)}",
+            "eligible_for_context="
+            f"{stats.get('eligible_for_context', False)}",
+            "eligible_for_truth_candidate="
+            f"{stats.get('eligible_for_truth_candidate', False)}",
+            "blocked_metrics="
+            f"{stats.get('blocked_metrics', [])}",
+            "confidence="
+            f"{stats.get('independent_success_rate', 0.0)}",
             "ledger_average_contradiction="
-            f"{stats.get('ledger_average_contradiction_score', 1.0)}",
-            stats.get("task_ids", []),
+            f"{stats.get('ledger_average_contradiction_score', 0.0)}",
+            "recent_tasks="
+            f"{_recent_items(stats.get('task_ids', []), MAX_TASKS_DISPLAYED)}",
         )
+    advancement_audit = report.get("concept_advancement_audit", {})
+    if advancement_audit:
+        print()
+        print("CONCEPT ADVANCEMENT AUDIT")
+        print()
+        for concept, audit in advancement_audit.items():
+            print(
+                concept,
+                "observations="
+                f"{audit.get('observations')}",
+                "confidence="
+                f"{audit.get('confidence')}",
+                "promotion_score="
+                f"{audit.get('promotion_score')}",
+                "promotion_score_required_next="
+                f"{audit.get('promotion_score_required_next')}",
+                "current_stage="
+                f"{audit.get('current_stage')}",
+                "next_stage="
+                f"{audit.get('next_stage')}",
+                "candidate_ready="
+                f"{audit.get('candidate_ready')}",
+                "eligible_for_context="
+                f"{audit.get('eligible_for_context')}",
+                "eligible_for_truth_candidate="
+                f"{audit.get('eligible_for_truth_candidate')}",
+                "blocked_by="
+                f"{audit.get('blocked_by', [])}",
+                "missing_promotion_score="
+                f"{audit.get('missing_promotion_score')}",
+                "missing_epistemic_graduation="
+                f"{audit.get('missing_epistemic_graduation')}",
+                "contradiction_block="
+                f"{audit.get('contradiction_block')}",
+                "contradiction_current="
+                f"{audit.get('contradiction_current')}",
+                "contradiction_required="
+                f"{audit.get('contradiction_required')}",
+                "saturation_block="
+                f"{audit.get('saturation_block')}",
+                "plateau_block="
+                f"{audit.get('plateau_block')}",
+                "context_block="
+                f"{audit.get('context_block')}",
+                "dependency_confidence="
+                f"{audit.get('dependency_confidence')}",
+                "dependency_chain_coverage="
+                f"{audit.get('dependency_chain_coverage')}",
+            )
     print()
     print("TRUTH CANDIDATE REPORT")
     print()
@@ -1507,6 +2159,10 @@ def print_training_report(report):
     ).items():
         print(
             concept,
+            "candidate_ready="
+            f"{evaluation.get('candidate_ready', False)}",
+            "promotion_score="
+            f"{evaluation.get('promotion_score')}",
             "eligible="
             f"{evaluation.get('eligible_for_truth_candidate', False)}",
             "reason="
@@ -1554,8 +2210,34 @@ def print_training_report(report):
             "promotion_dependency_bonus="
             f"{evaluation.get('promotion_dependency_bonus')}",
             "dependency_promotion_blockers="
-            f"{evaluation.get('dependency_promotion_blockers', [])}",
+            f"{_recent_items(evaluation.get('dependency_promotion_blockers', []), detail_limit)}",
         )
+    promotion_items = (
+        report.get("concept_lifecycle", {}).get(
+            "promotion_report",
+            [],
+        )
+        if isinstance(report.get("concept_lifecycle"), dict)
+        else []
+    )
+    if promotion_items:
+        print()
+        print("PROMOTION REPORT")
+        print()
+        for item in promotion_items:
+            print(
+                item.get("concept"),
+                "promotion_score="
+                f"{item.get('promotion_score')}",
+                "current_stage="
+                f"{item.get('current_stage')}",
+                "next_stage="
+                f"{item.get('next_stage')}",
+                "candidate_ready="
+                f"{item.get('candidate_ready')}",
+                "blocked_reason="
+                f"{item.get('blocked_reason')}",
+            )
     print()
     print("CONTEXT DISCOVERY REPORT")
     print()
@@ -1563,11 +2245,21 @@ def print_training_report(report):
         "context_discovery_reports",
         {},
     ).items():
+        transition_family = evaluation.get("transition_family", [])
+        expected_outcomes = evaluation.get("expected_outcomes", [])
         print(
             "task=",
             task,
+            "context="
+            f"{evaluation.get('context_name')}",
             "transformation="
-            f"{evaluation.get('transformation_family')}",
+            f"{evaluation.get('transformation_family', evaluation.get('concept'))}",
+            "transitions="
+            f"{len(transition_family)}",
+            "preconditions="
+            f"{len(evaluation.get('preconditions', []))}",
+            "outcomes="
+            f"{len(expected_outcomes)}",
             "topology="
             f"{evaluation.get('topology_behavior')}",
             "color="
@@ -1575,7 +2267,7 @@ def print_training_report(report):
             "identity="
             f"{evaluation.get('identity_behavior')}",
             "confidence="
-            f"{evaluation.get('confidence')}",
+            f"{evaluation.get('confidence', evaluation.get('context_confidence'))}",
             "cluster="
             f"{evaluation.get('cluster')}",
         )
@@ -1593,7 +2285,7 @@ def print_training_report(report):
             "parent="
             f"{evaluation.get('inheritance', [{}])[0].get('parent_context') if evaluation.get('inheritance') else None}",
             "specializations="
-            f"{evaluation.get('specialization', {}).get('specializations', [])}",
+            f"{_recent_items(evaluation.get('specialization', {}).get('specializations', []), detail_limit)}",
             "hierarchy_ready="
             f"{evaluation.get('hierarchy_ready', False)}",
         )
@@ -1610,13 +2302,13 @@ def print_training_report(report):
             "definition="
             f"{evaluation.get('semantic_definition')}",
             "properties="
-            f"{[item.get('property_name') for item in evaluation.get('properties', [])]}",
+            f"{_recent_items([item.get('property_name') for item in evaluation.get('properties', [])], detail_limit)}",
             "capabilities="
-            f"{evaluation.get('capabilities', [])}",
+            f"{_recent_items(evaluation.get('capabilities', []), detail_limit)}",
             "constraints="
-            f"{evaluation.get('constraints', [])}",
+            f"{_recent_items(evaluation.get('constraints', []), detail_limit)}",
             "implications="
-            f"{evaluation.get('implications', [])}",
+            f"{_recent_items(evaluation.get('implications', []), detail_limit)}",
             "confidence="
             f"{evaluation.get('confidence')}",
             "status="
@@ -1675,6 +2367,10 @@ def print_training_report(report):
         f"{architecture_report.get('dependency_explanation_quality')}",
         "evidence_saturated="
         f"{architecture_report.get('evidence_saturated')}",
+        "candidate_ready="
+        f"{architecture_report.get('candidate_ready')}",
+        "promotion_score="
+        f"{architecture_report.get('promotion_score')}",
         "promotion_dependency_score="
         f"{architecture_report.get('promotion_dependency_score')}",
         "promotion_dependency_bonus="
@@ -1699,10 +2395,12 @@ def print_training_report(report):
             "boundary_refinement_dependency",
             "concept="
             f"{item.get('concept')}",
-            "resolved_dependency_chain="
-            f"{item.get('resolved_dependency_chain', [])}",
-            "missing_dependencies="
-            f"{item.get('missing_dependencies', [])}",
+            "resolved_dependency_chain_depth="
+            f"{_count(item.get('resolved_dependency_chain', []))}",
+            "recent_dependencies="
+            f"{_recent_items(item.get('resolved_dependency_chain', []), detail_limit)}",
+            "missing_dependency_count="
+            f"{_count(item.get('missing_dependencies', []))}",
             "dependency_confidence="
             f"{item.get('dependency_confidence')}",
         )
@@ -1722,8 +2420,10 @@ def print_training_report(report):
             f"{item.get('coverage')}",
             "coherence="
             f"{item.get('coherence')}",
-            "explanation_path="
-            f"{item.get('explanation_path')}",
+            "explanation_path_depth="
+            f"{_count(item.get('explanation_path', []))}",
+            "recent_explanation_path="
+            f"{_recent_items(item.get('explanation_path', []), detail_limit)}",
         )
     for item in architecture_report.get(
         "dependency_ready_boundary_refinement_blockers",
@@ -1742,7 +2442,7 @@ def print_training_report(report):
             "eligible="
             f"{item.get('eligible_for_truth_candidate')}",
             "exact_blocker="
-            f"{item.get('exact_blocker', [])}",
+            f"{_recent_items(item.get('exact_blocker', []), detail_limit)}",
         )
     for reason in architecture_report.get("why", []):
         print("why=", reason)
@@ -1757,10 +2457,12 @@ def print_training_report(report):
     ).items():
         print(
             concept,
-            "valid_contexts="
-            f"{evaluation.get('valid_contexts', [])}",
-            "invalid_contexts="
-            f"{evaluation.get('invalid_contexts', [])}",
+            "valid_context_count="
+            f"{_count(evaluation.get('valid_contexts', []))}",
+            "recent_valid_contexts="
+            f"{_recent_items(evaluation.get('valid_contexts', []), detail_limit)}",
+            "invalid_context_count="
+            f"{_count(evaluation.get('invalid_contexts', []))}",
             "context_confidence="
             f"{evaluation.get('context_confidence')}",
             "transfer_reliability="
@@ -1798,7 +2500,7 @@ def print_training_report(report):
             "identity_governance_state="
             f"{evaluation.get('identity_governance_state')}",
             "failed_identity_governance_gates="
-            f"{evaluation.get('failed_identity_governance_gates', [])}",
+            f"{_recent_items(evaluation.get('failed_identity_governance_gates', []), detail_limit)}",
             "identity_state="
             f"{evaluation.get('identity_integration_state')}",
             "identity_runtime_state="
@@ -1812,7 +2514,7 @@ def print_training_report(report):
             "identity_runtime_merged="
             f"{evaluation.get('identity_runtime_merged')}",
             "failed_gates="
-            f"{evaluation.get('failed_gates', [])}",
+            f"{_recent_items(evaluation.get('failed_gates', []), detail_limit)}",
             "contextual_truth_authority="
             f"{evaluation.get('contextual_truth_authority', {}).get('contextual_truth_authority')}",
             "effective_contextual_truth="
@@ -1820,7 +2522,7 @@ def print_training_report(report):
             "contextual_truth_supported="
             f"{evaluation.get('contextual_truth_authority', {}).get('contextual_truth_supported')}",
             "identity_failed_checks="
-            f"{evaluation.get('identity_failed_checks', [])}",
+            f"{_recent_items(evaluation.get('identity_failed_checks', []), detail_limit)}",
             "recovery_state="
             f"{evaluation.get('recovery_state')}",
             "recovery_streak="
@@ -1832,15 +2534,15 @@ def print_training_report(report):
             "recovery_blocker_type="
             f"{evaluation.get('recovery_blocker_type')}",
             "recovery_failed_checks="
-            f"{evaluation.get('recovery_failed_checks', [])}",
+            f"{_recent_items(evaluation.get('recovery_failed_checks', []), detail_limit)}",
             "why="
-            f"{evaluation.get('stable_truth_why_chain', [])}",
+            f"{_recent_items(evaluation.get('stable_truth_why_chain', []), detail_limit)}",
             "how_we_know="
-            f"{evaluation.get('stable_truth_how_we_know', [])}",
+            f"{_recent_items(evaluation.get('stable_truth_how_we_know', []), detail_limit)}",
             "when_valid="
-            f"{evaluation.get('stable_truth_when_valid', [])}",
+            f"{_recent_items(evaluation.get('stable_truth_when_valid', []), detail_limit)}",
             "when_invalid="
-            f"{evaluation.get('stable_truth_when_invalid', [])}",
+            f"{_recent_items(evaluation.get('stable_truth_when_invalid', []), detail_limit)}",
         )
 
 

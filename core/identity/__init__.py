@@ -58,6 +58,10 @@ from core.identity.identity_continuity_engine import (
     IdentityContinuityEngine,
     identity_continuity_engine,
 )
+from core.identity.identity_replication_detector import (
+    IdentityReplicationDetector,
+    identity_replication_detector,
+)
 
 from core.identity.semantic_containment_engine import (
     SemanticContainmentEngine,
@@ -94,6 +98,8 @@ __all__ = [
     "cognitive_spine_stabilizer",
     "IdentityContinuityEngine",
     "identity_continuity_engine",
+    "IdentityReplicationDetector",
+    "identity_replication_detector",
     "SemanticContainmentEngine",
     "semantic_containment_engine",
     "CORE_TRUTHS",

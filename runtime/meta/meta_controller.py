@@ -418,6 +418,10 @@ class MetaControllerEngine:
                 and difference_count == 0
             )
             or success_state == "SUCCESS_WITH_RESIDUALS"
+            or (
+                success_state == "LEARNING_PROGRESS"
+                and self._get(evaluation_report, "retry_allowed", False) is False
+            )
         )
 
         if (
@@ -431,6 +435,8 @@ class MetaControllerEngine:
                 (
                     "high_confidence_residual_acceptance"
                     if success_state == "SUCCESS_WITH_RESIDUALS"
+                    else "new_knowledge_signal_recorded"
+                    if success_state == "LEARNING_PROGRESS"
                     else "exact_success_integrity_preserved"
                 ),
                 1.0,

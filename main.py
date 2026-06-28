@@ -3,6 +3,8 @@
 # ============================================
 
 import argparse
+import builtins
+from contextlib import contextmanager
 import json
 import logging
 import os
@@ -11,24 +13,7 @@ import time
 import traceback
 from datetime import datetime
 
-# ============================================
-# PIPELINE
-# ============================================
-
-from runtime.pipeline import pipeline
-
-from runtime.learning.training_assistant import TrainingAssistant
-
-from runtime.learning.training_report import (
-    build_training_report,
-    print_training_report,
-)
-
-from runtime.diagnostics import RuntimeDiagnostics
-
-from runtime.profiling import performance_reporter, telemetry
-from runtime.evaluation import EvaluationController
-from runtime.shutdown import ShutdownController
+from runtime.diagnostics import RuntimeWatchdog
 
 
 # ============================================
@@ -47,7 +32,14 @@ def print_runtime_banner():
 # BUILD FINAL REPORT
 # ============================================
 
-def build_runtime_metadata(args, execution_time, runtime_status, context_count=0):
+def build_runtime_metadata(
+    args,
+    execution_time,
+    runtime_status,
+    context_count=0,
+    runtime_metrics=None,
+):
+    runtime_metrics = runtime_metrics or {}
     return {
         "tasks_directory": args.tasks_dir,
         "mode": args.mode,
@@ -59,6 +51,39 @@ def build_runtime_metadata(args, execution_time, runtime_status, context_count=0
         "telemetry_enabled": not args.disable_telemetry,
         "cache_dependencies": args.cache_dependencies,
         "report_level": args.report_level,
+        "training_batch_size": runtime_metrics.get(
+            "training_batch_size",
+        ),
+        "training_batch_size_source": runtime_metrics.get(
+            "training_batch_size_source",
+        ),
+        "boot_duration": runtime_metrics.get("boot_duration"),
+        "task_selection_duration": runtime_metrics.get(
+            "task_selection_duration",
+        ),
+        "first_task_start_latency": runtime_metrics.get(
+            "first_task_start_latency",
+        ),
+        "cache_boot_loaded": runtime_metrics.get("cache_boot_loaded"),
+        "cache_boot_skipped": runtime_metrics.get("cache_boot_skipped"),
+        "legacy_cache_detected": runtime_metrics.get(
+            "legacy_cache_detected",
+        ),
+        "legacy_cache_migration_skipped": runtime_metrics.get(
+            "legacy_cache_migration_skipped",
+        ),
+        "governance_budget_seconds": runtime_metrics.get(
+            "governance_budget_seconds",
+        ),
+        "governance_budget_exceeded": runtime_metrics.get(
+            "governance_budget_exceeded",
+        ),
+        "finalization_duration": runtime_metrics.get(
+            "finalization_duration",
+        ),
+        "startup_hang_prevented": runtime_metrics.get(
+            "startup_hang_prevented",
+        ),
         "post_success_mode": args.post_success_mode,
         "profile_enabled": args.profile,
         "profile_output": args.profile_output,
@@ -74,6 +99,13 @@ def build_runtime_metadata(args, execution_time, runtime_status, context_count=0
 
 def safe_print_context(results, report_level="normal"):
     try:
+        from runtime.reporting.compact_report_builder import (
+            compact_report_builder,
+        )
+        from runtime.utils.normalization import normalize_context_object
+
+        results = normalize_context_object(results)
+
         if isinstance(results, dict):
             training_report = results.get("training_report", {})
 
@@ -95,12 +127,26 @@ def safe_print_context(results, report_level="normal"):
                     "dependency_chain_coverage":
                     architecture_report.get("dependency_chain_coverage"),
                     "performance_report":
-                    results.get("performance_report", {}),
+                    compact_report_builder.compact_performance_report(
+                        results.get("performance_report", {}),
+                    ),
                 })
             elif training_report:
-                print_training_report(training_report)
+                from runtime.learning.training_report import (
+                    print_training_report,
+                )
+
+                print_training_report(
+                    training_report,
+                    report_level=report_level,
+                )
             else:
-                print(results)
+                print(
+                    compact_report_builder.compact_context(
+                        results,
+                        level=report_level,
+                    )
+                )
         else:
             print("INVALID RUNTIME CONTEXT")
 
@@ -113,18 +159,99 @@ def safe_print_context(results, report_level="normal"):
 # ============================================
 
 def print_training_batch_summary(training_batch, verbose=False):
+    from runtime.reporting.compact_report_builder import (
+        MAX_TASKS_DISPLAYED,
+        compact_report_builder,
+    )
+
     print("\n==================================================")
     print("NEXRYN :: TRAINING ASSISTANT BATCH")
     print("==================================================\n")
 
     if verbose:
-        print(training_batch)
+        print(compact_report_builder.compact_context(training_batch))
         return
 
+    selected_files = training_batch.get("selected_task_files", [])
     print("training_mode:", training_batch.get("training_mode"))
-    print("selected_task_count:", training_batch.get("selected_task_count", 0))
-    print("selected_task_files:", training_batch.get("selected_task_files", []))
+    print("selected_tasks:", training_batch.get("selected_task_count", 0))
+    print("tasks_completed:", 0)
+    print("tasks_failed:", 0)
+    print("tasks_remaining:", training_batch.get("selected_task_count", 0))
+    print("current_batch_size:", training_batch.get("selected_task_count", 0))
+    print("recent_tasks:", list(selected_files or [])[-MAX_TASKS_DISPLAYED:])
     print("prioritized_concepts:", training_batch.get("prioritized_concepts", []))
+
+
+class _MinimalRuntimePrintFilter:
+    HEAVY_MARKERS = {
+        "predicted_grid",
+        "counterfactual_candidates",
+        "graph_reasoning",
+        "object_tracker",
+        "dependency_evidence",
+        "localization_reports",
+        "object_motion_report",
+        "OBJECT_MOTION_REPORT",
+        "LOCALIZATION_REPORT",
+    }
+
+    def __init__(self, original_print):
+        self.original_print = original_print
+        self._suppress_next_payload = False
+
+    def __call__(self, *args, **kwargs):
+        if self._suppress_next_payload:
+            self._suppress_next_payload = False
+            return
+        if not args:
+            self.original_print(*args, **kwargs)
+            return
+        text_args = []
+        for arg in args:
+            if self._is_heavy(arg):
+                return
+            text = str(arg)
+            if self._is_heavy_text(text):
+                return
+            if text.strip().upper() in {
+                "PREDICTED OUTPUT:",
+                "SYNTHESIZED PROGRAM:",
+                "EXECUTION PLAN:",
+                "SEARCH RESULT:",
+                "SEMANTIC GRAPH:",
+            }:
+                self._suppress_next_payload = True
+                return
+            text_args.append(text)
+        self.original_print(*text_args, **kwargs)
+
+    def _is_heavy(self, value):
+        if hasattr(value, "shape") and hasattr(value, "dtype"):
+            return True
+        if isinstance(value, dict):
+            return any(key in value for key in self.HEAVY_MARKERS)
+        if isinstance(value, (list, tuple)) and len(value) > 12:
+            return True
+        return False
+
+    def _is_heavy_text(self, text):
+        if len(text) > 1200:
+            return True
+        return any(marker in text for marker in self.HEAVY_MARKERS)
+
+
+@contextmanager
+def minimal_runtime_output(enabled):
+    if not enabled:
+        yield
+        return
+    original_print = builtins.print
+    builtins.print = _MinimalRuntimePrintFilter(original_print)
+    try:
+        yield
+    finally:
+        builtins.print = original_print
 
 
 # ============================================
@@ -171,11 +298,29 @@ def normalize_concept_diagnostics(training_report):
     for concept, stats in training_report.get("concept_memory", {}).items():
         concepts[concept] = {
             **stats,
-            "state": stats.get("lifecycle_state", "DISCOVERING"),
+            "state": stats.get(
+                "promotion_stage",
+                stats.get("lifecycle_state", "DISCOVERING"),
+            ),
             "candidate_ready": stats.get(
-                "preliminary_truth_candidate_ready",
+                "candidate_ready",
+                stats.get("preliminary_truth_candidate_ready", False),
+            ),
+            "promotion_score": stats.get("promotion_score"),
+            "promotion_stage": stats.get(
+                "promotion_stage",
+                stats.get("lifecycle_state", "DISCOVERING"),
+            ),
+            "eligible_for_context": stats.get(
+                "eligible_for_context",
                 False,
             ),
+            "eligible_for_truth_candidate": stats.get(
+                "eligible_for_truth_candidate",
+                False,
+            ),
+            "blocked_metrics": stats.get("blocked_metrics", []),
+            "promotion_reason": stats.get("promotion_reason"),
             "ledger_average_contradiction": stats.get(
                 "ledger_average_contradiction_score",
                 stats.get("average_contradiction_score"),
@@ -221,6 +366,135 @@ def normalize_context_diagnostics(training_report):
     return contexts
 
 
+def _metric_number(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _walk_metric_mappings(value):
+    if isinstance(value, dict):
+        yield value
+        for item in value.values():
+            yield from _walk_metric_mappings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_metric_mappings(item)
+
+
+def build_runtime_metric_bridge(
+    all_results,
+    training_report,
+    task_performance_reports,
+    module_timings,
+    runtime_metrics=None,
+):
+    from runtime.profiling.metric_bridge import runtime_metric_bridge
+
+    runtime_metrics = runtime_metrics or {}
+    concept_memory = training_report.get("concept_memory", {})
+    contexts = normalize_context_diagnostics(training_report)
+    completed_tasks = sum(
+        1
+        for item in all_results
+        if item.get("status") == "completed"
+    )
+
+    concept_candidates = [
+        sum(
+            int(_metric_number(report.get("concepts_processed")))
+            for report in task_performance_reports
+        ),
+        len(concept_memory) if isinstance(concept_memory, dict) else 0,
+        completed_tasks,
+    ]
+
+    dependency_depths = []
+    dependency_coverages = []
+    dependency_chain_reports = 0
+    semantic_counts = []
+
+    for mapping in _walk_metric_mappings({
+        "all_results": all_results,
+        "training_report": training_report,
+    }):
+        if "dependency_chain_depth" in mapping:
+            depth = int(_metric_number(mapping.get("dependency_chain_depth")))
+            dependency_depths.append(depth)
+            if depth > 0:
+                dependency_chain_reports += 1
+        if "dependency_chain_coverage" in mapping:
+            coverage = _metric_number(
+                mapping.get("dependency_chain_coverage"),
+            )
+            dependency_coverages.append(coverage)
+        if "semantic_concept_count" in mapping:
+            semantic_counts.append(
+                int(_metric_number(mapping.get("semantic_concept_count")))
+            )
+
+    active_compute_time = sum(
+        _metric_number(item.get("seconds"))
+        for item in module_timings
+        if isinstance(item, dict)
+    )
+    timing_bridge = runtime_metric_bridge.synchronize(
+        {
+            "total_runtime_seconds": sum(
+                _metric_number(report.get("total_runtime_seconds"))
+                for report in task_performance_reports
+            ),
+            "active_compute_time_seconds": active_compute_time,
+            "module_timings": module_timings,
+        },
+        module_timings=module_timings,
+        runtime_metrics=runtime_metrics,
+    )
+
+    concepts_processed = max(concept_candidates + semantic_counts + [0])
+    dependency_chain_depth = max(dependency_depths or [0])
+    dependency_chain_coverage = max(dependency_coverages or [0.0])
+
+    warnings = []
+    if concepts_processed == 0 and completed_tasks:
+        warnings.append("concept_metrics_missing_despite_completed_tasks")
+    if dependency_chain_depth == 0 and dependency_chain_reports:
+        warnings.append("dependency_depth_missing_despite_chain_reports")
+
+    return {
+        "concepts_processed": concepts_processed,
+        "semantic_concept_count": max(
+            semantic_counts + [concepts_processed],
+        ),
+        "context_count": len(contexts),
+        "dependency_chain_depth": dependency_chain_depth,
+        "dependency_chain_coverage": round(dependency_chain_coverage, 4),
+        "dependency_chains_executed": max(
+            sum(
+                int(_metric_number(
+                    report.get("dependency_chains_executed"),
+                ))
+                for report in task_performance_reports
+            ),
+            dependency_chain_reports,
+        ),
+        **timing_bridge,
+        "metric_bridge": {
+            "concept_sources": {
+                "task_performance_reports": concept_candidates[0],
+                "training_concept_memory": concept_candidates[1],
+                "completed_tasks_floor": concept_candidates[2],
+            },
+            "dependency_depth_samples": len(dependency_depths),
+            "dependency_coverage_samples": len(dependency_coverages),
+            "semantic_count_samples": len(semantic_counts),
+            "timing_fields_synchronized": True,
+        },
+        "metric_source_warnings": warnings,
+    }
+
+
 def collect_governance_reports(all_results, possible_keys):
     collected = {}
 
@@ -232,16 +506,39 @@ def collect_governance_reports(all_results, possible_keys):
 
         governance_reports = result.get("governance_reports", {})
 
-        if not isinstance(governance_reports, dict):
-            continue
+        report_sources = [result]
+        if isinstance(governance_reports, dict):
+            report_sources.append(governance_reports)
 
-        for key in possible_keys:
-            report = governance_reports.get(key)
+        for source in report_sources:
+            for key in possible_keys:
+                report = source.get(key)
 
-            if isinstance(report, dict):
-                collected.update(report)
+                if isinstance(report, dict):
+                    collected.update(report)
 
     return collected
+
+
+def resolve_training_batch_size(args, parser):
+    explicit = any(
+        item == "--training-batch-size"
+        or item.startswith("--training-batch-size=")
+        for item in sys.argv[1:]
+    )
+    if explicit:
+        return max(1, int(args.training_batch_size)), "cli"
+    if args.mode == "fast":
+        return 3, "mode_default"
+    return 3, "default"
+
+
+def governance_budget_for_mode(mode):
+    return {
+        "fast": 5,
+        "adaptive": 10,
+        "deep": None,
+    }.get(mode)
 
 
 # ============================================
@@ -346,8 +643,14 @@ parser.add_argument(
 parser.add_argument(
     "--training-batch-size",
     type=int,
-    default=5,
+    default=None,
     help="Number of ARC training tasks executed per runtime cycle",
+)
+
+parser.add_argument(
+    "--migrate-cache",
+    action="store_true",
+    help="Explicitly migrate legacy concept_cache.json before execution",
 )
 
 parser.add_argument(
@@ -416,6 +719,33 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+effective_report_level = args.report_level or {
+    "fast": "minimal",
+    "adaptive": "normal",
+    "deep": "full",
+}.get(args.mode, "normal")
+args.report_level = effective_report_level
+training_batch_size, training_batch_size_source = (
+    resolve_training_batch_size(args, parser)
+)
+governance_budget_seconds = governance_budget_for_mode(args.mode)
+runtime_watchdog = RuntimeWatchdog()
+runtime_watchdog.start("boot_total")
+runtime_watchdog.checkpoint("boot_start")
+runtime_metrics = {
+    "training_batch_size": training_batch_size,
+    "training_batch_size_source": training_batch_size_source,
+    "governance_budget_seconds": governance_budget_seconds,
+    "governance_budget_exceeded": False,
+    "cache_boot_loaded": False,
+    "cache_boot_skipped": True,
+    "legacy_cache_detected": os.path.exists(
+        os.path.join("runtime", "cache", "concept_cache.json")
+    ),
+    "legacy_cache_migration_skipped": not args.migrate_cache
+    and os.path.exists(os.path.join("runtime", "cache", "concept_cache.json")),
+    "startup_hang_prevented": True,
+}
 
 
 # ============================================
@@ -427,9 +757,7 @@ print_runtime_banner()
 runtime_start = time.time()
 runtime_status = "booting"
 results = {}
-shutdown_controller = ShutdownController(
-    logger=logging.getLogger("nexryn.shutdown")
-)
+shutdown_controller = None
 
 
 # ============================================
@@ -440,8 +768,11 @@ try:
     if args.verbose:
         print("NEXRYN :: VALIDATING PIPELINE...\n")
 
+    from runtime.pipeline import pipeline
+
     if pipeline is None:
         raise RuntimeError("Pipeline initialization failed")
+    runtime_watchdog.checkpoint("config_loaded")
 
 except Exception as initialization_error:
     print("\nPIPELINE INITIALIZATION ERROR:\n")
@@ -475,44 +806,22 @@ try:
             if file.endswith(".json")
         ]
     )
+    runtime_watchdog.checkpoint("task_list_loaded")
+
+    from runtime.learning.training_assistant import TrainingAssistant
 
     training_assistant = TrainingAssistant(
-        batch_size=args.training_batch_size
+        batch_size=training_batch_size
     )
 
     if args.reset_training_assistant:
         training_assistant.reset()
 
-    initial_ledger_report = (
-        pipeline
-        .cross_task_replication_collector
-        .ledger
-        .report()
-    )
+    concept_counts = {}
+    concept_states = {}
+    observed_task_ids = []
 
-    concept_counts = {
-        concept.get("concept"): concept.get("used_task_count", 0)
-        for concept in initial_ledger_report.get("concepts", [])
-        if concept.get("concept")
-    }
-
-    concept_lifecycle_report = (
-        pipeline
-        .concept_lifecycle_manager
-        .knowledge_maturity_report
-    )
-
-    concept_states = {
-        concept.get("concept"): concept.get("state", "DISCOVERING")
-        for concept in concept_lifecycle_report.get("concepts", [])
-        if concept.get("concept")
-    }
-
-    observed_task_ids = initial_ledger_report.get(
-        "observed_task_ids",
-        []
-    )
-
+    runtime_watchdog.start("task_selection")
     training_batch = training_assistant.select_batch(
         discovered_task_files,
         concept_counts=concept_counts,
@@ -520,6 +829,13 @@ try:
         task_directory=args.tasks_dir,
         observed_task_ids=observed_task_ids,
     )
+    runtime_metrics["task_selection_duration"] = (
+        runtime_watchdog.stop_and_warn(
+            "task_selection",
+            "task_selection",
+        )
+    )
+    runtime_watchdog.checkpoint("task_selection_complete")
 
     task_files = training_batch["selected_task_files"]
 
@@ -531,6 +847,21 @@ try:
     all_results = []
     successful_tasks = 0
     failed_tasks = 0
+    first_task_started = False
+
+    if args.migrate_cache:
+        from runtime.cache import CacheManager
+
+        runtime_watchdog.start("cache_init")
+        cache_manager = CacheManager(enable_legacy_cache_migration=True)
+        runtime_metrics["cache_boot_loaded"] = True
+        runtime_metrics["cache_boot_skipped"] = False
+        runtime_metrics.update(cache_manager.boot_report())
+        runtime_metrics["cache_init_duration"] = (
+            runtime_watchdog.stop_and_warn("cache_init", "cache_init")
+        )
+    else:
+        runtime_watchdog.checkpoint("cache_manager_initialized")
 
     for task_file in task_files:
         task_path = os.path.join(
@@ -541,34 +872,54 @@ try:
         print("\n==================================================")
         print(f"NEXRYN :: RUNNING TASK :: {task_file}")
         print("==================================================\n")
+        if not first_task_started:
+            runtime_watchdog.checkpoint("first_task_started")
+            runtime_metrics["first_task_start_latency"] = round(
+                time.perf_counter()
+                - runtime_watchdog.checkpoints["boot_start"],
+                4,
+            )
+            runtime_metrics["boot_duration"] = (
+                runtime_watchdog.stop_and_warn(
+                    "boot_total",
+                    "boot_total",
+                )
+            )
+            print("NEXRYN :: TASK EXECUTION STARTED")
+            first_task_started = True
 
         try:
-            task_result = pipeline.run(
-                task_path=task_path,
-                arc_replication_candidates=[
-                    {
-                        "task_path": os.path.join(
-                            args.tasks_dir,
-                            candidate_file,
-                        )
-                    }
-                    for candidate_file in task_files
-                    if candidate_file != task_file
-                ],
-                mode=args.mode,
-                max_chain_depth=args.max_chain_depth,
-                max_concepts=args.max_concepts,
-                telemetry_enabled=(
-                    False
-                    if args.disable_telemetry
-                    else None
-                ),
-                cache_dependencies=args.cache_dependencies,
-                report_level=args.report_level,
-                post_success_mode=args.post_success_mode,
-                profile=args.profile,
-                profile_level=args.profile_level,
-            )
+            with minimal_runtime_output(args.report_level == "minimal"):
+                task_result = pipeline.run(
+                    task_path=task_path,
+                    arc_replication_candidates=[
+                        {
+                            "task_path": os.path.join(
+                                args.tasks_dir,
+                                candidate_file,
+                            )
+                        }
+                        for candidate_file in task_files
+                        if candidate_file != task_file
+                    ],
+                    mode=args.mode,
+                    max_chain_depth=args.max_chain_depth,
+                    max_concepts=args.max_concepts,
+                    telemetry_enabled=(
+                        False
+                        if args.disable_telemetry
+                        else None
+                    ),
+                    cache_dependencies=args.cache_dependencies,
+                    report_level=args.report_level,
+                    post_success_mode=args.post_success_mode,
+                    profile=args.profile,
+                    profile_level=args.profile_level,
+                )
+            if first_task_started and "first_task_completed" not in (
+                runtime_watchdog.checkpoints
+            ):
+                runtime_watchdog.checkpoint("first_task_completed")
 
             if args.math_reasoning:
                 math_report = build_passive_math_reasoning_report(
@@ -620,10 +971,19 @@ try:
             )
 
             if args.verbose:
+                from runtime.reporting.compact_report_builder import (
+                    compact_report_builder,
+                )
+
                 print("\n==================================================")
                 print("NEXRYN :: GOVERNANCE REPORT")
                 print("==================================================\n")
-                print(governance_reports)
+                print(
+                    compact_report_builder.compact_context(
+                        governance_reports,
+                        level=args.report_level,
+                    )
+                )
 
         except Exception as task_error:
             failed_tasks += 1
@@ -664,6 +1024,26 @@ try:
         .concept_lifecycle_manager
         .knowledge_maturity_report
     )
+    if not concept_lifecycle_report.get("concepts"):
+        concept_lifecycle_report = (
+            pipeline
+            .concept_lifecycle_manager
+            .update_knowledge_maturity(
+                ledger_report,
+                {
+                    "truth_candidate_report": collect_governance_reports(
+                        all_results,
+                        [
+                            "truth_candidate_report",
+                            "truth_candidates",
+                            "TRUTH CANDIDATE REPORT",
+                        ],
+                    ),
+                },
+            )
+        )
+
+    from runtime.learning.training_report import build_training_report
 
     training_report = build_training_report(
         training_batch=training_batch,
@@ -671,6 +1051,7 @@ try:
         multi_task_results=all_results,
         ledger_report=ledger_report,
         concept_lifecycle_report=concept_lifecycle_report,
+        include_truth_evaluations=True,
     )
 
     task_performance_reports = [
@@ -699,19 +1080,29 @@ try:
         key=lambda item: item.get("seconds", 0.0),
         reverse=True,
     )[:5]
-    performance_report = {
-        "system": "runtime_reasoning_budget",
-        "total_runtime_seconds": round(
-            sum(
-                report.get("total_runtime_seconds", 0.0)
-                for report in task_performance_reports
-            ),
-            4,
-        ),
-        "concepts_processed": sum(
-            report.get("concepts_processed", 0)
+    metric_bridge = build_runtime_metric_bridge(
+        all_results=all_results,
+        training_report=training_report,
+        task_performance_reports=task_performance_reports,
+        module_timings=module_timings,
+        runtime_metrics=runtime_metrics,
+    )
+    total_runtime_seconds = round(
+        sum(
+            report.get("total_runtime_seconds", 0.0)
             for report in task_performance_reports
         ),
+        4,
+    )
+    active_compute_time_seconds = metric_bridge[
+        "active_compute_time_seconds"
+    ]
+    performance_report = {
+        "system": "runtime_reasoning_budget",
+        "total_runtime_seconds": total_runtime_seconds,
+        "concepts_processed": metric_bridge["concepts_processed"],
+        "semantic_concept_count": metric_bridge["semantic_concept_count"],
+        "context_count": metric_bridge["context_count"],
         "cache_hits": sum(
             report.get("cache_hits", 0)
             for report in task_performance_reports
@@ -720,9 +1111,128 @@ try:
             report.get("cache_misses", 0)
             for report in task_performance_reports
         ),
-        "dependency_chains_executed": sum(
-            report.get("dependency_chains_executed", 0)
+        "strategy_hits": sum(
+            report.get("strategy_hits", 0)
             for report in task_performance_reports
+        ),
+        "strategy_misses": sum(
+            report.get("strategy_misses", 0)
+            for report in task_performance_reports
+        ),
+        "context_hits": sum(
+            report.get("context_hits", 0)
+            for report in task_performance_reports
+        ),
+        "context_misses": sum(
+            report.get("context_misses", 0)
+            for report in task_performance_reports
+        ),
+        "program_hits": sum(
+            report.get("program_hits", 0)
+            for report in task_performance_reports
+        ),
+        "program_misses": sum(
+            report.get("program_misses", 0)
+            for report in task_performance_reports
+        ),
+        "truth_hits": sum(
+            report.get("truth_hits", 0)
+            for report in task_performance_reports
+        ),
+        "truth_misses": sum(
+            report.get("truth_misses", 0)
+            for report in task_performance_reports
+        ),
+        "dependency_snapshot_hits": sum(
+            report.get("dependency_snapshot_hits", 0)
+            for report in task_performance_reports
+        ),
+        "dependency_snapshot_misses": sum(
+            report.get("dependency_snapshot_misses", 0)
+            for report in task_performance_reports
+        ),
+        "world_model_hits": sum(
+            report.get("world_model_hits", 0)
+            for report in task_performance_reports
+        ),
+        "world_model_misses": sum(
+            report.get("world_model_misses", 0)
+            for report in task_performance_reports
+        ),
+        "estimated_compute_saved": round(
+            sum(
+                report.get("estimated_compute_saved", 0.0)
+                for report in task_performance_reports
+            ),
+            4,
+        ),
+        "estimated_runtime_saved": round(
+            sum(
+                report.get("estimated_runtime_saved", 0.0)
+                for report in task_performance_reports
+            ),
+            4,
+        ),
+        "dependency_chains_executed":
+        metric_bridge["dependency_chains_executed"],
+        "dependency_chain_depth": metric_bridge["dependency_chain_depth"],
+        "dependency_chain_coverage":
+        metric_bridge["dependency_chain_coverage"],
+        "pre_reasoning_router_enabled": any(
+            report.get("pre_reasoning_router_enabled", False)
+            for report in task_performance_reports
+        ),
+        "task_profiles_generated": sum(
+            report.get("task_profiles_generated", 0)
+            for report in task_performance_reports
+        ),
+        "selective_execution_enabled": any(
+            report.get("selective_execution_enabled", False)
+            for report in task_performance_reports
+        ),
+        "layers_enabled_count": sum(
+            report.get("layers_enabled_count", 0)
+            for report in task_performance_reports
+        ),
+        "layers_disabled_count": sum(
+            report.get("layers_disabled_count", 0)
+            for report in task_performance_reports
+        ),
+        "layers_deferred_count": sum(
+            report.get("layers_deferred_count", 0)
+            for report in task_performance_reports
+        ),
+        "full_stack_avoided": any(
+            report.get("full_stack_avoided", False)
+            for report in task_performance_reports
+        ),
+        "estimated_layers_skipped": sum(
+            report.get("estimated_layers_skipped", 0)
+            for report in task_performance_reports
+        ),
+        "skipped_reports_count": sum(
+            report.get("skipped_reports_count", 0)
+            for report in task_performance_reports
+        ),
+        "premature_reports_prevented": sum(
+            report.get("premature_reports_prevented", 0)
+            for report in task_performance_reports
+        ),
+        "active_compute_time_seconds": active_compute_time_seconds,
+        "idle_time_seconds": metric_bridge["idle_time_seconds"],
+        "startup_time_seconds": metric_bridge["startup_time_seconds"],
+        "shutdown_time_seconds": metric_bridge["shutdown_time_seconds"],
+        "task_execution_time_seconds":
+        metric_bridge["task_execution_time_seconds"],
+        "governance_time_seconds": metric_bridge["governance_time_seconds"],
+        "dependency_reasoning_time_seconds":
+        metric_bridge["dependency_reasoning_time_seconds"],
+        "cache_time_seconds": metric_bridge["cache_time_seconds"],
+        "finalization_time_seconds":
+        metric_bridge["finalization_time_seconds"],
+        "unattributed_runtime_seconds": round(
+            max(0.0, total_runtime_seconds - active_compute_time_seconds),
+            4,
         ),
         "telemetry_enabled": not args.disable_telemetry
         and args.mode != "fast",
@@ -734,7 +1244,19 @@ try:
         }.get(args.mode, "normal"),
         "slowest_modules": slowest_modules,
         "module_timings": module_timings,
+        "metric_bridge": metric_bridge["metric_bridge"],
+        "metric_source_warnings": metric_bridge["metric_source_warnings"],
     }
+    reuse_total = (
+        performance_report["cache_hits"]
+        + performance_report["cache_misses"]
+    )
+    performance_report["reuse_rate"] = round(
+        performance_report["cache_hits"] / reuse_total,
+        4,
+    ) if reuse_total else 0.0
+    from runtime.profiling.performance_reporter import performance_reporter
+
     performance_intelligence_report = performance_reporter.build_report(
         runtime_context={
             "COGNITIVE_REUSE_REPORT": (
@@ -776,6 +1298,22 @@ try:
         ],
     )
 
+    context_reuse_report = collect_governance_reports(
+        all_results,
+        [
+            "context_reuse_report",
+            "CONTEXT REUSE REPORT",
+        ],
+    )
+
+    truth_registry_report = collect_governance_reports(
+        all_results,
+        [
+            "truth_registry_report",
+            "TRUTH REGISTRY REPORT",
+        ],
+    )
+
     truth_graveyard_consistency_report = collect_governance_reports(
         all_results,
         [
@@ -783,6 +1321,10 @@ try:
             "truth_graveyard_consistency_report",
         ],
     )
+    discovery_only_truth_mode = False
+    if discovery_only_truth_mode:
+        truth_candidate_report = {}
+        truth_commit_report = {}
 
     concepts = normalize_concept_diagnostics(training_report)
     truth_candidates = normalize_truth_candidates(training_report)
@@ -813,9 +1355,38 @@ try:
         "truth_candidate_report": truth_candidate_report,
         "truth_commit_report": truth_commit_report,
         "contextual_truth_report": contextual_truth_report,
+        "context_reuse_report": context_reuse_report,
+        "CONTEXT REUSE REPORT": context_reuse_report,
+        "truth_registry_report": truth_registry_report,
         "truth_graveyard_consistency_report":
         truth_graveyard_consistency_report,
     }
+    governance_budget_exceeded = any(
+        isinstance(item.get("result"), dict)
+        and item["result"].get(
+            "governance_budget_exceeded",
+            False,
+        )
+        for item in all_results
+    )
+    finalization_durations = [
+        module.get("seconds", 0.0)
+        for item in all_results
+        if isinstance(item.get("result"), dict)
+        for module in item["result"]
+        .get("performance_report", {})
+        .get("module_timings", [])
+        if module.get("module") == "finalize_runtime"
+    ]
+    runtime_metrics["governance_budget_exceeded"] = (
+        governance_budget_exceeded
+    )
+    runtime_metrics["finalization_duration"] = round(
+        sum(finalization_durations),
+        4,
+    )
+    results["runtime_watchdog_report"] = runtime_watchdog.report()
+    results["runtime_metadata"] = dict(runtime_metrics)
 
     runtime_status = "completed"
 
@@ -852,6 +1423,15 @@ execution_time = round(
 
 if runtime_status == "completed" and isinstance(results, dict):
     try:
+        from runtime.evaluation.evaluation_controller import (
+            EvaluationController,
+        )
+        from runtime.shutdown.shutdown_controller import ShutdownController
+
+        shutdown_controller = ShutdownController(
+            logger=logging.getLogger("nexryn.shutdown")
+        )
+
         total_tasks = max(1, int(results.get("tasks_executed", 0) or 0))
         successful_tasks = int(results.get("successful_tasks", 0) or 0)
         failed_tasks = int(results.get("failed_tasks", 0) or 0)
@@ -932,30 +1512,44 @@ print("\n==================================================")
 print("NEXRYN :: FINAL CONTEXT")
 print("==================================================\n")
 
-effective_report_level = args.report_level or {
-    "fast": "minimal",
-    "adaptive": "normal",
-    "deep": "full",
-}.get(args.mode, "normal")
-
 safe_print_context(
     results,
     report_level=effective_report_level,
 )
 
 if isinstance(results, dict) and results.get("performance_report"):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
     print("\n==================================================")
     print("NEXRYN :: PERFORMANCE REPORT")
     print("==================================================\n")
-    print(results["performance_report"])
+    print(
+        compact_report_builder.compact_performance_report(
+            results["performance_report"],
+        )
+    )
 
 if isinstance(results, dict) and results.get("PERFORMANCE_REPORT"):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
     print("\n==================================================")
     print("NEXRYN :: PERFORMANCE INTELLIGENCE REPORT")
     print("==================================================\n")
-    print(results["PERFORMANCE_REPORT"])
+    print(
+        compact_report_builder.compact_context(
+            results["PERFORMANCE_REPORT"],
+            level=effective_report_level,
+        )
+    )
 
 if args.profile and isinstance(results, dict):
+    from runtime.profiling.performance_reporter import performance_reporter
+    from runtime.profiling.telemetry_collector import telemetry
+
     profile_payload = {
         "PERFORMANCE_REPORT": results.get("PERFORMANCE_REPORT", {}),
         "performance_report": results.get("performance_report", {}),
@@ -998,7 +1592,16 @@ if args.verbose:
         print("\n==================================================")
         print("NEXRYN :: PIPELINE REPORT")
         print("==================================================\n")
-        print(pipeline_report)
+        from runtime.reporting.compact_report_builder import (
+            compact_report_builder,
+        )
+
+        print(
+            compact_report_builder.compact_context(
+                pipeline_report,
+                level=effective_report_level,
+            )
+        )
 
     except Exception as report_error:
         print("\nPIPELINE REPORT UNAVAILABLE")
@@ -1013,7 +1616,20 @@ runtime_metadata = build_runtime_metadata(
     args,
     execution_time,
     runtime_status,
-    context_count=len(results) if isinstance(results, dict) else 0,
+    context_count=(
+        results.get("performance_report", {}).get(
+            "context_count",
+            len(normalize_context_diagnostics(
+                results.get("training_report", {}),
+            )),
+        )
+        if isinstance(results, dict)
+        else 0
+    ),
+    runtime_metrics={
+        **runtime_metrics,
+        "watchdog": runtime_watchdog.report(),
+    },
 )
 
 print("\n==================================================")
@@ -1027,6 +1643,8 @@ print(runtime_metadata)
 # ============================================
 
 try:
+    from runtime.diagnostics import RuntimeDiagnostics
+
     runtime_snapshot = type(
         "RuntimeSnapshot",
         (),

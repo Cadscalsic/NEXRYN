@@ -112,34 +112,149 @@ def test_training_report_exposes_compact_results_and_concept_memory(capsys):
     ]
     assert report["concept_memory"]["symbolic_remapping"][
         "lifecycle_state"
-    ] == "SUPPORTED"
-    assert report["truth_candidate_evaluations"]["symbolic_remapping"][
-        "blocked_metrics"
-    ] == ["contradiction_score"]
+    ] == "DISCOVERING"
+    assert report["truth_candidate_evaluations"] == {}
     assert report["concept_memory"]["symbolic_remapping"][
         "ledger_average_contradiction_score"
     ] == 0.0552
-    assert report["truth_candidate_evaluations"]["symbolic_remapping"][
-        "effective_contradiction_score"
-    ] == 0.14
-    assert report["truth_candidate_evaluations"]["symbolic_remapping"][
-        "contradiction_threshold"
-    ] == 0.10
-    assert report["truth_commit_evaluations"]["symbolic_remapping"][
-        "decision"
-    ] == "REMAIN_BELIEF"
-    assert report["truth_commit_evaluations"]["symbolic_remapping"][
-        "remaining_recovery_cycles"
-    ] == 3
+    assert report["truth_commit_evaluations"] == {}
     assert "CONCEPT DEBUG REPORT" in output
+    assert "CONCEPT ADVANCEMENT AUDIT" in output
+    assert "missing_promotion_score=True" in output
+    assert "missing_epistemic_graduation=True" in output
     assert "TRUTH CANDIDATE REPORT" in output
     assert "TRUTH COMMIT REPORT" in output
-    assert "symbolic_remapping 2 SUPPORTED" in output
+    assert "symbolic_remapping 2 DISCOVERING" in output
     assert "ledger_average_contradiction=0.0552" in output
-    assert "effective_contradiction=0.14" in output
-    assert "contradiction_threshold=0.1" in output
+    assert "effective_contradiction=0.14" not in output
+    assert "contradiction_threshold=0.1" not in output
     assert "dict_keys" not in output
     assert "large_runtime_context" not in output
+
+
+def test_training_report_preserves_context_candidate_in_discovery_mode():
+    report = build_training_report(
+        ledger_report={
+            "concepts": [{
+                "concept": "shape_preservation",
+                "used_task_count": 125,
+                "used_task_ids": [
+                    f"data/training/task_{index:03d}.json"
+                    for index in range(1, 126)
+                ],
+                "independent_success_rate": 0.824,
+            }],
+        },
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "shape_preservation",
+                "state": "CONTEXT_CANDIDATE",
+                "used_task_count": 125,
+                "preliminary_truth_candidate_ready": False,
+                "truth_candidate_promotion": {
+                    "candidate_ready": False,
+                    "context_candidate_ready": True,
+                    "promotion_score": 0.82,
+                    "promotion_dependency_score": 0.8848,
+                    "promotion_dependency_bonus": 0.02,
+                    "dependency_confidence": 0.8848,
+                    "dependency_chain_depth": 5,
+                    "dependency_chain_coverage": 0.9908,
+                    "missing_dependencies": [],
+                    "epistemic_graduation": {
+                        "promotion_score": 0.82,
+                        "promotion_stage": "PROCESS_CONTEXT",
+                        "next_stage": "TRUTH_CANDIDATE",
+                        "blocked_metrics": [
+                            "context_support",
+                        ],
+                        "thresholds": {
+                            "observation_saturation": 32,
+                            "maximum_contradiction_rate": 0.10,
+                            "TRUTH_CANDIDATE": 0.90,
+                        },
+                        "next_required_evidence": [{
+                            "metric": "promotion_score",
+                            "current_value": 0.82,
+                            "required": 0.90,
+                        }],
+                    },
+                    "failed_gates": [
+                        "context_strength",
+                    ],
+                },
+            }],
+        },
+        include_truth_evaluations=False,
+    )
+
+    memory = report["concept_memory"]["shape_preservation"]
+
+    assert memory["lifecycle_state"] == "CONTEXT_CANDIDATE"
+    assert memory["context_candidate_ready"] is True
+    audit = report["concept_advancement_audit"]["shape_preservation"]
+    assert audit["promotion_score"] == 0.82
+    assert audit["promotion_score_required_next"] == 0.90
+    assert audit["context_block"] is True
+    assert audit["missing_promotion_score"] is False
+    assert audit["missing_epistemic_graduation"] is False
+    assert report["truth_candidate_evaluations"] == {}
+    assert report["architecture_bottleneck_report"][
+        "promotion_dependency_score"
+    ] == 0.8848
+
+
+def test_training_report_counts_lifecycle_generated_contexts():
+    report = build_training_report(
+        concept_lifecycle_report={
+            "generated_contexts": [
+                {
+                    "context_id": "process_context:replication",
+                    "context_name": "replication_process_context",
+                    "context_type": "PROCESS_CONTEXT",
+                    "concept": "replication",
+                    "confidence": 0.9062,
+                    "context_confidence": 0.9062,
+                    "preconditions": ["concept_observed_across_tasks"],
+                    "transitions": ["dependency_supported_behavior"],
+                    "expected_outcomes": ["reusable_process_explanation"],
+                    "process_context_generated": True,
+                },
+                {
+                    "context_id": "semantic_context:replication",
+                    "context_name": "replication_semantic_context",
+                    "context_type": "SEMANTIC_CONTEXT",
+                    "concept": "replication",
+                    "confidence": 0.9062,
+                    "semantic_definition":
+                    "replication supported by promoted evidence",
+                },
+                {
+                    "context_id": "dependency_surface:replication",
+                    "context_name": "replication_dependency_surface",
+                    "context_type": "DEPENDENCY_SURFACE",
+                    "concept": "replication",
+                    "confidence": 0.9062,
+                    "dependency_confidence": 0.8848,
+                    "dependency_chain_coverage": 0.9908,
+                },
+            ],
+        },
+    )
+
+    architecture = report["architecture_bottleneck_report"]
+
+    assert architecture["context_count"] == 1
+    assert architecture["semantic_context_count"] == 1
+    assert report["context_discovery_reports"]["replication"][
+        "process_context_generated"
+    ] is True
+    assert report["semantic_context_reports"][
+        "replication_semantic_context"
+    ]["semantic_context_score"] == 0.9062
+    assert report["context_hierarchy_reports"][
+        "replication_dependency_surface"
+    ]["hierarchy_ready"] is True
 
 
 def test_training_report_exposes_locked_truth_review_snapshot(capsys):
@@ -207,35 +322,13 @@ def test_training_report_exposes_locked_truth_review_snapshot(capsys):
 
     print_training_report(report)
     output = capsys.readouterr().out
-    candidate = report["truth_candidate_evaluations"][
-        "topology_preservation"
-    ]
-    commitment = report["truth_commit_evaluations"][
-        "topology_preservation"
-    ]
-
-    assert candidate["effective_contradiction_score"] == 0.1114
-    assert candidate["contradiction_review_required"] is True
-    assert candidate["within_soft_review_zone"] is True
-    assert candidate["contradiction_review_severity"] == (
-        "LOW_RISK_REVIEW"
-    )
-    assert commitment["rehearsal_validation_pending"] is True
-    assert commitment["identity_governance_state"] == (
-        "TEMPORARY_RECOVERY_HOLD"
-    )
-    assert commitment["failed_identity_governance_gates"] == [
-        "semantic_spine_stable",
-    ]
-    assert commitment["revocation_severity"] == "LOW_RISK_REVIEW"
-    assert commitment["recovery_blocker_type"] == (
-        "VALIDATED_REVERSIBLE_REHEARSAL_PENDING"
-    )
-    assert "contradiction_review_required=True" in output
-    assert "within_soft_review_zone=True" in output
-    assert "rehearsal_validation_pending=True" in output
-    assert "revocation_severity=LOW_RISK_REVIEW" in output
-    assert "identity_governance_state=TEMPORARY_RECOVERY_HOLD" in output
+    assert report["truth_candidate_evaluations"] == {}
+    assert report["truth_commit_evaluations"] == {}
+    assert "contradiction_review_required=True" not in output
+    assert "within_soft_review_zone=True" not in output
+    assert "rehearsal_validation_pending=True" not in output
+    assert "revocation_severity=LOW_RISK_REVIEW" not in output
+    assert "identity_governance_state=TEMPORARY_RECOVERY_HOLD" not in output
 
 
 def test_training_report_detects_architecture_bottleneck_plateau(capsys):
@@ -793,16 +886,7 @@ def test_training_report_extracts_process_context_strength_from_runtime():
         },
     )
 
-    candidate = report["truth_candidate_evaluations"]["growth"]
-
-    assert candidate["context_strength"] == 0.9
-    assert candidate["context_strength_source"] == (
-        "epistemic_cognition_report.truth_candidate_engine"
-    )
-    assert candidate["context_discovery"]["transformation_family"] == "growth"
-    assert candidate["context_hierarchy"]["context_hierarchy_score"] == 0.752
-    assert candidate["semantic_context"]["semantic_context_score"] == 0.9
-    assert candidate["contextual_truth"]["contextual_truth_score"] == 0.71
+    assert report["truth_candidate_evaluations"] == {}
     assert report["context_discovery_reports"]["growth"][
         "transformation_family"
     ] == "growth"
@@ -815,3 +899,159 @@ def test_training_report_extracts_process_context_strength_from_runtime():
     assert report["contextual_truth_reports"]["growth"][
         "contextual_truth_score"
     ] == 0.71
+
+
+def test_training_report_recovers_lifecycle_truth_promotion_when_enabled():
+    report = build_training_report(
+        multi_task_results=[],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "TRUTH_CANDIDATE",
+                "preliminary_truth_candidate_ready": True,
+                "truth_candidate_promotion": {
+                    "candidate_ready": True,
+                    "promotion_score": 0.81,
+                    "eligible_for_truth_candidate": True,
+                    "stage_eligible_for_truth_candidate": True,
+                    "promotion_dependency_score": 0.82,
+                    "promotion_dependency_bonus": 0.18,
+                    "dependency_confidence": 0.91,
+                    "dependency_chain_depth": 4,
+                    "dependency_chain_coverage": 0.94,
+                    "missing_dependencies": [],
+                    "failed_gates": [],
+                    "dependency_promotion_blockers": [],
+                },
+            }],
+        },
+        include_truth_evaluations=True,
+    )
+
+    candidate = report["truth_candidate_evaluations"]["growth"]
+    architecture = report["architecture_bottleneck_report"]
+
+    assert candidate["candidate_ready"] is True
+    assert candidate["eligible_for_truth_candidate"] is True
+    assert candidate["promotion_score"] == 0.81
+    assert candidate["promotion_dependency_score"] == 0.82
+    assert architecture["candidate_ready"] is True
+    assert architecture["eligible_for_truth_candidate"] is True
+    assert architecture["promotion_score"] == 0.81
+    assert architecture["promotion_dependency_score"] == 0.82
+
+
+def test_training_report_extracts_process_context_discovery_reports(capsys):
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_growth.json",
+            "status": "completed",
+            "result": {
+                "epistemic_cognition_report": {
+                    "truth_candidate_engine": {
+                        "evaluations": [{
+                            "concept": "growth",
+                            "process_context_discovery_report": {
+                                "system": "process_context_discovery_engine",
+                                "concept": "growth",
+                                "context_name": "growth_context",
+                                "preconditions": [{
+                                    "source": "growth",
+                                    "relation": "requires",
+                                    "target": "object_core",
+                                }],
+                                "transition_family": [{
+                                    "source": "growth",
+                                    "relation": "transitions_to",
+                                    "target": "area_increase",
+                                }],
+                                "expected_outcomes": [{
+                                    "source": "area_increase",
+                                    "relation": "results_in",
+                                    "target": "identity_preserved",
+                                }],
+                                "context_confidence": 0.9276,
+                                "process_context_discovered": True,
+                            },
+                        }],
+                    },
+                    "context_discovery_engine": {
+                        "evaluations": [],
+                    },
+                },
+            },
+        }],
+    )
+
+    assert report["context_discovery_reports"]["growth"][
+        "context_name"
+    ] == "growth_context"
+    assert report["architecture_bottleneck_report"]["context_count"] == 1
+
+    print_training_report(report)
+    output = capsys.readouterr().out
+    assert "CONTEXT DISCOVERY REPORT" in output
+    assert "context=growth_context" in output
+    assert "transitions=1" in output
+    assert "confidence=0.9276" in output
+
+
+def test_training_report_bridges_cognition_layer_contexts_to_candidates():
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_growth.json",
+            "status": "completed",
+            "result": {
+                "epistemic_cognition_layer": {
+                    "truth_candidate_engine": {
+                        "evaluations": [{
+                            "concept": "growth",
+                            "candidate_state": "PRE_VALIDATION",
+                            "eligible_for_truth_candidate": False,
+                            "context_discovery": {
+                                "concept": "growth",
+                                "task": "task_growth.json",
+                                "transformation_family": "growth",
+                                "confidence": 0.88,
+                            },
+                            "context_hierarchy": {
+                                "context_hierarchy_score": 0.76,
+                                "hierarchy_ready": True,
+                            },
+                            "semantic_context": {
+                                "context": "growth",
+                                "semantic_context_score": 0.82,
+                            },
+                        }],
+                    },
+                    "evaluations": [{
+                        "concept": "growth",
+                        "truth_commit": {
+                            "decision": "REMAIN_BELIEF",
+                            "reason": "truth_candidate_required",
+                        },
+                    }],
+                },
+            },
+        }],
+        include_truth_evaluations=True,
+    )
+
+    candidate = report["truth_candidate_evaluations"]["growth"]
+
+    assert candidate["candidate_ready"] is False
+    assert candidate["eligible_for_truth_candidate"] is False
+    assert candidate["stage_eligible_for_truth_candidate"] is False
+    assert candidate["promotion_score"] == 0.82
+    assert report["context_discovery_reports"]["growth"][
+        "transformation_family"
+    ] == "growth"
+    assert report["context_hierarchy_reports"]["growth"][
+        "context_hierarchy_score"
+    ] == 0.76
+    assert report["semantic_context_reports"]["growth"][
+        "semantic_context_score"
+    ] == 0.82
+    assert report["truth_commit_evaluations"]["growth"][
+        "decision"
+    ] == "REMAIN_BELIEF"

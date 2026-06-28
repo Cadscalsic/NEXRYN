@@ -95,6 +95,42 @@ def test_meta_stops_after_success_with_residuals():
     assert decision.enable_strategy_evolution is False
 
 
+def test_learning_progress_is_terminal_runtime_shutdown():
+    context = trusted_residual_context()
+    context["world_model_gate_report"] = {"execution_authorized": False}
+    context["transformation_localization"] = {
+        "localization_ready": True,
+        "localization_confidence": 0.748,
+        "localized_program": [{"op": "duplicate_object"}],
+    }
+    context["dependency_evidence"] = [{"target": "identity_replication"}]
+
+    evaluation, report = SuccessSemanticsEngine().apply(
+        {
+            "accuracy": 0.84,
+            "difference_count": 2,
+            "success": False,
+            "exact_success": False,
+        },
+        context,
+    )
+
+    assert evaluation["success_state"] == "LEARNING_PROGRESS"
+    assert evaluation["termination_reason"] == "NEW_KNOWLEDGE_SIGNAL_RECORDED"
+    assert evaluation["failure_detected"] is False
+    assert evaluation["episode_completed"] is True
+    assert evaluation["retry_allowed"] is False
+    assert evaluation["shutdown_mode"] == "fast"
+    assert report["background_task_control"]["disabled_tasks"]["self_improvement"] is True
+
+    context["evaluation_result"] = evaluation
+    decision = MetaControllerEngine().decide(context)
+
+    assert decision.action == "STOP_AFTER_SUCCESS"
+    assert decision.shutdown_mode == "fast"
+    assert decision.max_reasoning_depth == 0
+
+
 def test_motivation_rewards_success_with_residuals_without_penalty():
     context = trusted_residual_context()
     context["evaluation_result"] = {

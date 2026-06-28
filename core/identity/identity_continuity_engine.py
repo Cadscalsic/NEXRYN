@@ -2,6 +2,7 @@ from collections import Counter
 from typing import Any, Mapping
 
 from core.epistemic_models import clamp
+from core.identity.identity_replication_detector import identity_replication_detector
 from core.perception.object_tracker import ObjectTracker
 
 
@@ -91,7 +92,9 @@ class IdentityContinuityEngine:
         """Evaluate whether perceived objects preserve identity across states."""
 
         tracking = self.object_tracker.track(input_grid, output_grid)
+        replication = identity_replication_detector.detect(tracking)
         mappings = self._temporal_mappings(tracking)
+        mappings = self._apply_replication_transitions(mappings, replication)
         transition_counts = Counter(
             mapping["identity_transition"]
             for mapping in mappings
@@ -113,12 +116,16 @@ class IdentityContinuityEngine:
             "identity_preserved": continuity_state in {
                 "OBJECT_IDENTITY_CONTINUOUS",
                 "OBJECT_IDENTITY_TRANSFORMED",
+                "OBJECT_IDENTITY_REPLICATION",
             },
+            "identity_replication":
+            transition_counts.get("IdentityReplication", 0) > 0,
             "identity_split": transition_counts.get("IdentitySplit", 0) > 0,
             "identity_merged": transition_counts.get("IdentityMerged", 0) > 0,
             "identity_created": transition_counts.get("IdentityCreated", 0) > 0,
             "identity_destroyed": transition_counts.get("IdentityDestroyed", 0) > 0,
             "tracking": tracking,
+            "identity_replication_report": replication,
         }
         report["dependency_evidence"] = self._object_dependency_evidence(report)
         return report
@@ -145,6 +152,7 @@ class IdentityContinuityEngine:
                 "identity_continuity_preserved": True,
                 "identity_preserved": True,
                 "identity_split": False,
+                "identity_replication": False,
                 "identity_merged": False,
                 "continuity_state": "IDENTITY_SEQUENCE_TRIVIAL",
                 "identity_governance_gates": {
@@ -186,6 +194,7 @@ class IdentityContinuityEngine:
             step_reports,
         )
         has_split = transition_counts.get("IdentitySplit", 0) > 0
+        has_replication = transition_counts.get("IdentityReplication", 0) > 0
         has_merge = transition_counts.get("IdentityMerged", 0) > 0
         has_interruption = any(
             transition_counts.get(kind, 0) > 0
@@ -236,12 +245,14 @@ class IdentityContinuityEngine:
             "identity_continuity_preserved": identity_preserved,
             "identity_preserved": identity_preserved,
             "identity_split": has_split,
+            "identity_replication": has_replication,
             "identity_merged": has_merge,
             "identity_created": transition_counts.get("IdentityCreated", 0) > 0,
             "identity_destroyed":
             transition_counts.get("IdentityDestroyed", 0) > 0,
             "continuity_state": self._sequence_continuity_state(
                 identity_preserved,
+                has_replication,
                 has_split,
                 has_merge,
                 has_interruption,
@@ -305,6 +316,8 @@ class IdentityContinuityEngine:
         context_patch = {
             "identity_continuity": identity_continuity,
             "semantic_drift": semantic_drift,
+            "identity_replication": sequence.get("identity_replication", False),
+            "replication_safe_policy": self._replication_safe_policy(sequence),
             "identity_continuity_engine_report": sequence,
             "concept_identity_state": concept_identity_state,
             "system_identity_state": system_identity_state,
@@ -347,6 +360,7 @@ class IdentityContinuityEngine:
             "minimum_semantic_spine_score":
             self.minimum_semantic_spine_score,
             "identity_split": sequence.get("identity_split", False),
+            "identity_replication": sequence.get("identity_replication", False),
             "identity_merged": sequence.get("identity_merged", False),
             "identity_governance_gates": gates,
             "concept_identity_state": concept_identity_state,
@@ -358,6 +372,7 @@ class IdentityContinuityEngine:
             sequence.get("process_identity_branching_score", 0.0),
             "process_identity_branching_evidence":
             sequence.get("process_identity_branching_evidence", []),
+            "replication_safe_policy": self._replication_safe_policy(sequence),
             "truth_commit_context_patch": context_patch,
             "sequence": sequence,
             "dependency_evidence": sequence.get("dependency_evidence", []),
@@ -374,6 +389,8 @@ class IdentityContinuityEngine:
                 sequence.get("identity_continuity", 0.0)
             ),
             "identity_split": sequence.get("identity_split", False) is True,
+            "identity_replication":
+            sequence.get("identity_replication", False) is True,
             "identity_merged": sequence.get("identity_merged", False) is True,
             "identity_created": sequence.get("identity_created", False) is True,
             "identity_destroyed":
@@ -400,7 +417,10 @@ class IdentityContinuityEngine:
             scoped["identity_scope"] = "system_identity_state"
             return scoped
 
-        continuity_score = evidence["identity_continuity"]
+        continuity_score = max(
+            evidence["identity_continuity"],
+            clamp(scoped.get("identity_continuity", 0.0)),
+        )
         semantic_spine_score = max(
             clamp(scoped.get("semantic_spine_score", 0.0)),
             continuity_score,
@@ -424,6 +444,7 @@ class IdentityContinuityEngine:
             "identity_continuity_preserved": continuity_preserved,
             "identity_preserved": continuity_preserved,
             "identity_split": False,
+            "identity_replication": False,
             "identity_merged": False,
             "identity_created": False,
             "identity_destroyed": False,
@@ -518,6 +539,8 @@ class IdentityContinuityEngine:
     ) -> str:
         if identity_stable:
             return "stable"
+        if sequence.get("identity_replication") is True:
+            return "identity_replication_tracked"
         if sequence.get("identity_split") is True:
             return "identity_branching_tracked"
         if sequence.get("identity_merged") is True:
@@ -551,6 +574,44 @@ class IdentityContinuityEngine:
                 })
         return mappings
 
+    def _apply_replication_transitions(
+        self,
+        mappings: list[dict[str, Any]],
+        replication: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        if replication.get("identity_transition") != "IDENTITY_REPLICATION":
+            return mappings
+        replicated_by_source = {
+            str(event.get("source_object")): {
+                str(target)
+                for target in event.get("replicated_objects", [])
+            }
+            for event in replication.get("replication_events", [])
+        }
+        if not replicated_by_source and replication.get("source_object"):
+            replicated_by_source[str(replication["source_object"])] = {
+                str(target)
+                for target in replication.get("replicated_objects", [])
+            }
+
+        calibrated = []
+        for mapping in mappings:
+            source = str(mapping.get("object_t0"))
+            target = str(mapping.get("object_t1"))
+            if (
+                mapping.get("identity_transition") == "IdentitySplit"
+                and target in replicated_by_source.get(source, set())
+            ):
+                mapping = dict(mapping)
+                mapping["identity_transition"] = "IdentityReplication"
+                mapping["transition_type"] = "identity_replication"
+                mapping["continuity"] = max(
+                    clamp(mapping.get("continuity", 0.0)),
+                    0.90,
+                )
+            calibrated.append(mapping)
+        return calibrated
+
     def _object_continuity_score(
         self,
         mappings: list[Mapping[str, Any]],
@@ -559,10 +620,12 @@ class IdentityContinuityEngine:
             return 1.0
         weights = {
             "IdentityPreserved": 1.0,
-            "IdentitySplit": 0.72,
+            "IdentityReplication": 0.90,
+            "IdentityTransformed": 0.80,
+            "IdentitySplit": 0.40,
             "IdentityMerged": 0.68,
-            "IdentityCreated": 0.38,
-            "IdentityDestroyed": 0.20,
+            "IdentityCreated": 0.0,
+            "IdentityDestroyed": 0.0,
         }
         scores = [
             clamp(mapping.get("continuity", 0.0))
@@ -580,6 +643,8 @@ class IdentityContinuityEngine:
             return "OBJECT_IDENTITY_INTERRUPTED"
         if transition_counts.get("IdentityCreated", 0) > 0:
             return "OBJECT_IDENTITY_CREATED"
+        if transition_counts.get("IdentityReplication", 0) > 0:
+            return "OBJECT_IDENTITY_REPLICATION"
         if transition_counts.get("IdentitySplit", 0) > 0:
             return "OBJECT_IDENTITY_SPLIT"
         if transition_counts.get("IdentityMerged", 0) > 0:
@@ -614,7 +679,9 @@ class IdentityContinuityEngine:
                 self._dependency(
                     source,
                     f"identity_transition:{transition}",
-                    0.90 if transition == "IdentityPreserved" else 0.76,
+                    0.90
+                    if transition in {"IdentityPreserved", "IdentityReplication"}
+                    else 0.76,
                     {"transition": transition, "count": count},
                 )
             )
@@ -848,6 +915,7 @@ class IdentityContinuityEngine:
     def _sequence_continuity_state(
         self,
         identity_preserved: bool,
+        has_replication: bool,
         has_split: bool,
         has_merge: bool,
         has_interruption: bool,
@@ -855,6 +923,8 @@ class IdentityContinuityEngine:
     ) -> str:
         if has_interruption:
             return "IDENTITY_SEQUENCE_INTERRUPTED"
+        if has_replication:
+            return "IDENTITY_SEQUENCE_REPLICATION"
         if has_split:
             return "IDENTITY_SEQUENCE_SPLIT"
         if has_merge:
@@ -890,11 +960,34 @@ class IdentityContinuityEngine:
                 self._dependency(
                     source,
                     f"temporal_identity_transition:{transition}",
-                    0.92 if transition == "IdentityPreserved" else 0.78,
+                    0.92
+                    if transition in {"IdentityPreserved", "IdentityReplication"}
+                    else 0.78,
                     {"transition": transition, "count": count},
                 )
             )
         return evidence
+
+    def _replication_safe_policy(self, sequence: Mapping[str, Any]) -> dict[str, Any]:
+        replication_detected = sequence.get("identity_replication") is True
+        causal_lineage_preserved = (
+            sequence.get("identity_continuity_preserved") is True
+            and clamp(sequence.get("identity_continuity", 0.0))
+            >= self.minimum_continuity
+        )
+        dependency_graph_valid = sequence.get("identity_split") is not True
+        authorized = (
+            replication_detected
+            and causal_lineage_preserved
+            and dependency_graph_valid
+        )
+        return {
+            "policy": "REPLICATION_SAFE_POLICY",
+            "identity_replication_detected": replication_detected,
+            "causal_lineage_preserved": causal_lineage_preserved,
+            "dependency_graph_valid": dependency_graph_valid,
+            "execution_authorized": authorized,
+        }
 
     def _dependency(
         self,

@@ -49,6 +49,13 @@ class DependencyDiscoveryEngine:
                 "descendant_identity_mapping",
                 "object_count_increase",
             ],
+            "replication": [
+                "object_ancestry",
+                "object_descendants",
+                "causal_prerequisites",
+                "transformation_dependencies",
+                "execution_dependencies",
+            ],
             "density_modulation": [
                 "density_behavior",
                 "fill_pattern",
@@ -58,7 +65,8 @@ class DependencyDiscoveryEngine:
         self.transformation_dependency_templates = {
             "duplication": [
                 "object_count_increase",
-                "identity_split",
+                "identity_replication",
+                "lineage_continuity",
                 "topology_splitting",
                 "shape_preservation_expected",
                 "color_change_possible",
@@ -79,6 +87,14 @@ class DependencyDiscoveryEngine:
                 "lineage_continuity",
                 "identity_branching",
                 "descendant_identity_mapping",
+            ],
+            "identity_replication": [
+                "lineage_continuity",
+                "object_ancestry",
+                "object_descendants",
+                "causal_prerequisites",
+                "transformation_dependencies",
+                "execution_dependencies",
             ],
             "identity_preserved": [
                 "identity_continuity",
@@ -488,8 +504,68 @@ class DependencyDiscoveryEngine:
             report["dependencies"],
             report["critical_missing_dependencies"],
         )
+        report["dependency_graph"] = self.build_dependency_graph(
+            report["dependencies"]
+        )
+        report["dependency_chains"] = self.build_dependency_chains(
+            report["dependencies"]
+        )
+        report["causal_evidence"] = self.build_causal_evidence(
+            report["dependencies"]
+        )
         self.known_dependency_memory[concept] = report
         return report
+
+    def build_dependency_graph(self, dependencies):
+        nodes = sorted({
+            str(value)
+            for dependency in list(dependencies or [])
+            for value in (dependency.get("source"), dependency.get("target"))
+            if value
+        })
+        edges = [
+            {
+                "source": dependency.get("source"),
+                "target": dependency.get("target"),
+                "relation": dependency.get("relation", "depends_on"),
+                "confidence": dependency.get("confidence", 0.0),
+                "dependency_type": dependency.get("dependency_type"),
+            }
+            for dependency in list(dependencies or [])
+        ]
+        return {"nodes": nodes, "edges": edges}
+
+    def build_dependency_chains(self, dependencies):
+        return [
+            [
+                dependency.get("source"),
+                dependency.get("relation", "depends_on"),
+                dependency.get("target"),
+            ]
+            for dependency in list(dependencies or [])
+        ]
+
+    def build_causal_evidence(self, dependencies):
+        return [
+            {
+                "question": self._causal_question(dependency.get("target")),
+                "source": dependency.get("source"),
+                "target": dependency.get("target"),
+                "confidence": dependency.get("confidence", 0.0),
+                "supporting_signals": dependency.get("supporting_signals", []),
+            }
+            for dependency in list(dependencies or [])
+        ]
+
+    def _causal_question(self, target):
+        target = str(target or "")
+        if "ancestry" in target or "descendant" in target:
+            return "What produced this object?"
+        if "execution" in target:
+            return "What depends on this object?"
+        if "prerequisite" in target or "transformation" in target:
+            return "What must exist before this transformation?"
+        return "What breaks if this object disappears?"
 
     def recommend_action(self, dependencies, missing_critical):
         dependencies = list(dependencies or [])

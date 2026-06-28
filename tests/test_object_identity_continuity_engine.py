@@ -26,20 +26,33 @@ def test_object_identity_continuity_preserves_recolored_object():
     assert "identity_transition:IdentityPreserved" in evidence_targets(report)
 
 
-def test_object_identity_continuity_detects_split_lineage():
+def test_object_identity_continuity_detects_replication_lineage():
     report = IdentityContinuityEngine().evaluate_objects(
         [[1, 0, 0]],
         [[1, 0, 1]],
     )
 
-    assert report["continuity_state"] == "OBJECT_IDENTITY_SPLIT"
-    assert report["identity_split"] is True
-    assert report["transition_counts"]["IdentitySplit"] == 2
+    assert report["continuity_state"] == "OBJECT_IDENTITY_REPLICATION"
+    assert report["identity_replication"] is True
+    assert report["identity_split"] is False
+    assert report["transition_counts"]["IdentityReplication"] == 2
     assert {
         mapping["object_t1"]
         for mapping in report["object_temporal_mappings"]
-        if mapping["identity_transition"] == "IdentitySplit"
+        if mapping["identity_transition"] == "IdentityReplication"
     } == {"obj_1", "obj_2"}
+
+
+def test_object_identity_continuity_detects_split_lineage():
+    report = IdentityContinuityEngine().evaluate_objects(
+        [[1, 1, 0]],
+        [[1, 0, 1]],
+    )
+
+    assert report["continuity_state"] == "OBJECT_IDENTITY_SPLIT"
+    assert report["identity_split"] is True
+    assert report["identity_replication"] is False
+    assert report["transition_counts"]["IdentitySplit"] == 2
 
 
 def test_object_identity_continuity_detects_created_object():
@@ -106,7 +119,7 @@ def test_identity_continuity_sequence_preserves_recolored_object_lineage():
     )
 
 
-def test_identity_continuity_sequence_detects_temporal_split():
+def test_identity_continuity_sequence_detects_temporal_replication():
     report = IdentityContinuityEngine().evaluate_sequence(
         [
             [[1, 0, 0]],
@@ -115,9 +128,27 @@ def test_identity_continuity_sequence_detects_temporal_split():
         ],
     )
 
+    assert report["continuity_state"] == "IDENTITY_SEQUENCE_REPLICATION"
+    assert report["identity_continuity_preserved"] is True
+    assert report["identity_replication"] is True
+    assert report["identity_split"] is False
+    assert report["identity_governance_gates"]["identity_stable"] is True
+    assert report["transition_counts"]["IdentityReplication"] == 2
+
+
+def test_identity_continuity_sequence_detects_temporal_split():
+    report = IdentityContinuityEngine().evaluate_sequence(
+        [
+            [[1, 1, 0]],
+            [[1, 0, 1]],
+            [[1, 0, 1]],
+        ],
+    )
+
     assert report["continuity_state"] == "IDENTITY_SEQUENCE_SPLIT"
     assert report["identity_continuity_preserved"] is True
     assert report["identity_split"] is True
+    assert report["identity_replication"] is False
     assert report["identity_governance_gates"]["identity_stable"] is False
     assert report["transition_counts"]["IdentitySplit"] == 2
 
@@ -158,23 +189,25 @@ def test_identity_runtime_exports_truth_commit_context_for_preserved_lineage():
     assert governance["identity_runtime_supported"] is True
 
 
-def test_identity_runtime_tracks_split_without_marking_identity_stable():
+def test_identity_runtime_keeps_replication_stable():
     runtime = IdentityContinuityEngine().run_identity_runtime(
         [
             [[1, 0, 0]],
             [[1, 0, 1]],
             [[1, 0, 1]],
         ],
+        concept="replication",
     )
     context_patch = runtime["truth_commit_context_patch"]
     governance = evaluate_identity_governance(context_patch)
 
-    assert runtime["runtime_state"] == "IDENTITY_RUNTIME_TRANSFORMED"
-    assert runtime["identity_split"] is True
+    assert runtime["runtime_state"] == "IDENTITY_RUNTIME_STABLE"
+    assert runtime["identity_replication"] is True
+    assert runtime["identity_split"] is False
     assert context_patch["identity_stability_report"][
         "identity_stability_state"
-    ] == "identity_branching_tracked"
-    assert governance["identity_stable"] is False
+    ] == "stable"
+    assert governance["identity_stable"] is True
     assert governance["semantic_spine_stable"] is True
 
 
@@ -502,7 +535,8 @@ def test_belief_engine_runs_identity_runtime_for_replication_family():
     )
 
     assert patch["identity_runtime_report"]["runtime_state"] is not None
-    assert patch["identity_runtime_report"]["identity_split"] is True
+    assert patch["identity_runtime_report"]["identity_replication"] is True
+    assert patch["identity_runtime_report"]["identity_split"] is False
 
 
 def test_belief_engine_identity_runtime_context_reads_task_path():

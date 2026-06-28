@@ -13,6 +13,7 @@ from runtime.profiling.runtime_profiler import runtime_profiler
 from runtime.profiling.shutdown_profiler import shutdown_profiler
 from runtime.profiling.stage_profiler import stage_profiler
 from runtime.profiling.telemetry_collector import telemetry
+from runtime.profiling.metric_bridge import runtime_metric_bridge
 
 
 class PerformanceReporter:
@@ -24,9 +25,18 @@ class PerformanceReporter:
     ) -> dict[str, Any]:
         runtime_context = runtime_context or {}
         performance_report = performance_report or runtime_context.get("performance_report", {})
+        runtime_context = {
+            **runtime_context,
+            "performance_report": performance_report,
+        }
         module_timings = list(performance_report.get("module_timings", []))
         if not module_timings:
             module_timings = list(performance_report.get("slowest_modules", []))
+        performance_report = runtime_metric_bridge.merge(
+            performance_report,
+            module_timings=module_timings,
+        )
+        runtime_context["performance_report"] = performance_report
 
         runtime_metrics = runtime_profiler.profile(
             performance_report,
@@ -78,6 +88,23 @@ class PerformanceReporter:
             memory_metrics.cache_hits / max(cache_total, 1),
             4,
         )
+        adaptive_reuse_report = self._mapping(
+            runtime_context.get("ADAPTIVE_REUSE_REPORT")
+            or runtime_context.get("adaptive_reuse_report")
+            or runtime_context.get("COGNITIVE_REUSE_REPORT")
+            or performance_report.get("adaptive_reuse_engine")
+        )
+        reuse_efficiency = round(
+            (
+                adaptive_reuse_report.get("cache_hits", 0)
+                / max(
+                    adaptive_reuse_report.get("cache_hits", 0)
+                    + adaptive_reuse_report.get("cache_misses", 0),
+                    1,
+                )
+            ),
+            4,
+        )
 
         report = {
             "system": "performance_intelligence_layer",
@@ -101,6 +128,19 @@ class PerformanceReporter:
                 "strategy_reuse_rate": strategy_reuse_rate,
                 "program_reuse_rate": program_reuse_rate,
                 "STRATEGY_REUSE_RATE": strategy_reuse_rate,
+            },
+            "adaptive_reuse_efficiency": {
+                "reuse_efficiency": reuse_efficiency,
+                "top_reused_assets":
+                adaptive_reuse_report.get("top_reused_assets", []),
+                "reuse_opportunities_missed":
+                adaptive_reuse_report.get("reuse_opportunities_missed", []),
+                "estimated_governance_saved":
+                adaptive_reuse_report.get("estimated_governance_saved", 0.0),
+                "estimated_dependency_saved":
+                adaptive_reuse_report.get("estimated_dependency_saved", 0.0),
+                "estimated_runtime_saved":
+                adaptive_reuse_report.get("estimated_runtime_saved", 0.0),
             },
             "shutdown_efficiency": {
                 **shutdown_metrics.as_dict(),
@@ -126,6 +166,9 @@ class PerformanceReporter:
             report["telemetry_events"] = telemetry.snapshot()
 
         return report
+
+    def _mapping(self, value):
+        return value if isinstance(value, dict) else {}
 
     def write_report(
         self,

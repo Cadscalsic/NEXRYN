@@ -102,6 +102,28 @@ class LocalizationController:
             prediction_accuracy=prediction_accuracy,
             integrity_preserved=integrity_preserved,
             identity_stable=identity_stable,
+            identity_confidence=1.0 if identity_stable else 0.0,
+            dependency_support=max(
+                clamp(hypothesis.get("semantic_support")),
+                clamp(hypothesis.get("causal_support")),
+                0.70
+                if result.get("target_objects")
+                or result.get("localized_step_count", 0) > 0
+                else 0.0,
+            ),
+            arbitration_score=clamp(
+                hypothesis.get("arbitration_score", hypothesis_confidence)
+            ),
+            winning_hypothesis_stable=hypothesis.get(
+                "winning_hypothesis_stable",
+                True,
+            ) is not False,
+            dependency_evidence_exists=bool(
+                result.get("target_objects")
+                or result.get("localized_step_count", 0) > 0
+                or hypothesis.get("semantic_support")
+                or hypothesis.get("causal_support")
+            ),
             contradiction_detected=contradiction_detected,
         )
         result.update(readiness)

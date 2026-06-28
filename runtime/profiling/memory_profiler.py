@@ -42,14 +42,54 @@ class MemoryProfiler:
         )
         cache_hits = int(self._number(performance_report.get("cache_hits")))
         cache_misses = int(self._number(performance_report.get("cache_misses")))
-        strategy_hits = int(self._number(reuse_report.get("strategy_hits")))
-        program_hits = int(self._number(reuse_report.get("program_hits")))
-        context_hits = int(self._number(reuse_report.get("context_hits")))
-        truth_hits = int(self._number(reuse_report.get("truth_hits")))
-        strategy_misses = 0 if strategy_hits else int(supervisor_report.get("selected_action") != "REUSE_KNOWN_STRATEGY")
-        program_misses = 0 if program_hits else int(supervisor_report.get("selected_action") != "REUSE_EXECUTABLE_PROGRAM")
-        context_misses = 0 if context_hits else int(supervisor_report.get("selected_action") != "REUSE_VALIDATED_CONTEXT")
-        truth_misses = 0 if truth_hits else int(supervisor_report.get("selected_action") != "REUSE_LOCKED_TRUTH")
+        strategy_hits = int(self._number(
+            performance_report.get("strategy_hits")
+            or reuse_report.get("strategy_hits")
+        ))
+        program_hits = int(self._number(
+            performance_report.get("program_hits")
+            or reuse_report.get("program_hits")
+        ))
+        context_hits = int(self._number(
+            performance_report.get("context_hits")
+            or reuse_report.get("context_hits")
+        ))
+        truth_hits = int(self._number(
+            performance_report.get("truth_hits")
+            or reuse_report.get("truth_hits")
+        ))
+        strategy_misses = int(self._number(
+            performance_report.get("strategy_misses")
+        ))
+        program_misses = int(self._number(
+            performance_report.get("program_misses")
+        ))
+        context_misses = int(self._number(
+            performance_report.get("context_misses")
+        ))
+        truth_misses = int(self._number(
+            performance_report.get("truth_misses")
+        ))
+        if not strategy_hits and not strategy_misses:
+            strategy_misses = int(
+                supervisor_report.get("selected_action")
+                != "REUSE_KNOWN_STRATEGY"
+            )
+        if not program_hits and not program_misses:
+            program_misses = int(
+                supervisor_report.get("selected_action")
+                != "REUSE_EXECUTABLE_PROGRAM"
+            )
+        if not context_hits and not context_misses:
+            context_misses = int(
+                supervisor_report.get("selected_action")
+                != "REUSE_VALIDATED_CONTEXT"
+            )
+        if not truth_hits and not truth_misses:
+            truth_misses = int(
+                supervisor_report.get("selected_action")
+                != "REUSE_LOCKED_TRUTH"
+            )
         reuse_events = cache_hits + strategy_hits + program_hits + context_hits + truth_hits
         queries = (
             reuse_events

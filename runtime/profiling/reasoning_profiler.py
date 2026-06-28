@@ -29,20 +29,32 @@ class ReasoningProfiler:
         module_timings: list[dict[str, Any]] | None = None,
     ) -> ReasoningMetrics:
         runtime_context = runtime_context or {}
+        performance_report = self._mapping(
+            runtime_context.get("performance_report")
+        )
         reasoning_report = self._mapping(runtime_context.get("reasoning_report"))
         routing_report = self._mapping(reasoning_report.get("routing_report"))
         evaluation = self._mapping(runtime_context.get("evaluation_result"))
         reasoning_depth = int(self._number(
             reasoning_report.get("reasoning_depth")
             or runtime_context.get("reasoning_depth")
+            or performance_report.get("reasoning_depth")
+            or performance_report.get("dependency_chain_depth")
             or 0
         ))
         active_routes = int(self._number(
             reasoning_report.get("active_routes")
             or routing_report.get("route_count")
+            or performance_report.get("dependency_chains_executed")
             or 0
         ))
-        semantic_concept_count = len(runtime_context.get("semantic_concepts", []) or [])
+        semantic_concepts = runtime_context.get("semantic_concepts", []) or []
+        semantic_concept_count = int(self._number(
+            performance_report.get("semantic_concept_count")
+            or performance_report.get("concepts_processed")
+            or len(semantic_concepts)
+            or 0
+        ))
         hypothesis_count = len(runtime_context.get("hypotheses", []) or [])
         counterfactual_count = len(runtime_context.get("counterfactuals", []) or [])
         reasoning_cost = self._reasoning_cost(

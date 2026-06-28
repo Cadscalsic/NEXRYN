@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 import hashlib
 import json
+import builtins
 from pathlib import Path
 import time
 from typing import Optional
@@ -48,6 +49,7 @@ class CacheEntry:
 
 
 class CognitiveCacheManager:
+    _legacy_warning_printed_global = False
 
     VOLATILE_CONTEXT_KEYS = {
         "timestamp",
@@ -78,6 +80,7 @@ class CognitiveCacheManager:
         self,
         cache_path=None,
         persistence_enabled=True,
+        max_load_bytes=25_000_000,
     ):
 
         self._cache = {}
@@ -88,10 +91,13 @@ class CognitiveCacheManager:
         self.invalidated_concepts = []
         self.cache_path = Path(cache_path or self.DEFAULT_CACHE_PATH)
         self.persistence_enabled = bool(persistence_enabled)
+        self.max_load_bytes = int(max_load_bytes)
+        self.loaded = False
+        self.load_skipped = False
+        self.load_skip_reason = None
         self.cache_load_time = 0.0
         self.cache_save_time = 0.0
         self._dirty = False
-        self.load()
 
     def build_key(
         self,
@@ -122,6 +128,7 @@ class CognitiveCacheManager:
 
     def lookup(self, cache_key):
 
+        self._ensure_loaded()
         if cache_key in self._cache:
             entry = self._cache[cache_key]
             if self._entry_invalid(cache_key, entry):
@@ -250,6 +257,7 @@ class CognitiveCacheManager:
 
     def invalidate(self, predicate=None):
 
+        self._ensure_loaded()
         if predicate is None:
             return 0
 
@@ -272,10 +280,20 @@ class CognitiveCacheManager:
 
         if not self.persistence_enabled:
             return 0
+        if self.loaded:
+            return len(self._cache)
 
         started_at = time.perf_counter()
         try:
             if not self.cache_path.exists():
+                self.loaded = True
+                return 0
+            if self.cache_path.stat().st_size > self.max_load_bytes:
+                self._cache = {}
+                self.loaded = True
+                self.load_skipped = True
+                self.load_skip_reason = "cache_file_too_large"
+                self._warn_legacy_cache_detected()
                 return 0
             with self.cache_path.open("r", encoding="utf-8") as handle:
                 payload = json.load(handle)
@@ -286,10 +304,20 @@ class CognitiveCacheManager:
                     key, value = restored
                     self._cache[key] = value
             self._dirty = False
+            self.loaded = True
             return len(self._cache)
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        except (
+            OSError,
+            json.JSONDecodeError,
+            TypeError,
+            ValueError,
+            MemoryError,
+        ):
             self._cache = {}
             self._dirty = False
+            self.loaded = True
+            self.load_skipped = True
+            self.load_skip_reason = "cache_unreadable"
             return 0
         finally:
             self.cache_load_time = round(
@@ -358,6 +386,9 @@ class CognitiveCacheManager:
             "cache_reuse_ratio": metrics.reuse_ratio,
             "cache_persistence_enabled":
             metrics.persistence_enabled,
+            "cache_loaded": self.loaded,
+            "cache_load_skipped": self.load_skipped,
+            "cache_load_skip_reason": self.load_skip_reason,
             "reused_concepts": list(self.reused_concepts),
             "invalidated_concepts": list(self.invalidated_concepts),
             "cache_entries": len(self._cache),
@@ -378,6 +409,22 @@ class CognitiveCacheManager:
                 for item in value
             ]
         return value
+
+    def _ensure_loaded(self):
+
+        if not self.loaded and not self.load_skipped:
+            self.load()
+
+    def _warn_legacy_cache_detected(self):
+
+        if (
+            CognitiveCacheManager._legacy_warning_printed_global
+            or getattr(builtins, "_nexryn_legacy_cache_warning", False)
+        ):
+            return
+        print("Legacy concept_cache.json detected but not loaded during boot")
+        CognitiveCacheManager._legacy_warning_printed_global = True
+        builtins._nexryn_legacy_cache_warning = True
 
     def _entry_invalid(self, cache_key, entry):
 

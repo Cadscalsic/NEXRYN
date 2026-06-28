@@ -243,6 +243,43 @@ from runtime.context.context_taxonomy_engine import (
     context_taxonomy_engine
 )
 
+from runtime.context.context_registry import (
+
+    ContextRegistry,
+
+    context_registry
+)
+
+from runtime.context.context_reuse_engine import (
+
+    ContextReuseEngine,
+
+    context_reuse_engine
+)
+
+from runtime.context.semantic_context_builder import (
+
+    SemanticContextBuilder,
+
+    semantic_context_builder
+)
+
+from runtime.context.context_hierarchy_engine import (
+
+    ContextHierarchyEngine,
+
+    context_hierarchy_engine
+)
+
+from runtime.context.context_validator import (
+
+    is_valid_context,
+
+    normalize_context,
+
+    validate_context_collection
+)
+
 from runtime.process.process_semantic_engine import (
 
     ProcessSemanticEngine,
@@ -426,5 +463,27 @@ __all__ = [
 
     "ContextTaxonomyEngine",
 
-    "context_taxonomy_engine"
+    "context_taxonomy_engine",
+
+    "ContextRegistry",
+
+    "context_registry",
+
+    "ContextReuseEngine",
+
+    "context_reuse_engine",
+
+    "SemanticContextBuilder",
+
+    "semantic_context_builder",
+
+    "ContextHierarchyEngine",
+
+    "context_hierarchy_engine",
+
+    "is_valid_context",
+
+    "normalize_context",
+
+    "validate_context_collection"
 ]

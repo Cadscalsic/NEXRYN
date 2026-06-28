@@ -24,8 +24,44 @@ class ProcessContext:
     concept: str = ""
     constraints: list[str] = field(default_factory=list)
 
-    def as_dict(self) -> dict[str, Any]:
+    @property
+    def governance_visible(self) -> bool:
+        return bool(
+            self.context_strength >= 0.85
+            and self.identity_continuity >= 0.85
+            and self.causal_alignment >= 0.85
+        )
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.governance_visible and self.dependency_links)
+
+    def compact_dict(self) -> dict[str, Any]:
+        return {
+            "context_name": self.name,
+            "concept": self.concept,
+            "process_family": self.process_family,
+            "context_type": "PROCESS_CONTEXT",
+            "process_context_strength": clamp(self.context_strength),
+            "identity_continuity": clamp(self.identity_continuity),
+            "causal_alignment": clamp(self.causal_alignment),
+            "governance_visible": self.governance_visible,
+            "process_context_ready": self.ready,
+            "dependency_link_count": len(self.dependency_links),
+            "transition_count": len(self.transition_signature),
+            "status": (
+                "PROCESS_CONTEXT_VALIDATED"
+                if self.ready
+                else "PROCESS_CONTEXT_SUPPORTED"
+            ),
+        }
+
+    def as_dict(self, compact: bool = False) -> dict[str, Any]:
+        if compact:
+            return self.compact_dict()
+
         data = asdict(self)
+
         data.update({
             "context_name": self.name,
             "context_type": "PROCESS_CONTEXT",
@@ -64,19 +100,8 @@ class ProcessContext:
                 "identity_scope_leakage_detected": False,
             },
         })
+
         return data
-
-    @property
-    def governance_visible(self) -> bool:
-        return bool(
-            self.context_strength >= 0.85
-            and self.identity_continuity >= 0.85
-            and self.causal_alignment >= 0.85
-        )
-
-    @property
-    def ready(self) -> bool:
-        return bool(self.governance_visible and self.dependency_links)
 
 
 class ProcessContextRegistry:
@@ -84,12 +109,26 @@ class ProcessContextRegistry:
 
     system_name = "process_context_registry"
 
-    def __init__(self):
+    def __init__(self, max_contexts: int = 512):
         self._contexts: dict[str, ProcessContext] = {}
+        self.max_contexts = max_contexts
+        self.registration_count = 0
+        self.replacement_count = 0
 
     def register(self, process_context: ProcessContext) -> dict[str, Any]:
-        self._contexts[process_context.name] = process_context
-        return process_context.as_dict()
+        name = str(process_context.name)
+
+        if name in self._contexts:
+            self.replacement_count += 1
+
+        self._contexts[name] = process_context
+        self.registration_count += 1
+
+        if len(self._contexts) > self.max_contexts:
+            oldest_key = next(iter(self._contexts))
+            self._contexts.pop(oldest_key, None)
+
+        return process_context.as_dict(compact=True)
 
     def register_semantic_model(self, model: Mapping[str, Any]) -> dict[str, Any]:
         context = process_context_from_mapping({
@@ -113,37 +152,62 @@ class ProcessContextRegistry:
                 model.get("transition_steps", []),
             ),
         })
+
         registered = self.register(context)
+
         return {
             **registered,
             "process_semantic_model": True,
-            "source_model": dict(model),
+            "source_model_summary": {
+                "concept": model.get("concept"),
+                "context_name": model.get("context_name"),
+                "transition_count": len(
+                    model.get("transition_steps", [])
+                    or model.get("transition_signature", [])
+                    or []
+                ),
+            },
         }
 
-    def get(self, name: str) -> dict[str, Any]:
+    def get(self, name: str, compact: bool = False) -> dict[str, Any]:
         context = self._contexts.get(str(name))
-        return context.as_dict() if context else {}
+        return context.as_dict(compact=compact) if context else {}
 
-    def all(self) -> list[dict[str, Any]]:
-        return [context.as_dict() for context in self._contexts.values()]
-
-    def report(self) -> dict[str, Any]:
-        contexts = self.all()
-        visible = [
-            context for context in contexts if context.get("governance_visible")
+    def all(self, compact: bool = True) -> list[dict[str, Any]]:
+        return [
+            context.as_dict(compact=compact)
+            for context in self._contexts.values()
         ]
+
+    def report(self, compact: bool = True) -> dict[str, Any]:
+        contexts = self.all(compact=compact)
+
+        visible = [
+            context
+            for context in contexts
+            if context.get("governance_visible")
+        ]
+
+        process_semantic_models = {
+            context.get("concept"): context
+            for context in contexts
+            if context.get("concept")
+        }
+
         return {
             "system": self.system_name,
             "contexts": contexts,
-            "process_semantic_models": {
-                context.get("concept"): context
-                for context in contexts
-                if context.get("concept")
-            },
+            "process_semantic_models": process_semantic_models,
             "visible_contexts": visible,
             "process_context_count": len(contexts),
+            "visible_context_count": len(visible),
+            "registration_count": self.registration_count,
+            "replacement_count": self.replacement_count,
+            "compact_report": compact,
             "process_context_registration_rate": (
-                round(len(visible) / len(contexts), 4) if contexts else 1.0
+                round(len(visible) / len(contexts), 4)
+                if contexts
+                else 1.0
             ),
         }
 

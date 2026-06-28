@@ -343,6 +343,23 @@ def transformation_stage(context):
     # WORLD MODEL SIMULATION
     # ========================================
 
+    execution_plan_context = (
+        context.get("pre_reasoning_execution_plan")
+        or context.get("execution_plan")
+        or {}
+    )
+    enabled_layers = set(
+        execution_plan_context.get("enabled_layers", [])
+    )
+    disabled_layers = set(
+        execution_plan_context.get("disabled_layers", [])
+    )
+    world_model_skipped = (
+        bool(execution_plan_context)
+        and "world_model" in disabled_layers
+        and "world_model" not in enabled_layers
+    )
+
     simulation_result = {}
 
     prediction_report = {
@@ -354,47 +371,66 @@ def transformation_stage(context):
 
     predicted_simulation = None
 
-    try:
-
-        simulation_result = (
-
-            world_model_engine
-            .simulate_transformation(
-
-                input_array,
-
-                synthesized_program
-            )
-        )
-
-        predicted_simulation = (
-
-            simulation_result.get(
-                "predicted_grid"
-            )
-        )
-
-        prediction_report = (
-
-            world_model_engine
-            .evaluate_prediction(
-
-                predicted_simulation,
-
-                output_array
-            )
-        )
-
-    except Exception as error:
+    if world_model_skipped:
 
         prediction_report = {
-
+            "system": "world_model",
+            "report_state": "skipped",
+            "skipped": True,
+            "skip_reason": execution_plan_context.get(
+                "skip_reasons",
+                {},
+            ).get(
+                "world_model",
+                "not_required_by_task_profile",
+            ),
             "accuracy": 0.0,
-
             "success": False,
-
-            "error": repr(error)
         }
+
+    else:
+
+        try:
+
+            simulation_result = (
+
+                world_model_engine
+                .simulate_transformation(
+
+                    input_array,
+
+                    synthesized_program
+                )
+            )
+
+            predicted_simulation = (
+
+                simulation_result.get(
+                    "predicted_grid"
+                )
+            )
+
+            prediction_report = (
+
+                world_model_engine
+                .evaluate_prediction(
+
+                    predicted_simulation,
+
+                    output_array
+                )
+            )
+
+        except Exception as error:
+
+            prediction_report = {
+
+                "accuracy": 0.0,
+
+                "success": False,
+
+                "error": repr(error)
+            }
 
     # ========================================
     # WORLD CONSISTENCY

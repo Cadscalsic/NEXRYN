@@ -4,6 +4,7 @@ from runtime.world.world_model import WorldModelEngine
 from core.scene_graph import GraphReasoner
 from runtime.execution.execution_integrity_guard import ExecutionIntegrityGuard
 from runtime.execution.world_model_gate import WorldModelGate
+from runtime.transformation_localization import ExecutionReadinessCalibrator
 from runtime.transformation_localization import localization_controller
 from runtime.kernel.cognitive_blackboard import CognitiveBlackboard
 from runtime.planning.planning_engine import PlanningEngine
@@ -108,6 +109,24 @@ def test_localization_controller_calibrates_zero_confidence_with_fallback():
     }
     assert calibrated["execution_ready"] is True
     assert calibrated["LOCALIZATION_REPORT"]["execution_authorized"] is True
+
+
+def test_medium_localization_confidence_allows_probable_sandbox_execution():
+    readiness = ExecutionReadinessCalibrator().evaluate(
+        hypothesis_confidence=0.92,
+        localization_confidence=0.748,
+        prediction_accuracy=0.91,
+        identity_confidence=0.95,
+        dependency_support=0.94,
+        arbitration_score=0.91,
+        winning_hypothesis_stable=True,
+        dependency_evidence_exists=True,
+    )
+
+    assert readiness["localization_confidence_band"] == "MEDIUM"
+    assert readiness["readiness_class"] == "READINESS_HIGH"
+    assert readiness["execution_governance_state"] == "EXECUTION_PROBABLE"
+    assert readiness["execution_ready"] is True
 
 
 def test_color_mapping_localizes_to_object_level_executable_rule():

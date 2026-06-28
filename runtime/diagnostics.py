@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any, Dict, List, Optional
 
 
@@ -21,6 +22,95 @@ class ConceptDiagnostic:
     how_we_know: Optional[List[str]] = None
     when_valid: Optional[List[str]] = None
     when_invalid: Optional[List[str]] = None
+
+
+class RuntimeWatchdog:
+    DEFAULT_THRESHOLDS = {
+        "boot_total": 5.0,
+        "cache_init": 1.0,
+        "task_selection": 2.0,
+        "governance": 10.0,
+        "finalization": 3.0,
+    }
+
+    def __init__(self, thresholds: Optional[Dict[str, float]] = None):
+        self.thresholds = {
+            **self.DEFAULT_THRESHOLDS,
+            **(thresholds or {}),
+        }
+        self._starts: Dict[str, float] = {}
+        self.durations: Dict[str, float] = {}
+        self.checkpoints: Dict[str, float] = {}
+        self.warnings: List[Dict[str, float]] = []
+
+    def start(self, label: str) -> float:
+        self._starts[str(label)] = time.perf_counter()
+        return self._starts[str(label)]
+
+    def stop(self, label: str) -> float:
+        label = str(label)
+        started = self._starts.get(label)
+        if started is None:
+            return 0.0
+        duration = time.perf_counter() - started
+        self.durations[label] = duration
+        return duration
+
+    def checkpoint(self, label: str) -> float:
+        self.checkpoints[str(label)] = time.perf_counter()
+        return self.checkpoints[str(label)]
+
+    def exceeded(self, label: str, threshold_seconds: float) -> bool:
+        label = str(label)
+        duration = self.durations.get(label)
+        if duration is None and label in self._starts:
+            duration = time.perf_counter() - self._starts[label]
+        exceeded = bool(duration is not None and duration > threshold_seconds)
+        if exceeded:
+            self.warn(label, duration, threshold_seconds)
+        return exceeded
+
+    def warn(
+        self,
+        label: str,
+        duration: float,
+        threshold_seconds: float,
+    ) -> Dict[str, float]:
+        warning = {
+            "stage": str(label),
+            "duration": round(float(duration), 4),
+            "threshold": float(threshold_seconds),
+        }
+        if warning not in self.warnings:
+            self.warnings.append(warning)
+            print(
+                "NEXRYN WATCHDOG WARNING :: "
+                f"{warning['stage']} took {warning['duration']}s "
+                f"(threshold {warning['threshold']}s)"
+            )
+        return warning
+
+    def stop_and_warn(
+        self,
+        label: str,
+        threshold_label: Optional[str] = None,
+    ) -> float:
+        duration = self.stop(label)
+        threshold = self.thresholds.get(threshold_label or label)
+        if threshold is not None and duration > threshold:
+            self.warn(label, duration, threshold)
+        return duration
+
+    def report(self) -> Dict[str, Any]:
+        return {
+            "system": "runtime_watchdog",
+            "durations": {
+                key: round(value, 4)
+                for key, value in self.durations.items()
+            },
+            "checkpoints": sorted(self.checkpoints),
+            "warnings": list(self.warnings),
+        }
 
 
 class RuntimeDiagnostics:

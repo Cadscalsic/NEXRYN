@@ -9,6 +9,5 @@ outputs/
 error_log.txt
 *.zip
 memory/*.json
-runtime/cache/concept_cache.json
-runtime/cache/
-runtime/cache/
+runtime/cache/*.json
+runtime/cache/.adaptive_cache_migrated

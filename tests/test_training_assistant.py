@@ -10,7 +10,7 @@ def task_files(count=12):
     ]
 
 
-def test_training_assistant_selects_five_tasks_and_resumes_active_batch(
+def test_training_assistant_selects_three_tasks_and_resumes_active_batch(
     tmp_path,
 ):
     state_path = tmp_path / "training_assistant_state.json"
@@ -25,8 +25,6 @@ def test_training_assistant_selects_five_tasks_and_resumes_active_batch(
         "task_001.json",
         "task_002.json",
         "task_003.json",
-        "task_004.json",
-        "task_005.json",
     ]
     assert selected["resumed_active_batch"] is False
     assert resumed["selected_task_files"] == selected["selected_task_files"]
@@ -49,11 +47,9 @@ def test_training_assistant_advances_after_completed_cycle(tmp_path):
     )
     assert completion["completed_cycles"] == 1
     assert selected["selected_task_files"] == [
+        "task_004.json",
+        "task_005.json",
         "task_006.json",
-        "task_007.json",
-        "task_008.json",
-        "task_009.json",
-        "task_010.json",
     ]
 
 
@@ -67,11 +63,13 @@ def test_training_assistant_wraps_at_end_of_task_list(tmp_path):
     assistant.complete_cycle()
     assistant.select_batch(tasks)
     assistant.complete_cycle()
+    assistant.select_batch(tasks)
+    assistant.complete_cycle()
+    assistant.select_batch(tasks)
+    assistant.complete_cycle()
     selected = assistant.select_batch(tasks)
 
     assert selected["selected_task_files"] == [
-        "task_011.json",
-        "task_012.json",
         "task_001.json",
         "task_002.json",
         "task_003.json",

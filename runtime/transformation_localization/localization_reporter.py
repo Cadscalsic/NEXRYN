@@ -17,6 +17,13 @@ class LocalizationReporter:
             "system": "LOCALIZATION_REPORT",
             "localization_confidence": localization.get("localization_confidence", 0.0),
             "execution_readiness": readiness.get("execution_readiness", 0.0),
+            "readiness_class": readiness.get("readiness_class"),
+            "localization_confidence_band":
+            readiness.get("localization_confidence_band"),
+            "execution_governance_state":
+            readiness.get("execution_governance_state"),
+            "sandbox_execution_authorized":
+            readiness.get("sandbox_execution_authorized") is True,
             "target_objects": localization.get("target_objects", []),
             "fallback_used": localization.get("fallback_used"),
             "localization_attempts": budget_report.get("localization_attempts", 0),

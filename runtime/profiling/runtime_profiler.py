@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from runtime.profiling.metric_bridge import runtime_metric_bridge
+
 
 @dataclass
 class RuntimeMetrics:
@@ -13,6 +15,11 @@ class RuntimeMetrics:
     shutdown_time_seconds: float
     active_compute_time_seconds: float
     idle_time_seconds: float
+    task_execution_time_seconds: float = 0.0
+    governance_time_seconds: float = 0.0
+    dependency_reasoning_time_seconds: float = 0.0
+    cache_time_seconds: float = 0.0
+    finalization_time_seconds: float = 0.0
 
     def as_dict(self) -> dict[str, float]:
         return asdict(self)
@@ -34,14 +41,45 @@ class RuntimeProfiler:
             if "finalize" in str(item.get("module", ""))
             or "shutdown" in str(item.get("module", ""))
         )
-        active_compute = sum(self._float(item.get("seconds")) for item in module_timings)
+        active_compute = self._float(
+            performance_report.get("active_compute_time_seconds")
+        )
+        if active_compute <= 0.0:
+            active_compute = sum(
+                self._float(item.get("seconds"))
+                for item in module_timings
+            )
+        timing_bridge = runtime_metric_bridge.synchronize(
+            {
+                **performance_report,
+                "total_runtime_seconds": total_runtime,
+                "active_compute_time_seconds": active_compute,
+            },
+            module_timings=module_timings,
+        )
         idle = max(0.0, total_runtime - active_compute)
         return RuntimeMetrics(
             total_runtime_seconds=round(total_runtime, 4),
-            startup_time_seconds=round(startup, 4),
-            shutdown_time_seconds=round(shutdown, 4),
-            active_compute_time_seconds=round(active_compute, 4),
-            idle_time_seconds=round(idle, 4),
+            startup_time_seconds=timing_bridge["startup_time_seconds"]
+            or round(startup, 4),
+            shutdown_time_seconds=timing_bridge["shutdown_time_seconds"]
+            or round(shutdown, 4),
+            active_compute_time_seconds=timing_bridge[
+                "active_compute_time_seconds"
+            ] or round(active_compute, 4),
+            idle_time_seconds=timing_bridge["idle_time_seconds"]
+            or round(idle, 4),
+            task_execution_time_seconds=timing_bridge[
+                "task_execution_time_seconds"
+            ],
+            governance_time_seconds=timing_bridge["governance_time_seconds"],
+            dependency_reasoning_time_seconds=timing_bridge[
+                "dependency_reasoning_time_seconds"
+            ],
+            cache_time_seconds=timing_bridge["cache_time_seconds"],
+            finalization_time_seconds=timing_bridge[
+                "finalization_time_seconds"
+            ],
         )
 
     def _module_time(self, module_timings, module_name):
