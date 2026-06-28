@@ -21,6 +21,12 @@ from runtime.transformation_localization.object_targeting_engine import (
     ObjectTargetingEngine,
     object_targeting_engine,
 )
+from runtime.grounding import (
+    GroundingMemory,
+    ObjectGroundingEngine,
+    grounding_memory,
+    object_grounding_engine,
+)
 
 __all__ = [
     "ExecutionReadinessCalibrator",
@@ -29,9 +35,13 @@ __all__ = [
     "LocalizationFallbackManager",
     "LocalizationResult",
     "ObjectTargetingEngine",
+    "GroundingMemory",
+    "ObjectGroundingEngine",
     "execution_readiness_calibrator",
+    "grounding_memory",
     "localization_confidence_engine",
     "localization_controller",
     "localization_fallback_manager",
+    "object_grounding_engine",
     "object_targeting_engine",
 ]

@@ -6,6 +6,11 @@ from dataclasses import asdict, dataclass, field
 
 
 WORLD_GOVERNANCE_DECISIONS: tuple[str, ...] = (
+    "ALLOW",
+    "ALLOW_SANDBOX",
+    "ALLOW_PROBATION",
+    "DEFER",
+    "DENY",
     "ADMIT",
     "ADMIT_WITH_LIMITS",
     "QUARANTINE",
@@ -32,11 +37,28 @@ class WorldGovernanceDecision:
 
     @property
     def allowed(self) -> bool:
-        return self.decision in {"ADMIT", "ADMIT_WITH_LIMITS"}
+        return self.decision in {
+            "ADMIT",
+            "ADMIT_WITH_LIMITS",
+            "ALLOW",
+            "ALLOW_SANDBOX",
+            "ALLOW_PROBATION",
+        }
+
+    @property
+    def permission(self) -> str:
+        if self.decision in {"ADMIT", "ALLOW"}:
+            return "ALLOW"
+        if self.decision == "ADMIT_WITH_LIMITS":
+            return "ALLOW_PROBATION"
+        if self.decision == "REQUIRE_MORE_EVIDENCE":
+            return "DEFER"
+        return "DENY"
 
     def as_dict(self) -> dict:
         payload = asdict(self)
         payload["allowed"] = self.allowed
+        payload["permission"] = self.permission
         return payload
 
 

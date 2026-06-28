@@ -462,6 +462,33 @@ class ConceptMaturityTracker:
                     promotion,
                     "RUNTIME_TRUTH_CANDIDATE_READY",
                 )
+            elif (
+                promotion.get("candidate_ready") is True
+                and promotion.get("dependency_chain_complete_for_promotion") is True
+                and promotion.get("readiness_gates", {}).get(
+                    "process_context_ready",
+                    True,
+                ) is True
+                and used_task_count >= self.TRUTH_CANDIDATE_MINIMUM_TASKS
+            ):
+                graduation = {
+                    **graduation,
+                    "graduation_stage": "TRUTH_CANDIDATE",
+                    "promotion_stage": "TRUTH_CANDIDATE",
+                    "current_stage": "TRUTH_CANDIDATE",
+                    "next_stage": "ESTABLISHED_TRUTH",
+                    "candidate_ready": True,
+                    "eligible_for_context": True,
+                    "eligible_for_truth_candidate": True,
+                    "promotion_reason":
+                    "TRUTH_CANDIDATE: dependency-synchronized gates satisfied",
+                    "graduation_reason":
+                    "TRUTH_CANDIDATE: dependency-synchronized gates satisfied",
+                }
+                promotion = self._lock_candidate_ready(
+                    promotion,
+                    "DEPENDENCY_SYNCHRONIZED_TRUTH_CANDIDATE_READY",
+                )
             state = graduation["promotion_stage"]
             context_artifacts = self._context_artifacts(
                 concept,

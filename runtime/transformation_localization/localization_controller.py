@@ -25,6 +25,7 @@ from runtime.transformation_localization.object_targeting_engine import (
     object_targeting_engine,
 )
 from runtime.transformation_localization.localization_metrics import clamp
+from runtime.grounding.object_grounding_engine import object_grounding_engine
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class LocalizationController:
         integrity_preserved: bool = True,
         identity_stable: bool = True,
         contradiction_detected: bool = False,
+        runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         logger.info("[LOCALIZATION] start")
         budget = localization_budget_controller.start()
@@ -49,6 +51,9 @@ class LocalizationController:
             synthesized_program if isinstance(synthesized_program, Mapping) else {}
         )
         hypothesis = hypothesis if isinstance(hypothesis, Mapping) else {}
+        runtime_context = (
+            runtime_context if isinstance(runtime_context, Mapping) else {}
+        )
         original_ready = result.get("localization_ready") is True
         original_confidence = clamp(result.get("localization_confidence"))
         original_step_count = int(result.get("localized_step_count", 0) or 0)
@@ -58,6 +63,17 @@ class LocalizationController:
             "target_objects": targeting.target_objects,
             "transformation_scope": targeting.transformation_scope,
         })
+        grounding_report = object_grounding_engine.ground(
+            hypothesis=hypothesis,
+            localization=result,
+            synthesized_program=synthesized_program,
+            runtime_context=runtime_context,
+        )
+        result = object_grounding_engine.recover_localization(
+            result,
+            grounding_report,
+            synthesized_program=synthesized_program,
+        )
 
         confidence = localization_confidence_engine.evaluate(
             result,
@@ -126,8 +142,42 @@ class LocalizationController:
             ),
             contradiction_detected=contradiction_detected,
         )
+        if (
+            result.get("localization_recovery_mode") is True
+            and prediction_accuracy >= 0.90
+            and readiness.get("safety_blocked") is not True
+        ):
+            readiness = {
+                **readiness,
+                "execution_ready": False,
+                "sandbox_execution_authorized": True,
+                "execution_governance_state": "EXECUTION_PROBATION",
+                "readiness_state": "EXECUTION_PROBATION",
+            }
         result.update(readiness)
         logger.info("[LOCALIZATION] execution_ready=%s", readiness.get("execution_ready"))
+        from runtime.execution.execution_readiness_explainer import (
+            execution_readiness_explainer,
+        )
+
+        governance = (
+            runtime_context.get("WORLD GOVERNANCE INTROSPECTION REPORT")
+            or runtime_context.get("world_governance_introspection_report")
+            or {}
+        )
+        if not isinstance(governance, Mapping):
+            governance = {}
+        readiness_report = execution_readiness_explainer.explain(
+            readiness=readiness,
+            localization=result,
+            grounding=grounding_report,
+            governance=governance,
+        )
+        result["EXECUTION READINESS REPORT"] = readiness_report
+        result["execution_readiness_report"] = readiness_report
+        if readiness_report.get("readiness_class") == "EXECUTION_PROBATION":
+            result["execution_probation"] = True
+            result["execution_governance_state"] = "EXECUTION_PROBATION"
 
         budget_report = localization_budget_controller.report(budget)
         result.update(budget_report)

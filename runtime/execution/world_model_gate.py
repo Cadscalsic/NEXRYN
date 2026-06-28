@@ -7,6 +7,9 @@ from runtime.transformation_localization.localization_metrics import (
     EXECUTION_THRESHOLD,
     MAX_WORLD_MODEL_RETRIES,
 )
+from runtime.governance.world_governance_introspection import (
+    world_governance_introspection,
+)
 
 
 class WorldModelGate:
@@ -57,19 +60,75 @@ class WorldModelGate:
             not execution_accepted
             and localization_readiness.get("execution_ready") is True
         )
+        probation_execution = (
+            not execution_accepted
+            and localization_readiness.get("execution_probation") is True
+        )
         if localization_confirmed:
             execution_accepted = True
             sandbox_execution_accepted = False
+        elif probation_execution:
+            sandbox_execution_accepted = True
         if motion_governance.get("execution_rejected") is True:
             execution_accepted = False
             sandbox_execution_accepted = False
             localization_confirmed = False
+            probation_execution = False
+        base_rejection = (
+            not execution_accepted
+            and not sandbox_execution_accepted
+            and motion_governance.get("execution_rejected") is not True
+        )
+        governance_introspection = world_governance_introspection.evaluate(
+            {
+                **anticipation_report,
+                "execution_readiness":
+                localization_readiness.get("execution_readiness", 0.0),
+                "confidence_required": EXECUTION_THRESHOLD,
+                "confidence_observed":
+                localization_readiness.get("execution_readiness", 0.0),
+            },
+            current_decision=(
+                "EXECUTION_ABORTED_WORLD_MODEL_REJECTION"
+                if base_rejection
+                else "ALLOW"
+                if execution_accepted
+                else "ALLOW_SANDBOX"
+                if sandbox_execution_accepted
+                else "DENY"
+            ),
+            rejection_reason=(
+                "motion_governance_rejection"
+                if motion_governance.get("execution_rejected") is True
+                else "world_model_rejected_execution_without_explanation"
+                if base_rejection
+                else None
+            ),
+            triggered_rules=self._triggered_rules(
+                anticipation_report,
+                localization_readiness,
+                motion_governance,
+                base_rejection,
+            ),
+        )
+        governance_decision = governance_introspection["decision"]
+        if (
+            base_rejection
+            and governance_decision in {"ALLOW_SANDBOX", "ALLOW_PROBATION"}
+        ):
+            sandbox_execution_accepted = True
+        elif base_rejection and governance_decision == "ALLOW":
+            execution_accepted = True
+            sandbox_execution_accepted = False
         gate_state = (
             "EXECUTION_ABORTED_MOTION_GOVERNANCE"
             if motion_governance.get("execution_rejected") is True
             else
             self.LOCALIZATION_CONFIRMED_STATE
             if localization_confirmed
+            else
+            "EXECUTION_PROBATION"
+            if probation_execution
             else
             "EXECUTION_AUTHORIZED"
             if execution_accepted
@@ -94,6 +153,8 @@ class WorldModelGate:
             "explicit_execution_acceptance_required": True,
             "sandbox_execution_isolated": sandbox_execution_accepted,
             "localization_confirmed": localization_confirmed,
+            "probation_execution": probation_execution,
+            "execution_probation": probation_execution,
             "execution_readiness":
             localization_readiness.get("execution_readiness", 0.0),
             "localization_execution_ready":
@@ -102,6 +163,20 @@ class WorldModelGate:
             localization_readiness.get("LOCALIZATION_REPORT", {}),
             "motion_governance":
             motion_governance,
+            "governance_decision": governance_decision,
+            "governance_decision_report":
+            governance_introspection.get("governance_decision_report", {}),
+            "WORLD GOVERNANCE INTROSPECTION REPORT":
+            governance_introspection,
+            "world_governance_introspection_report":
+            governance_introspection,
+            "learning_credit_authorized":
+            governance_introspection.get("learning_credit_authorized", False),
+            "evidence_accumulation_authorized":
+            governance_introspection.get(
+                "evidence_accumulation_authorized",
+                False,
+            ),
         }
 
     def _motion_governance_report(self, anticipation_report):
@@ -142,6 +217,29 @@ class WorldModelGate:
                 else []
             ),
         }
+
+    def _triggered_rules(
+        self,
+        anticipation_report,
+        localization_readiness,
+        motion_governance,
+        base_rejection,
+    ):
+        rules = []
+        if base_rejection:
+            rules.append("explicit_execution_acceptance_required")
+        if motion_governance.get("execution_rejected") is True:
+            rules.extend(motion_governance.get("reasons", []))
+        readiness_state = localization_readiness.get("readiness_state")
+        if readiness_state:
+            rules.append(readiness_state)
+        if self._contradiction_detected(anticipation_report):
+            rules.append("contradiction_detected")
+        if self._identity_unstable(anticipation_report):
+            rules.append("identity_unstable")
+        if anticipation_report.get("ontology_integrity_violation") is True:
+            rules.append("ontology_integrity_violation")
+        return list(dict.fromkeys(rules))
 
     def _execution_readiness_report(
         self,
@@ -205,6 +303,7 @@ class WorldModelGate:
                 contradiction_detected=self._contradiction_detected(
                     anticipation_report
                 ),
+                runtime_context=anticipation_report,
             )
 
         if self._contradiction_detected(anticipation_report):
@@ -308,9 +407,19 @@ class WorldModelGate:
             and shape_safe
             and integrity_preserved
         )
+        probation_execution = localization.get("execution_probation") is True
+        if probation_execution:
+            execution_ready = False
+            readiness["execution_governance_state"] = "EXECUTION_PROBATION"
+            readiness["readiness_state"] = "EXECUTION_PROBATION"
+            readiness["sandbox_execution_authorized"] = True
         if search_retry_limit_reached and execution_ready:
             readiness["readiness_state"] = "SEARCH_RETRY_LIMIT_EXECUTE_BEST_CANDIDATE"
         readiness["execution_ready"] = execution_ready
+        readiness["execution_probation"] = probation_execution
+        readiness["localization_recovery_mode"] = (
+            localization.get("localization_recovery_mode") is True
+        )
         readiness["localized_step_count"] = localized_step_count
         readiness["retry_count"] = retry_count
         readiness["max_world_model_retries"] = MAX_WORLD_MODEL_RETRIES
@@ -318,6 +427,15 @@ class WorldModelGate:
             "LOCALIZATION_REPORT",
             {},
         )
+        readiness["EXECUTION READINESS REPORT"] = localization.get(
+            "EXECUTION READINESS REPORT",
+            {},
+        )
+        readiness["OBJECT GROUNDING REPORT"] = localization.get(
+            "OBJECT GROUNDING REPORT",
+            {},
+        )
+        readiness["target_objects"] = localization.get("target_objects", [])
         return readiness
 
     def _localization_confirmed_execution_allowed(

@@ -221,6 +221,19 @@ class CompactReportBuilder:
             "unattributed_runtime_seconds": report.get(
                 "unattributed_runtime_seconds",
             ),
+            "untracked_runtime_seconds": report.get(
+                "untracked_runtime_seconds",
+            ),
+            "attributed_runtime_seconds": report.get(
+                "attributed_runtime_seconds",
+            ),
+            "runtime_breakdown": report.get("runtime_breakdown"),
+            "runtime_attribution_report": self._compact_value(
+                report.get("runtime_attribution_report", {}),
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
+            ),
             "governance_skip_count": report.get("governance_skip_count"),
             "dependency_snapshot_hits": report.get(
                 "dependency_snapshot_hits",

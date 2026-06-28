@@ -120,6 +120,21 @@ from runtime.process.process_semantic_engine import (
     process_semantic_engine
 )
 
+from runtime.governance.world_governance_introspection import (
+
+    GOVERNANCE_ACTIONS,
+
+    REJECTION_CATEGORIES,
+
+    GovernanceDecisionMemory,
+
+    WorldGovernanceIntrospection,
+
+    governance_decision_memory,
+
+    world_governance_introspection
+)
+
 # ============================================
 # EXPORTS
 # ============================================
@@ -203,5 +218,12 @@ __all__ = [
     "governance_cache_invalidation_engine",
 
     "ProcessSemanticEngine",
-    "process_semantic_engine"
+    "process_semantic_engine",
+
+    "GOVERNANCE_ACTIONS",
+    "REJECTION_CATEGORIES",
+    "GovernanceDecisionMemory",
+    "WorldGovernanceIntrospection",
+    "governance_decision_memory",
+    "world_governance_introspection"
 ]

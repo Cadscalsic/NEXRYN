@@ -16,6 +16,10 @@ from runtime.execution.world_model_gate import (
     WorldModelGate,
     world_model_gate,
 )
+from runtime.execution.execution_readiness_explainer import (
+    ExecutionReadinessExplainer,
+    execution_readiness_explainer,
+)
 
 
 
@@ -36,4 +40,8 @@ __all__ = [
     "WorldModelGate",
 
     "world_model_gate",
+
+    "ExecutionReadinessExplainer",
+
+    "execution_readiness_explainer",
 ]

@@ -85,6 +85,10 @@ class WorldGovernanceReporter:
         return payload
 
     def build_report(self) -> dict[str, Any]:
+        from runtime.governance.world_governance_introspection import (
+            world_governance_introspection,
+        )
+
         latest = self.decisions[-1] if self.decisions else {}
         latest_potential = (
             self.potential_worlds_reports[-1]
@@ -117,6 +121,16 @@ class WorldGovernanceReporter:
         }
         return {
             "WORLD_GOVERNANCE_REPORT": world_report,
+            "WORLD GOVERNANCE INTROSPECTION REPORT":
+            world_governance_introspection.build_report().get(
+                "WORLD GOVERNANCE INTROSPECTION REPORT",
+                {},
+            ),
+            "GOVERNANCE DECISION MEMORY":
+            world_governance_introspection.build_report().get(
+                "GOVERNANCE DECISION MEMORY",
+                {},
+            ),
             "POTENTIAL_WORLDS_REPORT": latest_potential.get(
                 "POTENTIAL_WORLDS_REPORT",
                 {},

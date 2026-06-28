@@ -13,6 +13,12 @@ class LocalizationReporter:
         budget_report: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         budget_report = budget_report if isinstance(budget_report, Mapping) else {}
+        readiness_report = localization.get("EXECUTION READINESS REPORT", {})
+        if not isinstance(readiness_report, Mapping):
+            readiness_report = {}
+        grounding_report = localization.get("OBJECT GROUNDING REPORT", {})
+        if not isinstance(grounding_report, Mapping):
+            grounding_report = {}
         return {
             "system": "LOCALIZATION_REPORT",
             "localization_confidence": localization.get("localization_confidence", 0.0),
@@ -23,8 +29,28 @@ class LocalizationReporter:
             "execution_governance_state":
             readiness.get("execution_governance_state"),
             "sandbox_execution_authorized":
-            readiness.get("sandbox_execution_authorized") is True,
+            readiness.get("sandbox_execution_authorized") is True
+            or readiness_report.get("readiness_class") == "EXECUTION_PROBATION",
+            "execution_probation":
+            readiness_report.get("readiness_class") == "EXECUTION_PROBATION",
             "target_objects": localization.get("target_objects", []),
+            "affected_objects": localization.get("affected_objects", []),
+            "anchor_objects": localization.get("anchor_objects", []),
+            "transformation_targets":
+            localization.get("transformation_targets", []),
+            "candidate_object_regions":
+            localization.get("candidate_object_regions", []),
+            "candidate_transform_regions":
+            localization.get("candidate_transform_regions", []),
+            "localization_hints": localization.get("localization_hints", []),
+            "object_detection": grounding_report.get("object_detection", 0.0),
+            "transformation_detection":
+            grounding_report.get("transformation_detection", 0.0),
+            "causal_support": grounding_report.get("causal_support", 0.0),
+            "OBJECT GROUNDING REPORT": grounding_report,
+            "EXECUTION READINESS REPORT": readiness_report,
+            "LOCALIZATION EXPLAINER REPORT":
+            grounding_report.get("LOCALIZATION EXPLAINER REPORT", {}),
             "fallback_used": localization.get("fallback_used"),
             "localization_attempts": budget_report.get("localization_attempts", 0),
             "execution_authorized": readiness.get("execution_ready") is True,

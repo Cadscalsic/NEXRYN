@@ -129,6 +129,52 @@ def test_medium_localization_confidence_allows_probable_sandbox_execution():
     assert readiness["execution_ready"] is True
 
 
+def test_residual_guided_grounding_recovers_empty_target_objects_for_probation():
+    calibrated = localization_controller.calibrate(
+        {
+            "localization_ready": False,
+            "localization_confidence": 0.1675,
+            "localized_step_count": 0,
+            "target_objects": [],
+            "localization_reports": [],
+        },
+        synthesized_program={
+            "step_count": 1,
+            "steps": [{
+                "operation": "replace_color",
+                "parameters": {},
+            }],
+        },
+        hypothesis={
+            "primitive": "replace_color",
+            "confidence": 0.92,
+        },
+        prediction_accuracy=0.92,
+        runtime_context={
+            "prediction_accuracy": 0.92,
+            "residual_locations": [(1, 2), (2, 2)],
+            "WORLD GOVERNANCE INTROSPECTION REPORT": {
+                "decision": "ALLOW_SANDBOX",
+                "trust_score": 1.0,
+                "risk_score": 0.0,
+                "learning_credit_authorized": True,
+            },
+        },
+    )
+
+    report = calibrated["LOCALIZATION_REPORT"]
+    readiness = calibrated["EXECUTION READINESS REPORT"]
+
+    assert calibrated["target_objects"]
+    assert report["object_detection"] > 0.0
+    assert report["transformation_detection"] > 0.0
+    assert report["candidate_object_regions"]
+    assert report["localization_hints"]
+    assert readiness["readiness_class"] == "EXECUTION_PROBATION"
+    assert calibrated["execution_probation"] is True
+    assert report["sandbox_execution_authorized"] is True
+
+
 def test_color_mapping_localizes_to_object_level_executable_rule():
     input_grid = [
         [0, 0, 0, 0, 0],

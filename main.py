@@ -102,9 +102,16 @@ def safe_print_context(results, report_level="normal"):
         from runtime.reporting.compact_report_builder import (
             compact_report_builder,
         )
-        from runtime.utils.normalization import normalize_context_object
+        from runtime.context.context_serializer import normalize_context
+        from runtime.context.context_validation_engine import (
+            context_validation_engine,
+        )
 
-        results = normalize_context_object(results)
+        results = normalize_context(results)
+        results.setdefault(
+            "context_validation_report",
+            context_validation_engine.validate(results),
+        )
 
         if isinstance(results, dict):
             training_report = results.get("training_report", {})
@@ -152,6 +159,20 @@ def safe_print_context(results, report_level="normal"):
 
     except Exception as error:
         print(f"CONTEXT PRINT FAILURE: {error}")
+        try:
+            from runtime.context.context_serializer import serialize_context
+
+            serialized = serialize_context(results)
+            print({
+                "context_print_fallback": True,
+                "context_id": serialized.context_id,
+                "serialized_context_bytes": len(serialized.payload),
+            })
+        except Exception as fallback_error:
+            print({
+                "context_print_fallback": False,
+                "failure_reason": str(fallback_error),
+            })
 
 
 # ============================================
@@ -1255,6 +1276,31 @@ try:
         performance_report["cache_hits"] / reuse_total,
         4,
     ) if reuse_total else 0.0
+    from runtime.performance.runtime_attribution_engine import (
+        runtime_attribution_engine,
+    )
+
+    runtime_attribution_report = runtime_attribution_engine.build_report(
+        total_runtime=total_runtime_seconds,
+        performance_report=performance_report,
+        runtime_metrics=runtime_metrics,
+        module_timings=module_timings,
+    )
+    performance_report["runtime_attribution_report"] = (
+        runtime_attribution_report
+    )
+    performance_report["runtime_breakdown"] = (
+        runtime_attribution_report["runtime_breakdown"]
+    )
+    performance_report["attributed_runtime_seconds"] = (
+        runtime_attribution_report["attributed_runtime"]
+    )
+    performance_report["unattributed_runtime_seconds"] = (
+        runtime_attribution_report["unattributed_runtime"]
+    )
+    performance_report["untracked_runtime_seconds"] = (
+        runtime_attribution_report["untracked_runtime"]
+    )
     from runtime.profiling.performance_reporter import performance_reporter
 
     performance_intelligence_report = performance_reporter.build_report(
@@ -1330,6 +1376,26 @@ try:
     truth_candidates = normalize_truth_candidates(training_report)
     truth_commits = training_report.get("truth_commit_evaluations", {})
     contexts = normalize_context_diagnostics(training_report)
+    from runtime.dependency.dependency_injection_audit import (
+        dependency_injection_audit,
+    )
+    from runtime.context.context_validation_engine import (
+        context_validation_engine,
+    )
+
+    dependency_audit_report = dependency_injection_audit.audit(
+        truth_candidate_report.get("evaluations", [])
+        if isinstance(truth_candidate_report, dict)
+        else concepts
+    )
+    context_validation_report = {
+        "system": "context_validation_batch",
+        "context_count": len(contexts),
+        "reports": [
+            context_validation_engine.validate(context)
+            for context in contexts.values()
+        ],
+    }
 
     results = {
         "multi_task_results": all_results,
@@ -1353,8 +1419,12 @@ try:
         "ledger_report": ledger_report,
         "concept_lifecycle_report": concept_lifecycle_report,
         "truth_candidate_report": truth_candidate_report,
+        "dependency_injection_audit": dependency_audit_report,
+        "DEPENDENCY INJECTION AUDIT": dependency_audit_report,
         "truth_commit_report": truth_commit_report,
         "contextual_truth_report": contextual_truth_report,
+        "context_validation_report": context_validation_report,
+        "CONTEXT VALIDATION REPORT": context_validation_report,
         "context_reuse_report": context_reuse_report,
         "CONTEXT REUSE REPORT": context_reuse_report,
         "truth_registry_report": truth_registry_report,
@@ -1415,6 +1485,46 @@ execution_time = round(
     time.time() - runtime_start,
     4,
 )
+
+if isinstance(results, dict) and isinstance(results.get("performance_report"), dict):
+    from runtime.performance.runtime_attribution_engine import (
+        runtime_attribution_engine,
+    )
+
+    final_performance_report = results["performance_report"]
+    final_runtime_attribution_report = (
+        runtime_attribution_engine.build_report(
+            total_runtime=execution_time,
+            performance_report=final_performance_report,
+            runtime_metrics=runtime_metrics,
+            module_timings=final_performance_report.get(
+                "module_timings",
+                [],
+            ),
+        )
+    )
+    final_performance_report["execution_time"] = execution_time
+    final_performance_report["total_runtime_seconds"] = execution_time
+    final_performance_report["runtime_attribution_report"] = (
+        final_runtime_attribution_report
+    )
+    final_performance_report["runtime_breakdown"] = (
+        final_runtime_attribution_report["runtime_breakdown"]
+    )
+    final_performance_report["attributed_runtime_seconds"] = (
+        final_runtime_attribution_report["attributed_runtime"]
+    )
+    final_performance_report["unattributed_runtime_seconds"] = (
+        final_runtime_attribution_report["unattributed_runtime"]
+    )
+    final_performance_report["untracked_runtime_seconds"] = (
+        final_runtime_attribution_report["untracked_runtime"]
+    )
+    results["RUNTIME ATTRIBUTION REPORT"] = final_runtime_attribution_report
+    if isinstance(results.get("PERFORMANCE_REPORT"), dict):
+        results["PERFORMANCE_REPORT"]["runtime_attribution_report"] = (
+            final_runtime_attribution_report
+        )
 
 
 # ============================================
@@ -1528,6 +1638,21 @@ if isinstance(results, dict) and results.get("performance_report"):
     print(
         compact_report_builder.compact_performance_report(
             results["performance_report"],
+        )
+    )
+
+if isinstance(results, dict) and results.get("RUNTIME ATTRIBUTION REPORT"):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: RUNTIME ATTRIBUTION REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["RUNTIME ATTRIBUTION REPORT"],
+            level=effective_report_level,
         )
     )
 
