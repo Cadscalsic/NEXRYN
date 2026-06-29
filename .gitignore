@@ -15,3 +15,5 @@ runtime/cache/concept_cache.json
 runtime/cache/
 runtime/cache/
 runtime/cache/concept_cache.json
+runtime/cache/
+*.cache
