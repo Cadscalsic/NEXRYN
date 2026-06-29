@@ -82,6 +82,7 @@ class ConceptLifecycleManager:
                     "truth_registry_report",
                     {},
                 ),
+                report_level=context.get("report_level", "full"),
             )
         )
 

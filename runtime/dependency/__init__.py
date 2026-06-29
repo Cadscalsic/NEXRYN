@@ -10,6 +10,10 @@ from runtime.dependency.dependency_graph_engine import DependencyGraphEngine
 from runtime.dependency.dependency_trace_engine import DependencyTraceEngine
 from runtime.dependency.explanation_engine import ExplanationEngine
 from runtime.dependency.reasoned_dependency_chain import ReasonedDependencyChain
+from runtime.dependency.dependency_visibility_engine import (
+    DependencyVisibilityEngine,
+    dependency_visibility_engine,
+)
 
 __all__ = [
     "DependencyChainBuilder",
@@ -17,7 +21,9 @@ __all__ = [
     "DependencyCoherenceEngine",
     "DependencyGraphEngine",
     "DependencyTraceEngine",
+    "DependencyVisibilityEngine",
     "ExplanationEngine",
     "ReasonedDependencyChain",
     "dependency_coherence_engine",
+    "dependency_visibility_engine",
 ]

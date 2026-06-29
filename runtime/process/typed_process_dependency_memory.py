@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import hashlib
+import json
 from typing import Any, Iterable, Mapping
 
 from core.epistemic_models import clamp
@@ -141,6 +143,8 @@ class TypedProcessDependencyMemory:
 
     def __init__(self, seed_defaults: bool = True):
         self._links: dict[str, list[TypedProcessDependency]] = {}
+        self._version = 0
+        self._signature_cache: str | None = None
         if seed_defaults:
             self.ingest(DEFAULT_TYPED_PROCESS_DEPENDENCIES)
             self._ingest_core_defaults()
@@ -163,12 +167,17 @@ class TypedProcessDependencyMemory:
                 ):
                     bucket.append(link)
                     ingested += 1
+        if ingested:
+            self._version += 1
+            self._signature_cache = None
         return {
             "system": self.system_name,
             "typed_process_dependencies": "enabled",
             "typed_process_dependencies_enabled": True,
             "process_dependency_links_ingested": ingested,
             "process_dependency_links_loaded": self.links_loaded,
+            "dependency_memory_version": self._version,
+            "dependency_memory_signature": self.dependency_signature(),
         }
 
     def links_for(
@@ -195,6 +204,23 @@ class TypedProcessDependencyMemory:
             for links in self._links.values()
             for link in links
         ]
+
+    def dependency_signature(self) -> str:
+        if self._signature_cache is not None:
+            return self._signature_cache
+        payload = [
+            {
+                "source": link.source,
+                "dependency_type": link.dependency_type,
+                "target": link.target,
+                "confidence": link.confidence,
+                "process_family": link.process_family,
+            }
+            for link in self.all_links()
+        ]
+        encoded = json.dumps(payload, sort_keys=True, default=str)
+        self._signature_cache = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return self._signature_cache
 
     def resolve(
         self,
@@ -226,6 +252,8 @@ class TypedProcessDependencyMemory:
             "process_dependency_links_loaded": self.links_loaded,
             "process_dependency_links_used": len(links),
             "relevant_process_dependency_links": len(links),
+            "dependency_memory_version": self._version,
+            "dependency_memory_signature": self.dependency_signature(),
             "dependency_type_coverage": sorted(
                 {link.dependency_type for link in links}
             ),
@@ -237,6 +265,8 @@ class TypedProcessDependencyMemory:
             "typed_process_dependencies": "enabled",
             "typed_process_dependencies_enabled": True,
             "process_dependency_links_loaded": self.links_loaded,
+            "dependency_memory_version": self._version,
+            "dependency_memory_signature": self.dependency_signature(),
             "process_families": sorted(self._links),
             "dependency_types": [
                 item.value for item in ProcessDependencyType

@@ -30,6 +30,10 @@ from runtime.truth.contextual_truth_engine import (
     ContextualTruthEngine,
     contextual_truth_engine,
 )
+from runtime.truth.truth_reuse_engine import (
+    TruthReuseEngine,
+    truth_reuse_engine,
+)
 
 
 __all__ = [
@@ -49,4 +53,6 @@ __all__ = [
     "truth_registry",
     "ContextualTruthEngine",
     "contextual_truth_engine",
+    "TruthReuseEngine",
+    "truth_reuse_engine",
 ]

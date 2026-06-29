@@ -129,6 +129,54 @@ def test_purges_heavy_objects_after_exact_success():
     assert purged["LOCALIZATION_REPORT_summary"]["localization_ready"] is True
 
 
+def test_compacts_concept_lifecycle_report_with_budget_marker():
+    report = {
+        "system": "concept_maturity_tracker",
+        "states": ["DISCOVERING", "TRUTH_CANDIDATE"],
+        "concepts": [{
+            "concept": "replication",
+            "state": "TRUTH_CANDIDATE",
+            "used_task_count": 42,
+            "task_ids": ["task_001.json"] * 42,
+            "promotion_score": 0.93,
+            "promotion_stage": "TRUTH_CANDIDATE",
+            "candidate_ready": True,
+            "blocked_metrics": [],
+            "context_artifacts": {"large": "payload"},
+            "truth_candidate_promotion": {
+                "promotion_dependency_score": 0.94,
+                "dependency_chain_depth": 5,
+                "dependency_chain_coverage": 1.0,
+                "dependency_promotion_blockers": [],
+            },
+        }],
+        "promotion_report": [{
+            "concept": "replication",
+            "promotion_score": 0.93,
+        }],
+        "context_count": 3,
+        "truth_candidate_count": 1,
+        "state_counts": {"TRUTH_CANDIDATE": 1},
+    }
+
+    compact = CompactReportBuilder().compact_concept_lifecycle_report(
+        report,
+        report_budget_seconds=2.0,
+        elapsed_seconds=3.5,
+    )
+
+    concept = compact["concepts"][0]
+    assert compact["concept_lifecycle_compressed"] is True
+    assert compact["report_budget_exceeded"] is True
+    assert compact["report_truncated_reason"] == (
+        "concept_lifecycle_report_budget"
+    )
+    assert compact["context_count"] == 3
+    assert "task_ids" not in concept
+    assert "context_artifacts" not in concept
+    assert concept["promotion_dependency_score"] == 0.94
+
+
 def test_summarizes_counterfactual_candidates():
     compact = CompactReportBuilder().compact_context(
         _heavy_context(),

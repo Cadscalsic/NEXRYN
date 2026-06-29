@@ -4,6 +4,10 @@ from runtime.knowledge.epistemic_graduation_engine import (
     EpistemicGraduationEngine,
     evaluate_concept_graduation,
 )
+from runtime.knowledge.knowledge_flow_engine import (
+    KnowledgeFlowEngine,
+    knowledge_flow_engine,
+)
 
 
 __all__ = [
@@ -11,4 +15,6 @@ __all__ = [
     "DEFAULT_PROMOTION_WEIGHTS",
     "EpistemicGraduationEngine",
     "evaluate_concept_graduation",
+    "KnowledgeFlowEngine",
+    "knowledge_flow_engine",
 ]

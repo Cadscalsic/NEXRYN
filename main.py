@@ -394,16 +394,6 @@ def _metric_number(value, default=0.0):
         return default
 
 
-def _walk_metric_mappings(value):
-    if isinstance(value, dict):
-        yield value
-        for item in value.values():
-            yield from _walk_metric_mappings(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _walk_metric_mappings(item)
-
-
 def build_runtime_metric_bridge(
     all_results,
     training_report,
@@ -436,10 +426,37 @@ def build_runtime_metric_bridge(
     dependency_chain_reports = 0
     semantic_counts = []
 
-    for mapping in _walk_metric_mappings({
-        "all_results": all_results,
-        "training_report": training_report,
-    }):
+    metric_sources = [
+        report
+        for report in task_performance_reports
+        if isinstance(report, dict)
+    ]
+    for item in all_results:
+        result = item.get("result", {})
+        if not isinstance(result, dict):
+            continue
+        for key in (
+            "performance_report",
+            "PERFORMANCE_REPORT",
+            "performance_intelligence_report",
+            "runtime_metadata",
+        ):
+            report = result.get(key)
+            if isinstance(report, dict):
+                metric_sources.append(report)
+    metric_sources.append(training_report)
+    for key in (
+        "concept_lifecycle",
+        "concept_lifecycle_report",
+        "architecture_bottleneck_report",
+        "dependency_visibility_report",
+        "runtime_attribution_report",
+    ):
+        report = training_report.get(key)
+        if isinstance(report, dict):
+            metric_sources.append(report)
+
+    for mapping in metric_sources:
         if "dependency_chain_depth" in mapping:
             depth = int(_metric_number(mapping.get("dependency_chain_depth")))
             dependency_depths.append(depth)
@@ -476,6 +493,23 @@ def build_runtime_metric_bridge(
     concepts_processed = max(concept_candidates + semantic_counts + [0])
     dependency_chain_depth = max(dependency_depths or [0])
     dependency_chain_coverage = max(dependency_coverages or [0.0])
+    dependency_executor_cache_misses = sum(
+        int(_metric_number(report.get("dependency_executor_cache_misses")))
+        for report in task_performance_reports
+    )
+    dependency_executor_cache_hits = sum(
+        int(_metric_number(report.get("dependency_executor_cache_hits")))
+        for report in task_performance_reports
+    )
+    reported_dependency_executions = sum(
+        int(_metric_number(report.get("dependency_chains_executed")))
+        for report in task_performance_reports
+    )
+    dependency_chains_executed = (
+        dependency_executor_cache_misses
+        if (dependency_executor_cache_hits or dependency_executor_cache_misses)
+        else max(reported_dependency_executions, dependency_chain_reports)
+    )
 
     warnings = []
     if concepts_processed == 0 and completed_tasks:
@@ -491,15 +525,8 @@ def build_runtime_metric_bridge(
         "context_count": len(contexts),
         "dependency_chain_depth": dependency_chain_depth,
         "dependency_chain_coverage": round(dependency_chain_coverage, 4),
-        "dependency_chains_executed": max(
-            sum(
-                int(_metric_number(
-                    report.get("dependency_chains_executed"),
-                ))
-                for report in task_performance_reports
-            ),
-            dependency_chain_reports,
-        ),
+        "dependency_chains_executed": dependency_chains_executed,
+        "dependency_chain_reports_observed": dependency_chain_reports,
         **timing_bridge,
         "metric_bridge": {
             "concept_sources": {
@@ -509,6 +536,9 @@ def build_runtime_metric_bridge(
             },
             "dependency_depth_samples": len(dependency_depths),
             "dependency_coverage_samples": len(dependency_coverages),
+            "reported_dependency_executions": reported_dependency_executions,
+            "dependency_executor_cache_hits": dependency_executor_cache_hits,
+            "dependency_executor_cache_misses": dependency_executor_cache_misses,
             "semantic_count_samples": len(semantic_counts),
             "timing_fields_synchronized": True,
         },
@@ -869,6 +899,13 @@ try:
     successful_tasks = 0
     failed_tasks = 0
     first_task_started = False
+    main_module_timings = []
+
+    def record_main_timing(module_name, started_at):
+        main_module_timings.append({
+            "module": module_name,
+            "seconds": round(time.perf_counter() - started_at, 4),
+        })
 
     if args.migrate_cache:
         from runtime.cache import CacheManager
@@ -1028,18 +1065,23 @@ try:
                 }
             )
 
+    module_start = time.perf_counter()
     training_assistant_report = training_assistant.complete_cycle(
         successful_tasks=successful_tasks,
         failed_tasks=failed_tasks,
     )
+    record_main_timing("training_assistant_complete", module_start)
 
+    module_start = time.perf_counter()
     ledger_report = (
         pipeline
         .cross_task_replication_collector
         .ledger
         .report()
     )
+    record_main_timing("ledger_report", module_start)
 
+    module_start = time.perf_counter()
     concept_lifecycle_report = (
         pipeline
         .concept_lifecycle_manager
@@ -1052,6 +1094,7 @@ try:
             .update_knowledge_maturity(
                 ledger_report,
                 {
+                    "report_level": args.report_level,
                     "truth_candidate_report": collect_governance_reports(
                         all_results,
                         [
@@ -1063,9 +1106,36 @@ try:
                 },
             )
         )
+    concept_lifecycle_elapsed = round(time.perf_counter() - module_start, 4)
+    if (
+        args.report_level != "full"
+        and not concept_lifecycle_report.get("concept_lifecycle_compressed")
+    ):
+        from runtime.reporting.compact_report_builder import (
+            compact_report_builder,
+        )
+
+        concept_lifecycle_report = (
+            compact_report_builder.compact_concept_lifecycle_report(
+                concept_lifecycle_report,
+                report_budget_seconds=2.0,
+                elapsed_seconds=concept_lifecycle_elapsed,
+            )
+        )
+        pipeline.concept_lifecycle_manager.knowledge_maturity_report = (
+            concept_lifecycle_report
+        )
+    elif concept_lifecycle_elapsed > 2.0:
+        concept_lifecycle_report["report_budget_seconds"] = 2.0
+        concept_lifecycle_report["report_elapsed_seconds"] = (
+            concept_lifecycle_elapsed
+        )
+        concept_lifecycle_report["report_budget_exceeded"] = True
+    record_main_timing("concept_lifecycle_report", module_start)
 
     from runtime.learning.training_report import build_training_report
 
+    module_start = time.perf_counter()
     training_report = build_training_report(
         training_batch=training_batch,
         training_assistant_report=training_assistant_report,
@@ -1074,7 +1144,9 @@ try:
         concept_lifecycle_report=concept_lifecycle_report,
         include_truth_evaluations=True,
     )
+    record_main_timing("build_training_report", module_start)
 
+    module_start = time.perf_counter()
     task_performance_reports = [
         item.get("result", {}).get("performance_report", {})
         for item in all_results
@@ -1092,15 +1164,25 @@ try:
         for report in task_performance_reports
         for module in report.get("module_timings", [])
     ]
+    module_timings.extend(main_module_timings)
     slowest_modules = sorted(
         [
             module
             for report in task_performance_reports
             for module in report.get("slowest_modules", [])
-        ],
+        ] + main_module_timings,
         key=lambda item: item.get("seconds", 0.0),
         reverse=True,
     )[:5]
+    record_main_timing("collect_task_performance_reports", module_start)
+    module_timings.append(main_module_timings[-1])
+    slowest_modules = sorted(
+        slowest_modules + [main_module_timings[-1]],
+        key=lambda item: item.get("seconds", 0.0),
+        reverse=True,
+    )[:5]
+
+    module_start = time.perf_counter()
     metric_bridge = build_runtime_metric_bridge(
         all_results=all_results,
         training_report=training_report,
@@ -1108,6 +1190,14 @@ try:
         module_timings=module_timings,
         runtime_metrics=runtime_metrics,
     )
+    record_main_timing("build_runtime_metric_bridge", module_start)
+    module_timings.append(main_module_timings[-1])
+    slowest_modules = sorted(
+        slowest_modules + [main_module_timings[-1]],
+        key=lambda item: item.get("seconds", 0.0),
+        reverse=True,
+    )[:5]
+    module_start = time.perf_counter()
     total_runtime_seconds = round(
         sum(
             report.get("total_runtime_seconds", 0.0)
@@ -1166,6 +1256,14 @@ try:
         ),
         "dependency_snapshot_hits": sum(
             report.get("dependency_snapshot_hits", 0)
+            for report in task_performance_reports
+        ),
+        "dependency_executor_cache_hits": sum(
+            report.get("dependency_executor_cache_hits", 0)
+            for report in task_performance_reports
+        ),
+        "dependency_executor_cache_misses": sum(
+            report.get("dependency_executor_cache_misses", 0)
             for report in task_performance_reports
         ),
         "dependency_snapshot_misses": sum(
@@ -1276,16 +1374,65 @@ try:
         performance_report["cache_hits"] / reuse_total,
         4,
     ) if reuse_total else 0.0
+    lifecycle_knowledge_reuse_report = concept_lifecycle_report.get(
+        "knowledge_reuse_report",
+        {},
+    )
+    lifecycle_truth_reuse_report = concept_lifecycle_report.get(
+        "truth_reuse_report",
+        {},
+    )
+    performance_report.update({
+        "context_hits": concept_lifecycle_report.get("context_hits", 0),
+        "truth_hits": lifecycle_truth_reuse_report.get("truth_hits", 0),
+        "strategy_hits": lifecycle_knowledge_reuse_report.get("strategy_hits", 0),
+        "program_hits": lifecycle_knowledge_reuse_report.get("program_hits", 0),
+        "context_misses": lifecycle_knowledge_reuse_report.get("context_misses", 0),
+        "truth_misses": lifecycle_truth_reuse_report.get("truth_misses", 0),
+        "strategy_misses": lifecycle_knowledge_reuse_report.get("strategy_misses", 0),
+        "program_misses": lifecycle_knowledge_reuse_report.get("program_misses", 0),
+        "knowledge_reuse_rate":
+        lifecycle_knowledge_reuse_report.get("knowledge_reuse_rate", 0.0),
+        "context_count": concept_lifecycle_report.get("context_count", 0),
+        "context_consumed": concept_lifecycle_report.get("context_consumed", 0),
+        "truth_candidate_count":
+        concept_lifecycle_report.get("truth_candidate_count", 0),
+    })
+    record_main_timing("assemble_performance_report", module_start)
+    module_timings.append(main_module_timings[-1])
+    slowest_modules = sorted(
+        slowest_modules + [main_module_timings[-1]],
+        key=lambda item: item.get("seconds", 0.0),
+        reverse=True,
+    )[:5]
     from runtime.performance.runtime_attribution_engine import (
         runtime_attribution_engine,
     )
+    from runtime.dependency.dependency_visibility_engine import (
+        dependency_visibility_engine,
+    )
 
+    module_start = time.perf_counter()
+    dependency_visibility_report = dependency_visibility_engine.summarize(
+        performance_report,
+    )
+    record_main_timing("dependency_visibility_report", module_start)
+    module_timings.append(main_module_timings[-1])
+    performance_report["dependency_visibility_report"] = (
+        dependency_visibility_report
+    )
+    performance_report["dependency_chain_execution_time"] = (
+        dependency_visibility_report["dependency_chain_execution_time"]
+    )
+    module_start = time.perf_counter()
     runtime_attribution_report = runtime_attribution_engine.build_report(
         total_runtime=total_runtime_seconds,
         performance_report=performance_report,
         runtime_metrics=runtime_metrics,
         module_timings=module_timings,
     )
+    record_main_timing("runtime_attribution_report", module_start)
+    module_timings.append(main_module_timings[-1])
     performance_report["runtime_attribution_report"] = (
         runtime_attribution_report
     )
@@ -1301,8 +1448,22 @@ try:
     performance_report["untracked_runtime_seconds"] = (
         runtime_attribution_report["untracked_runtime"]
     )
+    from runtime.performance.unattributed_runtime_detector import (
+        unattributed_runtime_detector,
+    )
+
+    performance_report["unattributed_runtime_detector_report"] = (
+        unattributed_runtime_detector.detect(
+            runtime_attribution_report,
+            {
+                **runtime_metrics,
+                **performance_report,
+            },
+        )
+    )
     from runtime.profiling.performance_reporter import performance_reporter
 
+    module_start = time.perf_counter()
     performance_intelligence_report = performance_reporter.build_report(
         runtime_context={
             "COGNITIVE_REUSE_REPORT": (
@@ -1310,13 +1471,18 @@ try:
                 if hasattr(pipeline, "meta_supervisor")
                 else {}
             ),
+            "knowledge_reuse_report": lifecycle_knowledge_reuse_report,
+            "truth_reuse_report": lifecycle_truth_reuse_report,
             "task_performance_intelligence_reports":
             task_performance_intelligence_reports,
         },
         performance_report=performance_report,
         profile_level=args.profile_level,
     )
+    record_main_timing("performance_intelligence_report", module_start)
+    module_timings.append(main_module_timings[-1])
 
+    module_start = time.perf_counter()
     truth_candidate_report = collect_governance_reports(
         all_results,
         [
@@ -1367,11 +1533,14 @@ try:
             "truth_graveyard_consistency_report",
         ],
     )
+    record_main_timing("collect_governance_reports", module_start)
+    module_timings.append(main_module_timings[-1])
     discovery_only_truth_mode = False
     if discovery_only_truth_mode:
         truth_candidate_report = {}
         truth_commit_report = {}
 
+    module_start = time.perf_counter()
     concepts = normalize_concept_diagnostics(training_report)
     truth_candidates = normalize_truth_candidates(training_report)
     truth_commits = training_report.get("truth_commit_evaluations", {})
@@ -1421,6 +1590,22 @@ try:
         "truth_candidate_report": truth_candidate_report,
         "dependency_injection_audit": dependency_audit_report,
         "DEPENDENCY INJECTION AUDIT": dependency_audit_report,
+        "context_injection_audit":
+        concept_lifecycle_report.get("context_injection_audit", {}),
+        "CONTEXT INJECTION AUDIT":
+        concept_lifecycle_report.get("context_injection_audit", {}),
+        "knowledge_flow_report":
+        concept_lifecycle_report.get("knowledge_flow_report", {}),
+        "KNOWLEDGE FLOW REPORT":
+        concept_lifecycle_report.get("knowledge_flow_report", {}),
+        "knowledge_reuse_report": lifecycle_knowledge_reuse_report,
+        "KNOWLEDGE REUSE REPORT": lifecycle_knowledge_reuse_report,
+        "truth_reuse_report": lifecycle_truth_reuse_report,
+        "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
+        "recursive_context_audit":
+        concept_lifecycle_report.get("recursive_context_audit", {}),
+        "Recursive Context Audit":
+        concept_lifecycle_report.get("recursive_context_audit", {}),
         "truth_commit_report": truth_commit_report,
         "contextual_truth_report": contextual_truth_report,
         "context_validation_report": context_validation_report,
@@ -1457,6 +1642,14 @@ try:
     )
     results["runtime_watchdog_report"] = runtime_watchdog.report()
     results["runtime_metadata"] = dict(runtime_metrics)
+    record_main_timing("assemble_final_context", module_start)
+    module_timings.append(main_module_timings[-1])
+    performance_report["module_timings"] = module_timings
+    performance_report["slowest_modules"] = sorted(
+        module_timings,
+        key=lambda item: item.get("seconds", 0.0),
+        reverse=True,
+    )[:5]
 
     runtime_status = "completed"
 
@@ -1520,11 +1713,63 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
     final_performance_report["untracked_runtime_seconds"] = (
         final_runtime_attribution_report["untracked_runtime"]
     )
+    from runtime.performance.unattributed_runtime_detector import (
+        unattributed_runtime_detector,
+    )
+
+    final_performance_report["unattributed_runtime_detector_report"] = (
+        unattributed_runtime_detector.detect(
+            final_runtime_attribution_report,
+            {
+                **runtime_metrics,
+                **final_performance_report,
+            },
+        )
+    )
     results["RUNTIME ATTRIBUTION REPORT"] = final_runtime_attribution_report
     if isinstance(results.get("PERFORMANCE_REPORT"), dict):
-        results["PERFORMANCE_REPORT"]["runtime_attribution_report"] = (
+        performance_intelligence = results["PERFORMANCE_REPORT"]
+        performance_intelligence["runtime_attribution_report"] = (
             final_runtime_attribution_report
         )
+        runtime_breakdown = final_runtime_attribution_report.get(
+            "runtime_breakdown",
+            {},
+        )
+        if isinstance(performance_intelligence.get("runtime_summary"), dict):
+            runtime_summary = performance_intelligence["runtime_summary"]
+            runtime_summary["total_runtime_seconds"] = execution_time
+            runtime_summary["startup_time_seconds"] = runtime_breakdown.get(
+                "boot_time",
+                runtime_summary.get("startup_time_seconds", 0.0),
+            )
+            runtime_summary["task_execution_time_seconds"] = (
+                runtime_breakdown.get(
+                    "task_execution_time",
+                    runtime_summary.get("task_execution_time_seconds", 0.0),
+                )
+            )
+            runtime_summary["active_compute_time_seconds"] = (
+                runtime_summary["task_execution_time_seconds"]
+            )
+            runtime_summary["idle_time_seconds"] = runtime_breakdown.get(
+                "idle_time",
+                max(
+                    0.0,
+                    execution_time
+                    - runtime_summary["active_compute_time_seconds"],
+                ),
+            )
+            runtime_summary["untracked_runtime_seconds"] = (
+                final_runtime_attribution_report.get("untracked_runtime", 0.0)
+            )
+        for stage in performance_intelligence.get("stage_metrics", []):
+            if isinstance(stage, dict):
+                stage["percentage_of_runtime"] = round(
+                    float(stage.get("total_duration", 0.0) or 0.0)
+                    / max(execution_time, 0.0001),
+                    4,
+                )
 
 
 # ============================================

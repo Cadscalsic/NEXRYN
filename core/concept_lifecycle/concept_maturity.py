@@ -3,9 +3,18 @@ from core.truth.truth_candidate_engine import (
     TruthCandidatePromotionEngine,
 )
 from runtime.context.context_registry import ContextRegistry
+from runtime.context.context_consumption_engine import context_consumption_engine
+from runtime.context.context_injection_audit import context_injection_audit
+from runtime.context.process_context_readiness_engine import (
+    process_context_readiness_engine,
+)
+from runtime.context.recursive_context_audit import recursive_context_audit
+from runtime.knowledge.knowledge_flow_engine import knowledge_flow_engine
 from runtime.knowledge.epistemic_graduation_engine import (
     EpistemicGraduationEngine,
 )
+from runtime.reuse.knowledge_reuse_engine import knowledge_reuse_engine
+from runtime.truth.truth_reuse_engine import truth_reuse_engine
 
 
 class ConceptMaturityTracker:
@@ -58,6 +67,19 @@ class ConceptMaturityTracker:
         return self.truth_state_authority.stable_truth_concepts(
             truth_registry,
         )
+
+    def _evaluations_by_concept(self, truth_candidate_report):
+        evaluations_by_concept = {}
+        for evaluation in truth_candidate_report.get("evaluations", []):
+            if not isinstance(evaluation, dict):
+                continue
+            concept = evaluation.get("concept")
+            if not concept:
+                continue
+            evaluations_by_concept.setdefault(str(concept), []).append(
+                evaluation,
+            )
+        return evaluations_by_concept
 
     def _lock_candidate_ready(self, promotion, reason):
         readiness_gates = {
@@ -336,6 +358,56 @@ class ConceptMaturityTracker:
             "truth_validation_request": validation_request,
         }
 
+    def _repair_context_gates(self, promotion, consumption, readiness):
+        repaired = dict(promotion)
+        original_context_strength = float(
+            repaired.get("context_strength", 0.0) or 0.0
+        )
+        context_support = max(
+            original_context_strength,
+            float(consumption.get("context_support_score", 0.0) or 0.0),
+        )
+        repaired["context_strength"] = round(context_support, 4)
+        repaired["context_support_score"] = round(context_support, 4)
+        repaired["process_context_ready"] = readiness.get("process_context_ready")
+        repaired["context_consumed"] = consumption.get("context_consumed", 0)
+        readiness_gates = dict(repaired.get("readiness_gates", {}))
+        if context_support >= 0.72:
+            readiness_gates["context_strength"] = True
+        if readiness.get("process_context_ready"):
+            readiness_gates["process_context_ready"] = True
+        repaired["readiness_gates"] = readiness_gates
+        repaired["failed_gates"] = [
+            gate for gate, passed in readiness_gates.items() if not passed
+        ]
+        failed_gates = set(repaired["failed_gates"])
+        repaired["dependency_promotion_blockers"] = [
+            blocker
+            for blocker in repaired.get("dependency_promotion_blockers", [])
+            if not (
+                isinstance(blocker, str)
+                and blocker.startswith("promotion_gate_blocked:")
+                and blocker.split(":", 1)[1] not in failed_gates
+            )
+        ]
+        repaired["context_injection_repaired"] = bool(
+            consumption.get("context_consumed", 0)
+        )
+        if original_context_strength >= 0.72:
+            repaired["eligible_for_context"] = False
+            repaired["context_already_supported"] = True
+        repaired["context_gate_reason"] = (
+            "context_consumed_after_generation"
+            if consumption.get("context_consumed", 0)
+            else "context_not_consumed"
+        )
+        repaired["context_gate_blockers"] = (
+            readiness.get("process_context_ready_false_reasons", [])
+            if not readiness.get("process_context_ready")
+            else []
+        )
+        return repaired
+
     def _promotion_report_item(self, concept, graduation):
         return {
             "concept": concept,
@@ -350,19 +422,190 @@ class ConceptMaturityTracker:
             ),
         }
 
+    def _refresh_graduation_after_context(
+        self,
+        item,
+        promotion,
+        used_task_count,
+        average_contradiction_score,
+    ):
+        refreshed = self.epistemic_graduation_engine.evaluate(
+            **self._graduation_inputs(
+                item,
+                promotion,
+                used_task_count,
+                average_contradiction_score,
+            )
+        )
+        if (
+            promotion.get("candidate_ready") is True
+            and promotion.get("dependency_chain_complete_for_promotion") is True
+            and promotion.get("readiness_gates", {}).get(
+                "process_context_ready",
+                True,
+            ) is True
+            and promotion.get("readiness_gates", {}).get(
+                "context_strength",
+                False,
+            ) is True
+            and used_task_count >= self.TRUTH_CANDIDATE_MINIMUM_TASKS
+            and average_contradiction_score
+            <= self.TRUTH_CANDIDATE_MAXIMUM_CONTRADICTION
+            and refreshed["promotion_score"]
+            >= refreshed["thresholds"]["TRUTH_CANDIDATE"]
+        ):
+            return {
+                **refreshed,
+                "graduation_stage": "TRUTH_CANDIDATE",
+                "promotion_stage": "TRUTH_CANDIDATE",
+                "current_stage": "TRUTH_CANDIDATE",
+                "next_stage": "ESTABLISHED_TRUTH",
+                "candidate_ready": True,
+                "eligible_for_context": True,
+                "eligible_for_truth_candidate": True,
+                "promotion_reason":
+                "TRUTH_CANDIDATE: context consumption synchronized gates",
+                "graduation_reason":
+                "TRUTH_CANDIDATE: context consumption synchronized gates",
+                "blocked_metrics": [
+                    metric
+                    for metric in refreshed.get("blocked_metrics", [])
+                    if metric != "context_support"
+                ],
+            }
+        return refreshed
+
+    def _compact_promotion(self, promotion):
+        return {
+            "concept": promotion.get("concept"),
+            "decision": promotion.get("decision"),
+            "candidate_ready": promotion.get("candidate_ready"),
+            "promotion_score": promotion.get("promotion_score"),
+            "promotion_stage": promotion.get("promotion_stage"),
+            "eligible_for_context": promotion.get("eligible_for_context"),
+            "eligible_for_truth_candidate":
+            promotion.get("eligible_for_truth_candidate"),
+            "blocked_metrics": list(promotion.get("blocked_metrics", [])),
+            "promotion_reason": promotion.get("promotion_reason"),
+            "promotion_dependency_score":
+            promotion.get("promotion_dependency_score"),
+            "promotion_dependency_bonus":
+            promotion.get("promotion_dependency_bonus"),
+            "dependency_promotion_blockers": list(
+                promotion.get("dependency_promotion_blockers", [])
+            ),
+            "dependency_confidence": promotion.get("dependency_confidence"),
+            "dependency_chain_depth": promotion.get("dependency_chain_depth"),
+            "dependency_chain_coverage":
+            promotion.get("dependency_chain_coverage"),
+            "dependency_chain_complete_for_promotion":
+            promotion.get("dependency_chain_complete_for_promotion"),
+            "context_strength": promotion.get("context_strength"),
+            "context_consumed": promotion.get("context_consumed", 0),
+            "process_context_ready": promotion.get("process_context_ready"),
+            "process_context_generated":
+            promotion.get("process_context_generated"),
+            "truth_candidate_generated":
+            promotion.get("truth_candidate_generated"),
+        }
+
+    def _compact_maturity(self, maturity):
+        promotion = maturity.get("truth_candidate_promotion", {})
+        promotion = promotion if isinstance(promotion, dict) else {}
+        compact_promotion = self._compact_promotion(promotion)
+        return {
+            "concept": maturity.get("concept"),
+            "state": maturity.get("state"),
+            "used_task_count": maturity.get("used_task_count", 0),
+            "successful_task_count":
+            maturity.get("successful_task_count", 0),
+            "counterexample_task_count":
+            maturity.get("counterexample_task_count", 0),
+            "mixed_outcomes_detected":
+            maturity.get("mixed_outcomes_detected", False),
+            "independent_success_rate":
+            maturity.get("independent_success_rate", 0.0),
+            "cross_task_support": maturity.get("cross_task_support", 0.0),
+            "average_causal_alignment":
+            maturity.get("average_causal_alignment", 0.0),
+            "average_contradiction_score":
+            maturity.get("average_contradiction_score", 0.0),
+            "promotion_score": maturity.get("promotion_score"),
+            "promotion_stage": maturity.get("promotion_stage"),
+            "candidate_ready": maturity.get("candidate_ready"),
+            "preliminary_truth_candidate_ready":
+            maturity.get("preliminary_truth_candidate_ready"),
+            "eligible_for_context": maturity.get("eligible_for_context"),
+            "eligible_for_truth_candidate":
+            maturity.get("eligible_for_truth_candidate"),
+            "blocked_metrics": list(maturity.get("blocked_metrics", [])),
+            "promotion_reason": maturity.get("promotion_reason"),
+            "promotion_dependency_bonus":
+            maturity.get("promotion_dependency_bonus", 0.0),
+            "truth_candidate_readiness_gates":
+            maturity.get("truth_candidate_readiness_gates", {}),
+            "truth_candidate_promotion": compact_promotion,
+            "epistemic_graduation": {
+                "promotion_score": maturity.get("promotion_score"),
+                "promotion_stage": maturity.get("promotion_stage"),
+                "candidate_ready": maturity.get("candidate_ready"),
+                "eligible_for_context":
+                maturity.get("eligible_for_context"),
+                "eligible_for_truth_candidate":
+                maturity.get("eligible_for_truth_candidate"),
+                "blocked_metrics": list(maturity.get("blocked_metrics", [])),
+                "promotion_reason": maturity.get("promotion_reason"),
+            },
+            "process_context_generated":
+            promotion.get("process_context_generated", False),
+            "truth_candidate_generated":
+            promotion.get("truth_candidate_generated", False),
+            "context_consumed": promotion.get("context_consumed", 0),
+            "context_strength": promotion.get("context_strength"),
+            "report_compressed": True,
+        }
+
+    def _compact_context_audit(self, concepts):
+        blockers = []
+        repaired = 0
+        for concept in concepts:
+            promotion = concept.get("truth_candidate_promotion", {})
+            if not isinstance(promotion, dict):
+                continue
+            if promotion.get("context_injection_repaired"):
+                repaired += 1
+            concept_blockers = promotion.get("context_gate_blockers", [])
+            if concept_blockers:
+                blockers.append({
+                    "concept": concept.get("concept"),
+                    "context_gate_blockers": list(concept_blockers),
+                })
+        return {
+            "system": "context_injection_audit",
+            "compact_report": True,
+            "concept_count": len(concepts),
+            "context_injection_repaired_count": repaired,
+            "blocked_concepts": blockers,
+        }
+
     def evaluate(
         self,
         ledger_report=None,
         truth_candidate_report=None,
         truth_registry=None,
+        report_level="full",
     ):
         ledger_report = ledger_report or {}
         truth_candidate_report = truth_candidate_report or {}
         truth_registry = truth_registry or {}
+        compact_output = str(report_level or "full").lower() != "full"
         candidate_concepts = self._concept_names(
             truth_candidate_report,
             "evaluations",
             "eligible_for_truth_candidate",
+        )
+        evaluations_by_concept = self._evaluations_by_concept(
+            truth_candidate_report,
         )
         stable_truths = self._stable_truths(truth_registry)
 
@@ -396,19 +639,13 @@ class ConceptMaturityTracker:
                 records,
             )
             cross_task_support = item.get("cross_task_support", 0.0)
+            concept_truth_evaluations = evaluations_by_concept.get(
+                concept,
+                [],
+            )
             runtime_candidate_report = {
                 **truth_candidate_report,
-                "evaluations": [
-                    evaluation
-                    for evaluation in truth_candidate_report.get(
-                        "evaluations",
-                        [],
-                    )
-                    if (
-                        isinstance(evaluation, dict)
-                        and str(evaluation.get("concept")) == concept
-                    )
-                ],
+                "evaluations": concept_truth_evaluations,
             }
 
             promotion = self.truth_candidate_promotion_engine.evaluate(
@@ -464,10 +701,15 @@ class ConceptMaturityTracker:
                 )
             elif (
                 promotion.get("candidate_ready") is True
+                and not mixed_outcomes
                 and promotion.get("dependency_chain_complete_for_promotion") is True
                 and promotion.get("readiness_gates", {}).get(
                     "process_context_ready",
                     True,
+                ) is True
+                and promotion.get("readiness_gates", {}).get(
+                    "context_strength",
+                    False,
                 ) is True
                 and used_task_count >= self.TRUTH_CANDIDATE_MINIMUM_TASKS
             ):
@@ -495,6 +737,51 @@ class ConceptMaturityTracker:
                 graduation,
                 promotion,
             )
+            contexts_for_concept = context_artifacts.get("contexts", [])
+            context_reuse_report = knowledge_reuse_engine.reuse_before_regenerate(
+                {"concept": concept},
+                contexts=contexts_for_concept,
+                truths=[],
+                strategies=[],
+                programs=[],
+            )
+            truth_reuse_report = truth_reuse_engine.reuse_truth(
+                {"concept": concept},
+                truths=concept_truth_evaluations,
+                min_relevance=0.5,
+            )
+            context_consumption_report = context_consumption_engine.consume_all(
+                concept,
+                contexts_for_concept,
+                hierarchy=context_artifacts.get("context_hierarchy", {}),
+            )
+            process_context_readiness_report = (
+                process_context_readiness_engine.evaluate(
+                    concept,
+                    context_consumption_report,
+                    promotion,
+                )
+            )
+            promotion = self._repair_context_gates(
+                promotion,
+                context_consumption_report,
+                process_context_readiness_report,
+            )
+            if not promotion.get("candidate_ready_lock_reason"):
+                graduation = self._refresh_graduation_after_context(
+                    item,
+                    promotion,
+                    used_task_count,
+                    average_contradiction_score,
+                )
+                state = graduation["promotion_stage"]
+            context_injection_report = context_injection_audit.audit_concept(
+                concept,
+                contexts_for_concept,
+                context_consumption_report,
+                process_context_readiness_report,
+                promotion,
+            )
             truth_artifacts = self._truth_artifacts(
                 concept,
                 graduation,
@@ -506,7 +793,10 @@ class ConceptMaturityTracker:
                 "promotion_score": graduation["promotion_score"],
                 "promotion_stage": graduation["promotion_stage"],
                 "candidate_ready": graduation["candidate_ready"],
-                "eligible_for_context": graduation["eligible_for_context"],
+                "eligible_for_context": promotion.get(
+                    "eligible_for_context",
+                    graduation["eligible_for_context"],
+                ),
                 "eligible_for_truth_candidate":
                 graduation["eligible_for_truth_candidate"],
                 "blocked_metrics": graduation["blocked_metrics"],
@@ -516,6 +806,12 @@ class ConceptMaturityTracker:
                 "epistemic_graduation": graduation,
                 "process_context_generated": context_artifacts["generated"],
                 "truth_candidate_generated": truth_artifacts["generated"],
+                "context_consumption_report": context_consumption_report,
+                "process_context_readiness_report":
+                process_context_readiness_report,
+                "context_injection_audit": context_injection_report,
+                "knowledge_reuse_report": context_reuse_report,
+                "truth_reuse_report": truth_reuse_report,
             }
             readiness_gates = {
                 "independent_task_coverage": promotion[
@@ -559,7 +855,10 @@ class ConceptMaturityTracker:
                 "promotion_score": graduation["promotion_score"],
                 "promotion_stage": graduation["promotion_stage"],
                 "candidate_ready": graduation["candidate_ready"],
-                "eligible_for_context": graduation["eligible_for_context"],
+                "eligible_for_context": promotion.get(
+                    "eligible_for_context",
+                    graduation["eligible_for_context"],
+                ),
                 "eligible_for_truth_candidate":
                 graduation["eligible_for_truth_candidate"],
                 "blocked_metrics": graduation["blocked_metrics"],
@@ -581,6 +880,12 @@ class ConceptMaturityTracker:
                 "truth_validation_request":
                 truth_artifacts.get("truth_validation_request", {}),
                 "truth_candidate_promotion": promotion,
+                "context_consumption_report": context_consumption_report,
+                "process_context_readiness_report":
+                process_context_readiness_report,
+                "context_injection_audit": context_injection_report,
+                "knowledge_reuse_report": context_reuse_report,
+                "truth_reuse_report": truth_reuse_report,
                 "truth_candidate_requires_epistemic_gates": True,
                 "stable_truth_requires_truth_registry_commitment": True,
             }
@@ -607,11 +912,63 @@ class ConceptMaturityTracker:
             for concept in concepts
             if concept.get("truth_candidate_object")
         ]
+        consumed_contexts = [
+            item.get("context", {})
+            for concept in concepts
+            for item in concept.get("context_consumption_report", {}).get(
+                "consumption",
+                [],
+            )
+            if item.get("consumed")
+        ]
+        knowledge_flow_report = knowledge_flow_engine.reconstruct(
+            created=generated_contexts + generated_truth_candidates,
+            registered=self.context_registry.all_contexts(),
+            injected=consumed_contexts,
+            consumed=consumed_contexts,
+            reused=[
+                event
+                for concept in concepts
+                for event in (
+                    concept.get("knowledge_reuse_report", {}).get("reused_context"),
+                    concept.get("truth_reuse_report", {}).get("reused_truth"),
+                )
+                if event
+            ],
+            blocked=[
+                concept
+                for concept in concepts
+                if concept.get("context_injection_audit", {}).get(
+                    "context_gate_blockers",
+                )
+            ],
+        )
+        context_audit_report = (
+            self._compact_context_audit(concepts)
+            if compact_output
+            else context_injection_audit.audit(concepts)
+        )
+        recursive_audit_report = (
+            {
+                "system": "recursive_context_audit",
+                "context_count": len(generated_contexts),
+                "compact_report": True,
+            }
+            if compact_output
+            else recursive_context_audit.audit(generated_contexts)
+        )
+        knowledge_reuse_report = knowledge_reuse_engine.report()
+        truth_reuse_engine_report = truth_reuse_engine.report()
+        report_concepts = (
+            [self._compact_maturity(concept) for concept in concepts]
+            if compact_output
+            else concepts
+        )
 
         return {
             "system": "concept_maturity_tracker",
             "states": list(self.STATES),
-            "concepts": concepts,
+            "concepts": report_concepts,
             "promotion_report": promotion_report,
             "promotion_report_text": _format_promotion_report(
                 promotion_report,
@@ -619,6 +976,18 @@ class ConceptMaturityTracker:
             "context_registry_report": self.context_registry.report(),
             "generated_contexts": generated_contexts,
             "context_count": len(generated_contexts),
+            "context_consumed": len(consumed_contexts),
+            "context_hits": len(consumed_contexts),
+            "context_injection_audit": context_audit_report,
+            "recursive_context_audit": recursive_audit_report,
+            "knowledge_flow_report": knowledge_flow_report,
+            "knowledge_reuse_report": knowledge_reuse_report,
+            "truth_reuse_report": truth_reuse_engine_report,
+            "strategy_hits": knowledge_reuse_report.get("strategy_hits", 0),
+            "program_hits": knowledge_reuse_report.get("program_hits", 0),
+            "truth_hits": truth_reuse_engine_report.get("truth_hits", 0),
+            "knowledge_reuse_rate":
+            knowledge_reuse_report.get("knowledge_reuse_rate", 0.0),
             "truth_candidates": generated_truth_candidates,
             "truth_candidate_count": len(generated_truth_candidates),
             "candidate_ready_definition":
@@ -651,6 +1020,8 @@ class ConceptMaturityTracker:
                 }
             ],
             "count_alone_cannot_promote_truth": True,
+            "report_level": "compact" if compact_output else "full",
+            "concept_lifecycle_compressed": compact_output,
         }
 
 

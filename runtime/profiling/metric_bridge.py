@@ -45,6 +45,7 @@ class RuntimeMetricBridge:
             runtime_metrics.get("total_runtime_seconds"),
             active_compute,
         )
+        total_runtime = max(total_runtime, active_compute)
         startup = self._first_positive(
             performance_report.get("startup_time_seconds"),
             runtime_metrics.get("startup_time_seconds"),
@@ -84,7 +85,7 @@ class RuntimeMetricBridge:
             self._module_time_contains(module_timings, ("finalize",)),
         )
         idle = self._number(performance_report.get("idle_time_seconds"), None)
-        if idle is None:
+        if idle is None or active_compute + idle > total_runtime:
             idle = max(0.0, total_runtime - active_compute)
 
         return {

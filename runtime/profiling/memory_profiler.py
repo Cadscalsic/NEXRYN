@@ -35,6 +35,13 @@ class MemoryProfiler:
         reuse_report = self._mapping(
             runtime_context.get("COGNITIVE_REUSE_REPORT")
             or runtime_context.get("cognitive_reuse_report")
+            or runtime_context.get("knowledge_reuse_report")
+        )
+        knowledge_reuse_report = self._mapping(
+            runtime_context.get("knowledge_reuse_report")
+        )
+        truth_reuse_report = self._mapping(
+            runtime_context.get("truth_reuse_report")
         )
         supervisor_report = self._mapping(
             runtime_context.get("META_SUPERVISOR_REPORT")
@@ -45,18 +52,22 @@ class MemoryProfiler:
         strategy_hits = int(self._number(
             performance_report.get("strategy_hits")
             or reuse_report.get("strategy_hits")
+            or knowledge_reuse_report.get("strategy_hits")
         ))
         program_hits = int(self._number(
             performance_report.get("program_hits")
             or reuse_report.get("program_hits")
+            or knowledge_reuse_report.get("program_hits")
         ))
         context_hits = int(self._number(
             performance_report.get("context_hits")
             or reuse_report.get("context_hits")
+            or knowledge_reuse_report.get("context_hits")
         ))
         truth_hits = int(self._number(
             performance_report.get("truth_hits")
             or reuse_report.get("truth_hits")
+            or truth_reuse_report.get("truth_hits")
         ))
         strategy_misses = int(self._number(
             performance_report.get("strategy_misses")

@@ -1762,6 +1762,52 @@ def build_training_report(
     context_hierarchy_reports = {}
     semantic_context_reports = {}
 
+    def structured_context(value, fallback_name="", report=None):
+        from runtime.context.context_serialization_engine import normalize_context
+
+        normalized = normalize_context(value or fallback_name)
+        if report and isinstance(report, dict):
+            context_id = (
+                normalized.get("context_id")
+                or normalized.get("context_name")
+                or fallback_name
+            )
+            context_type = normalized.get("context_type")
+            if context_type in {None, "TEXT_CONTEXT"}:
+                context_type = report.get("context_type", "SEMANTIC_CONTEXT")
+            normalized = {
+                **normalized,
+                "context_id": context_id,
+                "context_name": normalized.get("context_name", context_id),
+                "concept": normalized.get("concept", report.get("concept")),
+                "context_type": context_type,
+                "context_strength": normalized.get(
+                    "context_strength",
+                    report.get(
+                        "context_confidence",
+                        report.get("confidence"),
+                    ),
+                ),
+            }
+        return normalized
+
+    def semantic_report_payload(report, context_name, score=None):
+        confidence = report.get("confidence", report.get("context_confidence", score))
+        return {
+            **report,
+            "context": structured_context(
+                report.get("context", context_name),
+                context_name,
+                report,
+            ),
+            "context_name": report.get("context_name", context_name),
+            "semantic_context_score": report.get(
+                "semantic_context_score",
+                report.get("context_confidence", score),
+            ),
+            "confidence": confidence,
+        }
+
     def record_process_context_report(report):
         if not isinstance(report, dict):
             return
@@ -1790,21 +1836,7 @@ def build_training_report(
         ):
             semantic_context_reports.setdefault(
                 str(context_name or key),
-                {
-                    **report,
-                    "context": context_name or key,
-                    "semantic_context_score": report.get(
-                        "semantic_context_score",
-                        report.get(
-                            "context_confidence",
-                            report.get("confidence"),
-                        ),
-                    ),
-                    "confidence": report.get(
-                        "confidence",
-                        report.get("context_confidence"),
-                    ),
-                },
+                semantic_report_payload(report, context_name or key),
             )
 
         governance_report = report.get("context_governance_report", {})
@@ -1884,13 +1916,14 @@ def build_training_report(
         elif context_type == "SEMANTIC_CONTEXT":
             semantic_context_reports.setdefault(
                 str(context_name),
-                {
-                    **context,
-                    "system": "lifecycle_semantic_context_generation",
-                    "context": context_name,
-                    "semantic_context_score": confidence,
-                    "confidence": confidence,
-                },
+                semantic_report_payload(
+                    {
+                        **context,
+                        "system": "lifecycle_semantic_context_generation",
+                    },
+                    context_name,
+                    confidence,
+                ),
             )
         elif context_type == "DEPENDENCY_SURFACE":
             context_hierarchy_reports.setdefault(
@@ -2027,11 +2060,105 @@ def _recent_items(items, limit=5):
     return items[-limit:]
 
 
+def _semantic_property_names(properties):
+    names = []
+    for item in properties or []:
+        if isinstance(item, dict):
+            name = (
+                item.get("property_name")
+                or item.get("name")
+                or item.get("context_id")
+            )
+        else:
+            name = item
+        if name:
+            names.append(str(name))
+    return names
+
+
 def _count(items):
     try:
         return len(items or [])
     except TypeError:
         return 0
+
+
+def _print_minimal_training_report(report):
+    from runtime.reporting.compact_report_builder import MAX_TASKS_DISPLAYED
+
+    task_results = report.get("multi_task_results", [])
+    tasks_executed = report.get("tasks_executed", [])
+    failed_tasks = report.get("failed_tasks", 0)
+    successful_tasks = report.get("successful_tasks", 0)
+    print("TRAINING REPORT")
+    print()
+    print("selected_tasks:", report.get("tasks_selected", 0))
+    print("tasks_completed:", successful_tasks)
+    print("tasks_failed:", failed_tasks)
+    print(
+        "tasks_remaining:",
+        max(report.get("tasks_selected", 0) - successful_tasks - failed_tasks, 0),
+    )
+    print("tasks_executed_count:", _count(tasks_executed))
+    print("recent_tasks:", _recent_items(tasks_executed, MAX_TASKS_DISPLAYED))
+    print("multi_task_result_count:", _count(task_results))
+    print("concept_count:", _count(report.get("concepts_discovered", {})))
+    print()
+    print("COMPACT CONCEPT REPORT")
+    print()
+    for concept, stats in report.get("concept_memory", {}).items():
+        print(
+            concept,
+            "stage="
+            f"{stats.get('promotion_stage', stats.get('lifecycle_state', 'DISCOVERING'))}",
+            "score="
+            f"{stats.get('promotion_score')}",
+            "ready="
+            f"{stats.get('candidate_ready', stats.get('preliminary_truth_candidate_ready', False))}",
+            "blocked="
+            f"{stats.get('blocked_metrics', [])}",
+        )
+    promotion_items = (
+        report.get("concept_lifecycle", {}).get(
+            "promotion_report",
+            [],
+        )
+        if isinstance(report.get("concept_lifecycle"), dict)
+        else []
+    )
+    if promotion_items:
+        print()
+        print("PROMOTION REPORT")
+        print()
+        for item in promotion_items:
+            print(
+                item.get("concept"),
+                "stage="
+                f"{item.get('current_stage')}",
+                "score="
+                f"{item.get('promotion_score')}",
+                "ready="
+                f"{item.get('candidate_ready')}",
+                "blocked="
+                f"{item.get('blocked_reason') or []}",
+            )
+    architecture_report = report.get("architecture_bottleneck_report", {})
+    if architecture_report:
+        print()
+        print("ARCHITECTURE BOTTLENECK REPORT")
+        print(
+            "bottleneck_type="
+            f"{architecture_report.get('bottleneck_type')}",
+            "dependency_chain_depth="
+            f"{architecture_report.get('dependency_chain_depth')}",
+            "dependency_chain_coverage="
+            f"{architecture_report.get('dependency_chain_coverage')}",
+            "recommended_next_step="
+            f"{architecture_report.get('recommended_next_step')}",
+        )
+    print()
+    print("TRUTH COMMIT REPORT")
+    print("truth_commit_count:", _count(report.get("truth_commit_evaluations", {})))
 
 
 def print_training_report(report, report_level="normal"):
@@ -2042,6 +2169,9 @@ def print_training_report(report, report_level="normal"):
     )
 
     report_level = str(report_level or "normal").lower()
+    if report_level == "minimal":
+        _print_minimal_training_report(report)
+        return
     detail_limit = (
         MAX_HISTORY_DISPLAYED
         if report_level != "full"
@@ -2302,7 +2432,7 @@ def print_training_report(report, report_level="normal"):
             "definition="
             f"{evaluation.get('semantic_definition')}",
             "properties="
-            f"{_recent_items([item.get('property_name') for item in evaluation.get('properties', [])], detail_limit)}",
+            f"{_recent_items(_semantic_property_names(evaluation.get('properties', [])), detail_limit)}",
             "capabilities="
             f"{_recent_items(evaluation.get('capabilities', []), detail_limit)}",
             "constraints="

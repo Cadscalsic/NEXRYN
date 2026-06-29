@@ -31,6 +31,13 @@ class ObjectGroundingEngine:
             candidate_regions,
             role="residual_target",
         )
+        if not target_objects and self._can_ground_from_input(operation):
+            target_objects = self._targets_from_input_grid(runtime_context)
+            candidate_regions = [
+                target["region"]
+                for target in target_objects
+                if isinstance(target.get("region"), Mapping)
+            ]
         affected_objects = self._affected_objects(target_objects, residual_locations)
         anchor_objects = self._anchor_objects(localization, target_objects)
         supporting_objects = self._supporting_objects(localization, anchor_objects)
@@ -214,6 +221,62 @@ class ObjectGroundingEngine:
             }
             for region in regions
         ]
+
+    def _can_ground_from_input(self, operation: str) -> bool:
+        return operation in {
+            "preserve_size",
+            "preserve_color",
+            "expand_pattern",
+            "density_change",
+        }
+
+    def _targets_from_input_grid(
+        self,
+        runtime_context: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        grid = runtime_context.get("input_grid")
+        if grid is None:
+            return []
+        try:
+            rows = grid.tolist() if hasattr(grid, "tolist") else grid
+            cells_by_color: dict[Any, list[dict[str, int]]] = {}
+            for row_index, row in enumerate(rows):
+                for col_index, value in enumerate(row):
+                    if value == 0:
+                        continue
+                    cells_by_color.setdefault(value, []).append({
+                        "row": int(row_index),
+                        "col": int(col_index),
+                    })
+        except Exception:
+            return []
+
+        targets = []
+        for index, (color, cells) in enumerate(cells_by_color.items(), start=1):
+            if not cells:
+                continue
+            rows_for_object = [cell["row"] for cell in cells]
+            cols_for_object = [cell["col"] for cell in cells]
+            region = {
+                "region_id": f"input_object_region_{index}",
+                "min_row": min(rows_for_object),
+                "max_row": max(rows_for_object),
+                "min_col": min(cols_for_object),
+                "max_col": max(cols_for_object),
+                "cells": cells,
+                "cell_count": len(cells),
+                "color": color,
+                "source": "input_object_grounding",
+            }
+            targets.append({
+                "object_id": f"obj_{index}",
+                "role": "input_object_anchor",
+                "region": region,
+                "identity_preserved": True,
+                "identity_confidence": 0.82,
+                "color": color,
+            })
+        return targets
 
     def _affected_objects(
         self,

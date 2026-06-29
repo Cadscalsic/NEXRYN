@@ -132,6 +132,38 @@ def test_training_report_exposes_compact_results_and_concept_memory(capsys):
     assert "large_runtime_context" not in output
 
 
+def test_training_report_minimal_prints_compact_concept_report(capsys):
+    report = build_training_report(
+        training_batch={"selected_task_count": 1},
+        multi_task_results=[{"task": "task_014.json", "status": "completed"}],
+        ledger_report={
+            "concepts": [{
+                "concept": "replication",
+                "used_task_count": 8,
+                "used_task_ids": ["data/training/task_014.json"],
+                "independent_success_rate": 0.93,
+            }],
+        },
+        concept_lifecycle_report={
+            "promotion_report": [{
+                "concept": "replication",
+                "promotion_score": 0.93,
+                "current_stage": "TRUTH_CANDIDATE",
+                "candidate_ready": True,
+                "blocked_reason": None,
+            }],
+        },
+    )
+
+    print_training_report(report, report_level="minimal")
+    output = capsys.readouterr().out
+
+    assert "COMPACT CONCEPT REPORT" in output
+    assert "replication stage=" in output
+    assert "TRUTH CANDIDATE REPORT" not in output
+    assert "effective_contradiction=" not in output
+
+
 def test_training_report_preserves_context_candidate_in_discovery_mode():
     report = build_training_report(
         ledger_report={
@@ -255,6 +287,34 @@ def test_training_report_counts_lifecycle_generated_contexts():
     assert report["context_hierarchy_reports"][
         "replication_dependency_surface"
     ]["hierarchy_ready"] is True
+
+
+def test_training_report_normalizes_semantic_context_and_prints_string_properties(capsys):
+    report = build_training_report(
+        concept_lifecycle_report={
+            "generated_contexts": [{
+                "context_id": "semantic_context:replication",
+                "context_name": "replication_process_context",
+                "context_type": "SEMANTIC_CONTEXT",
+                "concept": "replication",
+                "confidence": 0.91,
+                "semantic_definition": "replication context",
+                "properties": ["creates_objects", "preserves_shape"],
+            }],
+        },
+    )
+
+    semantic = report["semantic_context_reports"]["replication_process_context"]
+
+    assert semantic["context"]["context_id"] == "replication_process_context"
+    assert semantic["context"]["context_type"] == "SEMANTIC_CONTEXT"
+
+    print_training_report(report)
+    output = capsys.readouterr().out
+
+    assert "SEMANTIC CONTEXT REPORT" in output
+    assert "creates_objects" in output
+    assert "CONTEXT PRINT FAILURE" not in output
 
 
 def test_training_report_exposes_locked_truth_review_snapshot(capsys):

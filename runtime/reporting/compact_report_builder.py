@@ -238,6 +238,12 @@ class CompactReportBuilder:
             "dependency_snapshot_hits": report.get(
                 "dependency_snapshot_hits",
             ),
+            "dependency_executor_cache_hits": report.get(
+                "dependency_executor_cache_hits",
+            ),
+            "dependency_executor_cache_misses": report.get(
+                "dependency_executor_cache_misses",
+            ),
             "dependency_reasoning_skipped": report.get(
                 "dependency_reasoning_skipped",
             ),
@@ -294,6 +300,91 @@ class CompactReportBuilder:
                 5,
             ),
         }
+
+    def compact_concept_lifecycle_report(
+        self,
+        report: dict,
+        report_budget_seconds: float | None = None,
+        elapsed_seconds: float | None = None,
+    ) -> dict:
+        report = report if isinstance(report, dict) else {}
+
+        def compact_concept(concept):
+            promotion = concept.get("truth_candidate_promotion", {})
+            promotion = promotion if isinstance(promotion, dict) else {}
+            return {
+                "concept": concept.get("concept"),
+                "state": concept.get("state"),
+                "used_task_count": concept.get("used_task_count"),
+                "promotion_score": concept.get("promotion_score"),
+                "promotion_stage": concept.get("promotion_stage"),
+                "candidate_ready": concept.get("candidate_ready"),
+                "eligible_for_context": concept.get("eligible_for_context"),
+                "eligible_for_truth_candidate":
+                concept.get("eligible_for_truth_candidate"),
+                "blocked_metrics": list(concept.get("blocked_metrics", [])),
+                "average_contradiction_score":
+                concept.get("average_contradiction_score"),
+                "promotion_dependency_score":
+                promotion.get("promotion_dependency_score"),
+                "promotion_dependency_bonus":
+                promotion.get("promotion_dependency_bonus"),
+                "dependency_confidence": promotion.get("dependency_confidence"),
+                "dependency_chain_depth":
+                promotion.get("dependency_chain_depth"),
+                "dependency_chain_coverage":
+                promotion.get("dependency_chain_coverage"),
+                "dependency_promotion_blockers": list(
+                    promotion.get("dependency_promotion_blockers", [])
+                ),
+                "context_strength": promotion.get("context_strength"),
+                "context_consumed": promotion.get("context_consumed", 0),
+            }
+
+        compact = {
+            "system": report.get("system", "concept_maturity_tracker"),
+            "states": list(report.get("states", [])),
+            "concepts": [
+                compact_concept(concept)
+                for concept in report.get("concepts", [])
+                if isinstance(concept, dict)
+            ],
+            "promotion_report": self._limit_list(
+                report.get("promotion_report", []),
+                MAX_FULL_ENTRIES_DISPLAYED,
+            ),
+            "context_count": report.get("context_count", 0),
+            "context_consumed": report.get("context_consumed", 0),
+            "context_hits": report.get("context_hits", 0),
+            "truth_candidate_count": report.get("truth_candidate_count", 0),
+            "strategy_hits": report.get("strategy_hits", 0),
+            "program_hits": report.get("program_hits", 0),
+            "truth_hits": report.get("truth_hits", 0),
+            "knowledge_reuse_rate": report.get("knowledge_reuse_rate", 0.0),
+            "state_counts": dict(report.get("state_counts", {})),
+            "closest_truth_candidate_concepts": self._limit_list(
+                report.get("closest_truth_candidate_concepts", []),
+                MAX_FULL_ENTRIES_DISPLAYED,
+            ),
+            "candidate_ready_lifecycle_invariant_preserved":
+            report.get("candidate_ready_lifecycle_invariant_preserved"),
+            "count_alone_cannot_promote_truth":
+            report.get("count_alone_cannot_promote_truth"),
+            "concept_lifecycle_compressed": True,
+            "report_level": "compact",
+        }
+        if report_budget_seconds is not None:
+            compact["report_budget_seconds"] = report_budget_seconds
+        if elapsed_seconds is not None:
+            compact["report_elapsed_seconds"] = elapsed_seconds
+        if (
+            report_budget_seconds is not None
+            and elapsed_seconds is not None
+            and elapsed_seconds > report_budget_seconds
+        ):
+            compact["report_budget_exceeded"] = True
+            compact["report_truncated_reason"] = "concept_lifecycle_report_budget"
+        return compact
 
     def compact_governance_report(self, report: dict) -> dict:
         report = report if isinstance(report, dict) else {}

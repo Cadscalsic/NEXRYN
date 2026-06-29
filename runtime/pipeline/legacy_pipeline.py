@@ -1361,6 +1361,8 @@ class AdaptiveCognitivePipeline:
             "governance_revalidations_skipped": 0,
             "dependency_snapshot_hits": 0,
             "dependency_snapshot_misses": 0,
+            "dependency_executor_cache_hits": 0,
+            "dependency_executor_cache_misses": 0,
             "dependency_reasoning_skipped": 0,
             "dependency_activation_attempted": 0,
             "dependency_activation_successful": 0,
@@ -1827,6 +1829,9 @@ class AdaptiveCognitivePipeline:
         adaptive_cache_report = self.adaptive_cache_manager.report()
         adaptive_reuse_report = self.adaptive_reuse_engine.report()
         context_reuse_report = self.context_reuse_engine.report()
+        dependency_executor_cache_report = (
+            self.dependency_chain_executor.cache_report()
+        )
         local_cache_total = (
             self.performance_counters["cache_hits"]
             + self.performance_counters["cache_misses"]
@@ -1854,6 +1859,12 @@ class AdaptiveCognitivePipeline:
             "manager_cache_hit_rate": cache_metrics.hit_rate,
             "dependency_chains_executed":
             self.performance_counters["dependency_chains_executed"],
+            "dependency_executor_cache_hits":
+            self.performance_counters["dependency_executor_cache_hits"],
+            "dependency_executor_cache_misses":
+            self.performance_counters["dependency_executor_cache_misses"],
+            "dependency_executor_cache_report":
+            dependency_executor_cache_report,
             "explanation_paths_generated":
             self.performance_counters["explanation_paths_generated"],
             "telemetry_enabled":
@@ -1901,10 +1912,12 @@ class AdaptiveCognitivePipeline:
             "context_hits": max(
                 adaptive_cache_report["context_hits"],
                 adaptive_reuse_report["context_hits"],
+                self.performance_counters["context_hits"],
             ),
             "context_misses": max(
                 adaptive_cache_report["context_misses"],
                 adaptive_reuse_report["context_misses"],
+                self.performance_counters["context_misses"],
             ),
             "world_model_hits": max(
                 adaptive_cache_report["world_model_hits"],
@@ -2292,6 +2305,7 @@ class AdaptiveCognitivePipeline:
         self.completed_stages = []
         self.failed_stages = []
         self.cached_pipeline_result = None
+        self.dependency_chain_executor.clear_shared_cache()
         self.meta_supervisor.reset_episode()
         self.pre_reasoning_router.reset()
         self.adaptive_reuse_engine = AdaptiveReuseEngine(
@@ -4425,9 +4439,20 @@ class AdaptiveCognitivePipeline:
                             ],
                         )
                         )
-                        self.performance_counters[
-                            "dependency_chains_executed"
-                        ] += 1
+                        if computed_report.get("dependency_cache_hit"):
+                            self.performance_counters[
+                                "dependency_executor_cache_hits"
+                            ] += 1
+                            self.performance_counters[
+                                "dependency_reasoning_skipped"
+                            ] += 1
+                        else:
+                            self.performance_counters[
+                                "dependency_executor_cache_misses"
+                            ] += 1
+                            self.performance_counters[
+                                "dependency_chains_executed"
+                            ] += 1
                         return computed_report
 
                     report, optimization_report = (

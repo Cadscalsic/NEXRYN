@@ -46,6 +46,9 @@ SUPPORTED_TRANSFORMATIONS = {
     "replace_color",
     "map_colors",
     "duplicate_object",
+    "preserve_size",
+    "expand_pattern",
+    "density_change",
 }
 
 

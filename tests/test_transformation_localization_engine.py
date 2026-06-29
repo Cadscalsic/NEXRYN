@@ -175,6 +175,51 @@ def test_residual_guided_grounding_recovers_empty_target_objects_for_probation()
     assert report["sandbox_execution_authorized"] is True
 
 
+def test_preserve_size_grounds_input_object_and_reaches_world_gate():
+    input_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    target_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    synthesized_program = {
+        "step_count": 1,
+        "steps": [{
+            "operation": "preserve_size",
+            "parameters": {},
+        }],
+    }
+
+    anticipation = WorldModelEngine().anticipate_program(
+        input_grid=input_grid,
+        target_grid=target_grid,
+        synthesized_program=synthesized_program,
+    )
+    gate_report = WorldModelGate().evaluate(anticipation)
+    localization = anticipation["transformation_localization"]
+    localization_report = localization["LOCALIZATION_REPORT"]
+
+    assert localization["target_objects"]
+    assert localization_report["target_objects"]
+    assert localization_report["candidate_object_regions"]
+    assert localization_report["OBJECT GROUNDING REPORT"]["object_detection"] > 0.0
+    assert gate_report["LOCALIZATION_REPORT"]
+    assert gate_report["WORLD GOVERNANCE INTROSPECTION REPORT"][
+        "triggered_rules"
+    ] != ["LOCALIZED_PROGRAM_INCOMPATIBLE"]
+    assert "LOCALIZED_PROGRAM_INCOMPATIBLE" not in (
+        gate_report["WORLD GOVERNANCE INTROSPECTION REPORT"]["triggered_rules"]
+    )
+
+
 def test_color_mapping_localizes_to_object_level_executable_rule():
     input_grid = [
         [0, 0, 0, 0, 0],

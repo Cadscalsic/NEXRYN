@@ -33,6 +33,8 @@ class WorldModelGate:
         "scale",
         "scaling",
         "object_level_translate",
+        "preserve_size",
+        "expand_pattern",
     }
 
     def evaluate(self, anticipation_report=None):

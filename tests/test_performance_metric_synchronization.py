@@ -1,4 +1,5 @@
 from runtime.profiling.performance_reporter import PerformanceReporter
+from runtime.performance.runtime_attribution_engine import runtime_attribution_engine
 from runtime.reporting.compact_report_builder import CompactReportBuilder
 
 
@@ -50,6 +51,27 @@ def test_performance_reporter_uses_runtime_metric_bridge_fields():
     assert memory["reuse_rate"] > 0.0
 
 
+def test_performance_reporter_never_reports_total_below_active_compute():
+    report = PerformanceReporter().build_report(
+        performance_report={
+            "total_runtime_seconds": 18.0,
+            "idle_time_seconds": 18.0,
+            "slowest_modules": [
+                {"module": "stage_cycle", "seconds": 19.0},
+            ],
+        },
+        profile_level="minimal",
+    )
+
+    runtime = report["runtime_summary"]
+    stage = report["stage_metrics"][0]
+
+    assert runtime["total_runtime_seconds"] == 19.0
+    assert runtime["active_compute_time_seconds"] == 19.0
+    assert runtime["idle_time_seconds"] == 0.0
+    assert stage["percentage_of_runtime"] == 1.0
+
+
 def test_compact_performance_report_preserves_pipeline_metrics():
     compact = CompactReportBuilder().compact_performance_report({
         "system": "runtime_reasoning_budget",
@@ -76,3 +98,46 @@ def test_compact_performance_report_preserves_pipeline_metrics():
     assert compact["dependency_chain_coverage"] == 0.95
     assert compact["unattributed_runtime_seconds"] == 2.5
     assert compact["truth_hits"] == 1
+
+
+def test_runtime_attribution_does_not_relabel_cached_executor_time_as_dependency():
+    report = runtime_attribution_engine.build_report(
+        total_runtime=10.0,
+        performance_report={
+            "startup_time_seconds": 1.0,
+            "task_execution_time_seconds": 2.0,
+            "context_count": 5,
+            "dependency_chains_executed": 2,
+            "dependency_executor_cache_hits": 4,
+            "dependency_executor_cache_misses": 2,
+        },
+    )
+
+    breakdown = report["runtime_breakdown"]
+
+    assert breakdown["dependency_time"] == 0.0
+    assert breakdown["context_time"] == 0.0
+    assert breakdown["reasoning_time"] == 0.0
+    assert breakdown["untracked_runtime"] == 7.0
+    assert report["untracked_runtime"] == 7.0
+
+
+def test_runtime_attribution_does_not_relabel_candidate_runtime_as_truth():
+    report = runtime_attribution_engine.build_report(
+        total_runtime=20.0,
+        performance_report={
+            "startup_time_seconds": 1.0,
+            "truth_candidate_count": 5,
+            "slowest_modules": [
+                {"module": "stage_cycle", "seconds": 6.0},
+            ],
+        },
+    )
+
+    breakdown = report["runtime_breakdown"]
+
+    assert breakdown["truth_time"] == 0.0
+    assert breakdown["task_execution_time"] == 6.0
+    assert breakdown["reasoning_time"] == 0.0
+    assert breakdown["untracked_runtime"] == 13.0
+    assert report["untracked_runtime"] == 13.0

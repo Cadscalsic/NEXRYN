@@ -326,6 +326,15 @@ class WorldModelEngine:
                 "prediction_accuracy",
                 0.0,
             ),
+            runtime_context={
+                "input_grid": input_grid,
+                "output_grid": target_grid,
+                "target_grid": target_grid,
+                "predicted_output": predicted_grid,
+                "prediction_report": prediction_report,
+                "object_motion_report": object_motion_report,
+                "OBJECT_MOTION_REPORT": object_motion_report,
+            },
         )
         localized_program = localization_report.get(
             "localized_program",
@@ -337,9 +346,14 @@ class WorldModelEngine:
             localization_report["localized_program"] = localized_program
             localization_report["localized_step_count"] = 1
 
+        motion_targets = (
+            object_motion_report.get("movable_objects")
+            or object_motion_report.get("fixed_objects")
+            or localization_report.get("target_objects", [])
+        )
         localization_report.update({
             "target_objects":
-            object_motion_report.get("movable_objects", []),
+            motion_targets,
             "translation_per_object":
             object_motion_report.get("translation_per_object", {}),
             "support_objects":

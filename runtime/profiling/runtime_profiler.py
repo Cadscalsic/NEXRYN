@@ -57,6 +57,10 @@ class RuntimeProfiler:
             },
             module_timings=module_timings,
         )
+        total_runtime = max(
+            total_runtime,
+            timing_bridge["active_compute_time_seconds"],
+        )
         idle = max(0.0, total_runtime - active_compute)
         return RuntimeMetrics(
             total_runtime_seconds=round(total_runtime, 4),
