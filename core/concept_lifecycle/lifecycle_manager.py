@@ -66,6 +66,17 @@ class ConceptLifecycleManager:
     def update_knowledge_maturity(self, ledger_report, context=None):
 
         context = context if isinstance(context, dict) else {}
+        report_level = str(context.get("report_level", "full") or "full").lower()
+        if report_level != "full":
+            self.knowledge_maturity_report = self._compact_knowledge_maturity(
+                ledger_report,
+                context.get(
+                    "truth_candidate_engine_report",
+                    context.get("truth_candidate_report", {}),
+                ),
+                report_level=report_level,
+            )
+            return self.knowledge_maturity_report
 
         self.knowledge_maturity_report = (
             self.concept_maturity_tracker
@@ -82,11 +93,303 @@ class ConceptLifecycleManager:
                     "truth_registry_report",
                     {},
                 ),
-                report_level=context.get("report_level", "full"),
+                report_level=report_level,
             )
         )
 
         return self.knowledge_maturity_report
+
+    def _compact_knowledge_maturity(
+        self,
+        ledger_report,
+        truth_candidate_report=None,
+        report_level="normal",
+    ):
+        ledger_report = ledger_report if isinstance(ledger_report, dict) else {}
+        truth_candidate_report = (
+            truth_candidate_report
+            if isinstance(truth_candidate_report, dict)
+            else {}
+        )
+        runtime_candidates = {
+            str(item.get("concept")): item
+            for item in truth_candidate_report.get("evaluations", [])
+            if isinstance(item, dict) and item.get("concept")
+        }
+        concepts = []
+        generated_contexts = []
+        for item in ledger_report.get("concepts", []):
+            if not isinstance(item, dict) or not item.get("concept"):
+                continue
+            concept = str(item.get("concept"))
+            used_task_count = int(item.get("used_task_count", 0) or 0)
+            support = float(
+                item.get(
+                    "cross_task_support",
+                    item.get("independent_success_rate", 0.0),
+                )
+                or 0.0
+            )
+            contradiction = float(
+                item.get("average_contradiction_score", 0.0) or 0.0
+            )
+            runtime = runtime_candidates.get(concept, {})
+            eligible = bool(runtime.get("eligible_for_truth_candidate"))
+            blocked = list(runtime.get("blocked_metrics", []))
+            score = runtime.get("promotion_score")
+            if score is None:
+                score = round(
+                    min(
+                        1.0,
+                        support * 0.72
+                        + min(used_task_count / 32.0, 1.0) * 0.18
+                        + max(0.0, 1.0 - contradiction) * 0.10,
+                    ),
+                    4,
+                )
+            if eligible:
+                state = "TRUTH_CANDIDATE"
+                next_stage = "ESTABLISHED_TRUTH"
+                candidate_ready = True
+            elif used_task_count >= 5 and support >= 0.80:
+                state = "CANDIDATE"
+                next_stage = "PROCESS_CONTEXT"
+                candidate_ready = True
+            elif used_task_count >= 3:
+                state = "SUPPORTED"
+                next_stage = "CANDIDATE"
+                candidate_ready = False
+            else:
+                state = "DISCOVERING"
+                next_stage = "SUPPORTED"
+                candidate_ready = False
+            eligible_for_context = state in {
+                "CANDIDATE",
+                "PROCESS_CONTEXT",
+                "TRUTH_CANDIDATE",
+            }
+            eligible_for_truth_candidate = eligible
+            thresholds = {
+                "minimum_observations": 5,
+                "minimum_confidence": 0.80,
+                "maximum_contradiction_rate": 0.10,
+                "minimum_promotion_score": 0.70,
+            }
+            epistemic_graduation = {
+                "concept": concept,
+                "graduation_stage": state,
+                "current_stage": state,
+                "next_stage": next_stage,
+                "candidate_ready": candidate_ready,
+                "promotion_score": score,
+                "eligible_for_context": eligible_for_context,
+                "eligible_for_truth_candidate":
+                eligible_for_truth_candidate,
+                "blocked_metrics": blocked,
+                "thresholds": thresholds,
+                "next_required_evidence": [{
+                    "metric": "promotion_score",
+                    "required": (
+                        0.95
+                        if state == "TRUTH_CANDIDATE"
+                        else thresholds["minimum_promotion_score"]
+                    ),
+                }],
+                "compact_graduation": True,
+            }
+            if eligible_for_context:
+                generated_contexts.append({
+                    "context_id": f"{concept}_process_context",
+                    "context_name": concept,
+                    "concept": concept,
+                    "context_type": "PROCESS_CONTEXT",
+                    "status": "PROCESS_CONTEXT_SUPPORTED",
+                    "confidence": round(
+                        min(1.0, max(float(score or 0.0), support)),
+                        4,
+                    ),
+                    "context_strength": round(
+                        min(1.0, max(float(score or 0.0), support)),
+                        4,
+                    ),
+                    "transitions": [{
+                        "from": state,
+                        "to": next_stage,
+                        "source": "compact_lifecycle_summary",
+                    }],
+                    "preconditions": [{
+                        "metric": "candidate_ready",
+                        "satisfied": candidate_ready,
+                    }],
+                    "outcomes": [{
+                        "stage": next_stage,
+                        "eligible_for_context": eligible_for_context,
+                    }],
+                    "expected_outcomes": [{
+                        "stage": next_stage,
+                        "eligible_for_context": eligible_for_context,
+                    }],
+                    "source": "compact_lifecycle_summary",
+                    "report_compressed": True,
+                })
+            concept_report = {
+                "concept": concept,
+                "state": state,
+                "used_task_count": used_task_count,
+                "successful_task_count": sum(
+                    record.get("success") is True
+                    for record in item.get("records", [])
+                    if isinstance(record, dict)
+                ),
+                "counterexample_task_count": sum(
+                    record.get("success") is False
+                    for record in item.get("records", [])
+                    if isinstance(record, dict)
+                ),
+                "independent_success_rate":
+                item.get("independent_success_rate", 0.0),
+                "cross_task_support": support,
+                "average_contradiction_score": round(contradiction, 4),
+                "promotion_score": score,
+                "promotion_stage": state,
+                "candidate_ready": candidate_ready,
+                "preliminary_truth_candidate_ready": candidate_ready,
+                "eligible_for_context": eligible_for_context,
+                "eligible_for_truth_candidate": eligible_for_truth_candidate,
+                "blocked_metrics": blocked,
+                "promotion_reason": (
+                    "COMPACT_LIFECYCLE_SUMMARY: full lifecycle deferred"
+                ),
+                "epistemic_graduation": epistemic_graduation,
+                "truth_candidate_promotion": {
+                    "concept": concept,
+                    "candidate_ready": candidate_ready,
+                    "promotion_score": score,
+                    "promotion_stage": state,
+                    "eligible_for_context": eligible_for_context,
+                    "eligible_for_truth_candidate":
+                    eligible_for_truth_candidate,
+                    "blocked_metrics": blocked,
+                    "epistemic_graduation": epistemic_graduation,
+                    "promotion_dependency_score":
+                    runtime.get("promotion_dependency_score", 0.0),
+                    "promotion_dependency_bonus":
+                    runtime.get("promotion_dependency_bonus", 0.0),
+                    "dependency_promotion_blockers": list(
+                        runtime.get("dependency_promotion_blockers", [])
+                    ),
+                    "dependency_confidence":
+                    runtime.get("dependency_confidence", 0.0),
+                    "dependency_chain_depth":
+                    runtime.get("dependency_chain_depth", 0),
+                    "dependency_chain_coverage":
+                    runtime.get("dependency_chain_coverage", 0.0),
+                },
+                "report_compressed": True,
+            }
+            concepts.append(concept_report)
+
+        promotion_report = [
+            {
+                "concept": concept["concept"],
+                "promotion_score": concept["promotion_score"],
+                "current_stage": concept["state"],
+                "next_stage": (
+                    "ESTABLISHED_TRUTH"
+                    if concept["state"] == "TRUTH_CANDIDATE"
+                    else "PROCESS_CONTEXT"
+                    if concept["state"] == "CANDIDATE"
+                    else "CANDIDATE"
+                    if concept["state"] == "SUPPORTED"
+                    else "SUPPORTED"
+                ),
+                "candidate_ready": concept["candidate_ready"],
+                "blocked_reason": (
+                    ", ".join(concept["blocked_metrics"])
+                    if concept["blocked_metrics"]
+                    else None
+                ),
+            }
+            for concept in concepts
+        ]
+        state_counts = {
+            state: sum(concept["state"] == state for concept in concepts)
+            for state in self.concept_maturity_tracker.STATES
+        }
+        return {
+            "system": "concept_maturity_tracker",
+            "states": list(self.concept_maturity_tracker.STATES),
+            "concepts": concepts,
+            "promotion_report": promotion_report,
+            "context_registry_report": {},
+            "generated_contexts": generated_contexts,
+            "context_count": len(generated_contexts),
+            "context_consumed": 0,
+            "context_hits": 0,
+            "context_injection_audit": {
+                "compact_report": True,
+                "concept_count": len(concepts),
+                "generated_context_count": len(generated_contexts),
+            },
+            "recursive_context_audit": {
+                "compact_report": True,
+                "context_count": len(generated_contexts),
+            },
+            "knowledge_flow_report": {
+                "compact_report": True,
+                "knowledge_created": len(generated_contexts),
+                "knowledge_consumed": 0,
+            },
+            "knowledge_reuse_report": {
+                "knowledge_reuse_rate": 0.0,
+                "strategy_hits": 0,
+                "program_hits": 0,
+            },
+            "truth_reuse_report": {
+                "truth_hits": 0,
+                "truth_misses": len(concepts),
+                "truth_reuse_rate": 0.0,
+            },
+            "strategy_hits": 0,
+            "program_hits": 0,
+            "truth_hits": 0,
+            "knowledge_reuse_rate": 0.0,
+            "truth_candidates": [
+                concept
+                for concept in concepts
+                if concept.get("eligible_for_truth_candidate")
+            ],
+            "truth_candidate_count": sum(
+                bool(concept.get("eligible_for_truth_candidate"))
+                for concept in concepts
+            ),
+            "candidate_ready_lifecycle_invariant_preserved": all(
+                concept["candidate_ready"]
+                for concept in concepts
+                if concept["state"] in {
+                    "CANDIDATE",
+                    "PROCESS_CONTEXT",
+                    "TRUTH_CANDIDATE",
+                    "ESTABLISHED_TRUTH",
+                }
+            ),
+            "state_counts": state_counts,
+            "closest_truth_candidate_concepts": [
+                concept["concept"]
+                for concept in concepts
+                if concept["state"] in {
+                    "CANDIDATE",
+                    "PROCESS_CONTEXT",
+                    "TRUTH_CANDIDATE",
+                    "ESTABLISHED_TRUTH",
+                }
+            ],
+            "count_alone_cannot_promote_truth": True,
+            "report_level": "compact",
+            "concept_lifecycle_compressed": True,
+            "full_lifecycle_deferred": True,
+            "deferred_reason": "report_level_not_full",
+        }
 
     def register_validated(self, validation_report):
 

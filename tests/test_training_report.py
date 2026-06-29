@@ -289,6 +289,76 @@ def test_training_report_counts_lifecycle_generated_contexts():
     ]["hierarchy_ready"] is True
 
 
+def test_training_report_consumes_discovered_context_for_truth_admission():
+    report = build_training_report(
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "replication",
+                "state": "CANDIDATE",
+                "promotion_stage": "CANDIDATE",
+                "used_task_count": 29,
+                "candidate_ready": True,
+                "preliminary_truth_candidate_ready": True,
+                "eligible_for_context": True,
+                "truth_candidate_promotion": {
+                    "concept": "replication",
+                    "candidate_ready": True,
+                    "promotion_score": 0.9157,
+                    "promotion_stage": "CANDIDATE",
+                    "eligible_for_truth_candidate": False,
+                    "stage_eligible_for_truth_candidate": True,
+                    "blocked_metrics": [],
+                },
+            }],
+            "generated_contexts": [{
+                "context_id": "replication_process_context",
+                "context_name": "replication",
+                "context_type": "PROCESS_CONTEXT",
+                "concept": "replication",
+                "confidence": 0.9157,
+                "preconditions": ["candidate_ready"],
+                "transitions": ["candidate_to_process_context"],
+                "expected_outcomes": ["truth_candidate_context_support"],
+            }],
+            "promotion_report": [{
+                "concept": "replication",
+                "promotion_score": 0.9157,
+                "current_stage": "CANDIDATE",
+                "next_stage": "PROCESS_CONTEXT",
+                "candidate_ready": True,
+                "blocked_reason": None,
+            }],
+        },
+        include_truth_evaluations=True,
+    )
+
+    candidate = report["truth_candidate_evaluations"]["replication"]
+    context = report["context_discovery_reports"]["replication"]
+    promotion = report["concept_lifecycle"]["promotion_report"][0]
+
+    assert candidate["context_strength"] == 0.9157
+    assert candidate["context_strength_source"] == "context_scoring_pipeline"
+    assert candidate["semantic_context"]["semantic_context_score"] == 0.9157
+    assert candidate["context_hierarchy"]["context_hierarchy_score"] == 0.9157
+    assert (
+        candidate["contextual_truth"]["contextual_truth_score"]
+        >= 0.91
+    )
+    assert candidate["eligible_for_truth_candidate"] is True
+    assert (
+        candidate["eligibility_reason"]
+        == "context_scored_truth_candidate_admission"
+    )
+    assert context["context_name"] == "replication"
+    assert context["transformation_family"] == "replication"
+    assert len(context["transition_family"]) == 1
+    assert len(context["preconditions"]) == 1
+    assert len(context["expected_outcomes"]) == 1
+    assert promotion["current_stage"] == "TRUTH_CANDIDATE"
+    assert promotion["next_stage"] == "ESTABLISHED_TRUTH"
+    assert "replication" in report["contextual_truth_reports"]
+
+
 def test_training_report_normalizes_semantic_context_and_prints_string_properties(capsys):
     report = build_training_report(
         concept_lifecycle_report={
@@ -1115,3 +1185,44 @@ def test_training_report_bridges_cognition_layer_contexts_to_candidates():
     assert report["truth_commit_evaluations"]["growth"][
         "decision"
     ] == "REMAIN_BELIEF"
+
+
+def test_training_report_commits_and_reuses_ready_lifecycle_truths():
+    report = build_training_report(
+        multi_task_results=[],
+        concept_lifecycle_report={
+            "concepts": [{
+                "concept": "growth",
+                "state": "TRUTH_CANDIDATE",
+                "preliminary_truth_candidate_ready": True,
+                "truth_candidate_promotion": {
+                    "candidate_ready": True,
+                    "promotion_score": 0.94,
+                    "confidence": 0.94,
+                    "eligible_for_truth_candidate": True,
+                    "stage_eligible_for_truth_candidate": True,
+                    "dependency_confidence": 0.93,
+                    "dependency_chain_coverage": 0.94,
+                    "context_strength": 0.94,
+                    "causal_validation_score": 0.92,
+                    "cross_task_stability": 0.91,
+                    "contradiction_rate": 0.0,
+                    "failed_gates": [],
+                    "dependency_promotion_blockers": [],
+                },
+            }],
+        },
+        include_truth_evaluations=True,
+    )
+
+    commit = report["truth_commit_evaluations"]["growth"]
+    reuse = report["truth_reuse_report"]
+
+    assert commit["decision"] == "TRUTH_COMMITTED"
+    assert commit["final_commit_state"] == "TRUTH_COMMITTED"
+    assert commit["established_truth_state"] == "ESTABLISHED_TRUTH"
+    assert commit["commit_ready"] is True
+    assert report["truth_commit_engine_report"]["truth_committed"] is True
+    assert report["truth_registry_report"]["committed_truth_count"] == 1
+    assert reuse["truth_hits"] == 1
+    assert reuse["truth_misses"] == 0

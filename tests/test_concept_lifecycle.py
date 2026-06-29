@@ -174,6 +174,50 @@ def test_concept_maturity_normal_report_level_compresses_lifecycle_payload():
     assert "promotion_report" in report
 
 
+def test_lifecycle_manager_normal_report_level_defers_full_maturity():
+    manager = ConceptLifecycleManager()
+
+    report = manager.update_knowledge_maturity(
+        {
+            "concepts": [
+                maturity_concept("replication", 8),
+            ],
+        },
+        {"report_level": "normal"},
+    )
+
+    assert report["concept_lifecycle_compressed"] is True
+    assert report["full_lifecycle_deferred"] is True
+    assert report["report_level"] == "compact"
+    assert report["concepts"][0]["concept"] == "replication"
+    assert "context_artifacts" not in report["concepts"][0]
+
+
+def test_lifecycle_manager_normal_report_level_preserves_context_graduation():
+    manager = ConceptLifecycleManager()
+
+    report = manager.update_knowledge_maturity(
+        {
+            "concepts": [
+                maturity_concept("shape_preservation", 32),
+            ],
+        },
+        {"report_level": "normal"},
+    )
+
+    concept = report["concepts"][0]
+    graduation = concept["epistemic_graduation"]
+    context = report["generated_contexts"][0]
+
+    assert report["concept_lifecycle_compressed"] is True
+    assert report["context_count"] == 1
+    assert graduation["eligible_for_context"] is True
+    assert graduation["next_stage"] == "PROCESS_CONTEXT"
+    assert concept["truth_candidate_promotion"]["epistemic_graduation"]
+    assert context["context_type"] == "PROCESS_CONTEXT"
+    assert context["concept"] == "shape_preservation"
+
+
 def test_concept_maturity_missing_records_do_not_mean_full_contradiction():
     report = ConceptMaturityTracker().evaluate({
         "concepts": [{

@@ -12,8 +12,5 @@ memory/*.json
 runtime/cache/*.json
 runtime/cache/.adaptive_cache_migrated
 runtime/cache/concept_cache.json
-runtime/cache/
-runtime/cache/
 runtime/cache/concept_cache.json
-runtime/cache/
 *.cache

@@ -1946,6 +1946,814 @@ def build_training_report(
     for context in lifecycle_contexts:
         record_lifecycle_generated_context(context)
 
+    def context_score_from_discovery(report):
+        confidence = report.get(
+            "context_strength",
+            report.get(
+                "process_context_strength",
+                report.get(
+                    "context_confidence",
+                    report.get("confidence"),
+                ),
+            ),
+        )
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        transition_count = len(report.get("transition_family", []) or [])
+        if transition_count == 0:
+            transition_count = len(report.get("transitions", []) or [])
+        precondition_count = len(report.get("preconditions", []) or [])
+        outcome_count = len(report.get("expected_outcomes", []) or [])
+        if outcome_count == 0:
+            outcome_count = len(report.get("outcomes", []) or [])
+
+        structural_score = min(
+            1.0,
+            0.48
+            + min(transition_count, 2) * 0.14
+            + min(precondition_count, 2) * 0.12
+            + min(outcome_count, 2) * 0.10,
+        )
+        return round(max(0.0, min(max(confidence, structural_score), 1.0)), 4)
+
+    def synthesize_context_consumption_scores():
+        target_evaluations = (
+            candidate_context_evaluations
+            if discovery_only_mode
+            else candidate_evaluations
+        )
+
+        def fill_missing(target, source):
+            if not isinstance(target, dict):
+                return source
+            if not isinstance(source, dict):
+                return target
+            for key, value in source.items():
+                if target.get(key) is None or target.get(key) in ({}, []):
+                    target[key] = value
+            return target
+
+        def report_for_concept(reports, concept):
+            for key, report in reports.items():
+                if (
+                    isinstance(report, dict)
+                    and (
+                        str(key) == concept
+                        or str(report.get("concept", "")) == concept
+                    )
+                ):
+                    return report
+            return None
+
+        for concept, context_report in context_discovery_reports.items():
+            if not isinstance(context_report, dict):
+                continue
+            concept = str(
+                context_report.get("concept")
+                or context_report.get("context_name")
+                or concept
+            )
+            context_name = str(
+                context_report.get("context_name")
+                or context_report.get("context_id")
+                or concept
+            )
+            evaluation = target_evaluations.get(concept, {})
+            promotion_score = evaluation.get(
+                "promotion_score",
+                context_report.get("promotion_score"),
+            )
+            try:
+                promotion_score_value = float(promotion_score)
+            except (TypeError, ValueError):
+                promotion_score_value = 0.0
+            score = max(
+                context_score_from_discovery(context_report),
+                nested_score(
+                    evaluation,
+                    [
+                        ("context_strength",),
+                        ("semantic_context", "semantic_context_score"),
+                        ("context_hierarchy", "context_hierarchy_score"),
+                        ("contextual_truth", "contextual_truth_score"),
+                    ],
+                ),
+                promotion_score_value
+                if evaluation.get("candidate_ready")
+                and not evaluation.get("blocked_metrics")
+                else 0.0,
+            )
+            context_report.setdefault("concept", concept)
+            if context_report.get("context_name") is None:
+                context_report["context_name"] = context_name
+            if context_report.get("transformation_family") is None:
+                context_report["transformation_family"] = concept
+            if context_report.get("confidence") is None:
+                context_report["confidence"] = score
+            if context_report.get("context_confidence") is None:
+                context_report["context_confidence"] = score
+            if not context_report.get("transition_family"):
+                context_report["transition_family"] = [{
+                    "from": "CANDIDATE",
+                    "to": "TRUTH_CANDIDATE",
+                    "source": "context_scoring_pipeline",
+                }]
+            if not context_report.get("transitions"):
+                context_report["transitions"] = list(
+                    context_report.get("transition_family", [])
+                )
+            if not context_report.get("preconditions"):
+                context_report["preconditions"] = [{
+                    "metric": "candidate_ready",
+                    "satisfied": bool(evaluation.get("candidate_ready")),
+                }]
+            if not context_report.get("expected_outcomes"):
+                context_report["expected_outcomes"] = [{
+                    "stage": "TRUTH_CANDIDATE",
+                    "eligible_for_truth_candidate": bool(
+                        evaluation.get("eligible_for_truth_candidate")
+                    ),
+                }]
+            if not context_report.get("outcomes"):
+                context_report["outcomes"] = list(
+                    context_report.get("expected_outcomes", [])
+                )
+
+            semantic_report = report_for_concept(
+                semantic_context_reports,
+                concept,
+            )
+            if semantic_report is None:
+                semantic_report = {
+                    "system": "context_scoring_pipeline",
+                    "context": structured_context(
+                        context_report.get("context", context_name),
+                        context_name,
+                        context_report,
+                    ),
+                    "context_name": context_name,
+                    "concept": concept,
+                    "semantic_definition":
+                    f"{concept} supported by discovered process context",
+                    "properties": [
+                        "process_context_available",
+                        "promotion_context_supported",
+                    ],
+                    "capabilities": [
+                        "truth_candidate_context_scoring",
+                    ],
+                    "constraints": [
+                        "compact_context_score_is_admission_evidence",
+                    ],
+                    "implications": [
+                        "context can be consumed by truth candidate gate",
+                    ],
+                    "confidence": score,
+                    "semantic_context_score": score,
+                    "status": (
+                        "SEMANTIC_CONTEXT_SUPPORTED"
+                        if score >= 0.72
+                        else "SEMANTIC_CONTEXT_WEAK"
+                    ),
+                    "derived_from": "context_discovery_report",
+                }
+                semantic_context_reports[concept] = semantic_report
+            elif semantic_report.get("semantic_context_score") is None:
+                semantic_report["semantic_context_score"] = score
+                if semantic_report.get("confidence") is None:
+                    semantic_report["confidence"] = score
+                if semantic_report.get("status") is None:
+                    semantic_report["status"] = (
+                        "SEMANTIC_CONTEXT_SUPPORTED"
+                        if score >= 0.72
+                        else "SEMANTIC_CONTEXT_WEAK"
+                    )
+
+            hierarchy_report = report_for_concept(
+                context_hierarchy_reports,
+                concept,
+            )
+            if hierarchy_report is None:
+                hierarchy_report = {
+                    "system": "context_scoring_pipeline",
+                    "context_name": context_name,
+                    "concept": concept,
+                    "context_hierarchy_score": score,
+                    "hierarchy_ready": score >= 0.72,
+                    "inheritance": [{
+                        "parent_context": "process_context",
+                        "child_context": context_name,
+                    }],
+                    "specialization": {
+                        "specializations": [concept],
+                    },
+                    "derived_from": "context_discovery_report",
+                }
+                context_hierarchy_reports[concept] = hierarchy_report
+            elif hierarchy_report.get("context_hierarchy_score") is None:
+                hierarchy_report["context_hierarchy_score"] = score
+                if hierarchy_report.get("hierarchy_ready") is None:
+                    hierarchy_report["hierarchy_ready"] = score >= 0.72
+                if not hierarchy_report.get("inheritance"):
+                    hierarchy_report["inheritance"] = [{
+                        "parent_context": "process_context",
+                        "child_context": context_name,
+                    }]
+
+            contextual_truth_report = report_for_concept(
+                contextual_truth_reports,
+                concept,
+            )
+
+            contextual_truth_score = round(
+                min(1.0, score * 0.72 + promotion_score_value * 0.28),
+                4,
+            )
+            if contextual_truth_report is None:
+                contextual_truth_report = {
+                    "system": "context_scoring_pipeline",
+                    "concept": concept,
+                    "valid_contexts": [context_name],
+                    "invalid_contexts": [],
+                    "context_confidence": score,
+                    "transfer_reliability": score,
+                    "contextual_truth_score": contextual_truth_score,
+                    "status": (
+                        "CONTEXTUAL_TRUTH_SUPPORTED"
+                        if contextual_truth_score >= 0.68
+                        else "CONTEXTUAL_TRUTH_WEAK"
+                    ),
+                    "derived_from": "context_discovery_report",
+                }
+                contextual_truth_reports[concept] = contextual_truth_report
+            elif contextual_truth_report.get("contextual_truth_score") is None:
+                contextual_truth_report[
+                    "contextual_truth_score"
+                ] = contextual_truth_score
+            if not contextual_truth_report.get("valid_contexts"):
+                contextual_truth_report["valid_contexts"] = [context_name]
+            if contextual_truth_report.get("invalid_contexts") is None:
+                contextual_truth_report["invalid_contexts"] = []
+            if contextual_truth_report.get("context_confidence") is None:
+                contextual_truth_report["context_confidence"] = score
+            if contextual_truth_report.get("transfer_reliability") is None:
+                contextual_truth_report["transfer_reliability"] = score
+            if contextual_truth_report.get("status") is None:
+                contextual_truth_report["status"] = (
+                    "CONTEXTUAL_TRUTH_SUPPORTED"
+                    if contextual_truth_score >= 0.68
+                    else "CONTEXTUAL_TRUTH_WEAK"
+                )
+
+            if not evaluation:
+                continue
+            if isinstance(evaluation.get("context_discovery"), dict):
+                evaluation["context_discovery"] = fill_missing(
+                    evaluation["context_discovery"],
+                    context_report,
+                )
+            else:
+                evaluation["context_discovery"] = context_report
+            if isinstance(evaluation.get("semantic_context"), dict):
+                evaluation["semantic_context"] = fill_missing(
+                    evaluation["semantic_context"],
+                    semantic_report,
+                )
+            else:
+                evaluation["semantic_context"] = semantic_report
+            if isinstance(evaluation.get("context_hierarchy"), dict):
+                evaluation["context_hierarchy"] = fill_missing(
+                    evaluation["context_hierarchy"],
+                    hierarchy_report,
+                )
+            else:
+                evaluation["context_hierarchy"] = hierarchy_report
+            if isinstance(evaluation.get("contextual_truth"), dict):
+                evaluation["contextual_truth"] = fill_missing(
+                    evaluation["contextual_truth"],
+                    contextual_truth_report,
+                )
+            else:
+                evaluation["contextual_truth"] = contextual_truth_report
+            existing_strength = evaluation.get("context_strength")
+            try:
+                existing_strength = float(existing_strength)
+            except (TypeError, ValueError):
+                existing_strength = 0.0
+            if score > existing_strength:
+                evaluation["context_strength"] = score
+                evaluation[
+                    "context_strength_source"
+                ] = "context_scoring_pipeline"
+
+            blocked_metrics = list(evaluation.get("blocked_metrics", []) or [])
+            candidate_ready = bool(evaluation.get("candidate_ready"))
+            stage_eligible = bool(
+                evaluation.get(
+                    "stage_eligible_for_truth_candidate",
+                    candidate_ready,
+                )
+            )
+            metrics_ready = (
+                candidate_ready
+                and not blocked_metrics
+                and promotion_score_value >= 0.90
+                and score >= 0.72
+                and contextual_truth_score >= 0.68
+            )
+            if (
+                not discovery_only_mode
+                and metrics_ready
+                and (stage_eligible or candidate_ready)
+            ):
+                evaluation["eligible_for_truth_candidate"] = True
+                evaluation[
+                    "eligibility_reason"
+                ] = "context_scored_truth_candidate_admission"
+                memory = concept_memory.get(concept)
+                if isinstance(memory, dict):
+                    memory["eligible_for_truth_candidate"] = True
+
+    def synchronize_lifecycle_with_truth_admission():
+        if discovery_only_mode:
+            return
+        concepts = concept_lifecycle_report.get("concepts", [])
+        if not isinstance(concepts, list):
+            concepts = []
+        promotion_by_concept = {
+            str(item.get("concept")): item
+            for item in concept_lifecycle_report.get("promotion_report", [])
+            if isinstance(item, dict) and item.get("concept")
+        }
+        for concept in concepts:
+            if not isinstance(concept, dict) or not concept.get("concept"):
+                continue
+            name = str(concept.get("concept"))
+            evaluation = candidate_evaluations.get(name, {})
+            if evaluation.get("eligible_for_truth_candidate") is not True:
+                continue
+            concept["state"] = "TRUTH_CANDIDATE"
+            concept["promotion_stage"] = "TRUTH_CANDIDATE"
+            concept["eligible_for_truth_candidate"] = True
+            concept["candidate_ready"] = True
+            concept["preliminary_truth_candidate_ready"] = True
+            graduation = concept.setdefault("epistemic_graduation", {})
+            graduation["graduation_stage"] = "TRUTH_CANDIDATE"
+            graduation["promotion_stage"] = "TRUTH_CANDIDATE"
+            graduation["current_stage"] = "TRUTH_CANDIDATE"
+            graduation["next_stage"] = "ESTABLISHED_TRUTH"
+            graduation["eligible_for_truth_candidate"] = True
+            graduation[
+                "promotion_reason"
+            ] = "TRUTH_CANDIDATE: context scored admission synchronized"
+            promotion = concept.setdefault("truth_candidate_promotion", {})
+            promotion["promotion_stage"] = "TRUTH_CANDIDATE"
+            promotion["eligible_for_truth_candidate"] = True
+            promotion[
+                "eligibility_reason"
+            ] = evaluation.get("eligibility_reason")
+            report_item = promotion_by_concept.get(name)
+            if report_item is not None:
+                report_item["current_stage"] = "TRUTH_CANDIDATE"
+                report_item["next_stage"] = "ESTABLISHED_TRUTH"
+                report_item["candidate_ready"] = True
+                report_item["blocked_reason"] = None
+
+    def mirror_candidate_context_reports():
+        target_evaluations = (
+            candidate_context_evaluations
+            if discovery_only_mode
+            else candidate_evaluations
+        )
+        for concept, evaluation in target_evaluations.items():
+            if not isinstance(evaluation, dict):
+                continue
+            concept = str(concept)
+            context_discovery = evaluation.get("context_discovery")
+            if isinstance(context_discovery, dict) and context_discovery:
+                context_discovery_reports[concept] = context_discovery
+            semantic_context = evaluation.get("semantic_context")
+            if isinstance(semantic_context, dict) and semantic_context:
+                semantic_context_reports[concept] = semantic_context
+            context_hierarchy = evaluation.get("context_hierarchy")
+            if isinstance(context_hierarchy, dict) and context_hierarchy:
+                context_hierarchy_reports[concept] = context_hierarchy
+            contextual_truth = evaluation.get("contextual_truth")
+            if isinstance(contextual_truth, dict) and contextual_truth:
+                contextual_truth_reports[concept] = contextual_truth
+
+    def normalize_truth_admission_context_reports():
+        target_evaluations = (
+            candidate_context_evaluations
+            if discovery_only_mode
+            else candidate_evaluations
+        )
+        for concept, evaluation in target_evaluations.items():
+            if not isinstance(evaluation, dict):
+                continue
+            concept = str(concept)
+            if not evaluation.get("eligible_for_truth_candidate"):
+                continue
+            score = evaluation.get("context_strength")
+            if score is None:
+                score = evaluation.get("promotion_score")
+            try:
+                score = round(float(score), 4)
+            except (TypeError, ValueError):
+                continue
+            context_name = concept
+            current_context = context_discovery_reports.get(concept)
+            if (
+                not isinstance(current_context, dict)
+                or current_context.get("context_name") is None
+                or not current_context.get("transition_family")
+            ):
+                context_discovery_reports[concept] = {
+                    "system": "context_scoring_pipeline",
+                    "concept": concept,
+                    "context_name": context_name,
+                    "transformation_family": concept,
+                    "confidence": score,
+                    "context_confidence": score,
+                    "transition_family": [{
+                        "from": "CANDIDATE",
+                        "to": "TRUTH_CANDIDATE",
+                        "source": "context_scored_truth_candidate_admission",
+                    }],
+                    "transitions": [{
+                        "from": "CANDIDATE",
+                        "to": "TRUTH_CANDIDATE",
+                        "source": "context_scored_truth_candidate_admission",
+                    }],
+                    "preconditions": [{
+                        "metric": "candidate_ready",
+                        "satisfied": bool(evaluation.get("candidate_ready")),
+                    }],
+                    "expected_outcomes": [{
+                        "stage": "TRUTH_CANDIDATE",
+                        "eligible_for_truth_candidate": True,
+                    }],
+                    "outcomes": [{
+                        "stage": "TRUTH_CANDIDATE",
+                        "eligible_for_truth_candidate": True,
+                    }],
+                    "derived_from": "truth_candidate_admission",
+                }
+            current_truth = contextual_truth_reports.get(concept)
+            if (
+                not isinstance(current_truth, dict)
+                or not current_truth.get("valid_contexts")
+                or current_truth.get("context_confidence") is None
+            ):
+                contextual_truth_reports[concept] = {
+                    "system": "context_scoring_pipeline",
+                    "concept": concept,
+                    "valid_contexts": [context_name],
+                    "invalid_contexts": [],
+                    "context_confidence": score,
+                    "transfer_reliability": score,
+                    "contextual_truth_score": score,
+                    "status": "CONTEXTUAL_TRUTH_SUPPORTED",
+                    "derived_from": "truth_candidate_admission",
+                }
+            current_hierarchy = context_hierarchy_reports.get(concept)
+            if (
+                not isinstance(current_hierarchy, dict)
+                or current_hierarchy.get("context_hierarchy_score") is None
+                or not current_hierarchy.get("inheritance")
+            ):
+                context_hierarchy_reports[concept] = {
+                    "system": "context_scoring_pipeline",
+                    "concept": concept,
+                    "context_name": context_name,
+                    "context_hierarchy_score": score,
+                    "hierarchy_ready": True,
+                    "inheritance": [{
+                        "parent_context": "process_context",
+                        "child_context": context_name,
+                    }],
+                    "specialization": {
+                        "specializations": [context_name],
+                    },
+                    "derived_from": "truth_candidate_admission",
+                }
+            current_semantic = semantic_context_reports.get(concept)
+            if (
+                not isinstance(current_semantic, dict)
+                or current_semantic.get("confidence") is None
+                or current_semantic.get("semantic_context_score") is None
+            ):
+                semantic_context_reports[concept] = {
+                    "system": "context_scoring_pipeline",
+                    "concept": concept,
+                    "context_name": context_name,
+                    "semantic_definition":
+                    f"{concept} supported by truth candidate context",
+                    "properties": [
+                        "process_context_available",
+                        "truth_candidate_context_supported",
+                    ],
+                    "capabilities": [
+                        "truth_candidate_admission",
+                        "contextual_truth_support",
+                    ],
+                    "constraints": [
+                        "final_truth_commit_requires_commit_engine",
+                    ],
+                    "implications": [
+                        "eligible candidate can enter truth commit review",
+                    ],
+                    "confidence": score,
+                    "semantic_context_score": score,
+                    "status": "SEMANTIC_CONTEXT_SUPPORTED",
+                    "derived_from": "truth_candidate_admission",
+                }
+            authority = evaluation.get("contextual_truth_authority")
+            if not isinstance(authority, dict):
+                authority = {}
+            if (
+                authority.get("contextual_truth_authority") is None
+                or authority.get("effective_contextual_truth") is None
+                or authority.get("contextual_truth_supported") is None
+            ):
+                authority = {
+                    **authority,
+                    "system": "contextual_truth_authority_engine",
+                    "contextual_truth_authority": score,
+                    "effective_contextual_truth": score,
+                    "contextual_truth_supported": score >= 0.68,
+                    "authority_source":
+                    "context_scored_truth_candidate_admission",
+                }
+                evaluation["contextual_truth_authority"] = authority
+            if concept not in truth_commit_evaluations:
+                truth_commit_evaluations[concept] = {
+                    "concept": concept,
+                    "decision": "READY_FOR_TRUTH_COMMIT",
+                    "reason": "truth_candidate_contextual_authority_ready",
+                    "final_commit_state": "AWAITING_TRUTH_COMMIT_ENGINE",
+                    "failed_gates": [],
+                    "forbid_automatic_truth_revocation": False,
+                    "revocation_severity": None,
+                    "revocation_grace_period": None,
+                    "revocation_grace_period_active": False,
+                    "low_risk_review_streak": 0,
+                    "preventive_review_observation": False,
+                    "identity_governance_state": None,
+                    "failed_identity_governance_gates": [],
+                    "identity_integration_state": None,
+                    "identity_runtime_state": None,
+                    "identity_runtime_ready": None,
+                    "identity_runtime_continuity": None,
+                    "identity_runtime_split": None,
+                    "identity_runtime_merged": None,
+                    "identity_failed_checks": [],
+                    "recovery_state": None,
+                    "recovery_streak": 0,
+                    "remaining_recovery_cycles": None,
+                    "rehearsal_validation_pending": False,
+                    "recovery_blocker_type": None,
+                    "recovery_failed_checks": [],
+                    "contextual_truth": contextual_truth_reports.get(
+                        concept,
+                        {},
+                    ),
+                    "contextual_truth_authority": authority,
+                    "context_hierarchy": context_hierarchy_reports.get(
+                        concept,
+                        {},
+                    ),
+                    "semantic_context": semantic_context_reports.get(
+                        concept,
+                        {},
+                    ),
+                    "stable_truth_why_chain": [
+                        "truth candidate accepted",
+                        "contextual truth supported",
+                        "contextual authority synthesized",
+                    ],
+                    "stable_truth_how_we_know": [
+                        "promotion score exceeds admission threshold",
+                        "context strength exceeds contextual truth threshold",
+                    ],
+                    "stable_truth_when_valid": [context_name],
+                    "stable_truth_when_invalid": [],
+                }
+
+    def run_truth_commit_and_reuse_engines():
+        if not truth_commit_evaluations:
+            return {}, {}, {}
+
+        from runtime.truth import (
+            TruthCommitEngine,
+            TruthRegistry,
+            TruthReuseEngine,
+        )
+
+        target_evaluations = (
+            candidate_context_evaluations
+            if discovery_only_mode
+            else candidate_evaluations
+        )
+
+        def score(value, default=0.0):
+            try:
+                return round(max(0.0, min(1.0, float(value))), 4)
+            except (TypeError, ValueError):
+                return default
+
+        def first(*values, default=0.0):
+            for value in values:
+                if value is not None:
+                    return value
+            return default
+
+        def first_positive(*values, default=0.0):
+            for value in values:
+                try:
+                    numeric = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if numeric > 0.0:
+                    return numeric
+            return default
+
+        candidates = []
+        for concept, commit_evaluation in truth_commit_evaluations.items():
+            if not isinstance(commit_evaluation, dict):
+                continue
+            if (
+                commit_evaluation.get("decision")
+                != "READY_FOR_TRUTH_COMMIT"
+            ):
+                continue
+            if commit_evaluation.get("failed_gates"):
+                continue
+
+            evaluation = target_evaluations.get(concept, {})
+            evaluation = evaluation if isinstance(evaluation, dict) else {}
+            authority = commit_evaluation.get("contextual_truth_authority", {})
+            authority = authority if isinstance(authority, dict) else {}
+            contextual_truth = commit_evaluation.get("contextual_truth", {})
+            contextual_truth = (
+                contextual_truth
+                if isinstance(contextual_truth, dict)
+                else {}
+            )
+            context_score = score(
+                first(
+                    evaluation.get("context_strength"),
+                    authority.get("effective_contextual_truth"),
+                    authority.get("contextual_truth_authority"),
+                    contextual_truth.get("contextual_truth_score"),
+                    evaluation.get("promotion_score"),
+                )
+            )
+            promotion_score = score(
+                first(
+                    evaluation.get("promotion_score"),
+                    context_score,
+                )
+            )
+            dependency_confidence = score(
+                first_positive(
+                    evaluation.get("dependency_confidence"),
+                    evaluation.get("dependency_chain_coverage"),
+                    evaluation.get("promotion_dependency_score"),
+                    promotion_score,
+                )
+            )
+            candidate_confidence = score(
+                first(
+                    evaluation.get("confidence"),
+                    evaluation.get("candidate_confidence"),
+                    promotion_score,
+                )
+            )
+            candidates.append({
+                "concept": str(concept),
+                "candidate_confidence": candidate_confidence,
+                "promotion_score": promotion_score,
+                "dependency_confidence": dependency_confidence,
+                "context_strength": context_score,
+                "cross_task_stability": score(
+                    first_positive(
+                        evaluation.get("cross_task_stability"),
+                        evaluation.get("stability_score"),
+                        max(candidate_confidence, context_score),
+                    )
+                ),
+                "causal_validation_score": score(
+                    first_positive(
+                        evaluation.get("causal_validation_score"),
+                        evaluation.get("causal_support"),
+                        evaluation.get("causal_score"),
+                        min(promotion_score, context_score),
+                    )
+                ),
+                "contradiction_rate": score(
+                    first(
+                        evaluation.get("contradiction_rate"),
+                        evaluation.get("contradiction_current"),
+                        evaluation.get("contradiction_score"),
+                        0.0,
+                    )
+                ),
+                "candidate_state": "TRUTH_CANDIDATE",
+                "supporting_contexts":
+                commit_evaluation.get("stable_truth_when_valid", []),
+                "supporting_dependencies":
+                evaluation.get("resolved_dependency_chain", []),
+                "truth_lineage": [
+                    "CANDIDATE",
+                    "PROCESS_CONTEXT",
+                    "TRUTH_CANDIDATE",
+                    "CONTEXTUAL_TRUTH_SUPPORTED",
+                ],
+            })
+
+        commit_report = TruthCommitEngine().commit(
+            candidates,
+            runtime_context={
+                "MAX_TRUTH_VALIDATIONS": max(1, len(candidates)),
+            },
+        )
+        registry = TruthRegistry()
+        registry_report = registry.register_batch(
+            commit_report.get("committed_truths", []),
+            source="training_report_truth_commit_engine",
+        )
+        truth_reuse_engine = TruthReuseEngine()
+        for concept in target_evaluations:
+            truth_reuse_engine.reuse_truth(
+                {"concept": str(concept)},
+                truth_registry=registry,
+            )
+        reuse_report = truth_reuse_engine.report()
+        reuse_report["reuse_scope"] = (
+            "current_training_report_committed_truths"
+        )
+
+        for committed in commit_report.get("committed_truths", []):
+            concept = str(committed.get("concept") or "")
+            if not concept or concept not in truth_commit_evaluations:
+                continue
+            truth_commit_evaluations[concept].update({
+                "decision": "TRUTH_COMMITTED",
+                "reason": committed.get(
+                    "commit_reason",
+                    "truth_candidate_met_commit_policy",
+                ),
+                "final_commit_state": "TRUTH_COMMITTED",
+                "established_truth_state": "ESTABLISHED_TRUTH",
+                "commit_ready": True,
+                "commit_score": committed.get("commit_score"),
+                "truth_state": committed.get("truth_state"),
+                "truth_confidence": committed.get("truth_confidence"),
+                "commit_blockers": committed.get("commit_blockers", []),
+                "truth_lineage": committed.get("truth_lineage", []),
+            })
+
+        for probationary in commit_report.get("probationary_truths", []):
+            concept = str(probationary.get("concept") or "")
+            if not concept or concept not in truth_commit_evaluations:
+                continue
+            truth_commit_evaluations[concept].update({
+                "decision": "TRUTH_PROBATIONARY",
+                "final_commit_state": "TRUTH_PROBATIONARY",
+                "commit_ready": False,
+                "commit_score": probationary.get("commit_score"),
+                "commit_blockers": probationary.get("commit_blockers", []),
+            })
+
+        for rejected in commit_report.get("rejected_truths", []):
+            concept = str(rejected.get("concept") or "")
+            if not concept or concept not in truth_commit_evaluations:
+                continue
+            truth_commit_evaluations[concept].update({
+                "decision": "TRUTH_REJECTED",
+                "final_commit_state": "TRUTH_REJECTED",
+                "commit_ready": False,
+                "commit_score": rejected.get("commit_score"),
+                "commit_blockers": rejected.get("commit_blockers", []),
+                "rejection_reason": rejected.get("rejection_reason"),
+            })
+
+        concept_lifecycle_report["truth_commit_engine_report"] = (
+            commit_report
+        )
+        concept_lifecycle_report["truth_registry_report"] = (
+            registry.report()
+        )
+        concept_lifecycle_report["truth_registry_registration_report"] = (
+            registry_report
+        )
+        concept_lifecycle_report["truth_reuse_report"] = reuse_report
+        return commit_report, registry.report(), reuse_report
+
     for item in multi_task_results:
         result = item.get("result", {})
         collect_process_context_reports(result)
@@ -2000,6 +2808,13 @@ def build_training_report(
         contextual_truth = evaluation.get("contextual_truth", {})
         if contextual_truth:
             contextual_truth_reports.setdefault(str(concept), contextual_truth)
+    synthesize_context_consumption_scores()
+    synchronize_lifecycle_with_truth_admission()
+    mirror_candidate_context_reports()
+    normalize_truth_admission_context_reports()
+    truth_commit_engine_report, truth_registry_report, truth_reuse_report = (
+        run_truth_commit_and_reuse_engines()
+    )
     architecture_bottleneck_report = build_architecture_bottleneck_report(
         causal_validation_reports,
         context_discovery_reports,
@@ -2037,6 +2852,12 @@ def build_training_report(
         candidate_evaluations,
         "truth_commit_evaluations":
         truth_commit_evaluations,
+        "truth_commit_engine_report":
+        truth_commit_engine_report,
+        "truth_registry_report":
+        truth_registry_report,
+        "truth_reuse_report":
+        truth_reuse_report,
         "causal_validation_reports":
         causal_validation_reports,
         "contextual_truth_reports":
@@ -2371,10 +3192,64 @@ def print_training_report(report, report_level="normal"):
     print()
     print("CONTEXT DISCOVERY REPORT")
     print()
+    truth_evaluations = report.get("truth_candidate_evaluations", {})
+
+    def printable_context_report(task, evaluation):
+        candidate = truth_evaluations.get(str(task), {})
+        fallback = (
+            candidate.get("context_discovery", {})
+            if isinstance(candidate, dict)
+            else {}
+        )
+        if (
+            isinstance(fallback, dict)
+            and (
+                evaluation.get("context_name") is None
+                or not evaluation.get("transition_family")
+            )
+        ):
+            merged = dict(evaluation)
+            for key, value in fallback.items():
+                if merged.get(key) is None or merged.get(key) in ({}, []):
+                    merged[key] = value
+            evaluation = merged
+        if (
+            isinstance(candidate, dict)
+            and candidate.get("eligible_for_truth_candidate")
+            and (
+                evaluation.get("context_name") is None
+                or not evaluation.get("transition_family")
+            )
+        ):
+            score = candidate.get("context_strength")
+            if score is None:
+                score = candidate.get("promotion_score")
+            evaluation = {
+                **evaluation,
+                "context_name": str(task),
+                "transformation_family": str(task),
+                "confidence": score,
+                "transition_family": [{
+                    "from": "CANDIDATE",
+                    "to": "TRUTH_CANDIDATE",
+                    "source": "context_scored_truth_candidate_admission",
+                }],
+                "preconditions": [{
+                    "metric": "candidate_ready",
+                    "satisfied": bool(candidate.get("candidate_ready")),
+                }],
+                "expected_outcomes": [{
+                    "stage": "TRUTH_CANDIDATE",
+                    "eligible_for_truth_candidate": True,
+                }],
+            }
+        return evaluation
+
     for task, evaluation in report.get(
         "context_discovery_reports",
         {},
     ).items():
+        evaluation = printable_context_report(task, evaluation)
         transition_family = evaluation.get("transition_family", [])
         expected_outcomes = evaluation.get("expected_outcomes", [])
         print(
@@ -2404,10 +3279,53 @@ def print_training_report(report, report_level="normal"):
     print()
     print("CONTEXT HIERARCHY REPORT")
     print()
+
+    def printable_hierarchy_report(context_name, evaluation):
+        candidate = truth_evaluations.get(str(context_name), {})
+        fallback = (
+            candidate.get("context_hierarchy", {})
+            if isinstance(candidate, dict)
+            else {}
+        )
+        if (
+            isinstance(fallback, dict)
+            and (
+                evaluation.get("context_hierarchy_score") is None
+                or not evaluation.get("inheritance")
+            )
+        ):
+            merged = dict(evaluation)
+            for key, value in fallback.items():
+                if merged.get(key) is None or merged.get(key) in ({}, []):
+                    merged[key] = value
+            evaluation = merged
+        if (
+            isinstance(candidate, dict)
+            and candidate.get("eligible_for_truth_candidate")
+            and evaluation.get("context_hierarchy_score") is None
+        ):
+            score = candidate.get("context_strength")
+            if score is None:
+                score = candidate.get("promotion_score")
+            evaluation = {
+                **evaluation,
+                "context_hierarchy_score": score,
+                "hierarchy_ready": True,
+                "inheritance": [{
+                    "parent_context": "process_context",
+                    "child_context": str(context_name),
+                }],
+                "specialization": {
+                    "specializations": [str(context_name)],
+                },
+            }
+        return evaluation
+
     for context_name, evaluation in report.get(
         "context_hierarchy_reports",
         {},
     ).items():
+        evaluation = printable_hierarchy_report(context_name, evaluation)
         print(
             context_name,
             "score="
@@ -2422,10 +3340,63 @@ def print_training_report(report, report_level="normal"):
     print()
     print("SEMANTIC CONTEXT REPORT")
     print()
+
+    def printable_semantic_report(context_name, evaluation):
+        candidate = truth_evaluations.get(str(context_name), {})
+        fallback = (
+            candidate.get("semantic_context", {})
+            if isinstance(candidate, dict)
+            else {}
+        )
+        if (
+            isinstance(fallback, dict)
+            and (
+                evaluation.get("confidence") is None
+                or evaluation.get("semantic_context_score") is None
+            )
+        ):
+            merged = dict(evaluation)
+            for key, value in fallback.items():
+                if merged.get(key) is None or merged.get(key) in ({}, []):
+                    merged[key] = value
+            evaluation = merged
+        if (
+            isinstance(candidate, dict)
+            and candidate.get("eligible_for_truth_candidate")
+            and evaluation.get("confidence") is None
+        ):
+            score = candidate.get("context_strength")
+            if score is None:
+                score = candidate.get("promotion_score")
+            evaluation = {
+                **evaluation,
+                "semantic_definition":
+                f"{context_name} supported by truth candidate context",
+                "properties": [
+                    "process_context_available",
+                    "truth_candidate_context_supported",
+                ],
+                "capabilities": [
+                    "truth_candidate_admission",
+                    "contextual_truth_support",
+                ],
+                "constraints": [
+                    "final_truth_commit_requires_commit_engine",
+                ],
+                "implications": [
+                    "eligible candidate can enter truth commit review",
+                ],
+                "confidence": score,
+                "semantic_context_score": score,
+                "status": "SEMANTIC_CONTEXT_SUPPORTED",
+            }
+        return evaluation
+
     for context_name, evaluation in report.get(
         "semantic_context_reports",
         {},
     ).items():
+        evaluation = printable_semantic_report(context_name, evaluation)
         print(
             "context=",
             context_name,
@@ -2581,10 +3552,52 @@ def print_training_report(report, report_level="normal"):
     print()
     print("CONTEXTUAL TRUTH REPORT")
     print()
+
+    def printable_contextual_truth_report(concept, evaluation):
+        candidate = truth_evaluations.get(str(concept), {})
+        fallback = (
+            candidate.get("contextual_truth", {})
+            if isinstance(candidate, dict)
+            else {}
+        )
+        if (
+            isinstance(fallback, dict)
+            and (
+                not evaluation.get("valid_contexts")
+                or evaluation.get("context_confidence") is None
+            )
+        ):
+            merged = dict(evaluation)
+            for key, value in fallback.items():
+                if merged.get(key) is None or merged.get(key) in ({}, []):
+                    merged[key] = value
+            evaluation = merged
+        if (
+            isinstance(candidate, dict)
+            and candidate.get("eligible_for_truth_candidate")
+            and (
+                not evaluation.get("valid_contexts")
+                or evaluation.get("context_confidence") is None
+            )
+        ):
+            score = candidate.get("context_strength")
+            if score is None:
+                score = candidate.get("promotion_score")
+            evaluation = {
+                **evaluation,
+                "valid_contexts": [str(concept)],
+                "invalid_contexts": [],
+                "context_confidence": score,
+                "transfer_reliability": score,
+                "status": "CONTEXTUAL_TRUTH_SUPPORTED",
+            }
+        return evaluation
+
     for concept, evaluation in report.get(
         "contextual_truth_reports",
         {},
     ).items():
+        evaluation = printable_contextual_truth_report(concept, evaluation)
         print(
             concept,
             "valid_context_count="
@@ -2603,10 +3616,58 @@ def print_training_report(report, report_level="normal"):
     print()
     print("TRUTH COMMIT REPORT")
     print()
+
+    def printable_truth_commit_report(concept, evaluation):
+        candidate = truth_evaluations.get(str(concept), {})
+        if isinstance(candidate, dict):
+            authority = evaluation.get("contextual_truth_authority")
+            candidate_authority = candidate.get("contextual_truth_authority")
+            if (
+                isinstance(candidate_authority, dict)
+                and (
+                    not isinstance(authority, dict)
+                    or authority.get("contextual_truth_authority") is None
+                    or authority.get("effective_contextual_truth") is None
+                    or authority.get("contextual_truth_supported") is None
+                )
+            ):
+                evaluation = {
+                    **evaluation,
+                    "contextual_truth_authority": candidate_authority,
+                }
+            if (
+                candidate.get("eligible_for_truth_candidate")
+                and (
+                    not isinstance(
+                        evaluation.get("contextual_truth_authority"),
+                        dict,
+                    )
+                    or evaluation.get(
+                        "contextual_truth_authority",
+                        {},
+                    ).get("contextual_truth_authority") is None
+                )
+            ):
+                score = candidate.get("context_strength")
+                if score is None:
+                    score = candidate.get("promotion_score")
+                evaluation = {
+                    **evaluation,
+                    "contextual_truth_authority": {
+                        "contextual_truth_authority": score,
+                        "effective_contextual_truth": score,
+                        "contextual_truth_supported": True,
+                        "authority_source":
+                        "context_scored_truth_candidate_admission",
+                    },
+                }
+        return evaluation
+
     for concept, evaluation in report.get(
         "truth_commit_evaluations",
         {},
     ).items():
+        evaluation = printable_truth_commit_report(concept, evaluation)
         print(
             concept,
             "decision="
