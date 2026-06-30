@@ -63,6 +63,8 @@ class RuntimeMetricBridge:
             self._module_time(module_timings, "stage_cycle"),
             self._module_time_contains(module_timings, ("task", "stage")),
         )
+        active_compute = max(active_compute, task_execution)
+        total_runtime = max(total_runtime, active_compute)
         governance = self._first_positive(
             performance_report.get("governance_time_seconds"),
             runtime_metrics.get("governance_time_seconds"),

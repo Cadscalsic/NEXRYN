@@ -114,7 +114,7 @@ def test_training_assistant_prioritizes_rare_concept_tasks(tmp_path):
     )
 
     assert selected["training_mode"] == (
-        "concept_imbalance_prioritized_batch"
+        "knowledge_expansion_prioritized_batch"
     )
     assert selected["selected_task_files"] == [
         "task_003.json",
@@ -124,6 +124,10 @@ def test_training_assistant_prioritizes_rare_concept_tasks(tmp_path):
         "density_modulation",
         "topological_change",
     ]
+    assert (
+        selected["training_diversity_report"]["knowledge_expansion_score"]
+        > 0.0
+    )
 
 
 def test_training_assistant_prioritizes_unobserved_rare_concept_task(tmp_path):
@@ -151,3 +155,53 @@ def test_training_assistant_prioritizes_unobserved_rare_concept_task(tmp_path):
     )
 
     assert selected["selected_task_files"] == ["task_002.json"]
+
+
+def test_training_assistant_deprioritizes_recent_core_knowledge(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    tasks = {
+        "task_001.json": ["shape_preservation"],
+        "task_002.json": ["occlusion"],
+    }
+    for task_file, concepts in tasks.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({
+                "nexryn_metadata": {
+                    "target_concepts": concepts,
+                },
+            }),
+            encoding="utf-8",
+        )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        batch_size=1,
+    )
+    assistant.state["history"] = [
+        {
+            "cycle": 1,
+            "task_files": ["task_001.json"],
+            "concepts": ["shape_preservation"],
+        }
+    ]
+
+    selected = assistant.select_batch(
+        list(tasks),
+        concept_counts={"shape_preservation": 40, "occlusion": 0},
+        concept_states={"shape_preservation": "CORE_KNOWLEDGE"},
+        task_directory=tasks_directory,
+        core_knowledge=[
+            {
+                "concept": "shape_preservation",
+                "graduation_level": "CORE_KNOWLEDGE",
+                "mastery_score": 0.96,
+                "training_dominance_penalty": 0.75,
+            }
+        ],
+    )
+
+    assert selected["selected_task_files"] == ["task_002.json"]
+    assert selected["selected_concepts"] == ["occlusion"]
+    assert selected["training_diversity_report"][
+        "cooldown_filtered_concepts"
+    ] == ["shape_preservation"]

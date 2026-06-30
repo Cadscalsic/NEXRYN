@@ -76,6 +76,7 @@ class RuntimeAttributionEngine:
             ),
             4,
         )
+        attributed = round(min(attributed, total_runtime), 4)
         unattributed = round(max(0.0, total_runtime - attributed), 4)
 
         top_modules = sorted(

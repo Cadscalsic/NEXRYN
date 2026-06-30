@@ -27,6 +27,7 @@ class TrainingAssistant:
             "active_batch": [],
             "pending_next_task_index": None,
             "prioritized_concepts": [],
+            "selected_concepts": [],
             "curriculum_report": {},
             "history": [],
         }
@@ -91,6 +92,8 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         observed_task_ids=None,
+        history=None,
+        core_knowledge=None,
     ):
         rotated = [
             task_files[(start + offset) % len(task_files)]
@@ -102,6 +105,8 @@ class TrainingAssistant:
             concept_states=concept_states,
             task_directory=task_directory,
             observed_task_ids=observed_task_ids,
+            history=history,
+            core_knowledge=core_knowledge,
         )
         return (
             curriculum_report["ranked_task_files"],
@@ -115,16 +120,30 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         observed_task_ids=None,
+        core_knowledge=None,
     ):
         task_files = self._normalized_tasks(task_files)
         if not task_files:
             raise ValueError("at least one JSON training task is required")
 
-        resumed = self._active_batch_is_valid(task_files)
+        resumed = (
+            self._active_batch_is_valid(task_files)
+            and (
+                task_directory is None
+                or
+                self.state.get("curriculum_report", {})
+                .get("training_diversity_report", {})
+                .get("knowledge_expansion_score", 0.0)
+                > 0.0
+            )
+        )
         if resumed:
             selected = list(self.state["active_batch"])
             prioritized_concepts = list(
                 self.state.get("prioritized_concepts", [])
+            )
+            selected_concepts = list(
+                self.state.get("selected_concepts", [])
             )
             curriculum_report = dict(
                 self.state.get("curriculum_report", {})
@@ -139,6 +158,8 @@ class TrainingAssistant:
                 concept_states=concept_states,
                 task_directory=task_directory,
                 observed_task_ids=observed_task_ids,
+                history=self.state.get("history", []),
+                core_knowledge=core_knowledge,
             )
             prioritized_concepts = curriculum_report[
                 "prioritized_concepts"
@@ -147,8 +168,15 @@ class TrainingAssistant:
                 curriculum_report,
                 min(self.batch_size, len(task_files)),
             )
+            selected_concepts = sorted({
+                concept
+                for report in curriculum_report.get("task_priorities", [])
+                if report.get("task_file") in selected
+                for concept in report.get("target_concepts", [])
+            })
             self.state["active_batch"] = selected
             self.state["prioritized_concepts"] = prioritized_concepts
+            self.state["selected_concepts"] = selected_concepts
             self.state["curriculum_report"] = curriculum_report
             self.state["pending_next_task_index"] = (
                 start + len(selected)
@@ -163,7 +191,16 @@ class TrainingAssistant:
                 "bounded_round_robin_batch",
             ),
             "prioritized_concepts": prioritized_concepts,
+            "selected_concepts": selected_concepts,
             "curriculum_report": curriculum_report,
+            "training_diversity_report": dict(
+                curriculum_report.get("training_diversity_report")
+                or self.state.get("curriculum_report", {}).get(
+                    "training_diversity_report",
+                    {},
+                )
+                or {}
+            ),
             "batch_size": self.batch_size,
             "available_task_count": len(task_files),
             "selected_task_count": len(selected),
@@ -190,12 +227,15 @@ class TrainingAssistant:
         self.state["active_batch"] = []
         self.state["pending_next_task_index"] = None
         self.state["prioritized_concepts"] = []
+        selected_concepts = list(self.state.get("selected_concepts", []))
+        self.state["selected_concepts"] = []
         self.state["curriculum_report"] = {}
         self.state["history"] = [
             *list(self.state.get("history", []))[-31:],
             {
                 "cycle": completed_cycles,
                 "task_files": active_batch,
+                "concepts": selected_concepts,
                 "successful_tasks": int(successful_tasks),
                 "failed_tasks": int(failed_tasks),
                 "timestamp": datetime.utcnow().isoformat(),
@@ -218,6 +258,8 @@ class TrainingAssistant:
             "active_batch": list(self.state.get("active_batch", [])),
             "prioritized_concepts":
             list(self.state.get("prioritized_concepts", [])),
+            "selected_concepts":
+            list(self.state.get("selected_concepts", [])),
             "history_size": len(self.state.get("history", [])),
             "state_path": str(self.state_path),
         }

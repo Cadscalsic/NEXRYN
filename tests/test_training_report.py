@@ -1226,3 +1226,81 @@ def test_training_report_commits_and_reuses_ready_lifecycle_truths():
     assert report["truth_registry_report"]["committed_truth_count"] == 1
     assert reuse["truth_hits"] == 1
     assert reuse["truth_misses"] == 0
+    assert report["strategy_reuse_report"]["strategy_hits"] == 1
+    assert report["strategy_reuse_report"]["strategy_misses"] == 0
+    assert report["knowledge_reuse_report"]["strategy_hits"] == 1
+    assert report["hypothesis_generation_report"]["hypothesis_count"] == 1
+    assert (
+        report["hypothesis_generation_report"]["accepted_hypothesis_count"]
+        == 1
+    )
+    assert (
+        report["counterfactual_reasoning_report"]["counterfactual_count"]
+        == 1
+    )
+    assert (
+        report["counterfactual_reasoning_report"]["counterfactual_hits"]
+        == 1
+    )
+    assert (
+        report["counterfactual_reuse_report"]["counterfactual_success"]
+        == 1
+    )
+    assert report["concept_lifecycle"]["hypotheses"][0]["concept"] == "growth"
+    assert (
+        report["concept_lifecycle"]["counterfactuals"][0]["concept"]
+        == "growth"
+    )
+
+
+def test_training_report_prints_real_strategy_objects(capsys):
+    report = {
+        "strategy_reuse_report": {
+            "strategy_hits": 2,
+            "strategy_misses": 0,
+            "strategy_reuse_rate": 1.0,
+            "reused_strategies": [
+                {},
+                {
+                    "strategy_id": "strategy:growth:truth_guided_reuse",
+                    "concept": "growth",
+                    "reuse_state": "STRATEGY_REUSED",
+                    "reuse_score": 0.94,
+                    "method": "reuse committed growth as a solving constraint",
+                },
+            ],
+        },
+    }
+
+    print_training_report(report)
+
+    output = capsys.readouterr().out
+    assert "growth state=STRATEGY_REUSED score=0.94" in output
+    assert "None state=None score=None method=None" not in output
+
+
+def test_training_report_prints_counterfactual_reuse_objects(capsys):
+    report = {
+        "counterfactual_reuse_report": {
+            "counterfactual_hits": 1,
+            "counterfactual_misses": 0,
+            "counterfactual_reuse_rate": 1.0,
+            "counterfactual_success_rate": 1.0,
+            "reused_counterfactuals": [{
+                "counterfactual_id": "counterfactual:growth:truth_removed",
+                "concept": "growth",
+                "counterfactual_reuse_state": "COUNTERFACTUAL_REUSED",
+                "reuse_score": 0.94,
+                "learned_from": "committed_truth_and_accepted_hypothesis",
+            }],
+        },
+    }
+
+    print_training_report(report)
+
+    output = capsys.readouterr().out
+    assert "COUNTERFACTUAL REUSE REPORT" in output
+    assert (
+        "growth state=COUNTERFACTUAL_REUSED score=0.94 "
+        "learned_from=committed_truth_and_accepted_hypothesis"
+    ) in output

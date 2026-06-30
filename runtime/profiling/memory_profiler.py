@@ -18,6 +18,9 @@ class MemoryMetrics:
     program_misses: int
     truth_hits: int
     truth_misses: int
+    counterfactual_hits: int
+    counterfactual_misses: int
+    counterfactual_success: int
     reuse_rate: float
 
     def as_dict(self) -> dict[str, Any]:
@@ -43,6 +46,12 @@ class MemoryProfiler:
         truth_reuse_report = self._mapping(
             runtime_context.get("truth_reuse_report")
         )
+        strategy_reuse_report = self._mapping(
+            runtime_context.get("strategy_reuse_report")
+        )
+        counterfactual_reuse_report = self._mapping(
+            runtime_context.get("counterfactual_reuse_report")
+        )
         supervisor_report = self._mapping(
             runtime_context.get("META_SUPERVISOR_REPORT")
             or runtime_context.get("meta_supervisor_report")
@@ -51,6 +60,7 @@ class MemoryProfiler:
         cache_misses = int(self._number(performance_report.get("cache_misses")))
         strategy_hits = int(self._number(
             performance_report.get("strategy_hits")
+            or strategy_reuse_report.get("strategy_hits")
             or reuse_report.get("strategy_hits")
             or knowledge_reuse_report.get("strategy_hits")
         ))
@@ -71,6 +81,7 @@ class MemoryProfiler:
         ))
         strategy_misses = int(self._number(
             performance_report.get("strategy_misses")
+            or strategy_reuse_report.get("strategy_misses")
         ))
         program_misses = int(self._number(
             performance_report.get("program_misses")
@@ -80,6 +91,18 @@ class MemoryProfiler:
         ))
         truth_misses = int(self._number(
             performance_report.get("truth_misses")
+        ))
+        counterfactual_hits = int(self._number(
+            performance_report.get("counterfactual_hits")
+            or counterfactual_reuse_report.get("counterfactual_hits")
+        ))
+        counterfactual_misses = int(self._number(
+            performance_report.get("counterfactual_misses")
+            or counterfactual_reuse_report.get("counterfactual_misses")
+        ))
+        counterfactual_success = int(self._number(
+            performance_report.get("counterfactual_success")
+            or counterfactual_reuse_report.get("counterfactual_success")
         ))
         if not strategy_hits and not strategy_misses:
             strategy_misses = int(
@@ -101,7 +124,14 @@ class MemoryProfiler:
                 supervisor_report.get("selected_action")
                 != "REUSE_LOCKED_TRUTH"
             )
-        reuse_events = cache_hits + strategy_hits + program_hits + context_hits + truth_hits
+        reuse_events = (
+            cache_hits
+            + strategy_hits
+            + program_hits
+            + context_hits
+            + truth_hits
+            + counterfactual_hits
+        )
         queries = (
             reuse_events
             + cache_misses
@@ -109,6 +139,7 @@ class MemoryProfiler:
             + program_misses
             + context_misses
             + truth_misses
+            + counterfactual_misses
         )
         return MemoryMetrics(
             cache_hits=cache_hits,
@@ -121,6 +152,9 @@ class MemoryProfiler:
             program_misses=program_misses,
             truth_hits=truth_hits,
             truth_misses=truth_misses,
+            counterfactual_hits=counterfactual_hits,
+            counterfactual_misses=counterfactual_misses,
+            counterfactual_success=counterfactual_success,
             reuse_rate=round(reuse_events / max(queries, 1), 4),
         )
 

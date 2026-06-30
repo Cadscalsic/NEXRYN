@@ -83,6 +83,20 @@ class PerformanceReporter:
             memory_metrics.program_hits / max(program_queries, 1),
             4,
         )
+        counterfactual_queries = (
+            memory_metrics.counterfactual_hits
+            + memory_metrics.counterfactual_misses
+        )
+        counterfactual_reuse_rate = round(
+            memory_metrics.counterfactual_hits
+            / max(counterfactual_queries, 1),
+            4,
+        )
+        counterfactual_success_rate = round(
+            memory_metrics.counterfactual_success
+            / max(memory_metrics.counterfactual_hits, 1),
+            4,
+        )
         cache_total = memory_metrics.cache_hits + memory_metrics.cache_misses
         cache_hit_rate = round(
             memory_metrics.cache_hits / max(cache_total, 1),
@@ -127,6 +141,9 @@ class PerformanceReporter:
                 "cache_hit_rate": cache_hit_rate,
                 "strategy_reuse_rate": strategy_reuse_rate,
                 "program_reuse_rate": program_reuse_rate,
+                "counterfactual_reuse_rate": counterfactual_reuse_rate,
+                "counterfactual_success_rate":
+                counterfactual_success_rate,
                 "STRATEGY_REUSE_RATE": strategy_reuse_rate,
             },
             "adaptive_reuse_efficiency": {
@@ -158,6 +175,8 @@ class PerformanceReporter:
             reasoning_metrics.cognitive_efficiency,
             "STRATEGY_REUSE_RATE":
             strategy_reuse_rate,
+            "COUNTERFACTUAL_REUSE_RATE":
+            counterfactual_reuse_rate,
             "POST_COMPLETION_LATENCY":
             shutdown_metrics.post_completion_latency,
         }

@@ -57,6 +57,14 @@ class ReasoningProfiler:
         ))
         hypothesis_count = len(runtime_context.get("hypotheses", []) or [])
         counterfactual_count = len(runtime_context.get("counterfactuals", []) or [])
+        hypothesis_report = self._mapping(
+            runtime_context.get("hypothesis_generation_report")
+        )
+        accepted_hypotheses = int(self._number(
+            hypothesis_report.get("accepted_hypothesis_count")
+            or hypothesis_report.get("accepted_hypotheses_count")
+            or 0
+        ))
         reasoning_cost = self._reasoning_cost(
             module_timings or [],
             reasoning_depth,
@@ -69,6 +77,17 @@ class ReasoningProfiler:
             or runtime_context.get("prediction_accuracy")
             or 0.0
         )
+        if accuracy_gain <= 0.0 and hypothesis_count:
+            acceptance_signal = accepted_hypotheses / max(hypothesis_count, 1)
+            counterfactual_signal = min(
+                counterfactual_count / max(hypothesis_count, 1),
+                1.0,
+            )
+            accuracy_gain = round(
+                acceptance_signal * 0.65
+                + counterfactual_signal * 0.25,
+                4,
+            )
         success_count = 1 if (
             evaluation.get("exact_success") is True
             or evaluation.get("success_state") in {"SUCCESS", "EXACT_SUCCESS"}

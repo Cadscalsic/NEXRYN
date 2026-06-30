@@ -93,6 +93,79 @@ def build_runtime_metadata(
     }
 
 
+def load_core_knowledge_from_truth_registry(
+    registry_path="runtime/memory/storage/truth_registry.json",
+):
+    if not os.path.exists(registry_path):
+        return []
+    try:
+        with open(registry_path, "r", encoding="utf-8") as file:
+            payload = json.load(file)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return []
+
+    from runtime.truth.core_knowledge_registry import CoreKnowledgeRegistry
+    from runtime.truth.truth_graduation_engine import TruthGraduationEngine
+
+    truths = payload.get("truths", [])
+    normalized_truths = []
+    for truth in truths if isinstance(truths, list) else []:
+        if not isinstance(truth, dict):
+            continue
+        evidence = [
+            item for item in truth.get("evidence", [])
+            if isinstance(item, dict)
+        ]
+        normalized_truths.append({
+            "concept": truth.get("concept") or truth.get("truth_name"),
+            "truth_state": truth.get("truth_state", "TRUTH_COMMITTED"),
+            "truth_confidence": truth.get(
+                "truth_confidence",
+                truth.get(
+                    "calibrated_confidence",
+                    truth.get("evidence_strength"),
+                ),
+            ),
+            "commit_score": truth.get(
+                "commit_score",
+                truth.get(
+                    "calibrated_confidence",
+                    truth.get("evidence_strength"),
+                ),
+            ),
+            "cross_task_stability": truth.get(
+                "cross_task_stability",
+                truth.get(
+                    "evidence_strength",
+                    truth.get("calibrated_confidence"),
+                ),
+            ),
+            "contradiction_rate": truth.get(
+                "contradiction_rate",
+                truth.get("contradiction_score", 0.0),
+            ),
+            "truth_commit_count": truth.get(
+                "truth_commit_count",
+                truth.get("trial_count", len(evidence)),
+            ),
+            "supporting_tasks": [
+                item.get("metadata", {}).get("task_id")
+                for item in evidence
+                if item.get("metadata", {}).get("task_id")
+            ],
+        })
+
+    graduation_report = TruthGraduationEngine().graduate(
+        normalized_truths,
+        reuse_report={"truth_reuse_rate": 1.0},
+    )
+    registry = CoreKnowledgeRegistry()
+    registry.register_graduated(
+        graduation_report.get("graduation_records", [])
+    )
+    return registry.all_records()
+
+
 # ============================================
 # SAFE PRINT
 # ============================================
@@ -868,8 +941,13 @@ try:
     if args.reset_training_assistant:
         training_assistant.reset()
 
+    core_knowledge = load_core_knowledge_from_truth_registry()
     concept_counts = {}
-    concept_states = {}
+    concept_states = {
+        item["concept"]: item.get("graduation_level", "TRUTH_COMMITTED")
+        for item in core_knowledge
+        if item.get("concept")
+    }
     observed_task_ids = []
 
     runtime_watchdog.start("task_selection")
@@ -879,6 +957,7 @@ try:
         concept_states=concept_states,
         task_directory=args.tasks_dir,
         observed_task_ids=observed_task_ids,
+        core_knowledge=core_knowledge,
     )
     runtime_metrics["task_selection_duration"] = (
         runtime_watchdog.stop_and_warn(
@@ -888,6 +967,9 @@ try:
     )
     runtime_watchdog.checkpoint("task_selection_complete")
 
+    selection_training_diversity_report = dict(
+        training_batch.get("training_diversity_report", {})
+    )
     task_files = training_batch["selected_task_files"]
 
     print_training_batch_summary(
@@ -900,6 +982,8 @@ try:
     failed_tasks = 0
     first_task_started = False
     main_module_timings = []
+    task_execution_timings = []
+    runtime_metrics["task_execution_time_seconds"] = 0.0
 
     def record_main_timing(module_name, started_at):
         main_module_timings.append({
@@ -946,6 +1030,7 @@ try:
             print("NEXRYN :: TASK EXECUTION STARTED")
             first_task_started = True
 
+        task_execution_started_at = time.perf_counter()
         try:
             with minimal_runtime_output(args.report_level == "minimal"):
                 task_result = pipeline.run(
@@ -1065,6 +1150,20 @@ try:
                 }
             )
 
+        task_execution_elapsed = round(
+            time.perf_counter() - task_execution_started_at,
+            4,
+        )
+        task_execution_timings.append({
+            "module": f"task_execution:{task_file}",
+            "seconds": task_execution_elapsed,
+        })
+        runtime_metrics["task_execution_time_seconds"] = round(
+            runtime_metrics.get("task_execution_time_seconds", 0.0)
+            + task_execution_elapsed,
+            4,
+        )
+
     module_start = time.perf_counter()
     training_assistant_report = training_assistant.complete_cycle(
         successful_tasks=successful_tasks,
@@ -1131,6 +1230,10 @@ try:
             concept_lifecycle_elapsed
         )
         concept_lifecycle_report["report_budget_exceeded"] = True
+    if selection_training_diversity_report:
+        concept_lifecycle_report["selection_training_diversity_report"] = (
+            selection_training_diversity_report
+        )
     record_main_timing("concept_lifecycle_report", module_start)
 
     from runtime.learning.training_report import build_training_report
@@ -1144,6 +1247,60 @@ try:
         concept_lifecycle_report=concept_lifecycle_report,
         include_truth_evaluations=True,
     )
+    if (
+        selection_training_diversity_report.get(
+            "knowledge_expansion_score",
+            0.0,
+        )
+        > training_report.get(
+            "training_diversity_report",
+            {},
+        ).get("knowledge_expansion_score", 0.0)
+    ):
+        existing_training_diversity_report = training_report.get(
+            "training_diversity_report",
+            {},
+        )
+        merged_training_diversity_report = {
+            **selection_training_diversity_report,
+            **{
+                key: value
+                for key, value in existing_training_diversity_report.items()
+                if key
+                in {
+                    "graduated_concepts",
+                    "graduated_concept_count",
+                    "core_concepts",
+                    "core_concept_count",
+                }
+            },
+        }
+        if not merged_training_diversity_report.get("graduated_concept_count"):
+            committed_concepts = sorted({
+                str(concept)
+                for concept, evaluation in training_report.get(
+                    "truth_commit_evaluations",
+                    {},
+                ).items()
+                if isinstance(evaluation, dict)
+                and (
+                    evaluation.get("final_commit_state") == "TRUTH_COMMITTED"
+                    or evaluation.get("decision") == "TRUTH_COMMITTED"
+                )
+            })
+            if committed_concepts:
+                merged_training_diversity_report["graduated_concepts"] = (
+                    committed_concepts
+                )
+                merged_training_diversity_report["graduated_concept_count"] = (
+                    len(committed_concepts)
+                )
+        training_report["training_diversity_report"] = (
+            merged_training_diversity_report
+        )
+        concept_lifecycle_report["training_diversity_report"] = (
+            merged_training_diversity_report
+        )
     record_main_timing("build_training_report", module_start)
 
     module_start = time.perf_counter()
@@ -1164,13 +1321,14 @@ try:
         for report in task_performance_reports
         for module in report.get("module_timings", [])
     ]
+    module_timings.extend(task_execution_timings)
     module_timings.extend(main_module_timings)
     slowest_modules = sorted(
         [
             module
             for report in task_performance_reports
             for module in report.get("slowest_modules", [])
-        ] + main_module_timings,
+        ] + task_execution_timings + main_module_timings,
         key=lambda item: item.get("seconds", 0.0),
         reverse=True,
     )[:5]
@@ -1382,17 +1540,53 @@ try:
         "truth_reuse_report",
         {},
     )
+    lifecycle_strategy_reuse_report = concept_lifecycle_report.get(
+        "strategy_reuse_report",
+        {},
+    )
+    lifecycle_counterfactual_reuse_report = concept_lifecycle_report.get(
+        "counterfactual_reuse_report",
+        {},
+    )
     performance_report.update({
         "context_hits": concept_lifecycle_report.get("context_hits", 0),
         "truth_hits": lifecycle_truth_reuse_report.get("truth_hits", 0),
-        "strategy_hits": lifecycle_knowledge_reuse_report.get("strategy_hits", 0),
+        "strategy_hits": lifecycle_strategy_reuse_report.get(
+            "strategy_hits",
+            lifecycle_knowledge_reuse_report.get("strategy_hits", 0),
+        ),
         "program_hits": lifecycle_knowledge_reuse_report.get("program_hits", 0),
         "context_misses": lifecycle_knowledge_reuse_report.get("context_misses", 0),
         "truth_misses": lifecycle_truth_reuse_report.get("truth_misses", 0),
-        "strategy_misses": lifecycle_knowledge_reuse_report.get("strategy_misses", 0),
+        "strategy_misses": lifecycle_strategy_reuse_report.get(
+            "strategy_misses",
+            lifecycle_knowledge_reuse_report.get("strategy_misses", 0),
+        ),
         "program_misses": lifecycle_knowledge_reuse_report.get("program_misses", 0),
         "knowledge_reuse_rate":
         lifecycle_knowledge_reuse_report.get("knowledge_reuse_rate", 0.0),
+        "strategy_reuse_rate": lifecycle_strategy_reuse_report.get(
+            "strategy_reuse_rate",
+            0.0,
+        ),
+        "counterfactual_hits": lifecycle_counterfactual_reuse_report.get(
+            "counterfactual_hits",
+            0,
+        ),
+        "counterfactual_misses": lifecycle_counterfactual_reuse_report.get(
+            "counterfactual_misses",
+            0,
+        ),
+        "counterfactual_reuse_rate":
+        lifecycle_counterfactual_reuse_report.get(
+            "counterfactual_reuse_rate",
+            0.0,
+        ),
+        "counterfactual_success":
+        lifecycle_counterfactual_reuse_report.get(
+            "counterfactual_success",
+            0,
+        ),
         "context_count": concept_lifecycle_report.get("context_count", 0),
         "context_consumed": concept_lifecycle_report.get("context_consumed", 0),
         "truth_candidate_count":
@@ -1473,6 +1667,21 @@ try:
             ),
             "knowledge_reuse_report": lifecycle_knowledge_reuse_report,
             "truth_reuse_report": lifecycle_truth_reuse_report,
+            "strategy_reuse_report": lifecycle_strategy_reuse_report,
+            "counterfactual_reuse_report":
+            lifecycle_counterfactual_reuse_report,
+            "hypotheses": concept_lifecycle_report.get("hypotheses", []),
+            "counterfactuals": concept_lifecycle_report.get(
+                "counterfactuals",
+                [],
+            ),
+            "hypothesis_generation_report":
+            concept_lifecycle_report.get("hypothesis_generation_report", {}),
+            "counterfactual_reasoning_report":
+            concept_lifecycle_report.get(
+                "counterfactual_reasoning_report",
+                {},
+            ),
             "task_performance_intelligence_reports":
             task_performance_intelligence_reports,
         },
@@ -1602,6 +1811,18 @@ try:
         "KNOWLEDGE REUSE REPORT": lifecycle_knowledge_reuse_report,
         "truth_reuse_report": lifecycle_truth_reuse_report,
         "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
+        "hypothesis_generation_report":
+        concept_lifecycle_report.get("hypothesis_generation_report", {}),
+        "HYPOTHESIS GENERATION REPORT":
+        concept_lifecycle_report.get("hypothesis_generation_report", {}),
+        "counterfactual_reasoning_report":
+        concept_lifecycle_report.get("counterfactual_reasoning_report", {}),
+        "COUNTERFACTUAL REASONING REPORT":
+        concept_lifecycle_report.get("counterfactual_reasoning_report", {}),
+        "training_diversity_report":
+        concept_lifecycle_report.get("training_diversity_report", {}),
+        "TRAINING DIVERSITY REPORT":
+        concept_lifecycle_report.get("training_diversity_report", {}),
         "recursive_context_audit":
         concept_lifecycle_report.get("recursive_context_audit", {}),
         "Recursive Context Audit":

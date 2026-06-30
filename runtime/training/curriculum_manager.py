@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from runtime.training.task_diversity_engine import TaskDiversityEngine
+
 
 class CurriculumManager:
     """Ranks training tasks by concept scarcity and lifecycle state."""
@@ -137,6 +139,7 @@ class CurriculumManager:
                 for concept, count in (target_concept_counts or {}).items()
             },
         }
+        self.task_diversity_engine = TaskDiversityEngine()
 
     def _task_metadata(self, task_file, task_directory=None):
         if task_directory is None:
@@ -337,6 +340,8 @@ class CurriculumManager:
         concept_states=None,
         task_directory=None,
         observed_task_ids=None,
+        history=None,
+        core_knowledge=None,
     ):
         concept_counts = {
             str(concept): int(count)
@@ -396,16 +401,29 @@ class CurriculumManager:
                 item["original_order"],
             )
         )
+        diversity_report = self.task_diversity_engine.rerank(
+            task_reports,
+            history=history,
+            core_knowledge=core_knowledge,
+            concept_counts=concept_counts,
+            concept_states=concept_states,
+        )
+        if diversity_report.get("ranked_task_reports"):
+            task_reports = list(diversity_report["ranked_task_reports"])
         prioritized_concepts = sorted({
             item["concept"]
             for report in task_reports
             for item in report["concept_priorities"]
             if item["priority"] > 0
+            and item["concept"]
+            not in set(diversity_report.get("cooldown_filtered_concepts", []))
         })
         return {
             "system": "training_curriculum_manager",
             "training_mode": (
-                "concept_imbalance_prioritized_batch"
+                "knowledge_expansion_prioritized_batch"
+                if diversity_report.get("knowledge_expansion_score", 0.0) > 0
+                else "concept_imbalance_prioritized_batch"
                 if any(report["priority"] > 0 for report in task_reports)
                 else "bounded_round_robin_batch"
             ),
@@ -419,6 +437,7 @@ class CurriculumManager:
                 for report in task_reports
             ],
             "task_priorities": task_reports,
+            "training_diversity_report": diversity_report,
         }
 
     def select_batch_tasks(self, curriculum_report, batch_size):
