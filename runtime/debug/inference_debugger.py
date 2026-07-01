@@ -30,7 +30,9 @@ class InferenceDebugger:
 
         execution_plan,
 
-        inference_report
+        inference_report,
+
+        transformation_concept_discovery_report=None
     ):
 
         print("\nINFERENCE HYPOTHESES:\n")
@@ -51,6 +53,12 @@ class InferenceDebugger:
 
         print(arbitration_report)
 
+        if transformation_concept_discovery_report:
+
+            print("\nTRANSFORMATION CONCEPT DISCOVERY:\n")
+
+            print(transformation_concept_discovery_report)
+
         print("\nSEMANTIC ABSTRACTIONS:\n")
 
         for abstraction in semantic_abstractions:
@@ -60,6 +68,42 @@ class InferenceDebugger:
         print("\nSEMANTIC GRAPH:\n")
 
         print(semantic_graph)
+
+        transformation_causal_graph = {}
+
+        if isinstance(
+            semantic_graph,
+            dict
+        ):
+
+            transformation_causal_graph = semantic_graph.get(
+                "transformation_causal_graph",
+                {}
+            )
+
+        if transformation_causal_graph:
+
+            print("\nTRANSFORMATION CAUSAL GRAPH:\n")
+
+            print(transformation_causal_graph)
+
+            print("\nCAUSAL CHAINS:\n")
+
+            for chain in transformation_causal_graph.get(
+                "causal_chains",
+                []
+            ):
+
+                print(chain)
+
+            print("\nCAUSAL RELATIONS:\n")
+
+            for relation in transformation_causal_graph.get(
+                "edges",
+                []
+            ):
+
+                print(relation)
 
         print("\nSEARCH RESULT:\n")
 

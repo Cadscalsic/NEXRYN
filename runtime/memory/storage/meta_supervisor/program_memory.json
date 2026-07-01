@@ -1,0 +1,2141 @@
+{
+  "programs": [
+    {
+      "integrity_verified": true,
+      "match_confidence": 0.97,
+      "metadata": {
+        "accuracy": 0.96,
+        "concept": "propagation",
+        "program_family_id": "program-family-b83aea611dceaf9d",
+        "promotion_evidence": [
+          "e85421f6326b5d413c7c1a83dc635bb111c6c085849c0979198731b602b96b86"
+        ],
+        "residual_count": 1,
+        "semantic_contradictions": [],
+        "source": "evaluation_stage",
+        "success_state": "LEARNING_PROGRESS",
+        "task_signature": {
+          "concepts": [
+            "color_preservation",
+            "density_preservation",
+            "directional_motion",
+            "growth",
+            "object_identity_preservation",
+            "position_preservation",
+            "propagation",
+            "replication",
+            "shape_preservation",
+            "shape_relation",
+            "size_preservation",
+            "symbolic_remapping",
+            "symmetry_preservation",
+            "symmetry_reasoning",
+            "topological_growth",
+            "topological_reasoning",
+            "topology_preservation"
+          ],
+          "constraints": [],
+          "contexts": [
+            "attribute_mapping_preservation",
+            "axis_consistency",
+            "boundary_geometry_preservation",
+            "color_context",
+            "color_preservation",
+            "color_stability",
+            "color_transformation",
+            "connectivity_preservation",
+            "coordinate_anchor_preservation",
+            "directional_displacement",
+            "directional_motion",
+            "directional_motion_context",
+            "directional_spread",
+            "duplication",
+            "geometric_transformation",
+            "growth",
+            "growth_context",
+            "identity_continuity",
+            "identity_forking",
+            "identity_persistence",
+            "identity_preservation",
+            "identity_preservation_under_growth",
+            "identity_split",
+            "local_shape",
+            "local_shape_preservation",
+            "mirror_consistency",
+            "no_color_reassignment",
+            "object_core",
+            "object_count_growth",
+            "object_count_increase",
+            "object_creation",
+            "object_identity_preservation",
+            "object_persistence",
+            "position_change",
+            "position_context",
+            "position_delta",
+            "position_preservation",
+            "position_stability",
+            "propagation",
+            "propagation_context",
+            "propagation_transformation",
+            "region_expansion",
+            "region_relation_preservation",
+            "relative_position_preservation",
+            "replication",
+            "replication_context",
+            "shape_context",
+            "shape_preservation",
+            "shape_stability",
+            "signal_transfer",
+            "source_pattern_motion",
+            "source_pattern_preservation",
+            "source_pattern_preserved",
+            "structural_copying",
+            "structural_transformation",
+            "symmetry_context",
+            "symmetry_preservation",
+            "symmetry_reasoning",
+            "symmetry_relation",
+            "topological_growth",
+            "topological_growth_context",
+            "topology_context",
+            "topology_expansion",
+            "topology_preservation",
+            "topology_splitting",
+            "topology_stability"
+          ],
+          "transformations": [
+            "duplicate_object",
+            "duplication",
+            "expand_pattern",
+            "grow_topology",
+            "growth_context",
+            "identity_preservation",
+            "mirror_object",
+            "modify_symmetry",
+            "preserve_colors",
+            "preserve_objects",
+            "preserve_position",
+            "preserve_shape",
+            "preserve_size",
+            "preserve_topology"
+          ]
+        }
+      },
+      "operation_sequence": [
+        {
+          "index": 0,
+          "operation": "preserve_size",
+          "parameters": {}
+        }
+      ],
+      "program": {
+        "concept": "propagation",
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_size",
+            "parameters": {}
+          }
+        ]
+      },
+      "program_id": "program-dc6e7c77975a3755",
+      "stale": false,
+      "task_signature_id": "e85421f6326b5d413c7c1a83dc635bb111c6c085849c0979198731b602b96b86",
+      "updated_at": 1782867714.044098,
+      "validation_state": "candidate"
+    },
+    {
+      "integrity_verified": true,
+      "match_confidence": 1.0,
+      "metadata": {
+        "accuracy": 1.0,
+        "concept": "symbolic_remapping",
+        "program_family_id": "program-family-adc5330ca982d6ec",
+        "promotion_evidence": [
+          "e7e9efe5b666a8e2d8d91f2eb491d272cc9c7f9d6b98fc3dd3b46e7b68922d5a"
+        ],
+        "residual_count": 0,
+        "semantic_contradictions": [],
+        "source": "evaluation_stage",
+        "success_state": "EXACT_SUCCESS",
+        "task_signature": {
+          "concepts": [
+            "color_preservation",
+            "density_modulation",
+            "density_preservation",
+            "directional_motion",
+            "growth",
+            "object_identity_preservation",
+            "position_preservation",
+            "propagation",
+            "replication",
+            "shape_preservation",
+            "shape_relation",
+            "size_preservation",
+            "symbolic_remapping",
+            "symmetry_preservation",
+            "symmetry_reasoning",
+            "topological_growth",
+            "topological_reasoning",
+            "topology_preservation"
+          ],
+          "constraints": [],
+          "contexts": [
+            "attribute_mapping_preservation",
+            "axis_consistency",
+            "boundary_geometry_preservation",
+            "color_context",
+            "color_preservation",
+            "color_stability",
+            "color_transformation",
+            "connectivity_preservation",
+            "coordinate_anchor_preservation",
+            "directional_displacement",
+            "directional_motion",
+            "directional_motion_context",
+            "directional_spread",
+            "duplication",
+            "geometric_transformation",
+            "growth",
+            "growth_context",
+            "identity_continuity",
+            "identity_forking",
+            "identity_persistence",
+            "identity_preservation",
+            "identity_preservation_under_growth",
+            "identity_split",
+            "local_shape",
+            "local_shape_preservation",
+            "mirror_consistency",
+            "no_color_reassignment",
+            "object_core",
+            "object_count_growth",
+            "object_count_increase",
+            "object_creation",
+            "object_identity_preservation",
+            "object_persistence",
+            "position_change",
+            "position_context",
+            "position_delta",
+            "position_preservation",
+            "position_stability",
+            "propagation",
+            "propagation_context",
+            "propagation_transformation",
+            "region_expansion",
+            "region_relation_preservation",
+            "relative_position_preservation",
+            "replication",
+            "replication_context",
+            "shape_context",
+            "shape_preservation",
+            "shape_stability",
+            "signal_transfer",
+            "source_pattern_motion",
+            "source_pattern_preservation",
+            "source_pattern_preserved",
+            "structural_copying",
+            "structural_transformation",
+            "symmetry_context",
+            "symmetry_preservation",
+            "symmetry_reasoning",
+            "symmetry_relation",
+            "topological_growth",
+            "topological_growth_context",
+            "topology_context",
+            "topology_expansion",
+            "topology_preservation",
+            "topology_splitting",
+            "topology_stability"
+          ],
+          "transformations": [
+            "duplication",
+            "growth_context",
+            "identity_preservation",
+            "object_color_mapping",
+            "preserve_colors",
+            "preserve_density",
+            "preserve_objects",
+            "preserve_position",
+            "preserve_shape",
+            "preserve_size",
+            "preserve_symmetry",
+            "preserve_topology"
+          ]
+        }
+      },
+      "operation_sequence": [
+        {
+          "index": 0,
+          "operation": "replace_color",
+          "parameters": {
+            "added_colors": [
+              5,
+              7
+            ],
+            "attribute_deltas": [
+              {
+                "color": [
+                  1,
+                  5
+                ],
+                "identity_confidence": 1.0,
+                "input_object_id": "obj_1",
+                "output_object_id": "obj_1",
+                "position": [
+                  0,
+                  0
+                ],
+                "shape": [
+                  "0,0",
+                  "0,0"
+                ],
+                "size": [
+                  1,
+                  1
+                ],
+                "topology": {
+                  "holes": [
+                    0,
+                    0
+                  ],
+                  "is_solid": [
+                    true,
+                    true
+                  ]
+                }
+              },
+              {
+                "color": [
+                  2,
+                  7
+                ],
+                "identity_confidence": 1.0,
+                "input_object_id": "obj_2",
+                "output_object_id": "obj_2",
+                "position": [
+                  0,
+                  0
+                ],
+                "shape": [
+                  "0,0",
+                  "0,0"
+                ],
+                "size": [
+                  1,
+                  1
+                ],
+                "topology": {
+                  "holes": [
+                    0,
+                    0
+                  ],
+                  "is_solid": [
+                    true,
+                    true
+                  ]
+                }
+              },
+              {
+                "color": [
+                  2,
+                  7
+                ],
+                "identity_confidence": 1.0,
+                "input_object_id": "obj_3",
+                "output_object_id": "obj_3",
+                "position": [
+                  0,
+                  0
+                ],
+                "shape": [
+                  "0,0",
+                  "0,0"
+                ],
+                "size": [
+                  1,
+                  1
+                ],
+                "topology": {
+                  "holes": [
+                    0,
+                    0
+                  ],
+                  "is_solid": [
+                    true,
+                    true
+                  ]
+                }
+              },
+              {
+                "color": [
+                  1,
+                  5
+                ],
+                "identity_confidence": 1.0,
+                "input_object_id": "obj_4",
+                "output_object_id": "obj_4",
+                "position": [
+                  0,
+                  0
+                ],
+                "shape": [
+                  "0,0",
+                  "0,0"
+                ],
+                "size": [
+                  1,
+                  1
+                ],
+                "topology": {
+                  "holes": [
+                    0,
+                    0
+                  ],
+                  "is_solid": [
+                    true,
+                    true
+                  ]
+                }
+              }
+            ],
+            "color_mapping": {
+              "1": 5,
+              "2": 7
+            },
+            "localization_confidence": 0.9775,
+            "localization_ready": true,
+            "localization_type": "color_mapping",
+            "mapping": {
+              "1": 5,
+              "2": 7
+            },
+            "mapping_type": "object_color_mapping",
+            "object_mappings": [
+              {
+                "centroid_delta": [
+                  0,
+                  0
+                ],
+                "identity_confidence": 1.0,
+                "input_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 1,
+                    "max_row": 1,
+                    "min_col": 1,
+                    "min_row": 1,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      1,
+                      1
+                    ]
+                  ],
+                  "center": {
+                    "col": 1.0,
+                    "row": 1.0
+                  },
+                  "color": 1,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_1",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        1,
+                        1
+                      ],
+                      "bottom_right": [
+                        1,
+                        1
+                      ],
+                      "top_left": [
+                        1,
+                        1
+                      ],
+                      "top_right": [
+                        1,
+                        1
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 1,
+                      "min_col": 1,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 1.0,
+                      "row": 1.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        1,
+                        1
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "input_object_id": "obj_1",
+                "output_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 1,
+                    "max_row": 1,
+                    "min_col": 1,
+                    "min_row": 1,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      1,
+                      1
+                    ]
+                  ],
+                  "center": {
+                    "col": 1.0,
+                    "row": 1.0
+                  },
+                  "color": 5,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_1",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        1,
+                        1
+                      ],
+                      "bottom_right": [
+                        1,
+                        1
+                      ],
+                      "top_left": [
+                        1,
+                        1
+                      ],
+                      "top_right": [
+                        1,
+                        1
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 1,
+                      "min_col": 1,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 1.0,
+                      "row": 1.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        1,
+                        1
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "output_object_id": "obj_1",
+                "shape_similarity": 1.0,
+                "size_preserved": true,
+                "topology_preserved": true
+              },
+              {
+                "centroid_delta": [
+                  0,
+                  0
+                ],
+                "identity_confidence": 1.0,
+                "input_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 2,
+                    "max_row": 1,
+                    "min_col": 2,
+                    "min_row": 1,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      1,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 1.0
+                  },
+                  "color": 2,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_2",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        1,
+                        2
+                      ],
+                      "bottom_right": [
+                        1,
+                        2
+                      ],
+                      "top_left": [
+                        1,
+                        2
+                      ],
+                      "top_right": [
+                        1,
+                        2
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 1,
+                      "min_col": 2,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 2.0,
+                      "row": 1.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        1,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "input_object_id": "obj_2",
+                "output_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 2,
+                    "max_row": 1,
+                    "min_col": 2,
+                    "min_row": 1,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      1,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 1.0
+                  },
+                  "color": 7,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_2",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        1,
+                        2
+                      ],
+                      "bottom_right": [
+                        1,
+                        2
+                      ],
+                      "top_left": [
+                        1,
+                        2
+                      ],
+                      "top_right": [
+                        1,
+                        2
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 1,
+                      "min_col": 2,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 2.0,
+                      "row": 1.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        1,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "output_object_id": "obj_2",
+                "shape_similarity": 1.0,
+                "size_preserved": true,
+                "topology_preserved": true
+              },
+              {
+                "centroid_delta": [
+                  0,
+                  0
+                ],
+                "identity_confidence": 1.0,
+                "input_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 1,
+                    "max_row": 2,
+                    "min_col": 1,
+                    "min_row": 2,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      2,
+                      1
+                    ]
+                  ],
+                  "center": {
+                    "col": 1.0,
+                    "row": 2.0
+                  },
+                  "color": 2,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_3",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        2,
+                        1
+                      ],
+                      "bottom_right": [
+                        2,
+                        1
+                      ],
+                      "top_left": [
+                        2,
+                        1
+                      ],
+                      "top_right": [
+                        2,
+                        1
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 2,
+                      "min_col": 1,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 1.0,
+                      "row": 2.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        2,
+                        1
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "input_object_id": "obj_3",
+                "output_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 1,
+                    "max_row": 2,
+                    "min_col": 1,
+                    "min_row": 2,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      2,
+                      1
+                    ]
+                  ],
+                  "center": {
+                    "col": 1.0,
+                    "row": 2.0
+                  },
+                  "color": 7,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_3",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        2,
+                        1
+                      ],
+                      "bottom_right": [
+                        2,
+                        1
+                      ],
+                      "top_left": [
+                        2,
+                        1
+                      ],
+                      "top_right": [
+                        2,
+                        1
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 2,
+                      "min_col": 1,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 1.0,
+                      "row": 2.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        2,
+                        1
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "output_object_id": "obj_3",
+                "shape_similarity": 1.0,
+                "size_preserved": true,
+                "topology_preserved": true
+              },
+              {
+                "centroid_delta": [
+                  0,
+                  0
+                ],
+                "identity_confidence": 1.0,
+                "input_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 2,
+                    "max_row": 2,
+                    "min_col": 2,
+                    "min_row": 2,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      2,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 2.0
+                  },
+                  "color": 1,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_4",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        2,
+                        2
+                      ],
+                      "bottom_right": [
+                        2,
+                        2
+                      ],
+                      "top_left": [
+                        2,
+                        2
+                      ],
+                      "top_right": [
+                        2,
+                        2
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "input_object_id": "obj_4",
+                "output_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 2,
+                    "max_row": 2,
+                    "min_col": 2,
+                    "min_row": 2,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      2,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 2.0
+                  },
+                  "color": 5,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_4",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        2,
+                        2
+                      ],
+                      "bottom_right": [
+                        2,
+                        2
+                      ],
+                      "top_left": [
+                        2,
+                        2
+                      ],
+                      "top_right": [
+                        2,
+                        2
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "output_object_id": "obj_4",
+                "shape_similarity": 1.0,
+                "size_preserved": true,
+                "topology_preserved": true
+              }
+            ],
+            "removed_colors": [
+              1,
+              2
+            ]
+          }
+        }
+      ],
+      "program": {
+        "concept": "symbolic_remapping",
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "replace_color",
+            "parameters": {
+              "added_colors": [
+                5,
+                7
+              ],
+              "attribute_deltas": [
+                {
+                  "color": [
+                    1,
+                    5
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object_id": "obj_1",
+                  "output_object_id": "obj_1",
+                  "position": [
+                    0,
+                    0
+                  ],
+                  "shape": [
+                    "0,0",
+                    "0,0"
+                  ],
+                  "size": [
+                    1,
+                    1
+                  ],
+                  "topology": {
+                    "holes": [
+                      0,
+                      0
+                    ],
+                    "is_solid": [
+                      true,
+                      true
+                    ]
+                  }
+                },
+                {
+                  "color": [
+                    2,
+                    7
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object_id": "obj_2",
+                  "output_object_id": "obj_2",
+                  "position": [
+                    0,
+                    0
+                  ],
+                  "shape": [
+                    "0,0",
+                    "0,0"
+                  ],
+                  "size": [
+                    1,
+                    1
+                  ],
+                  "topology": {
+                    "holes": [
+                      0,
+                      0
+                    ],
+                    "is_solid": [
+                      true,
+                      true
+                    ]
+                  }
+                },
+                {
+                  "color": [
+                    2,
+                    7
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object_id": "obj_3",
+                  "output_object_id": "obj_3",
+                  "position": [
+                    0,
+                    0
+                  ],
+                  "shape": [
+                    "0,0",
+                    "0,0"
+                  ],
+                  "size": [
+                    1,
+                    1
+                  ],
+                  "topology": {
+                    "holes": [
+                      0,
+                      0
+                    ],
+                    "is_solid": [
+                      true,
+                      true
+                    ]
+                  }
+                },
+                {
+                  "color": [
+                    1,
+                    5
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object_id": "obj_4",
+                  "output_object_id": "obj_4",
+                  "position": [
+                    0,
+                    0
+                  ],
+                  "shape": [
+                    "0,0",
+                    "0,0"
+                  ],
+                  "size": [
+                    1,
+                    1
+                  ],
+                  "topology": {
+                    "holes": [
+                      0,
+                      0
+                    ],
+                    "is_solid": [
+                      true,
+                      true
+                    ]
+                  }
+                }
+              ],
+              "color_mapping": {
+                "1": 5,
+                "2": 7
+              },
+              "localization_confidence": 0.9775,
+              "localization_ready": true,
+              "localization_type": "color_mapping",
+              "mapping": {
+                "1": 5,
+                "2": 7
+              },
+              "mapping_type": "object_color_mapping",
+              "object_mappings": [
+                {
+                  "centroid_delta": [
+                    0,
+                    0
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 1,
+                      "min_col": 1,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        1,
+                        1
+                      ]
+                    ],
+                    "center": {
+                      "col": 1.0,
+                      "row": 1.0
+                    },
+                    "color": 1,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_1",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          1,
+                          1
+                        ],
+                        "bottom_right": [
+                          1,
+                          1
+                        ],
+                        "top_left": [
+                          1,
+                          1
+                        ],
+                        "top_right": [
+                          1,
+                          1
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 1,
+                        "max_row": 1,
+                        "min_col": 1,
+                        "min_row": 1,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 1.0,
+                        "row": 1.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          1,
+                          1
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "input_object_id": "obj_1",
+                  "output_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 1,
+                      "min_col": 1,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        1,
+                        1
+                      ]
+                    ],
+                    "center": {
+                      "col": 1.0,
+                      "row": 1.0
+                    },
+                    "color": 5,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_1",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          1,
+                          1
+                        ],
+                        "bottom_right": [
+                          1,
+                          1
+                        ],
+                        "top_left": [
+                          1,
+                          1
+                        ],
+                        "top_right": [
+                          1,
+                          1
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 1,
+                        "max_row": 1,
+                        "min_col": 1,
+                        "min_row": 1,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 1.0,
+                        "row": 1.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          1,
+                          1
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "output_object_id": "obj_1",
+                  "shape_similarity": 1.0,
+                  "size_preserved": true,
+                  "topology_preserved": true
+                },
+                {
+                  "centroid_delta": [
+                    0,
+                    0
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 1,
+                      "min_col": 2,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        1,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 1.0
+                    },
+                    "color": 2,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_2",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          1,
+                          2
+                        ],
+                        "bottom_right": [
+                          1,
+                          2
+                        ],
+                        "top_left": [
+                          1,
+                          2
+                        ],
+                        "top_right": [
+                          1,
+                          2
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 2,
+                        "max_row": 1,
+                        "min_col": 2,
+                        "min_row": 1,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 2.0,
+                        "row": 1.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          1,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "input_object_id": "obj_2",
+                  "output_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 1,
+                      "min_col": 2,
+                      "min_row": 1,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        1,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 1.0
+                    },
+                    "color": 7,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_2",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          1,
+                          2
+                        ],
+                        "bottom_right": [
+                          1,
+                          2
+                        ],
+                        "top_left": [
+                          1,
+                          2
+                        ],
+                        "top_right": [
+                          1,
+                          2
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 2,
+                        "max_row": 1,
+                        "min_col": 2,
+                        "min_row": 1,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 2.0,
+                        "row": 1.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          1,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "output_object_id": "obj_2",
+                  "shape_similarity": 1.0,
+                  "size_preserved": true,
+                  "topology_preserved": true
+                },
+                {
+                  "centroid_delta": [
+                    0,
+                    0
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 2,
+                      "min_col": 1,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        2,
+                        1
+                      ]
+                    ],
+                    "center": {
+                      "col": 1.0,
+                      "row": 2.0
+                    },
+                    "color": 2,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_3",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          2,
+                          1
+                        ],
+                        "bottom_right": [
+                          2,
+                          1
+                        ],
+                        "top_left": [
+                          2,
+                          1
+                        ],
+                        "top_right": [
+                          2,
+                          1
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 1,
+                        "max_row": 2,
+                        "min_col": 1,
+                        "min_row": 2,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 1.0,
+                        "row": 2.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          2,
+                          1
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "input_object_id": "obj_3",
+                  "output_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 1,
+                      "max_row": 2,
+                      "min_col": 1,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        2,
+                        1
+                      ]
+                    ],
+                    "center": {
+                      "col": 1.0,
+                      "row": 2.0
+                    },
+                    "color": 7,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_3",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          2,
+                          1
+                        ],
+                        "bottom_right": [
+                          2,
+                          1
+                        ],
+                        "top_left": [
+                          2,
+                          1
+                        ],
+                        "top_right": [
+                          2,
+                          1
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 1,
+                        "max_row": 2,
+                        "min_col": 1,
+                        "min_row": 2,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 1.0,
+                        "row": 2.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          2,
+                          1
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "output_object_id": "obj_3",
+                  "shape_similarity": 1.0,
+                  "size_preserved": true,
+                  "topology_preserved": true
+                },
+                {
+                  "centroid_delta": [
+                    0,
+                    0
+                  ],
+                  "identity_confidence": 1.0,
+                  "input_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "color": 1,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_4",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          2,
+                          2
+                        ],
+                        "bottom_right": [
+                          2,
+                          2
+                        ],
+                        "top_left": [
+                          2,
+                          2
+                        ],
+                        "top_right": [
+                          2,
+                          2
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 2,
+                        "max_row": 2,
+                        "min_col": 2,
+                        "min_row": 2,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 2.0,
+                        "row": 2.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          2,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "input_object_id": "obj_4",
+                  "output_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "color": 5,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_4",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          2,
+                          2
+                        ],
+                        "bottom_right": [
+                          2,
+                          2
+                        ],
+                        "top_left": [
+                          2,
+                          2
+                        ],
+                        "top_right": [
+                          2,
+                          2
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 2,
+                        "max_row": 2,
+                        "min_col": 2,
+                        "min_row": 2,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 2.0,
+                        "row": 2.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          2,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "output_object_id": "obj_4",
+                  "shape_similarity": 1.0,
+                  "size_preserved": true,
+                  "topology_preserved": true
+                }
+              ],
+              "removed_colors": [
+                1,
+                2
+              ]
+            }
+          }
+        ]
+      },
+      "program_id": "program-6097823aa7c9afc0",
+      "stale": false,
+      "task_signature_id": "e7e9efe5b666a8e2d8d91f2eb491d272cc9c7f9d6b98fc3dd3b46e7b68922d5a",
+      "updated_at": 1782871165.984519,
+      "validation_state": "stable"
+    }
+  ]
+}

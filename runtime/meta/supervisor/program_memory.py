@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, Mapping
 
 
 @dataclass
@@ -72,9 +72,7 @@ class ProgramMemory:
             record
             for record in self.records
             if record.task_signature_id == task_signature_id
-            and record.validation_state in {"validated", "stable"}
-            and record.integrity_verified
-            and not record.stale
+            and self._reusable(record)
         ]
         if not candidates:
             return None
@@ -82,6 +80,79 @@ class ProgramMemory:
             candidates,
             key=lambda record: record.match_confidence,
         )
+
+    def best_match_for_signature(self, task_signature: Any) -> ProgramRecord | None:
+        exact = self.best_match(task_signature.stable_id())
+        if exact is not None:
+            return exact
+
+        query = (
+            task_signature.as_dict()
+            if hasattr(task_signature, "as_dict")
+            else {}
+        )
+        ranked = []
+        for record in self.records:
+            if not self._reusable(record):
+                continue
+            score = self._semantic_match_score(query, record)
+            if score >= 0.65:
+                ranked.append((score, record))
+        if not ranked:
+            return None
+        return max(
+            ranked,
+            key=lambda item: (item[0], item[1].match_confidence),
+        )[1]
+
+    def _reusable(self, record: ProgramRecord) -> bool:
+        return (
+            record.validation_state in {"validated", "stable"}
+            and record.integrity_verified
+            and not record.stale
+        )
+
+    def _semantic_match_score(
+        self,
+        query: Mapping[str, Any],
+        record: ProgramRecord,
+    ) -> float:
+        query_tokens = _signature_tokens(query)
+        record_signature = record.metadata.get("task_signature", {})
+        record_tokens = _signature_tokens(
+            record_signature if isinstance(record_signature, Mapping) else {}
+        )
+        record_tokens.update(_program_tokens(record))
+        if not query_tokens or not record_tokens:
+            return 0.0
+        overlap = len(query_tokens & record_tokens) / len(query_tokens | record_tokens)
+        confidence = max(0.0, min(1.0, float(record.match_confidence or 0.0)))
+        return round((overlap * 0.75) + (confidence * 0.25), 4)
+
+
+def _signature_tokens(signature: Mapping[str, Any]) -> set[str]:
+    tokens: set[str] = set()
+    for value in signature.values():
+        if isinstance(value, str):
+            tokens.add(value)
+        elif isinstance(value, (list, tuple, set)):
+            tokens.update(str(item) for item in value if item)
+    return {token for token in tokens if token}
+
+
+def _program_tokens(record: ProgramRecord) -> set[str]:
+    tokens = set()
+    metadata = record.metadata if isinstance(record.metadata, Mapping) else {}
+    concept = metadata.get("concept")
+    if concept:
+        tokens.add(str(concept))
+    for step in record.operation_sequence:
+        if not isinstance(step, Mapping):
+            continue
+        operation = step.get("operation") or step.get("operator")
+        if operation:
+            tokens.add(str(operation))
+    return tokens
 
 
 program_memory = ProgramMemory()

@@ -164,6 +164,64 @@ def test_training_report_minimal_prints_compact_concept_report(capsys):
     assert "effective_contradiction=" not in output
 
 
+def test_training_report_prints_curriculum_coverage_report(capsys):
+    report = build_training_report(
+        curriculum_coverage_report={
+            "total_tasks": 12,
+            "generated_tasks": 4,
+            "concept_count": 8,
+            "covered_concepts": ["containment", "path_finding"],
+            "missing_concepts": [],
+            "coverage_percentage": 1.0,
+            "frontier_concepts": ["causal_reasoning"],
+            "topology_tasks": 3,
+            "containment_tasks": 2,
+            "occlusion_tasks": 1,
+            "path_reasoning_tasks": 2,
+            "scaling_tasks": 1,
+            "multi_concept_tasks": 5,
+            "curriculum_balance_score": 0.91,
+        },
+    )
+
+    print_training_report(report)
+    output = capsys.readouterr().out
+
+    assert "CURRICULUM COVERAGE REPORT" in output
+    assert "total_tasks=12" in output
+    assert "multi_concept_tasks=5" in output
+    assert "curriculum_balance_score=0.91" in output
+
+
+def test_training_report_prints_selection_diversity_report(capsys):
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 2,
+            "selection_diversity_report": {
+                "total_available_tasks": 40,
+                "selected_tasks": ["task_011.json", "task_022.json"],
+                "selection_mode": "weighted_random",
+                "random_seed": 123,
+                "previous_batch_overlap_count": 0,
+                "unseen_tasks_selected": 2,
+                "cooldown_filtered_tasks": 6,
+                "average_task_selection_frequency": 0.0,
+                "repeated_task_penalty_applied": False,
+                "diversity_score": 1.0,
+            },
+        },
+    )
+
+    print_training_report(report)
+    output = capsys.readouterr().out
+
+    assert "TRAINING SELECTION DIVERSITY REPORT" in output
+    assert "selected_tasks=['task_011.json', 'task_022.json']" in output
+    assert "selection_mode=weighted_random" in output
+    assert "previous_batch_overlap_count=0" in output
+    assert "diversity_score=1.0" in output
+
+
 def test_training_report_preserves_context_candidate_in_discovery_mode():
     report = build_training_report(
         ledger_report={

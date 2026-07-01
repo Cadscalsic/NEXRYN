@@ -37,8 +37,13 @@ class CognitiveReuseEngine:
         runtime_context: Mapping[str, Any],
     ) -> ReuseLookupResult:
         signature_id = task_signature.stable_id()
+        program_match = (
+            self.program_memory.best_match_for_signature(task_signature)
+            if hasattr(self.program_memory, "best_match_for_signature")
+            else self.program_memory.best_match(signature_id)
+        )
         return ReuseLookupResult(
-            program_match=self.program_memory.best_match(signature_id),
+            program_match=program_match,
             strategy_match=self.strategy_memory.best_match(
                 signature_id,
                 runtime_context,

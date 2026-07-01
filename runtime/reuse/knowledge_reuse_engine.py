@@ -20,7 +20,9 @@ class KnowledgeReuseEngine:
         self.strategy_misses = 0
         self.program_misses = 0
         self.reuse_events: list[dict[str, Any]] = []
+        self._context_cache: list[dict[str, Any]] | None = None
         self._strategy_cache: list[dict[str, Any]] | None = None
+        self._program_cache: list[dict[str, Any]] | None = None
 
     def reuse_before_regenerate(
         self,
@@ -30,14 +32,22 @@ class KnowledgeReuseEngine:
         strategies: list[Mapping[str, Any]] | None = None,
         programs: list[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        context = self._best(query, contexts or [], "context")
+        context = self._best(
+            query,
+            contexts or self._stored_contexts(),
+            "context",
+        )
         truth = self._best(query, truths or [], "truth")
         strategy = self._best(
             query,
             strategies or self._stored_strategies(),
             "strategy",
         )
-        program = self._best(query, programs or [], "program")
+        program = self._best(
+            query,
+            programs or self._stored_programs(),
+            "program",
+        )
         self._count("context", context)
         self._count("truth", truth)
         self._count("strategy", strategy)
@@ -119,6 +129,111 @@ class KnowledgeReuseEngine:
                     strategies.append(record)
         self._strategy_cache = strategies
         return list(strategies)
+
+    def _stored_contexts(self) -> list[dict[str, Any]]:
+        if self._context_cache is not None:
+            return list(self._context_cache)
+        root = Path("runtime/memory/context_memory.json")
+        contexts = []
+        if root.exists():
+            try:
+                payload = json.loads(root.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                payload = {}
+            stored_contexts = payload.get("contexts", {})
+            if isinstance(stored_contexts, Mapping):
+                iterable = stored_contexts.values()
+            elif isinstance(stored_contexts, list):
+                iterable = stored_contexts
+            else:
+                iterable = []
+            for item in iterable:
+                if not isinstance(item, Mapping):
+                    continue
+                source_context = item.get("source_context", {})
+                source_context = (
+                    source_context
+                    if isinstance(source_context, Mapping)
+                    else {}
+                )
+                record = {
+                    **dict(source_context),
+                    **dict(item),
+                }
+                context_id = (
+                    record.get("context_id")
+                    or record.get("context_name")
+                    or record.get("context")
+                )
+                record["context_id"] = context_id
+                record["name"] = context_id
+                record["concept"] = (
+                    record.get("concept")
+                    or record.get("source_concept")
+                    or record.get("context")
+                    or context_id
+                )
+                contexts.append(record)
+        self._context_cache = contexts
+        return list(contexts)
+
+    def _stored_programs(self) -> list[dict[str, Any]]:
+        if self._program_cache is not None:
+            return list(self._program_cache)
+        programs = []
+        try:
+            from runtime.meta.supervisor.program_memory import ProgramMemory
+
+            memory = ProgramMemory()
+            records = memory.records
+        except Exception:
+            records = []
+        for record in records:
+            if getattr(record, "stale", False):
+                continue
+            if getattr(record, "validation_state", "") not in {
+                "validated",
+                "stable",
+            }:
+                continue
+            if not getattr(record, "integrity_verified", False):
+                continue
+            metadata = getattr(record, "metadata", {}) or {}
+            metadata = metadata if isinstance(metadata, Mapping) else {}
+            program = getattr(record, "program", {}) or {}
+            program = program if isinstance(program, Mapping) else {}
+            operation_sequence = getattr(record, "operation_sequence", []) or []
+            operations = [
+                str(step.get("operator") or step.get("operation"))
+                for step in operation_sequence
+                if isinstance(step, Mapping)
+                and (step.get("operator") or step.get("operation"))
+            ]
+            for step in program.get("program_steps", []) or program.get("steps", []):
+                if not isinstance(step, Mapping):
+                    continue
+                operation = step.get("operator") or step.get("operation")
+                if operation:
+                    operations.append(str(operation))
+            concept = (
+                metadata.get("concept")
+                or program.get("concept")
+                or " ".join(operations)
+                or getattr(record, "task_signature_id", "")
+            )
+            programs.append({
+                "program_id": getattr(record, "program_id", ""),
+                "task_signature_id": getattr(record, "task_signature_id", ""),
+                "concept": concept,
+                "name": concept,
+                "confidence": getattr(record, "match_confidence", 0.0),
+                "program": dict(program),
+                "operation_sequence": operation_sequence,
+                "validation_state": getattr(record, "validation_state", ""),
+                "integrity_verified": getattr(record, "integrity_verified", False),
+            })
+        self._program_cache = programs
+        return list(programs)
 
 
 def _similarity(query: Mapping[str, Any] | str | None, candidate: Mapping[str, Any]) -> float:

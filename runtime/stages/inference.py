@@ -112,6 +112,11 @@ from runtime.meta import (
 from runtime.semantics.semantic_abstraction import (
     SemanticAbstractionEngine
 )
+from runtime.semantics.semantic_ontology import (
+    compression_level_for_concept,
+    lookup_hypothesis_concept,
+    lookup_operator_semantics,
+)
 
 # ============================================
 # ANALOGY
@@ -395,6 +400,516 @@ def filter_executable_hypotheses(
         )
 
     return executable
+
+
+TRANSFORMATION_PRIMITIVES = {
+    "duplicate_object",
+    "expand_object",
+    "expand_pattern",
+    "grow_topology",
+    "replace_color",
+    "translate_right",
+    "translate_left",
+    "translate_up",
+    "translate_down",
+    "mirror_object",
+    "fill_region",
+    "reduce_pattern",
+}
+
+
+PRESERVATION_PRIMITIVES = {
+    "preserve_objects",
+    "preserve_shape",
+    "preserve_density",
+    "preserve_colors",
+    "preserve_topology",
+    "preserve_symmetry",
+    "preserve_position",
+    "preserve_size",
+}
+
+
+FRONTIER_TRANSFORMATION_CONCEPTS = {
+    "propagation",
+    "density_modulation",
+    "growth",
+    "topological_growth",
+    "topological_change",
+    "topological_reasoning",
+    "symbolic_remapping",
+    "directional_motion",
+    "reflection",
+    "containment",
+    "replication",
+    "shape_relation",
+    "symmetry_reasoning",
+}
+
+
+SUPPORTING_INVARIANT_CONCEPTS = {
+    "object_identity_preservation",
+    "shape_preservation",
+    "color_preservation",
+    "position_preservation",
+    "size_preservation",
+    "density_preservation",
+    "topology_preservation",
+    "symmetry_preservation",
+}
+
+
+def _bounded_number(value, default=0.0):
+
+    try:
+
+        return max(
+            0.0,
+            min(
+                1.0,
+                float(value)
+            )
+        )
+
+    except (TypeError, ValueError):
+
+        return default
+
+
+def transformation_concept_score(
+    hypothesis,
+    grid_changed=False
+):
+
+    if not isinstance(
+        hypothesis,
+        dict
+    ):
+
+        return 0.0
+
+    primitive = hypothesis.get(
+        "primitive"
+    )
+
+    hypothesis_type = str(
+        hypothesis.get(
+            "type",
+            ""
+        )
+    )
+
+    semantic_class = str(
+        hypothesis.get(
+            "semantic_class",
+            ""
+        )
+    )
+
+    grounding = hypothesis.get(
+        "geometric_grounding",
+        {}
+    )
+
+    if not isinstance(
+        grounding,
+        dict
+    ):
+
+        grounding = {}
+
+    try:
+
+        density_delta = abs(
+            float(
+                grounding.get(
+                    "density_delta",
+                    0.0
+                )
+                or 0.0
+            )
+        )
+
+    except (TypeError, ValueError):
+
+        density_delta = 0.0
+
+    score = (
+        _bounded_number(
+            hypothesis.get(
+                "transformation_salience",
+                0.0
+            )
+        )
+        * 0.25
+    )
+
+    score += (
+        _bounded_number(
+            hypothesis.get(
+                "explanatory_power",
+                0.0
+            )
+        )
+        * 0.25
+    )
+
+    score += (
+        _bounded_number(
+            hypothesis.get(
+                "residual_reduction",
+                0.0
+            )
+        )
+        * 0.25
+    )
+
+    score += (
+        _bounded_number(
+            hypothesis.get(
+                "confidence",
+                0.0
+            )
+        )
+        * 0.10
+    )
+
+    if primitive in TRANSFORMATION_PRIMITIVES:
+
+        score += 0.30
+
+    if semantic_class and semantic_class != "invariant":
+
+        score += 0.20
+
+    if "change" in hypothesis_type or "transformation" in hypothesis_type:
+
+        score += 0.10
+
+    if density_delta > 0:
+
+        score += min(
+            0.20,
+            density_delta / 30.0
+        )
+
+    if (
+        grid_changed
+        and
+        primitive in PRESERVATION_PRIMITIVES
+    ):
+
+        score -= 0.45
+
+    return round(
+        max(
+            score,
+            0.0
+        ),
+        4
+    )
+
+
+def transformation_candidate_concept(
+    hypothesis
+):
+
+    if not isinstance(
+        hypothesis,
+        dict
+    ):
+
+        return "generic_transformation"
+
+    primitive = hypothesis.get(
+        "primitive"
+    )
+
+    operator_semantics = lookup_operator_semantics(
+        primitive
+    )
+
+    if operator_semantics:
+
+        operator_class = operator_semantics.get(
+            "semantic_class"
+        )
+
+        operator_concept = operator_semantics.get(
+            "semantic_concept",
+            "generic_transformation"
+        )
+
+        if operator_class != "invariant":
+
+            return operator_concept
+
+    hypothesis_concept = lookup_hypothesis_concept(
+        hypothesis.get(
+            "type",
+            ""
+        )
+    )
+
+    if hypothesis_concept != "generic_transformation":
+
+        return hypothesis_concept
+
+    return operator_semantics.get(
+        "semantic_concept",
+        "generic_transformation"
+    )
+
+
+def transformation_candidate_role(
+    hypothesis,
+    concept,
+    score
+):
+
+    primitive = hypothesis.get(
+        "primitive"
+    )
+
+    if score >= 0.55 and concept in FRONTIER_TRANSFORMATION_CONCEPTS:
+
+        return "primary_transformation"
+
+    if concept in FRONTIER_TRANSFORMATION_CONCEPTS:
+
+        return "latent_transformation"
+
+    if primitive in PRESERVATION_PRIMITIVES:
+
+        return "supporting_invariant"
+
+    return "candidate_context"
+
+
+def build_multi_transformation_graph(
+    hypotheses,
+    max_nodes=6
+):
+
+    nodes = []
+    seen = set()
+
+    for hypothesis in hypotheses or []:
+
+        if not isinstance(
+            hypothesis,
+            dict
+        ):
+
+            continue
+
+        score = hypothesis.get(
+            "transformation_concept_score",
+            0.0
+        )
+
+        concept = transformation_candidate_concept(
+            hypothesis
+        )
+
+        role = transformation_candidate_role(
+            hypothesis,
+            concept,
+            score
+        )
+
+        if (
+            role == "candidate_context"
+            and
+            score < 0.25
+        ):
+
+            continue
+
+        key = (
+            concept,
+            role
+        )
+
+        if key in seen:
+
+            continue
+
+        seen.add(
+            key
+        )
+
+        compression_level = compression_level_for_concept(
+            concept
+        )
+
+        nodes.append({
+            "concept": concept,
+            "role": role,
+            "source_type": hypothesis.get(
+                "type"
+            ),
+            "primitive": hypothesis.get(
+                "primitive"
+            ),
+            "score": score,
+            "confidence": hypothesis.get(
+                "confidence",
+                0.0
+            ),
+            "compressed_concept": compression_level.local_identity,
+            "structural_identity": compression_level.structural_identity,
+            "causal_identity": compression_level.causal_identity,
+            "archetypal_identity": compression_level.archetypal_identity,
+            "topology_signature": compression_level.topology_signature,
+        })
+
+    nodes = sorted(
+        nodes,
+        key=lambda item: (
+            2
+            if item.get("role") == "primary_transformation"
+            else 1
+            if item.get("role") == "latent_transformation"
+            else 0,
+            item.get("score", 0.0),
+            item.get("confidence", 0.0),
+        ),
+        reverse=True,
+    )[:max_nodes]
+
+    edges = []
+
+    for index, source in enumerate(
+        nodes
+    ):
+
+        for target_index in range(
+            index + 1,
+            len(nodes)
+        ):
+
+            target = nodes[target_index]
+
+            if source.get("role") == "primary_transformation":
+
+                relation = (
+                    "drives"
+                    if target.get("role") == "latent_transformation"
+                    else "constrained_by"
+                )
+
+            elif target.get("role") == "supporting_invariant":
+
+                relation = "stabilized_by"
+
+            else:
+
+                relation = "co_occurs_with"
+
+            edges.append({
+                "source": source.get("concept"),
+                "target": target.get("concept"),
+                "relation": relation,
+                "weight": round(
+                    max(
+                        source.get("score", 0.0),
+                        0.1
+                    )
+                    *
+                    max(
+                        target.get("confidence", 0.0),
+                        0.1
+                    ),
+                    4,
+                ),
+            })
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "primary_transformation_count": sum(
+            1
+            for node in nodes
+            if node.get("role") == "primary_transformation"
+        ),
+        "latent_transformation_count": sum(
+            1
+            for node in nodes
+            if node.get("role") == "latent_transformation"
+        ),
+        "supporting_invariant_count": sum(
+            1
+            for node in nodes
+            if node.get("role") == "supporting_invariant"
+        ),
+    }
+
+
+def prioritize_transformation_concepts(
+    hypotheses,
+    grid_changed=False
+):
+
+    annotated = []
+
+    for index, hypothesis in enumerate(
+        hypotheses or []
+    ):
+
+        if not isinstance(
+            hypothesis,
+            dict
+        ):
+
+            continue
+
+        concept_score = transformation_concept_score(
+            hypothesis,
+            grid_changed=grid_changed
+        )
+
+        hypothesis[
+            "transformation_concept_score"
+        ] = concept_score
+
+        hypothesis[
+            "transformation_discovery_state"
+        ] = (
+            "TRANSFORMATION_CONCEPT_DISCOVERED"
+            if concept_score >= 0.55
+            else "TRANSFORMATION_CONCEPT_WEAK"
+        )
+
+        annotated.append(
+            (
+                index,
+                hypothesis
+            )
+        )
+
+    return [
+        hypothesis
+        for index, hypothesis in sorted(
+            annotated,
+            key=lambda item: (
+                item[1].get(
+                    "transformation_concept_score",
+                    0.0
+                ),
+                _bounded_number(
+                    item[1].get(
+                        "confidence",
+                        0.0
+                    )
+                ),
+                -item[0],
+            ),
+            reverse=True
+        )
+    ]
 
 
 # ============================================
@@ -1151,6 +1666,72 @@ def inference_stage(context):
         )
     )
 
+    grid_changed = not np.array_equal(
+        input_array,
+        output_array
+    )
+
+    executable_hypotheses = prioritize_transformation_concepts(
+        executable_hypotheses,
+        grid_changed=grid_changed
+    )
+
+    multi_transformation_graph = build_multi_transformation_graph(
+        executable_hypotheses
+    )
+
+    transformation_concept_discovery_report = {
+        "system": "transformation_concept_discovery_engine",
+        "grid_changed": grid_changed,
+        "candidate_count": len(
+            executable_hypotheses
+        ),
+        "discovered_count": sum(
+            1
+            for hypothesis in executable_hypotheses
+            if hypothesis.get(
+                "transformation_discovery_state"
+            ) == "TRANSFORMATION_CONCEPT_DISCOVERED"
+        ),
+        "multi_transformation_graph":
+        multi_transformation_graph,
+        "multi_transformation_node_count":
+        multi_transformation_graph.get(
+            "node_count",
+            0
+        ),
+        "latent_transformation_count":
+        multi_transformation_graph.get(
+            "latent_transformation_count",
+            0
+        ),
+        "supporting_invariant_count":
+        multi_transformation_graph.get(
+            "supporting_invariant_count",
+            0
+        ),
+        "top_transformation_candidates": [
+            {
+                "type": hypothesis.get(
+                    "type"
+                ),
+                "primitive": hypothesis.get(
+                    "primitive"
+                ),
+                "concept": transformation_candidate_concept(
+                    hypothesis
+                ),
+                "semantic_class": hypothesis.get(
+                    "semantic_class"
+                ),
+                "transformation_concept_score": hypothesis.get(
+                    "transformation_concept_score"
+                ),
+            }
+            for hypothesis in executable_hypotheses[:5]
+        ],
+    }
+
     # ========================================
     # HIERARCHY
     # ========================================
@@ -1366,7 +1947,9 @@ def inference_stage(context):
         semantic_abstraction_engine
         .abstract_hypotheses(
 
-            executable_hypotheses
+            executable_hypotheses,
+
+            evidence_context=context
         )
     )
 
@@ -1383,6 +1966,25 @@ def inference_stage(context):
 
             semantic_abstractions
         )
+    )
+
+    transformation_causal_graph = (
+        semantic_graph.get(
+            "transformation_causal_graph",
+            {}
+        )
+    )
+
+    transformation_causal_relations = (
+        transformation_causal_graph.get(
+            "edges",
+            []
+        )
+        if isinstance(
+            transformation_causal_graph,
+            dict
+        )
+        else []
     )
 
     # ========================================
@@ -2191,6 +2793,56 @@ def inference_stage(context):
         "hypothesis_arbitration":
         execution_arbitration_report,
 
+        "TRANSFORMATION_CAUSAL_GRAPH":
+        transformation_causal_graph,
+
+        "causal_order":
+        (
+            transformation_causal_graph.get(
+                "causal_order",
+                []
+            )
+            if isinstance(
+                transformation_causal_graph,
+                dict
+            )
+            else []
+        ),
+
+        "primary_causal_chain":
+        (
+            transformation_causal_graph.get(
+                "primary_causal_chain",
+                []
+            )
+            if isinstance(
+                transformation_causal_graph,
+                dict
+            )
+            else []
+        ),
+
+        "causal_chains":
+        (
+            transformation_causal_graph.get(
+                "causal_chains",
+                []
+            )
+            if isinstance(
+                transformation_causal_graph,
+                dict
+            )
+            else []
+        ),
+
+        "causal_relations":
+        transformation_causal_relations,
+
+        "causal_relation_count":
+        len(
+            transformation_causal_relations
+        ),
+
         "OBJECT_CHANGE_REPORT":
         object_centric_reasoning.get(
             "OBJECT_CHANGE_REPORT",
@@ -2608,6 +3260,62 @@ def inference_stage(context):
         semantic_graph
     )
 
+    context["TRANSFORMATION_CAUSAL_GRAPH"] = (
+        transformation_causal_graph
+    )
+
+    context["transformation_causal_graph"] = (
+        transformation_causal_graph
+    )
+
+    context["causal_order"] = (
+        transformation_causal_graph.get(
+            "causal_order",
+            []
+        )
+        if isinstance(
+            transformation_causal_graph,
+            dict
+        )
+        else []
+    )
+
+    context["primary_causal_chain"] = (
+        transformation_causal_graph.get(
+            "primary_causal_chain",
+            []
+        )
+        if isinstance(
+            transformation_causal_graph,
+            dict
+        )
+        else []
+    )
+
+    context["causal_chains"] = (
+        transformation_causal_graph.get(
+            "causal_chains",
+            []
+        )
+        if isinstance(
+            transformation_causal_graph,
+            dict
+        )
+        else []
+    )
+
+    context["causal_relations"] = (
+        transformation_causal_relations
+    )
+
+    context["transformation_concept_discovery_report"] = (
+        transformation_concept_discovery_report
+    )
+
+    context["multi_transformation_graph"] = (
+        multi_transformation_graph
+    )
+
     context["analogies"] = analogies
 
     context["transfer_report"] = (
@@ -2768,7 +3476,10 @@ def inference_stage(context):
             execution_plan,
 
             inference_report=
-            inference_report
+            inference_report,
+
+            transformation_concept_discovery_report=
+            transformation_concept_discovery_report
         )
 
     except Exception:

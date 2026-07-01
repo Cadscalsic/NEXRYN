@@ -32,6 +32,10 @@ from runtime.world.world_model import (
     world_model_engine
 )
 
+from runtime.meta.supervisor.program_memory_learning import (
+    remember_validated_program
+)
+
 from runtime.memory import (
     latent_reasoning_reservoir
 )
@@ -423,6 +427,26 @@ def evaluation_stage(context):
     )
 
     # ========================================
+    # VALIDATED PROGRAM MEMORY
+    # ========================================
+
+    program_memory_report = (
+        remember_validated_program(
+            {
+                **context,
+                "evaluation_result":
+                evaluation_result,
+                "success_semantics_report":
+                success_semantics_report,
+                "episode_completed":
+                episode_completed,
+                "residual_analysis":
+                residual_analysis,
+            }
+        )
+    )
+
+    # ========================================
     # EVALUATION METRICS
     # ========================================
 
@@ -643,6 +667,10 @@ def evaluation_stage(context):
     context[
         "reflective_learning_report"
     ] = reflective_learning_report
+
+    context[
+        "program_memory_report"
+    ] = program_memory_report
 
     context[
         "evaluation_metrics"

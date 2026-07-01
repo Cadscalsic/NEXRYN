@@ -275,6 +275,34 @@ def print_training_batch_summary(training_batch, verbose=False):
     print("current_batch_size:", training_batch.get("selected_task_count", 0))
     print("recent_tasks:", list(selected_files or [])[-MAX_TASKS_DISPLAYED:])
     print("prioritized_concepts:", training_batch.get("prioritized_concepts", []))
+    selection_report = training_batch.get("selection_diversity_report", {})
+    if selection_report:
+        print()
+        print("TRAINING SELECTION DIVERSITY REPORT")
+        print(
+            "total_available_tasks=",
+            selection_report.get("total_available_tasks", 0),
+            "selected_tasks=",
+            selection_report.get("selected_tasks", []),
+            "selection_mode=",
+            selection_report.get("selection_mode"),
+            "random_seed=",
+            selection_report.get("random_seed"),
+        )
+        print(
+            "previous_batch_overlap_count=",
+            selection_report.get("previous_batch_overlap_count", 0),
+            "unseen_tasks_selected=",
+            selection_report.get("unseen_tasks_selected", 0),
+            "cooldown_filtered_tasks=",
+            selection_report.get("cooldown_filtered_tasks", 0),
+            "average_task_selection_frequency=",
+            selection_report.get("average_task_selection_frequency", 0.0),
+            "repeated_task_penalty_applied=",
+            selection_report.get("repeated_task_penalty_applied", False),
+            "diversity_score=",
+            selection_report.get("diversity_score", 0.0),
+        )
 
 
 class _MinimalRuntimePrintFilter:
@@ -784,6 +812,21 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--selection-mode",
+    type=str,
+    default="weighted_random",
+    choices=["random", "weighted_random", "curriculum"],
+    help="Training task selection mode",
+)
+
+parser.add_argument(
+    "--random-seed",
+    type=int,
+    default=None,
+    help="Optional reproducible random seed for training task selection",
+)
+
+parser.add_argument(
     "--math-reasoning",
     action="store_true",
     help="Enable passive mathematical reasoning evidence reports",
@@ -935,7 +978,9 @@ try:
     from runtime.learning.training_assistant import TrainingAssistant
 
     training_assistant = TrainingAssistant(
-        batch_size=training_batch_size
+        batch_size=training_batch_size,
+        selection_mode=args.selection_mode,
+        random_seed=args.random_seed,
     )
 
     if args.reset_training_assistant:
@@ -958,6 +1003,8 @@ try:
         task_directory=args.tasks_dir,
         observed_task_ids=observed_task_ids,
         core_knowledge=core_knowledge,
+        selection_mode=args.selection_mode,
+        random_seed=args.random_seed,
     )
     runtime_metrics["task_selection_duration"] = (
         runtime_watchdog.stop_and_warn(
@@ -969,6 +1016,9 @@ try:
 
     selection_training_diversity_report = dict(
         training_batch.get("training_diversity_report", {})
+    )
+    selection_diversity_report = dict(
+        training_batch.get("selection_diversity_report", {})
     )
     task_files = training_batch["selected_task_files"]
 
@@ -1233,6 +1283,10 @@ try:
     if selection_training_diversity_report:
         concept_lifecycle_report["selection_training_diversity_report"] = (
             selection_training_diversity_report
+        )
+    if selection_diversity_report:
+        concept_lifecycle_report["selection_diversity_report"] = (
+            selection_diversity_report
         )
     record_main_timing("concept_lifecycle_report", module_start)
 
@@ -1549,7 +1603,10 @@ try:
         {},
     )
     performance_report.update({
-        "context_hits": concept_lifecycle_report.get("context_hits", 0),
+        "context_hits": max(
+            concept_lifecycle_report.get("context_hits", 0),
+            lifecycle_knowledge_reuse_report.get("context_hits", 0),
+        ),
         "truth_hits": lifecycle_truth_reuse_report.get("truth_hits", 0),
         "strategy_hits": lifecycle_strategy_reuse_report.get(
             "strategy_hits",

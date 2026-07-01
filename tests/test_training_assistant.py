@@ -14,11 +14,21 @@ def test_training_assistant_selects_three_tasks_and_resumes_active_batch(
     tmp_path,
 ):
     state_path = tmp_path / "training_assistant_state.json"
-    first = TrainingAssistant(state_path=state_path)
+    memory_path = tmp_path / "task_selection_memory.json"
+    first = TrainingAssistant(
+        state_path=state_path,
+        selection_memory_path=memory_path,
+        selection_mode="curriculum",
+    )
     selected = first.select_batch(task_files())
 
-    resumed = TrainingAssistant(state_path=state_path).select_batch(
-        task_files()
+    resumed = TrainingAssistant(
+        state_path=state_path,
+        selection_memory_path=memory_path,
+        selection_mode="curriculum",
+    ).select_batch(
+        task_files(),
+        selection_mode="curriculum",
     )
 
     assert selected["selected_task_files"] == [
@@ -33,7 +43,9 @@ def test_training_assistant_selects_three_tasks_and_resumes_active_batch(
 
 def test_training_assistant_advances_after_completed_cycle(tmp_path):
     assistant = TrainingAssistant(
-        state_path=tmp_path / "training_assistant_state.json"
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        selection_mode="curriculum",
     )
     assistant.select_batch(task_files())
     completion = assistant.complete_cycle(
@@ -55,7 +67,9 @@ def test_training_assistant_advances_after_completed_cycle(tmp_path):
 
 def test_training_assistant_wraps_at_end_of_task_list(tmp_path):
     assistant = TrainingAssistant(
-        state_path=tmp_path / "training_assistant_state.json"
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        selection_mode="curriculum",
     )
     tasks = task_files(12)
 
@@ -96,7 +110,9 @@ def test_training_assistant_prioritizes_rare_concept_tasks(tmp_path):
         )
     assistant = TrainingAssistant(
         state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
         batch_size=2,
+        selection_mode="curriculum",
     )
 
     selected = assistant.select_batch(
@@ -144,7 +160,9 @@ def test_training_assistant_prioritizes_unobserved_rare_concept_task(tmp_path):
         )
     assistant = TrainingAssistant(
         state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
         batch_size=1,
+        selection_mode="curriculum",
     )
 
     selected = assistant.select_batch(
@@ -175,7 +193,9 @@ def test_training_assistant_deprioritizes_recent_core_knowledge(tmp_path):
         )
     assistant = TrainingAssistant(
         state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
         batch_size=1,
+        selection_mode="curriculum",
     )
     assistant.state["history"] = [
         {
@@ -205,3 +225,48 @@ def test_training_assistant_deprioritizes_recent_core_knowledge(tmp_path):
     assert selected["training_diversity_report"][
         "cooldown_filtered_concepts"
     ] == ["shape_preservation"]
+
+
+def test_training_assistant_weighted_random_avoids_previous_batch_overlap(
+    tmp_path,
+):
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=3,
+        random_seed=11,
+    )
+    tasks = task_files(30)
+
+    first = assistant.select_batch(tasks)
+    second = assistant.select_batch(tasks, random_seed=12)
+
+    assert first["training_mode"] == "weighted_random"
+    assert len(set(first["selected_task_files"])) == 3
+    assert (
+        set(first["selected_task_files"])
+        & set(second["selected_task_files"])
+    ) == set()
+    assert second["selection_diversity_report"][
+        "previous_batch_overlap_count"
+    ] == 0
+    assert second["selection_diversity_report"]["unseen_tasks_selected"] > 0
+
+
+def test_training_assistant_persists_task_selection_memory(tmp_path):
+    memory_path = tmp_path / "task_selection_memory.json"
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=memory_path,
+        batch_size=2,
+        random_seed=7,
+    )
+
+    selected = assistant.select_batch(task_files(12))
+    memory = json.loads(memory_path.read_text(encoding="utf-8"))
+
+    assert memory["previous_batch"] == selected["selected_task_files"]
+    assert memory["run_counter"] == 1
+    for task_file in selected["selected_task_files"]:
+        assert memory["tasks"][task_file]["times_selected"] == 1
+        assert memory["tasks"][task_file]["last_run_id"]

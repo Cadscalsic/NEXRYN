@@ -1,0 +1,225 @@
+{
+  "concept_family": "multi_concept_composition",
+  "concept_labels": [
+    "multi_concept_composition"
+  ],
+  "difficulty": "frontier",
+  "train": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          4
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          4
+        ]
+      ]
+    }
+  ],
+  "test": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          5
+        ]
+      ]
+    }
+  ],
+  "expected_transformations": [
+    "multi_concept_composition"
+  ],
+  "nexryn_metadata": {
+    "curriculum": "arc_cognitive_curriculum_balancing_alpha_01",
+    "task_id": "arc_generated_multi_concept_composition_03",
+    "concept_family": "multi_concept_composition",
+    "target_concepts": [
+      "multi_concept_composition"
+    ],
+    "concept_labels": [
+      "multi_concept_composition"
+    ],
+    "curriculum_level": 4,
+    "multi_concept": false,
+    "metadata_is_targeting_not_runtime_observation": true,
+    "governance_constraints": {
+      "force_truth_promotion": false,
+      "lower_thresholds": false,
+      "manual_stable_truth": false,
+      "evidence_only": true
+    }
+  }
+}

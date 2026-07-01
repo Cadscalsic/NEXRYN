@@ -1,0 +1,229 @@
+{
+  "concept_family": "causal_reasoning",
+  "concept_labels": [
+    "causal_reasoning",
+    "topology_change"
+  ],
+  "difficulty": "frontier",
+  "train": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "output": [
+        [
+          6,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "output": [
+        [
+          6,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      ]
+    }
+  ],
+  "test": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          2
+        ]
+      ]
+    }
+  ],
+  "expected_transformations": [
+    "causal_reasoning",
+    "topology_change"
+  ],
+  "nexryn_metadata": {
+    "curriculum": "arc_cognitive_curriculum_balancing_alpha_01",
+    "task_id": "arc_generated_causal_reasoning_topology_change_08",
+    "concept_family": "causal_reasoning",
+    "target_concepts": [
+      "causal_reasoning",
+      "topology_change"
+    ],
+    "concept_labels": [
+      "causal_reasoning",
+      "topology_change"
+    ],
+    "curriculum_level": 4,
+    "multi_concept": true,
+    "metadata_is_targeting_not_runtime_observation": true,
+    "governance_constraints": {
+      "force_truth_promotion": false,
+      "lower_thresholds": false,
+      "manual_stable_truth": false,
+      "evidence_only": true
+    }
+  }
+}

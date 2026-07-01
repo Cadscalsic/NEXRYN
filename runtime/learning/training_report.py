@@ -4,6 +4,7 @@ def build_training_report(
     multi_task_results=None,
     ledger_report=None,
     concept_lifecycle_report=None,
+    curriculum_coverage_report=None,
     include_truth_evaluations=False,
 ):
     discovery_only_mode = not include_truth_evaluations
@@ -12,6 +13,7 @@ def build_training_report(
     multi_task_results = list(multi_task_results or [])
     ledger_report = ledger_report or {}
     concept_lifecycle_report = concept_lifecycle_report or {}
+    curriculum_coverage_report = curriculum_coverage_report or {}
 
     def candidate_metric(evaluation, metric_name):
         return next(
@@ -2558,6 +2560,9 @@ def build_training_report(
         from runtime.reasoning.counterfactual_reuse_engine import (
             CounterfactualReuseEngine,
         )
+        from runtime.reuse.knowledge_reuse_engine import (
+            KnowledgeReuseEngine,
+        )
         from runtime.strategy.strategy_reuse_engine import (
             StrategyReuseEngine,
         )
@@ -2719,35 +2724,83 @@ def build_training_report(
             committed_truths,
             hypothesis_report.get("accepted_hypotheses", []),
         )
+        knowledge_reuse_engine = KnowledgeReuseEngine()
+        for concept in target_evaluations:
+            knowledge_reuse_engine.reuse_before_regenerate(
+                {"concept": str(concept)},
+                truths=committed_truths,
+                strategies=strategy_reuse_report.get("reused_strategies", []),
+            )
+        knowledge_reuse_metrics = knowledge_reuse_engine.metrics()
+        context_hits = max(
+            concept_lifecycle_report.get("context_hits", 0),
+            knowledge_reuse_metrics.get("context_hits", 0),
+        )
+        truth_hits = max(
+            reuse_report.get("truth_hits", 0),
+            knowledge_reuse_metrics.get("truth_hits", 0),
+        )
+        strategy_hits = max(
+            strategy_reuse_report.get("strategy_hits", 0),
+            knowledge_reuse_metrics.get("strategy_hits", 0),
+        )
+        program_hits = knowledge_reuse_metrics.get("program_hits", 0)
+        context_misses = knowledge_reuse_metrics.get("context_misses", 0)
+        truth_misses = max(
+            reuse_report.get("truth_misses", 0),
+            knowledge_reuse_metrics.get("truth_misses", 0),
+        )
+        strategy_misses = max(
+            strategy_reuse_report.get("strategy_misses", 0),
+            knowledge_reuse_metrics.get("strategy_misses", 0),
+        )
+        program_misses = knowledge_reuse_metrics.get("program_misses", 0)
+        knowledge_hits = (
+            context_hits
+            + truth_hits
+            + strategy_hits
+            + program_hits
+        )
+        knowledge_misses = (
+            context_misses
+            + truth_misses
+            + strategy_misses
+            + program_misses
+        )
         knowledge_reuse_report = {
             "system": "knowledge_reuse_engine",
             "report_state": "final",
-            "context_hits": concept_lifecycle_report.get("context_hits", 0),
-            "truth_hits": reuse_report.get("truth_hits", 0),
-            "strategy_hits": strategy_reuse_report.get("strategy_hits", 0),
-            "program_hits": 0,
-            "context_misses": 0,
-            "truth_misses": reuse_report.get("truth_misses", 0),
-            "strategy_misses":
-            strategy_reuse_report.get("strategy_misses", 0),
-            "program_misses": 0,
+            "context_hits": context_hits,
+            "truth_hits": truth_hits,
+            "strategy_hits": strategy_hits,
+            "program_hits": program_hits,
+            "context_misses": context_misses,
+            "truth_misses": truth_misses,
+            "strategy_misses": strategy_misses,
+            "program_misses": program_misses,
             "knowledge_reuse_rate": round(
-                (
-                    reuse_report.get("truth_hits", 0)
-                    + strategy_reuse_report.get("strategy_hits", 0)
-                )
-                / max(
-                    reuse_report.get("truth_hits", 0)
-                    + reuse_report.get("truth_misses", 0)
-                    + strategy_reuse_report.get("strategy_hits", 0)
-                    + strategy_reuse_report.get("strategy_misses", 0),
-                    1,
-                ),
+                knowledge_hits / max(knowledge_hits + knowledge_misses, 1),
                 4,
             ),
             "reused_strategies":
             strategy_reuse_report.get("reused_strategies", []),
-            "reason": "truth_and_strategy_reuse_summarized",
+            "reused_contexts": [
+                event
+                for event in knowledge_reuse_engine.report().get(
+                    "reuse_events",
+                    [],
+                )
+                if event.get("reuse_kind") == "context"
+            ],
+            "reused_programs": [
+                event
+                for event in knowledge_reuse_engine.report().get(
+                    "reuse_events",
+                    [],
+                )
+                if event.get("reuse_kind") == "program"
+            ],
+            "reason": "truth_strategy_context_and_program_reuse_summarized",
         }
 
         for committed in commit_report.get("committed_truths", []):
@@ -3182,6 +3235,8 @@ def build_training_report(
         core_knowledge_registration_report,
         "training_diversity_report":
         training_diversity_report,
+        "selection_diversity_report":
+        training_batch.get("selection_diversity_report", {}),
         "hypothesis_generation_report":
         hypothesis_generation_report,
         "counterfactual_reasoning_report":
@@ -3204,6 +3259,7 @@ def build_training_report(
         ledger_report.get("observed_task_count", 0),
         "training_assistant_report": training_assistant_report,
         "training_batch_snapshot": training_batch,
+        "curriculum_coverage_report": curriculum_coverage_report,
     }
 
 
@@ -4263,6 +4319,48 @@ def print_training_report(report, report_level="normal"):
                 f"{item.get('learned_from')}",
             )
 
+    selection_diversity_report = report.get("selection_diversity_report", {})
+    if not selection_diversity_report:
+        selection_diversity_report = report.get(
+            "training_batch_snapshot",
+            {},
+        ).get("selection_diversity_report", {})
+    if not selection_diversity_report:
+        selection_diversity_report = report.get(
+            "concept_lifecycle",
+            {},
+        ).get("selection_diversity_report", {})
+    if selection_diversity_report:
+        print()
+        print("TRAINING SELECTION DIVERSITY REPORT")
+        print()
+        print(
+            "total_available_tasks="
+            f"{selection_diversity_report.get('total_available_tasks', 0)}",
+            "selected_tasks="
+            f"{selection_diversity_report.get('selected_tasks', [])}",
+            "selection_mode="
+            f"{selection_diversity_report.get('selection_mode')}",
+            "random_seed="
+            f"{selection_diversity_report.get('random_seed')}",
+        )
+        print(
+            "previous_batch_overlap_count="
+            f"{selection_diversity_report.get('previous_batch_overlap_count', 0)}",
+            "unseen_tasks_selected="
+            f"{selection_diversity_report.get('unseen_tasks_selected', 0)}",
+            "cooldown_filtered_tasks="
+            f"{selection_diversity_report.get('cooldown_filtered_tasks', 0)}",
+            "average_task_selection_frequency="
+            f"{selection_diversity_report.get('average_task_selection_frequency', 0.0)}",
+        )
+        print(
+            "repeated_task_penalty_applied="
+            f"{selection_diversity_report.get('repeated_task_penalty_applied', False)}",
+            "diversity_score="
+            f"{selection_diversity_report.get('diversity_score', 0.0)}",
+        )
+
     training_diversity_report = report.get("training_diversity_report", {})
     if not training_diversity_report:
         training_diversity_report = report.get(
@@ -4377,6 +4475,56 @@ def print_training_report(report, report_level="normal"):
             f"{_recent_items(training_diversity_report.get('frontier_concepts_explored', []), detail_limit)}",
             "graduated_concepts="
             f"{_recent_items(training_diversity_report.get('graduated_concepts', []), detail_limit)}",
+        )
+
+    curriculum_coverage_report = report.get("curriculum_coverage_report", {})
+    if not curriculum_coverage_report:
+        curriculum_coverage_report = report.get(
+            "training_batch_snapshot",
+            {},
+        ).get("curriculum_coverage_report", {})
+    if not curriculum_coverage_report:
+        curriculum_coverage_report = report.get(
+            "concept_lifecycle",
+            {},
+        ).get("curriculum_coverage_report", {})
+    if curriculum_coverage_report:
+        print()
+        print("CURRICULUM COVERAGE REPORT")
+        print()
+        print(
+            "total_tasks="
+            f"{curriculum_coverage_report.get('total_tasks', 0)}",
+            "generated_tasks="
+            f"{curriculum_coverage_report.get('generated_tasks', 0)}",
+            "concept_count="
+            f"{curriculum_coverage_report.get('concept_count', 0)}",
+            "coverage_percentage="
+            f"{curriculum_coverage_report.get('coverage_percentage', 0.0)}",
+            "curriculum_balance_score="
+            f"{curriculum_coverage_report.get('curriculum_balance_score', 0.0)}",
+        )
+        print(
+            "missing_concepts="
+            f"{_recent_items(curriculum_coverage_report.get('missing_concepts', []), detail_limit)}",
+            "frontier_concepts="
+            f"{_recent_items(curriculum_coverage_report.get('frontier_concepts', []), detail_limit)}",
+            "covered_concepts="
+            f"{len(curriculum_coverage_report.get('covered_concepts', []))}",
+        )
+        print(
+            "topology_tasks="
+            f"{curriculum_coverage_report.get('topology_tasks', 0)}",
+            "containment_tasks="
+            f"{curriculum_coverage_report.get('containment_tasks', 0)}",
+            "occlusion_tasks="
+            f"{curriculum_coverage_report.get('occlusion_tasks', 0)}",
+            "path_reasoning_tasks="
+            f"{curriculum_coverage_report.get('path_reasoning_tasks', 0)}",
+            "scaling_tasks="
+            f"{curriculum_coverage_report.get('scaling_tasks', 0)}",
+            "multi_concept_tasks="
+            f"{curriculum_coverage_report.get('multi_concept_tasks', 0)}",
         )
 
 
