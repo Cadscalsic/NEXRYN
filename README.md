@@ -1,101 +1,166 @@
-# NEXRYN Alpha 1.9
+ NEXRYN Alpha 1.9
 
 **Next Recursive Adaptive Reasoning Network**
 
-NEXRYN is an experimental cognitive architecture designed to explore adaptive intelligence through symbolic perception, concept discovery, truth governance, identity preservation, contextual reasoning, and causal understanding.
+NEXRYN is an experimental cognitive architecture designed to explore adaptive intelligence through symbolic perception, concept formation, governed reasoning, contextual memory, causal understanding, and knowledge reuse.
 
-Unlike conventional AI systems that rely primarily on large-scale statistical learning, NEXRYN investigates how intelligence can emerge from structured cognition, reusable knowledge, adaptive memory, and governed reasoning.
+Unlike conventional AI systems that rely primarily on large-scale statistical learning, NEXRYN investigates how intelligence can emerge from structured cognition, semantic abstractions, adaptive memory, causal relationships, and self-governed reasoning processes.
 
-Its long-term objective is to evolve into a unified cognitive runtime capable of learning from experience, preserving its identity, reasoning transparently, and improving its performance over time.
-
----
-
-## Core Principles
-
-* **Adaptive** — Continuously improves through experience and feedback.
-* **Modular** — Built as independent, interoperable cognitive layers.
-* **Explainable** — Produces traceable and auditable reasoning paths.
-* **Efficient** — Optimizes cognitive resources through memory reuse and bounded reasoning.
-* **Governed** — Protects identity continuity, truth integrity, and constitutional constraints.
+Its long-term objective is to evolve into a unified cognitive runtime capable of learning from experience, preserving identity continuity, discovering reusable knowledge, constructing causal models, and continuously improving its reasoning capabilities.
 
 ---
 
-## Current Capabilities
+ Core Principles
 
-### Cognitive Runtime
+ Adaptive
+Continuously improves through experience, feedback, and knowledge accumulation.
 
-* Symbolic perception and object extraction
-* Concept discovery and abstraction
-* Semantic and episodic memory
-* Context retrieval and strategy reuse
-* Program synthesis and transformation matching
-* World model evaluation
-* Causal alignment and dependency reasoning
-* Adaptive cognitive budgeting
-* Runtime self-monitoring and introspection
+ Modular
+Built as interoperable cognitive systems that can evolve independently.
 
-### Governance Framework
+ Explainable
+Produces traceable reasoning paths, semantic abstractions, and causal explanations.
 
-* Truth governance
-* Identity governance
-* Constitutional integrity protection
-* Contradiction detection
-* Contextual truth validation
-* Semantic drift monitoring
-* Identity continuity stabilization
+ Efficient
+Optimizes cognitive resources through memory reuse, bounded reasoning, and adaptive execution.
 
-### Learning Systems
-
-* Adaptive training pipeline
-* Strategy evolution
-* Transfer learning
-* Success-driven memory reinforcement
-* Cognitive reward and motivation systems
-* Self-repair mechanisms
+ Governed
+Protects truth integrity, identity continuity, constitutional constraints, and runtime stability.
 
 ---
 
-## In Active Development
+ Current Capabilities
 
-* Causal Spine
-* Contextual Truth Engine
-* Object-relative motion reasoning
-* Topological reasoning
-* Gravity and support-surface reasoning
-* Strategy memory and program memory
-* Curriculum manager
-* Rare concept scheduler
-* Cognitive economy and motivation layer
-* Fast governance path
-* World governance layer
+ Cognitive Runtime
 
+- Symbolic perception and object extraction
+- Concept discovery and abstraction
+- Semantic memory and contextual memory
+- Context retrieval and reuse
+- Strategy reuse and strategy evolution
+- Program synthesis and transformation matching
+- World model evaluation
+- Dependency reasoning
+- Causal reasoning
+- Transformation discovery
+- Multi-transformation analysis
+- Adaptive cognitive budgeting
+- Runtime self-monitoring and introspection
 
-## Vision
+ Knowledge Systems
+
+- Concept lifecycle management
+- Truth candidate generation
+- Truth validation and commitment
+- Concept graduation
+- Semantic abstraction
+- Transformation classification
+- Knowledge reuse mechanisms
+- Counterfactual reasoning support
+
+ Governance Framework
+
+- Truth governance
+- Identity governance
+- Constitutional integrity protection
+- Contradiction detection
+- Contextual truth validation
+- Semantic drift monitoring
+- Identity continuity stabilization
+- Runtime safety controls
+
+  Learning Systems
+
+- Adaptive training pipeline
+- Transfer learning
+- Strategy evolution
+- Success-driven reinforcement
+- Program reuse foundations
+- Cognitive reward systems
+- Self-repair mechanisms
+- Training diversity controls
+
+  Causal Systems
+
+- Transformation causal graphs
+- Multi-step causal chains
+- Dependency tracking
+- Causal alignment analysis
+- Causal relation discovery
+
+---
+
+  In Active Development
+
+  Advanced Cognitive Systems
+
+- Causal Spine
+- Contextual Truth Engine
+- Concept hierarchy construction
+- Multi-hop causal reasoning
+- Knowledge composition engine
+
+ Spatial & Structural Reasoning
+
+- Relative position reasoning
+- Object-relative motion reasoning
+- Topological reasoning
+- Topological change detection
+- Scaling reasoning
+- Containment reasoning
+- Occlusion reasoning
+- Hidden object recovery
+- Route completion
+- Path finding
+
+ Learning & Curriculum
+
+- Curriculum Manager
+- Rare Concept Scheduler
+- Concept Coverage Auditor
+- Dynamic Task Diversity Engine
+- Frontier Concept Discovery
+
+ Runtime Evolution
+
+- Cognitive economy layer
+- Motivation and reward architecture
+- Fast governance path
+- Program knowledge library
+- World governance layer
+
+---
+
+ Vision
 
 NEXRYN aims to transition from task-specific problem solving toward a unified cognitive runtime capable of:
 
-* Adaptive learning
-* Explainable reasoning
-* Causal understanding
-* Knowledge reuse
-* Context-aware decision making
-* Identity preservation
-* Autonomous self-improvement
+- Adaptive learning
+- Explainable reasoning
+- Concept formation
+- Causal understanding
+- Knowledge reuse
+- Context-aware decision making
+- Identity preservation
+- Autonomous self-improvement
 
-The ultimate goal is not to build a system that solves tasks from scratch every time, but a system that learns how to think more effectively with every new experience.
-
----
-
-## Status
-
-NEXRYN is an active research project and is currently in the alpha stage.
-
-Interfaces, APIs, runtime behaviors, and architectural components may change rapidly as the cognitive framework evolves.
-
-Contributions, experiments, and research collaborations are welcome.
+The long-term objective is not merely to solve individual tasks, but to develop a system capable of accumulating reusable cognitive knowledge and applying it to novel situations through structured reasoning and adaptive generalization.
 
 ---
 
-## License
+ Status
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+NEXRYN is an active experimental research project currently in the Alpha stage.
+
+The architecture evolves continuously as new cognitive capabilities, governance mechanisms, learning systems, and reasoning frameworks are developed and validated.
+
+Interfaces, APIs, runtime behaviors, and internal cognitive structures may change significantly between releases.
+
+Research contributions, experimentation, and collaboration are welcome.
+
+---
+
+ License
+
+This project is licensed under the MIT License.
+See the LICENSE file for details.
