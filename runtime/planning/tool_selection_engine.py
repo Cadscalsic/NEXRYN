@@ -108,11 +108,36 @@ class ToolSelectionEngine:
                 "topology_change",
                 "topological",
                 "connectivity",
+                "gravity_simulation",
+                "gravity",
+                "falling",
+                "support",
+                "unsupported",
+                "physics",
+                "collision",
             )
         ):
             enabled.add("spatial_reasoning")
             reasons["spatial_reasoning"] = (
                 "task identity or target concepts indicate spatial reasoning"
+            )
+        if any(
+            marker in f"{task_identity} {concept_text}"
+            for marker in (
+                "gravity_simulation",
+                "gravity",
+                "falling",
+                "support",
+                "unsupported",
+                "physics",
+                "collision",
+                "state_transition",
+            )
+        ):
+            enabled.add("dependency_reasoning")
+            enabled.add("spatial_reasoning")
+            reasons["dependency_reasoning"] = (
+                "task identity indicates process physics dependency reasoning"
             )
 
         if (
@@ -129,6 +154,12 @@ class ToolSelectionEngine:
         if reasoning_budget.process_semantics_enabled:
             enabled.add("process_semantics")
             reasons["process_semantics"] = "process complexity requires it"
+
+        if "dependency_reasoning" in enabled:
+            enabled.add("process_semantics")
+            reasons["process_semantics"] = (
+                "dependency reasoning requires process context synthesis"
+            )
 
         if reasoning_budget.temporal_reasoning_enabled:
             enabled.add("temporal_reasoning")

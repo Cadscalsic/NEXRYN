@@ -96,6 +96,10 @@ class DependencyGraphBuilder:
             comparison,
             object_scene_graph=object_scene_graph,
         )
+        identity_continuity_report = self._align_identity_continuity_report(
+            identity_continuity_report,
+            object_scene_graph,
+        )
         chain = self._chain_for_operation(
             operation,
             comparison,
@@ -308,6 +312,39 @@ class DependencyGraphBuilder:
             and event.get("input_color") != event.get("output_color")
             for event in (color_report or {}).get("recolor_events", [])
         )
+
+    def _align_identity_continuity_report(
+        self,
+        report: Mapping[str, Any],
+        object_scene_graph: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+        aligned = dict(report or {})
+        summary = (object_scene_graph or {}).get("summary", {})
+        if not summary.get("has_identity_split"):
+            return aligned
+
+        transition_counts = dict(aligned.get("transition_counts", {}))
+        transition_counts["IdentitySplit"] = max(
+            int(transition_counts.get("IdentitySplit", 0) or 0),
+            int(
+                summary.get("identity_transition_kinds", {})
+                .get("IdentitySplit", 1)
+                or 1
+            ),
+        )
+        aligned["transition_counts"] = transition_counts
+        aligned["continuity_state"] = "OBJECT_IDENTITY_SPLIT"
+        aligned["identity_split"] = True
+        aligned["identity_replication"] = False
+
+        evidence = []
+        for item in aligned.get("dependency_evidence", []):
+            item = dict(item)
+            if str(item.get("target", "")).startswith("object_continuity:"):
+                item["target"] = "object_continuity:OBJECT_IDENTITY_SPLIT"
+            evidence.append(item)
+        aligned["dependency_evidence"] = evidence
+        return aligned
 
 
 __all__ = [

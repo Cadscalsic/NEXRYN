@@ -14,8 +14,13 @@ from runtime.dependency.dependency_visibility_engine import (
     DependencyVisibilityEngine,
     dependency_visibility_engine,
 )
+from runtime.dependency.dependency_activation_manager import (
+    DependencyActivationManager,
+    dependency_activation_manager,
+)
 
 __all__ = [
+    "DependencyActivationManager",
     "DependencyChainBuilder",
     "DependencyChainExecutor",
     "DependencyCoherenceEngine",
@@ -24,6 +29,7 @@ __all__ = [
     "DependencyVisibilityEngine",
     "ExplanationEngine",
     "ReasonedDependencyChain",
+    "dependency_activation_manager",
     "dependency_coherence_engine",
     "dependency_visibility_engine",
 ]

@@ -155,6 +155,32 @@ def test_structural_capability_forces_dependency_reasoning_in_fast_mode():
     }
 
 
+def test_gravity_task_identity_forces_dependency_reasoning():
+    router = PreReasoningRouter()
+    profile = router.analyze_task({
+        "task_id": "arc_concept_gravity_simulation_15.json",
+        "input_grid": [
+            [0, 2, 0],
+            [0, 0, 0],
+            [1, 1, 1],
+        ],
+        "output_grid": [
+            [0, 0, 0],
+            [0, 2, 0],
+            [1, 1, 1],
+        ],
+    })
+    plan = router.build_execution_plan(profile, {"mode": "fast"})
+
+    assert profile["task_family"] == "gravity_simulation"
+    for concept in ["gravity", "falling", "support", "physics"]:
+        assert concept in profile["suspected_concepts"]
+    assert "dependency_reasoning" in profile["required_capabilities"]
+    assert "dependency_reasoning" in plan["enabled_layers"]
+    assert plan["dependency_activation_attempted"] is True
+    assert plan["dependency_activation_blocked"] is False
+
+
 def test_low_confidence_escalates_dependency_and_context():
     router = PreReasoningRouter()
     profile = router.analyze_task(_color_mapping_task())

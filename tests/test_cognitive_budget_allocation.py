@@ -176,3 +176,34 @@ def test_dependency_tool_selection_creates_runtime_request():
     lifecycle = state.context["dependency_lifecycle_report"]
     assert request["request_state"] == "REQUESTED"
     assert lifecycle["dependency_activation_state"] == "REQUESTED"
+
+
+def test_gravity_task_identity_promotes_physics_dependency_concepts():
+
+    profile, cost = _profile_and_cost({
+        "task_id": "arc_concept_gravity_simulation_15.json",
+        "input_grid": [
+            [0, 2, 0],
+            [0, 0, 0],
+            [1, 1, 1],
+        ],
+        "output_grid": [
+            [0, 0, 0],
+            [0, 2, 0],
+            [1, 1, 1],
+        ],
+    })
+    budget = CognitiveBudgetEngine().allocate(profile, cost)
+    selection = ToolSelectionEngine().select(profile, budget)
+
+    for concept in [
+        "gravity_simulation",
+        "gravity",
+        "falling",
+        "support",
+        "physics",
+    ]:
+        assert concept in profile.target_concepts
+    assert "dependency_reasoning" in profile.required_capabilities
+    assert "dependency_reasoning" in selection.enabled_tools
+    assert "process_semantics" in selection.enabled_tools

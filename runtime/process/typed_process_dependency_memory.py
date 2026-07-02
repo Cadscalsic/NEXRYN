@@ -67,6 +67,15 @@ DEFAULT_TYPED_PROCESS_DEPENDENCIES = {
         ("directional_motion", "preserves", "object_identity", 0.88),
         ("directional_motion", "constrains", "direction_vector", 0.87),
     ],
+    "gravity": [
+        ("gravity", "requires", "support_state", 0.92),
+        ("support_state", "constrains", "falling", 0.91),
+        ("falling", "requires", "downward_motion", 0.90),
+        ("downward_motion", "derives_from", "directional_motion", 0.89),
+        ("falling", "causes", "support_collision", 0.88),
+        ("support_collision", "enables", "rest_state", 0.87),
+        ("gravity", "requires", "object_identity", 0.91),
+    ],
     "topological_growth": [
         ("topological_growth", "derives_from", "growth", 0.88),
         ("topological_growth", "requires", "identity_persistence", 0.91),
@@ -127,6 +136,37 @@ DEFAULT_TYPED_PROCESS_DEPENDENCIES = {
         ("set_reasoning", "requires", "object_set_membership", 0.91),
         ("set_reasoning", "requires", "cardinality", 0.90),
         ("object_set_membership", "requires", "object_identity", 0.89),
+    ],
+    "path_finding": [
+        ("path_finding", "requires", "goal_state", 0.93),
+        ("path_finding", "requires", "start_state", 0.92),
+        ("path_finding", "requires", "reachability_graph", 0.92),
+        ("reachability_graph", "requires", "connectivity_map", 0.91),
+        ("connectivity_map", "requires", "spatial_adjacency", 0.90),
+        ("reachability_graph", "enables", "reachable_nodes", 0.90),
+        ("reachable_nodes", "enables", "path_candidates", 0.89),
+        ("path_candidates", "enables", "best_path", 0.89),
+        ("best_path", "constrains", "route_completion", 0.88),
+    ],
+    "route_completion": [
+        ("route_completion", "requires", "partial_route", 0.92),
+        ("route_completion", "requires", "missing_segment", 0.90),
+        ("missing_segment", "requires", "path_candidates", 0.89),
+        ("path_candidates", "requires", "reachability_graph", 0.90),
+        ("route_completion", "enables", "completed_route", 0.90),
+    ],
+    "reachability": [
+        ("reachability", "requires", "start_state", 0.91),
+        ("reachability", "requires", "goal_state", 0.91),
+        ("reachability", "requires", "connectivity_map", 0.90),
+        ("connectivity_map", "enables", "reachable_nodes", 0.90),
+        ("reachable_nodes", "enables", "goal_reachable", 0.88),
+    ],
+    "path_construction": [
+        ("path_construction", "requires", "reachable_nodes", 0.91),
+        ("path_construction", "requires", "path_candidates", 0.90),
+        ("path_candidates", "enables", "connector_sequence", 0.89),
+        ("connector_sequence", "enables", "completed_path", 0.88),
     ],
 }
 

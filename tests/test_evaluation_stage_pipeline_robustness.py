@@ -130,6 +130,27 @@ def test_introspection_attributes_path_finding_from_task_signal():
     )
 
 
+def test_introspection_attributes_gravity_from_task_identity():
+    report = IntrospectionEngine().analyze_cycle(
+        {"semantics": {"concept_count": 0}},
+        {"accuracy": 0.80, "success": False},
+        {
+            "task_id": "arc_concept_gravity_simulation_09.json",
+            "input_summary": {"object_count": 2, "density": 0.20},
+            "output_summary": {"object_count": 2, "density": 0.20},
+        },
+    )
+
+    concepts = set(report["attributed_concepts"])
+
+    assert "gravity" in concepts
+    assert "falling" in concepts
+    assert "support" in concepts
+    assert "collision" in concepts
+    assert "rest_state" in concepts
+    assert "spatial_delta" in report["semantic_attribution_evidence"]
+
+
 def test_introspection_attributes_rotation_from_grid_geometry():
     report = IntrospectionEngine().analyze_cycle(
         {"semantics": {"concept_count": 0}},

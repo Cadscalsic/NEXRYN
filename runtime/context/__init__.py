@@ -280,6 +280,13 @@ from runtime.context.context_validator import (
     validate_context_collection
 )
 
+from runtime.context.context_integrity_guard import (
+
+    ContextIntegrityGuard,
+
+    context_integrity_guard
+)
+
 from runtime.process.process_semantic_engine import (
 
     ProcessSemanticEngine,
@@ -480,6 +487,10 @@ __all__ = [
     "ContextHierarchyEngine",
 
     "context_hierarchy_engine",
+
+    "ContextIntegrityGuard",
+
+    "context_integrity_guard",
 
     "is_valid_context",
 

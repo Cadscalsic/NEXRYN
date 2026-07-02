@@ -35,6 +35,15 @@ PROCESS_SEMANTIC_RULES = {
         "transition_steps": ["position_delta_applied"],
         "postconditions": ["position_updated"],
     },
+    "gravity": {
+        "preconditions": ["object_identity_exists", "support_state_known"],
+        "transition_steps": [
+            "unsupported_state_detected",
+            "downward_motion_applied",
+            "support_collision_resolved",
+        ],
+        "postconditions": ["rest_state_known"],
+    },
     "topological_growth": {
         "preconditions": ["topology_anchor_exists"],
         "transition_steps": ["connectivity_expands"],
@@ -70,7 +79,57 @@ PROCESS_SEMANTIC_RULES = {
         "transition_steps": ["set_relation_evaluated"],
         "postconditions": ["set_constraint_known"],
     },
+    "path_finding": {
+        "preconditions": ["start_state_known", "goal_state_known"],
+        "transition_steps": [
+            "reachability_graph_built",
+            "path_candidates_generated",
+            "best_path_selected",
+        ],
+        "postconditions": ["route_to_goal_known"],
+    },
+    "route_completion": {
+        "preconditions": ["partial_route_known", "goal_state_known"],
+        "transition_steps": [
+            "missing_segment_identified",
+            "connector_sequence_constructed",
+        ],
+        "postconditions": ["completed_route_exists"],
+    },
+    "reachability": {
+        "preconditions": ["connectivity_map_known"],
+        "transition_steps": ["reachable_nodes_computed"],
+        "postconditions": ["goal_reachability_known"],
+    },
+    "path_construction": {
+        "preconditions": ["reachable_nodes_known"],
+        "transition_steps": ["path_candidates_constructed"],
+        "postconditions": ["completed_path_exists"],
+    },
+    "symbolic_remapping": {
+        "preconditions": ["source_symbols_known", "target_palette_known"],
+        "transition_steps": [
+            "mapping_domain_identified",
+            "symbol_value_pairs_inferred",
+            "mapping_consistency_checked",
+        ],
+        "postconditions": ["remapped_symbol_values_known"],
+    },
 }
+
+DEFAULT_PROCESS_CONCEPTS = (
+    "growth",
+    "propagation",
+    "replication",
+    "directional_motion",
+    "topological_growth",
+    "object_counting",
+    "cardinality",
+    "quantity_preservation",
+    "quantity_transformation",
+    "numerical_reasoning",
+    "set_reasoning",
+)
 
 
 MISSING_DEPENDENCY_DEFINITIONS = {
@@ -104,6 +163,10 @@ MISSING_DEPENDENCY_DEFINITIONS = {
         DEFAULT_TYPED_PROCESS_DEPENDENCIES["numerical_reasoning"]
     ),
     "set_reasoning": DEFAULT_TYPED_PROCESS_DEPENDENCIES["set_reasoning"],
+    "path_finding": DEFAULT_TYPED_PROCESS_DEPENDENCIES["path_finding"],
+    "route_completion": DEFAULT_TYPED_PROCESS_DEPENDENCIES["route_completion"],
+    "reachability": DEFAULT_TYPED_PROCESS_DEPENDENCIES["reachability"],
+    "path_construction": DEFAULT_TYPED_PROCESS_DEPENDENCIES["path_construction"],
 }
 
 
@@ -129,7 +192,7 @@ class ProcessSemanticModel:
 
 class ProcessSemanticEngine:
     system_name = "process_semantic_engine"
-    process_concepts = tuple(PROCESS_SEMANTIC_RULES)
+    process_concepts = DEFAULT_PROCESS_CONCEPTS
 
     def __init__(
         self,
@@ -211,12 +274,20 @@ class ProcessSemanticEngine:
         runtime_contexts = (
             runtime_contexts if isinstance(runtime_contexts, Mapping) else {}
         )
+        concepts = list(self.process_concepts)
+        for concept in runtime_contexts.keys():
+            concept = str(concept)
+            if (
+                concept in PROCESS_SEMANTIC_RULES
+                and concept not in concepts
+            ):
+                concepts.append(concept)
         models = {
             concept: self.synthesize(
                 concept,
                 runtime_context=runtime_contexts.get(concept, runtime_contexts),
             )
-            for concept in self.process_concepts
+            for concept in concepts
         }
         strengths = [
             model.get("process_context_strength", 0.0)
@@ -287,6 +358,7 @@ process_semantic_engine = ProcessSemanticEngine()
 
 __all__ = [
     "MISSING_DEPENDENCY_DEFINITIONS",
+    "DEFAULT_PROCESS_CONCEPTS",
     "PROCESS_SEMANTIC_RULES",
     "ProcessSemanticEngine",
     "ProcessSemanticModel",

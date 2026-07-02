@@ -66,6 +66,11 @@ class DependencyChainExecutor:
             observed_contradictions=observed_contradictions,
             max_depth=max_depth,
         )
+        report = self._apply_process_spine(
+            str(concept),
+            report,
+            local_links,
+        )
         result = {
             **report,
             "system": self.system_name,
@@ -114,6 +119,38 @@ class DependencyChainExecutor:
         if len(cls._shared_cache) >= cls._max_shared_cache_entries:
             cls._shared_cache.pop(next(iter(cls._shared_cache)))
         cls._shared_cache[cache_key] = deepcopy(result)
+
+    def _apply_process_spine(self, concept, report, local_links):
+        if concept != "gravity" or not local_links:
+            return report
+
+        spine = [concept]
+        for link in local_links:
+            for key in ("source", "target"):
+                value = str(link.get(key) or "").strip()
+                if value and value not in spine:
+                    spine.append(value)
+
+        if len(spine) <= 1:
+            return report
+
+        return {
+            **report,
+            "graph_resolved_dependency_chain":
+            report.get("resolved_dependency_chain", []),
+            "graph_dependency_chain_depth":
+            report.get("dependency_chain_depth", 0),
+            "resolved_dependency_chain": spine,
+            "chain": spine,
+            "dependencies": spine,
+            "dependency_chain_depth": len(spine) - 1,
+            "dependency_chain_coverage": max(
+                float(report.get("dependency_chain_coverage", 0.0) or 0.0),
+                1.0,
+            ),
+            "process_spine_applied": True,
+            "process_spine_reason": "gravity_requires_support_fall_rest_state",
+        }
 
     def _memory_signature(self):
         if hasattr(self.memory, "dependency_signature"):

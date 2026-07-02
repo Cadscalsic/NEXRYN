@@ -198,10 +198,17 @@ class ProcessSemanticContextEngine:
             transition_graph_report["initial_state"],
             "transition_steps":
             semantic_context_report["transition_steps"],
+            "preconditions":
+            semantic_context_report["preconditions"],
+            "postconditions":
+            semantic_context_report["postconditions"],
+            "invariants":
+            semantic_context_report["invariants"],
             "final_state":
             transition_graph_report["final_state"],
             "temporal_constraints":
             semantic_context_report["temporal_constraints"],
+            "process_context_generated": True,
             "process_semantic_context_synthesized": True,
             "process_context_discovery_report": discovery,
             "process_context_validation_report": validation,

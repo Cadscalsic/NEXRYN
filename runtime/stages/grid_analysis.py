@@ -4,6 +4,8 @@
 
 from datetime import datetime
 
+from runtime.context.context_integrity_guard import context_integrity_guard
+
 
 # ============================================
 # GRID ANALYSIS STAGE
@@ -48,17 +50,15 @@ def grid_analysis_stage(context):
     # VALIDATE CONTEXT
     # ========================================
 
-    if "input_grid" not in context:
+    integrity_report = context_integrity_guard.require(
+        context,
+        "grid_analysis",
+        ("input_grid", "output_grid"),
+    )
 
-        raise ValueError(
-            "Missing input_grid"
-        )
-
-    if "output_grid" not in context:
-
-        raise ValueError(
-            "Missing output_grid"
-        )
+    stage_report[
+        "runtime_context_integrity_report"
+    ] = integrity_report
 
     # ========================================
     # LOAD GRIDS

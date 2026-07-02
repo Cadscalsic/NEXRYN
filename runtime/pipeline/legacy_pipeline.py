@@ -15,7 +15,11 @@ import time
 from runtime.kernel.runtime_kernel import RuntimeKernel
 from runtime.state.runtime_state import RuntimeState
 from runtime.scheduler.runtime_scheduler import RuntimeScheduler
-from runtime.dependency import DependencyChainExecutor
+from runtime.dependency import (
+    DependencyChainExecutor,
+    dependency_activation_manager,
+)
+from runtime.context.context_integrity_guard import context_integrity_guard
 from runtime.process import ProcessSemanticEngine
 
 # ============================================
@@ -42,7 +46,7 @@ from runtime.learning.saturation_controller import (
     learning_saturation_controller,
 )
 from runtime.reporting import CompactReportBuilder
-from runtime.cache import CacheManager
+from runtime.cache import CacheManager, concept_lifecycle_cache
 from runtime.truth import (
     truth_lifecycle_synchronizer,
     promotion_engine,
@@ -1645,6 +1649,40 @@ class AdaptiveCognitivePipeline:
         runtime_context["task_profile"] = task_profile
         runtime_context["pre_reasoning_execution_plan"] = execution_plan
         runtime_context["execution_plan"] = execution_plan
+        if execution_plan.get("dependency_reasoning_enabled"):
+            runtime_context["runtime_tool_requests"] = {
+                **runtime_context.get("runtime_tool_requests", {}),
+                "dependency_reasoning": {
+                    "tool_name": "dependency_reasoning",
+                    "request_state": "REQUESTED",
+                    "requested_by": "pre_reasoning_router",
+                    "activation_state": "DEPENDENCY_REQUIRED",
+                    "reason": execution_plan.get(
+                        "dependency_activation_reason",
+                    ),
+                    "matched_signals": (
+                        execution_plan.get(
+                            "dependency_activation_policy",
+                            {},
+                        ).get("matched_signals", [])
+                    ),
+                },
+            }
+            runtime_context["enabled_tools"] = sorted(
+                set(runtime_context.get("enabled_tools", []) or [])
+                | {"dependency_reasoning"}
+            )
+            runtime_context["dependency_lifecycle_report"] = {
+                **runtime_context.get("dependency_lifecycle_report", {}),
+                "system": "dependency_runtime",
+                "report_state": "pending",
+                "dependency_activation_state": "REQUESTED",
+                "dependency_requested_by": "pre_reasoning_router",
+                "dependency_activation_reason":
+                execution_plan.get("dependency_activation_reason"),
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+            }
         runtime_context["pre_reasoning_router_report"] = (
             self.pre_reasoning_router.report()
         )
@@ -1899,6 +1937,34 @@ class AdaptiveCognitivePipeline:
         dependency_state = self._dependency_activation_state(
             dependency_time,
         )
+        introspection_report = runtime_context.get(
+            "introspection_report",
+            {},
+        )
+        if not isinstance(introspection_report, dict):
+            introspection_report = {}
+        dependency_activation_trace = runtime_context.get(
+            "DEPENDENCY_ACTIVATION_TRACE",
+            {},
+        )
+        dependency_lifecycle_report = runtime_context.get(
+            "dependency_lifecycle_report",
+            {},
+        )
+        lifecycle_cost = round(
+            sum(
+                float(item.get("seconds", 0.0) or 0.0)
+                for item in module_timings
+                if isinstance(item, dict)
+                and item.get("module") in {
+                    "concept_lifecycle_report",
+                    "concept_lifecycle",
+                    "knowledge_concept_lifecycle_report",
+                }
+            ),
+            4,
+        )
+        lifecycle_cache_report = concept_lifecycle_cache.report()
         process_context_count = (
             runtime_context.get("process_context_registry_report", {})
             if isinstance(
@@ -1931,6 +1997,26 @@ class AdaptiveCognitivePipeline:
             "dependency_chain_depth": dependency_depth,
             "dependency_chain_coverage": dependency_coverage,
             "dependency_activation_state": dependency_state,
+            "dependency_activation_reason": (
+                dependency_activation_trace.get("dependency_activation_reason")
+                or dependency_lifecycle_report.get(
+                    "dependency_activation_reason",
+                )
+            ),
+            "dependency_skip_reason": (
+                dependency_activation_trace.get("dependency_skip_reason")
+                or dependency_lifecycle_report.get("dependency_skip_reason")
+            ),
+            "dependency_usage_rate":
+            dependency_activation_trace.get("dependency_usage_rate", 0.0),
+            "metric_reconciliation_report": (
+                self._metric_reconciliation_report(
+                    runtime_context,
+                    introspection_report,
+                    dependency_state,
+                    dependency_time,
+                )
+            ),
             "dependency_time": dependency_time,
             "dependency_reasoning_time_seconds": dependency_time,
             "dependency_executor_cache_hits":
@@ -1939,6 +2025,10 @@ class AdaptiveCognitivePipeline:
             self.performance_counters["dependency_executor_cache_misses"],
             "dependency_executor_cache_report":
             dependency_executor_cache_report,
+            "concept_lifecycle_cost": lifecycle_cost,
+            "concept_lifecycle_cache_hits":
+            lifecycle_cache_report.get("concept_lifecycle_cache_hits", 0),
+            "concept_lifecycle_cache_report": lifecycle_cache_report,
             "explanation_paths_generated":
             self.performance_counters["explanation_paths_generated"],
             "telemetry_enabled":
@@ -2230,6 +2320,83 @@ class AdaptiveCognitivePipeline:
             adaptive_reuse_report,
             context_reuse_report,
         )
+
+    def _metric_reconciliation_report(
+        self,
+        runtime_context,
+        introspection_report,
+        dependency_state,
+        dependency_time,
+    ):
+
+        runtime_context = (
+            runtime_context
+            if isinstance(runtime_context, dict)
+            else {}
+        )
+        introspection_report = (
+            introspection_report
+            if isinstance(introspection_report, dict)
+            else {}
+        )
+        dependency_executed = self.performance_counters.get(
+            "dependency_chains_executed",
+            0,
+        )
+        dependency_depth = runtime_context.get(
+            "dependency_chain_depth",
+            0,
+        )
+        dependency_requested = self._dependency_reasoning_requested(
+            runtime_context,
+        )
+        inferred_depth = int(
+            introspection_report.get("reasoning_depth", 0) or 0
+        )
+        inferred_routes = int(
+            introspection_report.get("active_routes", 0) or 0
+        )
+        inferred_nodes = int(
+            introspection_report.get("execution_nodes", 0) or 0
+        )
+        attributed = list(
+            introspection_report.get("attributed_concepts", []) or []
+        )
+        dependency_concepts = self._dependency_reasoning_concepts(
+            runtime_context,
+        )
+        mismatch = (
+            (inferred_depth > 0 or inferred_routes > 0 or inferred_nodes > 0)
+            and dependency_executed <= 0
+            and dependency_depth <= 0
+        )
+        reason = "metrics_reconciled"
+        if mismatch:
+            reason = (
+                "introspection_measures_pipeline_activity_while_performance_"
+                "measures_executed_dependency_runtime"
+            )
+
+        return {
+            "system": "metric_reconciliation",
+            "report_state": "final",
+            "metric_reconciliation_state": (
+                "MISMATCH_EXPLAINED" if mismatch else "CONSISTENT"
+            ),
+            "introspection_metric_source": "pipeline_activity_inference",
+            "performance_metric_source": "dependency_runtime_counters",
+            "introspection_reasoning_depth": inferred_depth,
+            "introspection_route_count": inferred_routes,
+            "introspection_execution_nodes": inferred_nodes,
+            "dependency_requested": dependency_requested,
+            "dependency_activation_state": dependency_state,
+            "dependency_chains_executed": dependency_executed,
+            "dependency_chain_depth": dependency_depth,
+            "dependency_reasoning_time_seconds": dependency_time,
+            "attributed_concepts": attributed,
+            "dependency_runnable_concepts": dependency_concepts,
+            "reconciliation_reason": reason,
+        }
 
     def _dependency_activation_state(self, dependency_time, requested=False):
 
@@ -2867,6 +3034,13 @@ class AdaptiveCognitivePipeline:
                 self.runtime.set_stage(
                     stage_name
                 )
+
+                if stage_name == "grid_analysis":
+                    context_integrity_guard.require(
+                        runtime_context,
+                        "grid_analysis",
+                        ("input_grid", "output_grid"),
+                    )
 
                 if stage_name == "evaluation":
                     runtime_context = (
@@ -3984,12 +4158,23 @@ class AdaptiveCognitivePipeline:
             {},
         )
 
+        self.runtime.bulk_update_context(
+            runtime_context
+        )
+
         self.runtime.apply_reasoning_budget(
             reasoning_budget
         )
 
         self.runtime.apply_tool_selection(
             tool_selection
+        )
+
+        synchronized_context = dict(
+            self.runtime.get_context()
+        )
+        runtime_context.update(
+            synchronized_context
         )
 
         meta_decision_report = self.run_meta_decision_cycle(
@@ -4588,6 +4773,34 @@ class AdaptiveCognitivePipeline:
         runtime_context = (
             self.runtime.get_context()
         )
+        links_loaded = (
+            self.dependency_chain_executor
+            .memory
+            .links_loaded
+        )
+        activation_decision = dependency_activation_manager.evaluate(
+            runtime_context,
+            runtime_context.get(
+                "pre_reasoning_task_profile",
+                runtime_context.get("task_profile", {}),
+            ),
+            links_loaded=links_loaded,
+        )
+        runtime_context["dependency_activation_manager_report"] = (
+            activation_decision
+        )
+        runtime_context["dependency_activation_reason"] = (
+            activation_decision.get("dependency_activation_reason")
+        )
+        if activation_decision.get("activation_state") in {
+            "DEPENDENCY_REQUIRED",
+            "DEPENDENCY_RECOMMENDED",
+        }:
+            runtime_context = dependency_activation_manager.promote_request(
+                runtime_context,
+                activation_decision,
+            )
+            self.runtime.bulk_update_context(runtime_context)
         dependency_requested = self._dependency_reasoning_requested(
             runtime_context
         )
@@ -4614,11 +4827,6 @@ class AdaptiveCognitivePipeline:
                 "dependency_reasoning",
                 runtime_context,
             )
-            links_loaded = (
-                self.dependency_chain_executor
-                .memory
-                .links_loaded
-            )
             link_usage = explain_dependency_link_usage({
                 "process_dependency_links_loaded": links_loaded,
                 "process_dependency_links_used": 0,
@@ -4643,7 +4851,8 @@ class AdaptiveCognitivePipeline:
                 "dependency_activation_state": "SKIPPED",
                 "dependency_time": dependency_time,
                 "dependency_activation_reason":
-                skipped.get("activation_rule"),
+                runtime_context.get("dependency_activation_reason")
+                or skipped.get("activation_rule"),
                 "dependency_chain_generation_attempted": False,
                 "dependency_chain_generation_successful": False,
                 "dependency_chain_generation_failed": False,
@@ -4661,6 +4870,21 @@ class AdaptiveCognitivePipeline:
                 **link_usage,
                 "bypass_reason": skipped.get("skip_reason"),
             }]
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE"] = {
+                "system": "dependency_activation_trace",
+                "requested": dependency_requested,
+                "selected": False,
+                "executed": False,
+                "skipped": True,
+                "blocked": bool(link_usage["dependency_activation_blocked"]),
+                "unused": links_loaded,
+                "activation_state": "DEPENDENCY_NOT_REQUIRED",
+                "dependency_activation_reason":
+                runtime_context.get("dependency_activation_reason"),
+                "dependency_skip_reason": skipped.get("skip_reason"),
+                "process_dependency_links_loaded": links_loaded,
+                "process_dependency_links_used": 0,
+            }
             runtime_context[
                 "dependency_lifecycle_report"
             ] = {
@@ -4671,6 +4895,8 @@ class AdaptiveCognitivePipeline:
                 "dependency_chains_executed": 0,
                 "dependency_outputs_generated": 0,
                 "skip_reason": skipped.get("skip_reason"),
+                "dependency_activation_reason":
+                runtime_context.get("dependency_activation_reason"),
             }
             self.runtime.bulk_update_context(
                 runtime_context
@@ -4715,6 +4941,8 @@ class AdaptiveCognitivePipeline:
             })
             runtime_context["dependency_reasoning_report"].update({
                 **link_usage,
+                "dependency_activation_reason":
+                runtime_context.get("dependency_activation_reason"),
                 "dependency_chain_generation_attempted": False,
                 "dependency_chain_generation_successful": False,
                 "dependency_chain_generation_failed": False,
@@ -4729,6 +4957,23 @@ class AdaptiveCognitivePipeline:
             runtime_context[
                 "dependency_execution_trace"
             ] = []
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE"] = {
+                "system": "dependency_activation_trace",
+                "requested": dependency_requested,
+                "selected": False,
+                "executed": False,
+                "skipped": True,
+                "blocked": bool(link_usage["dependency_activation_blocked"]),
+                "unused": link_usage["dependency_links_skipped"],
+                "activation_state":
+                activation_decision.get("activation_state"),
+                "dependency_activation_reason":
+                runtime_context.get("dependency_activation_reason"),
+                "dependency_skip_reason": "disabled_by_tool_selection",
+                "process_dependency_links_loaded":
+                link_usage["process_dependency_links_loaded"],
+                "process_dependency_links_used": 0,
+            }
             runtime_context[
                 "dependency_lifecycle_report"
             ] = {
@@ -4739,6 +4984,8 @@ class AdaptiveCognitivePipeline:
                 "dependency_chains_executed": 0,
                 "dependency_outputs_generated": 0,
                 "skip_reason": "disabled_by_tool_selection",
+                "dependency_activation_reason":
+                runtime_context.get("dependency_activation_reason"),
             }
 
             self.runtime.bulk_update_context(
@@ -4753,9 +5000,31 @@ class AdaptiveCognitivePipeline:
         concepts = self._dependency_reasoning_concepts(
             runtime_context
         )
+        attribution_report = runtime_context.get(
+            "semantic_attribution_report",
+            {},
+        )
+        if not isinstance(attribution_report, dict):
+            attribution_report = {}
+        runtime_context["dependency_activation_bridge_report"] = {
+            "system": "dependency_activation_bridge",
+            "report_state": "active",
+            "bridge_source": "concept_attribution",
+            "attributed_concepts": list(
+                attribution_report.get("attributed_concepts", []) or []
+            ),
+            "dependency_runnable_concepts": list(concepts),
+            "dependency_runtime_requested": dependency_requested,
+            "dependency_activation_state": (
+                activation_decision.get("activation_state")
+            ),
+        }
         max_concepts = self.reasoning_budget.get("max_concepts")
         if max_concepts is not None:
             concepts = concepts[:max_concepts]
+            runtime_context["dependency_activation_bridge_report"][
+                "selected_dependency_concepts"
+            ] = list(concepts)
 
         dependency_reports = {}
         dependency_traces = []
@@ -5068,10 +5337,24 @@ class AdaptiveCognitivePipeline:
                     or len(report.get("resolved_dependency_chain", []))
                     or len(report.get("chain", []))
                 )
+            if (
+                report.get("process_dependency_links_used", 0) <= 0
+                and report.get("dependency_chain_depth", 0) > 0
+            ):
+                report["process_dependency_links_used"] = min(
+                    report.get("process_dependency_links_loaded", links_loaded),
+                    max(
+                        int(report.get("dependency_chain_depth", 0) or 0),
+                        len(report.get("resolved_dependency_chain", [])),
+                        len(report.get("chain", [])),
+                    ),
+                )
             link_usage = explain_dependency_link_usage(report)
             report.update({
                 **link_usage,
                 "dependency_activation_reason":
+                runtime_context.get("dependency_activation_reason")
+                or
                 runtime_context.get(
                     "pre_reasoning_execution_plan",
                     {},
@@ -5259,6 +5542,42 @@ class AdaptiveCognitivePipeline:
         runtime_context[
             "DEPENDENCY_EXECUTION_TRACE"
         ] = runtime_context["dependency_execution_trace"]
+        loaded_total = (
+            self.dependency_chain_executor
+            .memory
+            .links_loaded
+        )
+        used_total = self.performance_counters[
+            "process_dependency_links_used"
+        ]
+        runtime_context["DEPENDENCY_ACTIVATION_TRACE"] = {
+            "system": "dependency_activation_trace",
+            "requested": dependency_requested,
+            "selected": bool(concepts),
+            "executed": bool(dependency_reports),
+            "skipped": not bool(dependency_reports),
+            "blocked": loaded_total > 0 and used_total <= 0,
+            "unused": max(loaded_total - used_total, 0),
+            "activation_state": (
+                "DEPENDENCY_COMPLETED"
+                if dependency_reports
+                else activation_decision.get("activation_state")
+            ),
+            "dependency_activation_reason":
+            runtime_context.get("dependency_activation_reason"),
+            "dependency_skip_reason": (
+                None
+                if dependency_reports
+                else "no_dependency_concepts_available"
+            ),
+            "process_dependency_links_loaded": loaded_total,
+            "process_dependency_links_used": used_total,
+            "dependency_usage_rate": (
+                round(used_total / loaded_total, 4)
+                if loaded_total
+                else 0.0
+            ),
+        }
         runtime_context[
             "dependency_lifecycle_report"
         ] = {
@@ -5284,6 +5603,16 @@ class AdaptiveCognitivePipeline:
             self.performance_counters["dependency_chain_generation_failed"],
             "dependency_time": dependency_time,
             "dependency_outputs_generated": len(dependency_reports),
+            "dependency_activation_reason":
+            runtime_context.get("dependency_activation_reason"),
+            "dependency_skip_reason":
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE"].get(
+                "dependency_skip_reason"
+            ),
+            "dependency_usage_rate":
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE"].get(
+                "dependency_usage_rate",
+            ),
             "downstream_consumers": [
                 "context_truth_advancement",
                 "promotion_engine",
@@ -5336,7 +5665,8 @@ class AdaptiveCognitivePipeline:
                 ] == 0
             ),
             "dependency_activation_reason":
-            runtime_context.get(
+            runtime_context.get("dependency_activation_reason")
+            or runtime_context.get(
                 "pre_reasoning_execution_plan",
                 {},
             ).get("dependency_activation_reason"),
@@ -5369,6 +5699,10 @@ class AdaptiveCognitivePipeline:
             self.performance_counters["process_dependency_links_used"],
             "process_dependency_links_skipped":
             self.performance_counters["process_dependency_links_skipped"],
+            "dependency_usage_rate":
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE"].get(
+                "dependency_usage_rate",
+            ),
             "dependency_activation_state":
             dependency_lifecycle_state,
             "dependency_time":
@@ -5706,12 +6040,40 @@ class AdaptiveCognitivePipeline:
     ):
 
         derived_contexts = []
+        process_registry = runtime_context.get(
+            "process_context_registry_report",
+            {},
+        )
+        registered_process_contexts = (
+            process_registry.get("process_contexts", [])
+            if isinstance(process_registry, dict)
+            else []
+        )
+        process_by_concept = {
+            str(context.get("concept")): context
+            for context in registered_process_contexts
+            if isinstance(context, dict) and context.get("concept")
+        }
         for context in semantic_contexts:
             if not isinstance(context, dict):
                 continue
 
             concept = context.get("concept", "runtime_context")
             process_context = context.get("process_context", {})
+            dependency_chain = context.get("dependency_chain", [])
+            dependency_report = self._dependency_report_for_context(
+                concept,
+                dependency_chain,
+                runtime_context,
+            )
+            if not process_context:
+                process_context = process_by_concept.get(str(concept), {})
+            if not process_context:
+                process_context = self._process_context_from_dependency(
+                    concept,
+                    dependency_report,
+                    context,
+                )
             if isinstance(process_context, dict) and process_context:
                 derived_contexts.append({
                     **process_context,
@@ -5731,7 +6093,8 @@ class AdaptiveCognitivePipeline:
                     ),
                     "source": "semantic_context_builder.process_context",
                     "source_semantic_context": context.get("context_id"),
-                    "dependency_chain": context.get("dependency_chain", []),
+                    "dependency_chain": dependency_chain,
+                    "dependency_context_bridge": True,
                 })
 
             causal_score = context.get("causal_score")
@@ -5739,6 +6102,11 @@ class AdaptiveCognitivePipeline:
                 causal_confidence = float(causal_score)
             except (TypeError, ValueError):
                 causal_confidence = 0.0
+            if causal_confidence <= 0.0:
+                causal_confidence = self._causal_confidence_from_dependency(
+                    dependency_report,
+                    process_context,
+                )
             if causal_confidence > 0.0:
                 derived_contexts.append({
                     "context_id": f"causal_context:{concept}",
@@ -5746,15 +6114,22 @@ class AdaptiveCognitivePipeline:
                     "concept": concept,
                     "confidence": round(causal_confidence, 4),
                     "causal_score": round(causal_confidence, 4),
-                    "dependency_chain": context.get("dependency_chain", []),
+                    "dependency_chain": dependency_chain,
                     "process_context": process_context,
-                    "source": "semantic_context_builder.causal_score",
+                    "source": "dependency_process_context_bridge.causal",
                     "source_semantic_context": context.get("context_id"),
+                    "dependency_context_bridge": True,
                 })
 
             world_context = context.get("world_context", {})
             if not world_context:
                 world_context = runtime_context.get("world_model_report", {})
+            if not world_context:
+                world_context = self._world_context_from_dependency(
+                    concept,
+                    dependency_report,
+                    runtime_context,
+                )
             if isinstance(world_context, dict) and world_context:
                 world_confidence = (
                     world_context.get("confidence")
@@ -5774,12 +6149,177 @@ class AdaptiveCognitivePipeline:
                     "context_type": "WORLD_CONTEXT",
                     "concept": world_context.get("concept", concept),
                     "confidence": world_confidence,
-                    "source": "semantic_context_builder.world_context",
+                    "source": "dependency_process_context_bridge.world",
                     "source_semantic_context": context.get("context_id"),
-                    "dependency_chain": context.get("dependency_chain", []),
+                    "dependency_chain": dependency_chain,
+                    "dependency_context_bridge": True,
                 })
 
         return derived_contexts
+
+    def _dependency_report_for_context(
+        self,
+        concept,
+        dependency_chain,
+        runtime_context,
+    ):
+
+        dependency_chains = runtime_context.get("process_dependency_chains", {})
+        if isinstance(dependency_chains, dict):
+            report = dependency_chains.get(str(concept))
+            if isinstance(report, dict):
+                return report
+        if isinstance(dependency_chain, dict):
+            return dependency_chain
+        return {
+            "concept": concept,
+            "resolved_dependency_chain": list(dependency_chain or []),
+            "dependency_chain_depth": len(list(dependency_chain or [])),
+            "dependency_chain_coverage": (
+                1.0 if dependency_chain else 0.0
+            ),
+        }
+
+    def _process_context_from_dependency(
+        self,
+        concept,
+        dependency_report,
+        semantic_context,
+    ):
+
+        if not isinstance(dependency_report, dict):
+            return {}
+        chain = (
+            dependency_report.get("resolved_dependency_chain")
+            or dependency_report.get("chain")
+            or semantic_context.get("dependency_chain", [])
+            or []
+        )
+        depth = int(dependency_report.get("dependency_chain_depth", 0) or 0)
+        coverage = float(
+            dependency_report.get("dependency_chain_coverage", 0.0) or 0.0
+        )
+        if not chain and depth <= 0 and coverage <= 0.0:
+            return {}
+        confidence = max(
+            float(semantic_context.get("confidence", 0.0) or 0.0),
+            float(dependency_report.get("dependency_coherence", 0.0) or 0.0),
+            float(
+                dependency_report.get(
+                    "dependency_coherence_average",
+                    0.0,
+                )
+                or 0.0
+            ),
+            coverage,
+            min(1.0, depth / 4.0) if depth else 0.0,
+        )
+        return {
+            "context_id": f"process_context:{concept}",
+            "context_name": f"{concept}_process_context",
+            "context_type": "PROCESS_CONTEXT",
+            "concept": concept,
+            "confidence": round(min(1.0, confidence), 4),
+            "process_context_strength": round(min(1.0, confidence), 4),
+            "dependency_chain": list(chain),
+            "dependency_chain_depth": depth or len(chain),
+            "dependency_chain_coverage": coverage,
+            "preconditions": [
+                {"state": "dependency_chain_available", "satisfied": True},
+            ],
+            "transitions": [
+                {
+                    "from": chain[index],
+                    "to": chain[index + 1],
+                    "transition": "depends_on",
+                    "confidence": round(min(1.0, confidence), 4),
+                }
+                for index in range(max(len(chain) - 1, 0))
+            ],
+            "expected_outcomes": [
+                {"state": "semantic_context_grounded_by_process"},
+            ],
+            "process_context_generated": True,
+            "process_context_ready": True,
+            "source": "dependency_process_context_bridge",
+        }
+
+    def _causal_confidence_from_dependency(
+        self,
+        dependency_report,
+        process_context,
+    ):
+
+        if not isinstance(dependency_report, dict):
+            return 0.0
+        depth = int(dependency_report.get("dependency_chain_depth", 0) or 0)
+        coverage = float(
+            dependency_report.get("dependency_chain_coverage", 0.0) or 0.0
+        )
+        coherence = max(
+            float(dependency_report.get("dependency_coherence", 0.0) or 0.0),
+            float(
+                dependency_report.get(
+                    "dependency_coherence_average",
+                    0.0,
+                )
+                or 0.0
+            ),
+        )
+        if depth <= 0 and coverage <= 0.0 and coherence <= 0.0:
+            return 0.0
+        process_bonus = 0.08 if process_context else 0.0
+        return round(
+            min(
+                1.0,
+                max(coverage, coherence, min(1.0, depth / 4.0))
+                + process_bonus,
+            ),
+            4,
+        )
+
+    def _world_context_from_dependency(
+        self,
+        concept,
+        dependency_report,
+        runtime_context,
+    ):
+
+        if not isinstance(dependency_report, dict):
+            return {}
+        depth = int(dependency_report.get("dependency_chain_depth", 0) or 0)
+        coverage = float(
+            dependency_report.get("dependency_chain_coverage", 0.0) or 0.0
+        )
+        task_id = str(runtime_context.get("task_id", "") or "").lower()
+        structural_world_signal = any(
+            signal in f"{task_id} {concept} {dependency_report}".lower()
+            for signal in (
+                "gravity",
+                "falling",
+                "support",
+                "physics",
+                "collision",
+                "world",
+                "state_transition",
+                "motion",
+                "position",
+            )
+        )
+        if not structural_world_signal and depth <= 0 and coverage <= 0.0:
+            return {}
+        confidence = max(coverage, min(1.0, depth / 4.0), 0.72)
+        return {
+            "context_id": f"world_context:{concept}",
+            "context_type": "WORLD_CONTEXT",
+            "concept": concept,
+            "world_state": "dependency_grounded_process_world",
+            "world_confidence": round(confidence, 4),
+            "confidence": round(confidence, 4),
+            "dependency_chain_depth": depth,
+            "dependency_chain_coverage": coverage,
+            "source": "dependency_process_context_bridge",
+        }
 
     def _context_type_counts(self, contexts):
 
@@ -6020,6 +6560,31 @@ class AdaptiveCognitivePipeline:
             "process_context_count": type_counts["PROCESS_CONTEXT"],
             "causal_context_count": type_counts["CAUSAL_CONTEXT"],
             "world_context_count": type_counts["WORLD_CONTEXT"],
+        }
+        runtime_context["context_chain_report"] = {
+            "system": "context_chain_report",
+            "report_state": "final",
+            "chain": [
+                "Concept",
+                "Dependency",
+                "Process Context",
+                "Causal Context",
+                "World Context",
+                "Semantic Context",
+            ],
+            "dependency_context_count": len(dependency_chains),
+            "process_context_count": type_counts["PROCESS_CONTEXT"],
+            "causal_context_count": type_counts["CAUSAL_CONTEXT"],
+            "world_context_count": type_counts["WORLD_CONTEXT"],
+            "semantic_context_count": type_counts["SEMANTIC_CONTEXT"],
+            "semantic_contexts_grounded_by_process": (
+                type_counts["SEMANTIC_CONTEXT"] > 0
+                and type_counts["PROCESS_CONTEXT"] > 0
+            ),
+            "semantic_bypass_detected": (
+                type_counts["SEMANTIC_CONTEXT"] > 0
+                and type_counts["PROCESS_CONTEXT"] == 0
+            ),
         }
         runtime_context["causal_validation_reports"] = {
             context.get("context_id"): context
@@ -6555,6 +7120,23 @@ class AdaptiveCognitivePipeline:
 
             add(concept)
 
+        for report_key in (
+            "semantic_attribution_report",
+            "introspection_report",
+        ):
+
+            report = runtime_context.get(report_key, {})
+            if not isinstance(report, dict):
+                continue
+            for concept in report.get("attributed_concepts", []) or []:
+                add(concept)
+            for concept in report.get("concepts", []) or []:
+                add(concept)
+            evidence = report.get("semantic_attribution_evidence", {})
+            if isinstance(evidence, dict):
+                for concept in evidence.keys():
+                    add(concept)
+
         memory_report = (
             self.dependency_chain_executor
             .memory
@@ -6594,7 +7176,64 @@ class AdaptiveCognitivePipeline:
 
             runnable_concepts = available_processes
 
-        return runnable_concepts
+        return self._prioritize_dependency_concepts(
+            runnable_concepts,
+            runtime_context,
+        )
+
+    def _prioritize_dependency_concepts(self, concepts, runtime_context):
+
+        concepts = list(dict.fromkeys(concepts or []))
+        if not concepts:
+            return concepts
+
+        signal_text = " ".join(
+            str(value)
+            for value in [
+                runtime_context.get("task_id"),
+                runtime_context.get("task_path"),
+                runtime_context.get("task_file"),
+                runtime_context.get("semantic_attribution_report"),
+                runtime_context.get("introspection_report"),
+            ]
+            if value not in (None, "")
+        ).lower()
+        priority_groups = []
+        if "gravity" in signal_text:
+            priority_groups.append([
+                "gravity",
+                "directional_motion",
+                "propagation",
+            ])
+        if "path_finding" in signal_text or "route_completion" in signal_text:
+            priority_groups.append([
+                "path_finding",
+                "route_completion",
+                "reachability",
+                "path_construction",
+            ])
+        if (
+            "color_mapping" in signal_text
+            or "color_elimination" in signal_text
+            or "color_introduction" in signal_text
+            or "symbolic_remapping" in signal_text
+        ):
+            priority_groups.append([
+                "symbolic_remapping",
+                "color_preservation",
+            ])
+
+        prioritized = []
+        for group in priority_groups:
+            for concept in group:
+                if concept in concepts and concept not in prioritized:
+                    prioritized.append(concept)
+
+        for concept in concepts:
+            if concept not in prioritized:
+                prioritized.append(concept)
+
+        return prioritized
 
     def _dependency_concept_aliases(self, concept, available_concepts):
 
@@ -6602,6 +7241,110 @@ class AdaptiveCognitivePipeline:
         concept = str(concept or "").strip().lower()
         if not concept:
             return aliases
+
+        explicit_aliases = {
+            "path_finding": (
+                "path_finding",
+                "reachability",
+                "route_completion",
+                "path_construction",
+            ),
+            "route_completion": (
+                "route_completion",
+                "path_finding",
+                "path_construction",
+            ),
+            "reachability": (
+                "reachability",
+                "path_finding",
+            ),
+            "path_construction": (
+                "path_construction",
+                "path_finding",
+                "route_completion",
+            ),
+            "reachable_nodes": (
+                "reachability",
+                "path_finding",
+            ),
+            "best_path": (
+                "path_finding",
+                "route_completion",
+            ),
+            "color_mapping": (
+                "symbolic_remapping",
+                "color_preservation",
+            ),
+            "color_elimination": (
+                "symbolic_remapping",
+            ),
+            "color_introduction": (
+                "symbolic_remapping",
+            ),
+            "symbolic_remapping": (
+                "symbolic_remapping",
+            ),
+            "mapping_rule": (
+                "symbolic_remapping",
+            ),
+            "palette_mapping": (
+                "symbolic_remapping",
+            ),
+            "bridge_creation": (
+                "topological_growth",
+                "growth",
+                "propagation",
+            ),
+            "component_connection": (
+                "topological_growth",
+                "connectivity_preservation",
+                "growth",
+            ),
+            "connectivity_change": (
+                "topological_growth",
+                "growth",
+            ),
+            "topology_change": (
+                "topological_growth",
+                "growth",
+                "topology_preservation",
+            ),
+            "transformation_sequence": (
+                "propagation",
+                "directional_motion",
+            ),
+            "gravity": (
+                "gravity",
+                "directional_motion",
+                "propagation",
+            ),
+            "falling": (
+                "gravity",
+                "directional_motion",
+            ),
+            "support": (
+                "gravity",
+                "topology_preservation",
+                "position_preservation",
+            ),
+            "physics": (
+                "gravity",
+                "directional_motion",
+                "propagation",
+            ),
+            "collision": (
+                "gravity",
+                "position_preservation",
+                "topology_preservation",
+            ),
+            "rest_state": (
+                "gravity",
+            ),
+        }
+
+        for alias in explicit_aliases.get(concept, ()):
+            if alias in available_concepts:
+                aliases.append(alias)
 
         if concept.endswith("_preservation"):
             base = concept[: -len("_preservation")]

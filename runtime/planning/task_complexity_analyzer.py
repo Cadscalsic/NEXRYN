@@ -190,6 +190,24 @@ class TaskComplexityAnalyzer:
                 "counting",
                 "dependency_reasoning",
             ]))
+        if any(
+            concept in target_concepts or concept in suspected_concepts
+            for concept in (
+                "gravity_simulation",
+                "gravity",
+                "falling",
+                "support",
+                "physics",
+                "collision",
+            )
+        ):
+            required_capabilities = list(dict.fromkeys([
+                *required_capabilities,
+                "gravity_reasoning",
+                "world_model",
+                "dependency_reasoning",
+                "context_discovery",
+            ]))
 
         return TaskProfile(
             task_id=str(
@@ -282,6 +300,29 @@ class TaskComplexityAnalyzer:
                 "quantity_transformation",
                 "numerical_reasoning",
                 "set_reasoning",
+            ])
+        if any(
+            marker in signal_text
+            for marker in (
+                "gravity_simulation",
+                "gravity simulation",
+                "gravity",
+                "falling",
+                "support",
+                "unsupported",
+                "physics",
+                "collision",
+            )
+        ):
+            concepts.extend([
+                "gravity_simulation",
+                "gravity",
+                "falling",
+                "support",
+                "physics",
+                "collision",
+                "downward_motion",
+                "state_transition",
             ])
         return list(dict.fromkeys(concepts))
 

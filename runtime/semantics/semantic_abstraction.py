@@ -2289,6 +2289,25 @@ class SemanticAbstractionEngine:
                 ),
             ),
             (
+                (
+                    "gravity_simulation",
+                    "gravity simulation",
+                    "gravity",
+                    "falling",
+                    "unsupported",
+                    "support_collision",
+                    "support collision",
+                ),
+                (
+                    "gravity",
+                    "falling",
+                    "support",
+                    "collision",
+                    "rest_state",
+                    "downward_motion",
+                ),
+            ),
+            (
                 ("route_completion", "route completion"),
                 ("route_completion", "path_construction", "reachability"),
             ),

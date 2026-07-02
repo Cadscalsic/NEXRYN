@@ -643,10 +643,10 @@ class IdentityContinuityEngine:
             return "OBJECT_IDENTITY_INTERRUPTED"
         if transition_counts.get("IdentityCreated", 0) > 0:
             return "OBJECT_IDENTITY_CREATED"
-        if transition_counts.get("IdentityReplication", 0) > 0:
-            return "OBJECT_IDENTITY_REPLICATION"
         if transition_counts.get("IdentitySplit", 0) > 0:
             return "OBJECT_IDENTITY_SPLIT"
+        if transition_counts.get("IdentityReplication", 0) > 0:
+            return "OBJECT_IDENTITY_REPLICATION"
         if transition_counts.get("IdentityMerged", 0) > 0:
             return "OBJECT_IDENTITY_MERGED"
         if continuity_score >= 0.82:

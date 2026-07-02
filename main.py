@@ -81,6 +81,18 @@ def build_runtime_metadata(
         "finalization_duration": runtime_metrics.get(
             "finalization_duration",
         ),
+        "concept_lifecycle_cost": runtime_metrics.get(
+            "concept_lifecycle_cost",
+        ),
+        "report_generation_cost": runtime_metrics.get(
+            "report_generation_cost",
+        ),
+        "report_compression_ratio": runtime_metrics.get(
+            "report_compression_ratio",
+        ),
+        "report_budget_usage": runtime_metrics.get(
+            "report_budget_usage",
+        ),
         "startup_hang_prevented": runtime_metrics.get(
             "startup_hang_prevented",
         ),
@@ -1850,6 +1862,54 @@ try:
     )
     record_main_timing("performance_intelligence_report", module_start)
     module_timings.append(main_module_timings[-1])
+    from runtime.reporting.report_budget_manager import report_budget_manager
+
+    report_generation_cost = round(
+        sum(
+            item.get("seconds", 0.0)
+            for item in main_module_timings
+            if item.get("module") in {
+                "concept_lifecycle_report",
+                "build_training_report",
+                "collect_task_performance_reports",
+                "build_runtime_metric_bridge",
+                "assemble_performance_report",
+                "dependency_visibility_report",
+                "runtime_attribution_report",
+                "performance_intelligence_report",
+            }
+        ),
+        4,
+    )
+    report_budget_report = report_budget_manager.evaluate(
+        report_generation_cost,
+        total_runtime_seconds,
+        performance_report,
+    )
+    performance_report.update({
+        "report_generation_cost":
+        report_budget_report["report_generation_cost"],
+        "report_budget_usage": report_budget_report["report_budget_usage"],
+        "report_compression_ratio":
+        report_budget_report["report_compression_ratio"],
+        "report_budget_exceeded":
+        report_budget_report["report_budget_exceeded"],
+        "report_budget_report": report_budget_report,
+        "concept_lifecycle_cost": concept_lifecycle_elapsed,
+        "concept_lifecycle_cache_hits":
+        concept_lifecycle_report.get(
+            "concept_lifecycle_cache_report",
+            {},
+        ).get("concept_lifecycle_cache_hits", 0),
+    })
+    runtime_metrics.update({
+        "report_generation_cost":
+        report_budget_report["report_generation_cost"],
+        "report_budget_usage": report_budget_report["report_budget_usage"],
+        "report_compression_ratio":
+        report_budget_report["report_compression_ratio"],
+        "concept_lifecycle_cost": concept_lifecycle_elapsed,
+    })
 
     def synchronize_training_report_metrics(
         training_report,
@@ -2079,6 +2139,7 @@ try:
         "truth_registry_report": truth_registry_report,
         "truth_graveyard_consistency_report":
         truth_graveyard_consistency_report,
+        "report_budget_report": report_budget_report,
     }
     governance_budget_exceeded = any(
         isinstance(item.get("result"), dict)
@@ -2333,9 +2394,21 @@ print("\n==================================================")
 print("NEXRYN :: FINAL CONTEXT")
 print("==================================================\n")
 
+final_report_level = effective_report_level
+if (
+    isinstance(results, dict)
+    and results.get("report_budget_report", {}).get("report_budget_exceeded")
+    and effective_report_level in {"full", "debug", "audit"}
+):
+    final_report_level = "normal"
+    results["report_budget_report"]["forced_report_level"] = final_report_level
+    results["report_budget_report"]["compression_action"] = (
+        "deep_report_forced_to_normal_summary"
+    )
+
 safe_print_context(
     results,
-    report_level=effective_report_level,
+    report_level=final_report_level,
 )
 
 if (
@@ -2371,7 +2444,7 @@ if (
     print(
         compact_report_builder.compact_context(
             results["RUNTIME ATTRIBUTION REPORT"],
-            level=effective_report_level,
+            level=final_report_level,
         )
     )
 
@@ -2390,7 +2463,7 @@ if (
     print(
         compact_report_builder.compact_context(
             results["PERFORMANCE_REPORT"],
-            level=effective_report_level,
+            level=final_report_level,
         )
     )
 

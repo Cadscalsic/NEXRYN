@@ -43,6 +43,7 @@ from core.concept_lifecycle.concept_validation import (
 from core.concept_lifecycle.concept_maturity import (
     ConceptMaturityTracker,
 )
+from runtime.cache.concept_lifecycle_cache import concept_lifecycle_cache
 
 
 class ConceptLifecycleManager:
@@ -67,14 +68,29 @@ class ConceptLifecycleManager:
 
         context = context if isinstance(context, dict) else {}
         report_level = str(context.get("report_level", "full") or "full").lower()
+        truth_candidate_report = context.get(
+            "truth_candidate_engine_report",
+            context.get("truth_candidate_report", {}),
+        )
+        cache_key = concept_lifecycle_cache.key(
+            ledger_report,
+            truth_candidate_report,
+            report_level=report_level,
+        )
+        cached = concept_lifecycle_cache.get(cache_key)
+        if cached is not None:
+            self.knowledge_maturity_report = cached
+            return self.knowledge_maturity_report
+
         if report_level != "full":
             self.knowledge_maturity_report = self._compact_knowledge_maturity(
                 ledger_report,
-                context.get(
-                    "truth_candidate_engine_report",
-                    context.get("truth_candidate_report", {}),
-                ),
+                truth_candidate_report,
                 report_level=report_level,
+            )
+            self.knowledge_maturity_report = concept_lifecycle_cache.put(
+                cache_key,
+                self.knowledge_maturity_report,
             )
             return self.knowledge_maturity_report
 
@@ -82,19 +98,17 @@ class ConceptLifecycleManager:
             self.concept_maturity_tracker
             .evaluate(
                 ledger_report,
-                context.get(
-                    "truth_candidate_engine_report",
-                    context.get(
-                        "truth_candidate_report",
-                        {},
-                    ),
-                ),
+                truth_candidate_report,
                 context.get(
                     "truth_registry_report",
                     {},
                 ),
                 report_level=report_level,
             )
+        )
+        self.knowledge_maturity_report = concept_lifecycle_cache.put(
+            cache_key,
+            self.knowledge_maturity_report,
         )
 
         return self.knowledge_maturity_report

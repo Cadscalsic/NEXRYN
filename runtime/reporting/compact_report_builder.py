@@ -256,6 +256,18 @@ class CompactReportBuilder:
             "dependency_reasoning_skipped": report.get(
                 "dependency_reasoning_skipped",
             ),
+            "dependency_activation_reason": report.get(
+                "dependency_activation_reason",
+            ),
+            "dependency_skip_reason": report.get("dependency_skip_reason"),
+            "dependency_usage_rate": report.get("dependency_usage_rate"),
+            "concept_lifecycle_cost": report.get("concept_lifecycle_cost"),
+            "concept_lifecycle_cache_hits": report.get(
+                "concept_lifecycle_cache_hits",
+            ),
+            "report_generation_cost": report.get("report_generation_cost"),
+            "report_compression_ratio": report.get("report_compression_ratio"),
+            "report_budget_usage": report.get("report_budget_usage"),
             "pre_reasoning_router_enabled": report.get(
                 "pre_reasoning_router_enabled",
             ),
