@@ -40,6 +40,36 @@ PROCESS_SEMANTIC_RULES = {
         "transition_steps": ["connectivity_expands"],
         "postconditions": ["expanded_connectivity_exists"],
     },
+    "object_counting": {
+        "preconditions": ["object_identity_exists", "object_set_identified"],
+        "transition_steps": ["cardinality_computed"],
+        "postconditions": ["object_count_known"],
+    },
+    "cardinality": {
+        "preconditions": ["object_set_membership_known"],
+        "transition_steps": ["set_size_measured"],
+        "postconditions": ["cardinality_known"],
+    },
+    "quantity_preservation": {
+        "preconditions": ["initial_cardinality_known"],
+        "transition_steps": ["cardinality_compared"],
+        "postconditions": ["quantity_preserved"],
+    },
+    "quantity_transformation": {
+        "preconditions": ["initial_cardinality_known"],
+        "transition_steps": ["cardinality_delta_computed"],
+        "postconditions": ["quantity_delta_known"],
+    },
+    "numerical_reasoning": {
+        "preconditions": ["quantity_values_known"],
+        "transition_steps": ["numeric_relation_evaluated"],
+        "postconditions": ["numeric_constraint_known"],
+    },
+    "set_reasoning": {
+        "preconditions": ["object_membership_known"],
+        "transition_steps": ["set_relation_evaluated"],
+        "postconditions": ["set_constraint_known"],
+    },
 }
 
 
@@ -62,6 +92,18 @@ MISSING_DEPENDENCY_DEFINITIONS = {
         ("occupied_cell_count", "preserves", "coverage_pattern", 0.87),
         ("coverage_pattern", "enables", "density_preservation", 0.86),
     ],
+    "object_counting": DEFAULT_TYPED_PROCESS_DEPENDENCIES["object_counting"],
+    "cardinality": DEFAULT_TYPED_PROCESS_DEPENDENCIES["cardinality"],
+    "quantity_preservation": (
+        DEFAULT_TYPED_PROCESS_DEPENDENCIES["quantity_preservation"]
+    ),
+    "quantity_transformation": (
+        DEFAULT_TYPED_PROCESS_DEPENDENCIES["quantity_transformation"]
+    ),
+    "numerical_reasoning": (
+        DEFAULT_TYPED_PROCESS_DEPENDENCIES["numerical_reasoning"]
+    ),
+    "set_reasoning": DEFAULT_TYPED_PROCESS_DEPENDENCIES["set_reasoning"],
 }
 
 

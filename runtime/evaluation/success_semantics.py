@@ -154,6 +154,16 @@ class SuccessSemanticsEngine:
             success_state = "HIGH_VALUE_PARTIAL_SUCCESS"
             termination_reason = "LOCALIZED_TRANSFORMATION_PROGRESS"
             failure_detected = False
+            partial_success_detected = True
+            retry_allowed = False
+        elif (
+            evaluation.get("high_value_partial_success") is True
+            or evaluation.get("success_state") == "HIGH_VALUE_PARTIAL_SUCCESS"
+        ):
+            success_state = "HIGH_VALUE_PARTIAL_SUCCESS"
+            termination_reason = "NEAR_SUCCESS_WITH_SMALL_RESIDUAL"
+            failure_detected = False
+            partial_success_detected = True
             retry_allowed = False
         elif self._learning_progress(context, localization_report):
             success_state = "LEARNING_PROGRESS"

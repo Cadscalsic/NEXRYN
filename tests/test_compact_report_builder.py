@@ -172,6 +172,9 @@ def test_compacts_concept_lifecycle_report_with_budget_marker():
         "concept_lifecycle_report_budget"
     )
     assert compact["context_count"] == 3
+    assert concept["concept_name"] == "replication"
+    assert concept["current_stage"] == "TRUTH_CANDIDATE"
+    assert concept["observation_count"] == 42
     assert "task_ids" not in concept
     assert "context_artifacts" not in concept
     assert concept["promotion_dependency_score"] == 0.94
@@ -237,15 +240,29 @@ def test_summarizes_historical_task_lists():
 
     assert "observed_tasks" not in compact
     assert compact["observation_count"] == 125
-    assert compact["recent_tasks"] == [
-        "task_121.json",
-        "task_122.json",
-        "task_123.json",
-        "task_124.json",
-        "task_125.json",
-    ]
     assert compact["source_files_count"] == 20
-    assert len(compact["recent_sources"]) == 10
+    assert "recent_tasks" not in compact
+    assert "recent_sources" not in compact
+
+
+def test_audit_report_can_include_historical_task_lists():
+    compact = CompactReportBuilder().compact_context(
+        {
+            "observed_tasks": [
+                f"task_{index:03}.json"
+                for index in range(1, 5)
+            ],
+        },
+        level="audit",
+    )
+
+    assert compact["observed_tasks_count"] == 4
+    assert compact["observed_tasks"] == [
+        "task_001.json",
+        "task_002.json",
+        "task_003.json",
+        "task_004.json",
+    ]
 
 
 def test_normal_report_summarizes_grids_traces_and_nested_runtime_objects():

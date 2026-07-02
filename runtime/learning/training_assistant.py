@@ -604,7 +604,12 @@ class TrainingAssistant:
             self.state.get("pending_next_task_index"),
         }
 
-    def complete_cycle(self, successful_tasks=0, failed_tasks=0):
+    def complete_cycle(
+        self,
+        successful_tasks=0,
+        failed_tasks=0,
+        incomplete_tasks=0,
+    ):
         active_batch = list(self.state.get("active_batch", []))
         if not active_batch:
             return {
@@ -632,6 +637,7 @@ class TrainingAssistant:
                 "concepts": selected_concepts,
                 "successful_tasks": int(successful_tasks),
                 "failed_tasks": int(failed_tasks),
+                "incomplete_tasks": int(incomplete_tasks),
                 "timestamp": datetime.utcnow().isoformat(),
             },
         ]

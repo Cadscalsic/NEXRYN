@@ -54,6 +54,11 @@ from runtime.truth import (
 )
 from runtime.cognition import AdaptiveReuseEngine
 from runtime.profiling.metric_bridge import runtime_metric_bridge
+from runtime.telemetry import (
+    MetricIntegrityValidator,
+    RuntimeTelemetryValidator,
+    metric_authority_registry,
+)
 
 # ============================================
 # MEMORY
@@ -1420,6 +1425,7 @@ class AdaptiveCognitivePipeline:
             "context_count": 0,
             "registered_context_count": 0,
             "semantic_context_count": 0,
+            "process_context_count": 0,
             "causal_context_count": 0,
             "world_context_count": 0,
             "promotion_evaluations": 0,
@@ -1587,6 +1593,37 @@ class AdaptiveCognitivePipeline:
         )
         self._sync_pre_reasoning_metrics(plan)
         return report
+
+    def _dependency_reasoning_requested(self, runtime_context=None):
+
+        runtime_context = (
+            runtime_context
+            if isinstance(runtime_context, dict)
+            else self.runtime.get_context()
+        )
+        runtime_tool_requests = runtime_context.get(
+            "runtime_tool_requests",
+            {},
+        )
+        dependency_request = (
+            runtime_tool_requests.get("dependency_reasoning", {})
+            if isinstance(runtime_tool_requests, dict)
+            else {}
+        )
+        tool_selection_report = runtime_context.get(
+            "tool_selection_report",
+            {},
+        )
+        enabled_tools = set(runtime_context.get("enabled_tools", []) or [])
+        if isinstance(tool_selection_report, dict):
+            enabled_tools.update(
+                tool_selection_report.get("enabled_tools", []) or []
+            )
+
+        return (
+            dependency_request.get("request_state") == "REQUESTED"
+            or "dependency_reasoning" in enabled_tools
+        )
 
     def _build_pre_reasoning_execution_plan(self, runtime_context):
 
@@ -1841,7 +1878,39 @@ class AdaptiveCognitivePipeline:
             if local_cache_total
             else 0.0
         )
-        return {
+        runtime_context = self.runtime.get_context()
+        dependency_depth = runtime_context.get(
+            "dependency_chain_depth",
+            0,
+        )
+        dependency_coverage = runtime_context.get(
+            "dependency_chain_coverage",
+            0.0,
+        )
+        dependency_time = round(
+            sum(
+                float(item.get("seconds", 0.0) or 0.0)
+                for item in module_timings
+                if isinstance(item, dict)
+                and item.get("module") == "dependency_reasoning"
+            ),
+            4,
+        )
+        dependency_state = self._dependency_activation_state(
+            dependency_time,
+        )
+        process_context_count = (
+            runtime_context.get("process_context_registry_report", {})
+            if isinstance(
+                runtime_context.get("process_context_registry_report"),
+                dict,
+            )
+            else {}
+        ).get(
+            "process_context_count",
+            self.performance_counters.get("process_context_count", 0),
+        )
+        base_report = {
             "system": "runtime_reasoning_budget",
             "mode": self.reasoning_budget["mode"],
             "execution_time": total_runtime_seconds,
@@ -1859,6 +1928,11 @@ class AdaptiveCognitivePipeline:
             "manager_cache_hit_rate": cache_metrics.hit_rate,
             "dependency_chains_executed":
             self.performance_counters["dependency_chains_executed"],
+            "dependency_chain_depth": dependency_depth,
+            "dependency_chain_coverage": dependency_coverage,
+            "dependency_activation_state": dependency_state,
+            "dependency_time": dependency_time,
+            "dependency_reasoning_time_seconds": dependency_time,
             "dependency_executor_cache_hits":
             self.performance_counters["dependency_executor_cache_hits"],
             "dependency_executor_cache_misses":
@@ -1885,6 +1959,10 @@ class AdaptiveCognitivePipeline:
             adaptive_reuse_report,
             "context_reuse_report":
             context_reuse_report,
+            "cache_metric_authority":
+            adaptive_cache_report,
+            "reuse_metric_authority":
+            adaptive_reuse_report,
             "truth_hits": max(
                 adaptive_cache_report["truth_hits"],
                 adaptive_reuse_report["truth_hits"],
@@ -1993,6 +2071,8 @@ class AdaptiveCognitivePipeline:
             self.performance_counters["registered_context_count"],
             "semantic_context_count":
             self.performance_counters["semantic_context_count"],
+            "process_context_count":
+            process_context_count,
             "causal_context_count":
             self.performance_counters["causal_context_count"],
             "world_context_count":
@@ -2014,6 +2094,8 @@ class AdaptiveCognitivePipeline:
                 4,
             ),
             "truth_commit_count":
+            self.performance_counters["truth_commit_count"],
+            "committed_count":
             self.performance_counters["truth_commit_count"],
             "truth_commit_rate":
             round(
@@ -2142,6 +2224,135 @@ class AdaptiveCognitivePipeline:
             "recomputed_concepts":
             list(self.runtime.invalidated_concepts),
         }
+        return self._finalize_observability_report(
+            base_report,
+            adaptive_cache_report,
+            adaptive_reuse_report,
+            context_reuse_report,
+        )
+
+    def _dependency_activation_state(self, dependency_time, requested=False):
+
+        attempted = self.performance_counters.get(
+            "dependency_activation_attempted",
+            0,
+        )
+        executed = self.performance_counters.get(
+            "dependency_chains_executed",
+            0,
+        )
+        skipped = self.performance_counters.get(
+            "dependency_reasoning_skipped",
+            0,
+        )
+        failed = self.performance_counters.get(
+            "dependency_chain_generation_failed",
+            0,
+        )
+        successful = self.performance_counters.get(
+            "dependency_chain_generation_successful",
+            0,
+        )
+        if executed > 0:
+            return "COMPLETED"
+        if attempted <= 0 and skipped <= 0 and failed <= 0 and successful <= 0:
+            return "REQUESTED" if requested else "NOT_REQUESTED"
+        if skipped > 0 and executed <= 0:
+            return "SKIPPED"
+        if failed > 0 and successful <= 0:
+            return "FAILED"
+        if successful > 0 and executed <= 0:
+            return "SKIPPED"
+        if attempted > 0:
+            return "REQUESTED"
+        return "REQUESTED" if requested else "NOT_REQUESTED"
+
+    def _finalize_observability_report(
+        self,
+        base_report,
+        adaptive_cache_report,
+        adaptive_reuse_report,
+        context_reuse_report,
+    ):
+
+        sources = {
+            "dependency_runtime": {
+                "dependency_chains_executed":
+                base_report.get("dependency_chains_executed", 0),
+                "dependency_chain_depth":
+                base_report.get("dependency_chain_depth", 0),
+                "dependency_chain_coverage":
+                base_report.get("dependency_chain_coverage", 0.0),
+                "dependency_reasoning_skipped":
+                base_report.get("dependency_reasoning_skipped", 0),
+                "dependency_activation_state":
+                base_report.get("dependency_activation_state"),
+                "dependency_time": base_report.get("dependency_time", 0.0),
+                "dependency_executor_cache_hits":
+                base_report.get("dependency_executor_cache_hits", 0),
+                "dependency_executor_cache_misses":
+                base_report.get("dependency_executor_cache_misses", 0),
+            },
+            "context_registry": {
+                "context_count": base_report.get("context_count", 0),
+                "registered_context_count":
+                base_report.get("registered_context_count", 0),
+            "semantic_context_count":
+            base_report.get("semantic_context_count", 0),
+            "process_context_count":
+            base_report.get("process_context_count", 0),
+                "context_created": base_report.get("context_created", 0),
+                "context_registered": base_report.get("context_registered", 0),
+                "context_consumed": base_report.get("context_consumed", 0),
+                "context_lost": base_report.get("context_lost", 0),
+            },
+            "truth_candidate_engine": {
+                "candidate_count": base_report.get("candidate_count", 0),
+                "candidate_generated": base_report.get("candidate_generated", 0),
+                "candidate_rejected": base_report.get("candidate_rejected", 0),
+            },
+            "truth_commit_engine": {
+                "committed_count": base_report.get("truth_commit_count", 0),
+                "truth_commit_count": base_report.get("truth_commit_count", 0),
+                "truth_committed": base_report.get("truth_committed", 0),
+                "truth_rejected": base_report.get("truth_rejected", 0),
+            },
+            "adaptive_reuse_engine": adaptive_reuse_report,
+            "context_reuse_engine": context_reuse_report,
+            "adaptive_cache_manager": adaptive_cache_report,
+            "local_runtime_cache": {
+                "cache_hits": base_report.get("cache_hits", 0),
+                "cache_misses": base_report.get("cache_misses", 0),
+                "cache_hit_rate": base_report.get("cache_hit_rate", 0.0),
+            },
+        }
+        report = metric_authority_registry.reconcile(
+            base_report,
+            sources,
+        )
+        integrity_report = MetricIntegrityValidator().validate(report)
+        observability_report = RuntimeTelemetryValidator().validate(report)
+        report["metric_integrity_report"] = integrity_report
+        report["runtime_observability_report"] = observability_report
+        report["OBSERVABILITY_DASHBOARD"] = {
+            "metric_consistency_score":
+            observability_report["metric_consistency_score"],
+            "dependency_integrity_score":
+            observability_report["dependency_integrity_score"],
+            "context_integrity_score":
+            observability_report["context_integrity_score"],
+            "truth_integrity_score":
+            observability_report["truth_integrity_score"],
+            "cache_integrity_score":
+            observability_report["cache_integrity_score"],
+            "reuse_integrity_score":
+            observability_report["reuse_integrity_score"],
+            "telemetry_health_score":
+            observability_report["telemetry_health_score"],
+            "contradictions":
+            observability_report["contradictions"],
+        }
+        return report
 
     def attach_performance_intelligence(
         self,
@@ -2236,6 +2447,87 @@ class AdaptiveCognitivePipeline:
             )
         )
         return compacted
+
+    def _ensure_prediction_before_evaluation(self, runtime_context):
+
+        runtime_context = (
+            runtime_context
+            if isinstance(runtime_context, dict)
+            else {}
+        )
+
+        if runtime_context.get("predicted_output") is not None:
+            runtime_context["prediction_pipeline_report"] = {
+                "status": "prediction_available",
+                "prediction_source": "upstream_stage",
+                "inference_stage_status": (
+                    runtime_context
+                    .get("inference_stage_report", {})
+                    .get("status")
+                ),
+                "transformation_stage_status": (
+                    runtime_context
+                    .get("transformation_stage_report", {})
+                    .get("status")
+                ),
+            }
+            return runtime_context
+
+        input_grid = runtime_context.get("input_grid")
+        if hasattr(input_grid, "grid"):
+            predicted_output = input_grid.grid.copy()
+        else:
+            predicted_output = input_grid
+
+        prediction_pipeline_report = {
+            "status": "fallback_prediction_produced",
+            "prediction_source": "identity_baseline",
+            "reason": "predicted_output_missing_before_evaluation",
+            "success_state": "PREDICTION_FALLBACK_IDENTITY",
+            "inference_stage_status": (
+                runtime_context
+                .get("inference_stage_report", {})
+                .get("status")
+            ),
+            "transformation_stage_status": (
+                runtime_context
+                .get("transformation_stage_report", {})
+                .get("status")
+            ),
+            "reasoning_report_status": (
+                runtime_context
+                .get("reasoning_report", {})
+                .get("status")
+            ),
+            "transformation_report_status": (
+                runtime_context
+                .get("transformation_report", {})
+                .get("status")
+            ),
+            "pipeline_disconnect_detected": True,
+        }
+
+        if predicted_output is None:
+            prediction_pipeline_report.update({
+                "status": "prediction_unavailable",
+                "prediction_source": None,
+                "reason": "input_grid_missing_before_evaluation",
+            })
+            runtime_context[
+                "prediction_pipeline_report"
+            ] = prediction_pipeline_report
+            return runtime_context
+
+        runtime_context["predicted_output"] = predicted_output
+        runtime_context["prediction_pipeline_report"] = (
+            prediction_pipeline_report
+        )
+        runtime_context["prediction_fallback_used"] = True
+        runtime_context["prediction_fallback_reason"] = (
+            "predicted_output_missing_before_evaluation"
+        )
+        runtime_context["success_state"] = "PREDICTION_FALLBACK_IDENTITY"
+        return runtime_context
 
     def run_safe_self_repair_cycle(
         self,
@@ -2576,6 +2868,18 @@ class AdaptiveCognitivePipeline:
                     stage_name
                 )
 
+                if stage_name == "evaluation":
+                    runtime_context = (
+                        self._ensure_dependency_context_before_evaluation(
+                            runtime_context,
+                        )
+                    )
+                    runtime_context = (
+                        self._ensure_prediction_before_evaluation(
+                            runtime_context,
+                        )
+                    )
+
                 runtime_context = (
                     stage_callable(runtime_context)
                 )
@@ -2878,6 +3182,152 @@ class AdaptiveCognitivePipeline:
         runtime_context[
             "dependency_context_activation_report"
         ] = activation_report
+        self.runtime.bulk_update_context(runtime_context)
+        return runtime_context
+
+    def _ensure_dependency_context_before_evaluation(
+        self,
+        runtime_context,
+    ):
+
+        runtime_context = (
+            runtime_context
+            if isinstance(runtime_context, dict)
+            else self.runtime.get_context()
+        )
+        dependency_report = runtime_context.get(
+            "dependency_reasoning_report",
+            {},
+        )
+        dependency_chains = runtime_context.get(
+            "process_dependency_chains",
+            {},
+        )
+        dependency_ready = (
+            isinstance(dependency_chains, dict)
+            and bool(dependency_chains)
+        )
+        dependency_report_final = (
+            isinstance(dependency_report, dict)
+            and dependency_report.get("report_state") in {"final", "skipped"}
+        )
+        dependency_requested = (
+            self._dependency_reasoning_requested(runtime_context)
+            or self.runtime.is_tool_enabled("dependency_reasoning")
+            or bool(
+                runtime_context.get("semantic_abstractions")
+                or runtime_context.get("epistemic_hypotheses")
+                or runtime_context.get("prioritized_concepts")
+            )
+        )
+
+        if dependency_requested:
+            runtime_context["runtime_tool_requests"] = {
+                **runtime_context.get("runtime_tool_requests", {}),
+                "dependency_reasoning": {
+                    "tool_name": "dependency_reasoning",
+                    "request_state": "REQUESTED",
+                    "requested_by": "pre_evaluation_barrier",
+                },
+            }
+            runtime_context["dependency_lifecycle_report"] = {
+                **runtime_context.get("dependency_lifecycle_report", {}),
+                "system": "dependency_runtime",
+                "report_state": "pending",
+                "dependency_activation_state": "REQUESTED",
+                "dependency_requested_by": "pre_evaluation_barrier",
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+            }
+
+        activation_report = {
+            "system": "dependency_context_pre_evaluation_barrier",
+            "report_state": "final",
+            "stage": "before_evaluation",
+            "dependency_requested": dependency_requested,
+            "dependency_runtime_invoked": False,
+            "process_semantic_runtime_invoked": False,
+            "context_truth_runtime_invoked": False,
+        }
+
+        if dependency_requested and (
+            not dependency_report_final or not dependency_ready
+        ):
+            self.run_dependency_reasoning_cycle()
+            runtime_context = self.runtime.get_context()
+            dependency_chains = runtime_context.get(
+                "process_dependency_chains",
+                {},
+            )
+            dependency_ready = (
+                isinstance(dependency_chains, dict)
+                and bool(dependency_chains)
+            )
+            activation_report["dependency_runtime_invoked"] = True
+
+        process_semantic_report = runtime_context.get(
+            "process_semantic_report",
+            {},
+        )
+        process_semantic_ready = (
+            isinstance(process_semantic_report, dict)
+            and process_semantic_report.get("report_state") == "final"
+            and not process_semantic_report.get("skipped")
+        )
+        if dependency_ready and not process_semantic_ready:
+            self.run_process_semantic_cycle()
+            runtime_context = self.runtime.get_context()
+            activation_report["process_semantic_runtime_invoked"] = True
+
+        semantic_context_report = runtime_context.get(
+            "semantic_context_report",
+            {},
+        )
+        semantic_context_ready = (
+            isinstance(semantic_context_report, dict)
+            and int(
+                semantic_context_report.get(
+                    "semantic_context_count",
+                    semantic_context_report.get("result_count", 0),
+                )
+                or 0
+            ) > 0
+        )
+        if dependency_ready and not semantic_context_ready:
+            self.run_context_truth_advancement_cycle()
+            runtime_context = self.runtime.get_context()
+            activation_report["context_truth_runtime_invoked"] = True
+
+        registry_contexts = (
+            self.context_registry.all_contexts()
+            if hasattr(self.context_registry, "all_contexts")
+            else []
+        )
+        activation_report.update({
+            "dependency_chains_available": dependency_ready,
+            "process_context_count": sum(
+                1
+                for context in registry_contexts
+                if context.get("context_type") == "PROCESS_CONTEXT"
+            ),
+            "semantic_context_count": sum(
+                1
+                for context in registry_contexts
+                if context.get("context_type") == "SEMANTIC_CONTEXT"
+            ),
+            "context_count": len(registry_contexts),
+            "dependency_chains_executed":
+            self.performance_counters.get("dependency_chains_executed", 0),
+        })
+        runtime_context[
+            "dependency_context_pre_evaluation_barrier"
+        ] = activation_report
+        runtime_context[
+            "dependency_context_activation_report"
+        ] = {
+            **runtime_context.get("dependency_context_activation_report", {}),
+            **activation_report,
+        }
         self.runtime.bulk_update_context(runtime_context)
         return runtime_context
 
@@ -4138,10 +4588,26 @@ class AdaptiveCognitivePipeline:
         runtime_context = (
             self.runtime.get_context()
         )
+        dependency_requested = self._dependency_reasoning_requested(
+            runtime_context
+        )
+        if dependency_requested:
+            runtime_context["dependency_lifecycle_report"] = {
+                **runtime_context.get("dependency_lifecycle_report", {}),
+                "system": "dependency_runtime",
+                "report_state": "running",
+                "dependency_activation_state": "EXECUTING",
+                "dependency_requested_by": "tool_selection",
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+            }
 
-        if not self._layer_allowed(
+        if (
+            not dependency_requested
+            and not self._layer_allowed(
             "dependency_reasoning",
             runtime_context,
+            )
         ):
 
             skipped = self._router_skipped_report(
@@ -4163,15 +4629,19 @@ class AdaptiveCognitivePipeline:
             self.performance_counters["dependency_activation_blocked"] += int(
                 links_loaded > 0
             )
+            self.performance_counters["dependency_reasoning_skipped"] += 1
             self.performance_counters["process_dependency_links_skipped"] += (
                 link_usage["dependency_links_skipped"]
             )
+            dependency_time = round(time.perf_counter() - module_start, 4)
             runtime_context[
                 "dependency_reasoning_report"
             ] = {
                 **skipped,
                 **link_usage,
                 "reasoning_invoked": False,
+                "dependency_activation_state": "SKIPPED",
+                "dependency_time": dependency_time,
                 "dependency_activation_reason":
                 skipped.get("activation_rule"),
                 "dependency_chain_generation_attempted": False,
@@ -4191,6 +4661,17 @@ class AdaptiveCognitivePipeline:
                 **link_usage,
                 "bypass_reason": skipped.get("skip_reason"),
             }]
+            runtime_context[
+                "dependency_lifecycle_report"
+            ] = {
+                "system": "dependency_runtime",
+                "report_state": "final",
+                "dependency_activation_state": "SKIPPED",
+                "dependency_time": dependency_time,
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+                "skip_reason": skipped.get("skip_reason"),
+            }
             self.runtime.bulk_update_context(
                 runtime_context
             )
@@ -4200,10 +4681,15 @@ class AdaptiveCognitivePipeline:
             )
             return
 
-        if not self.runtime.is_tool_enabled(
+        if (
+            not dependency_requested
+            and not self.runtime.is_tool_enabled(
             "dependency_reasoning"
+            )
         ):
 
+            self.performance_counters["dependency_reasoning_skipped"] += 1
+            dependency_time = round(time.perf_counter() - module_start, 4)
             runtime_context[
                 "dependency_reasoning_report"
             ] = {
@@ -4212,6 +4698,8 @@ class AdaptiveCognitivePipeline:
                 "skipped": True,
                 "operator_available": True,
                 "reasoning_invoked": False,
+                "dependency_activation_state": "SKIPPED",
+                "dependency_time": dependency_time,
                 "bypass_reason": "disabled_by_tool_selection",
                 "max_chain_depth":
                 self.reasoning_budget["max_chain_depth"],
@@ -4241,6 +4729,17 @@ class AdaptiveCognitivePipeline:
             runtime_context[
                 "dependency_execution_trace"
             ] = []
+            runtime_context[
+                "dependency_lifecycle_report"
+            ] = {
+                "system": "dependency_runtime",
+                "report_state": "final",
+                "dependency_activation_state": "SKIPPED",
+                "dependency_time": dependency_time,
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+                "skip_reason": "disabled_by_tool_selection",
+            }
 
             self.runtime.bulk_update_context(
                 runtime_context
@@ -4752,6 +5251,46 @@ class AdaptiveCognitivePipeline:
                 for item in dependency_traces
             ]
         )
+        dependency_time = round(time.perf_counter() - module_start, 4)
+        dependency_lifecycle_state = self._dependency_activation_state(
+            dependency_time,
+            requested=dependency_requested,
+        )
+        runtime_context[
+            "DEPENDENCY_EXECUTION_TRACE"
+        ] = runtime_context["dependency_execution_trace"]
+        runtime_context[
+            "dependency_lifecycle_report"
+        ] = {
+            "system": "dependency_runtime",
+            "report_state": "final",
+            "dependency_activation_state": dependency_lifecycle_state,
+            "dependency_lifecycle_states": [
+                "NOT_REQUESTED",
+                "REQUESTED",
+                "ACTIVATED",
+                "EXECUTING",
+                "COMPLETED",
+                "FAILED",
+                "SKIPPED",
+            ],
+            "dependency_chains_executed":
+            self.performance_counters["dependency_chains_executed"],
+            "dependency_chain_generation_attempted":
+            self.performance_counters["dependency_chain_generation_attempted"],
+            "dependency_chain_generation_successful":
+            self.performance_counters["dependency_chain_generation_successful"],
+            "dependency_chain_generation_failed":
+            self.performance_counters["dependency_chain_generation_failed"],
+            "dependency_time": dependency_time,
+            "dependency_outputs_generated": len(dependency_reports),
+            "downstream_consumers": [
+                "context_truth_advancement",
+                "promotion_engine",
+                "truth_candidate_engine",
+                "truth_commit_engine",
+            ],
+        }
 
         runtime_context[
             "dependency_reasoning_report"
@@ -4830,6 +5369,10 @@ class AdaptiveCognitivePipeline:
             self.performance_counters["process_dependency_links_used"],
             "process_dependency_links_skipped":
             self.performance_counters["process_dependency_links_skipped"],
+            "dependency_activation_state":
+            dependency_lifecycle_state,
+            "dependency_time":
+            dependency_time,
         }
 
         self.runtime.bulk_update_context(
@@ -4986,7 +5529,9 @@ class AdaptiveCognitivePipeline:
                     {},
                 )
                 runtime_context["process_context_registry_report"] = (
-                    report.get("process_context_registry", {})
+                    self._register_process_semantic_contexts(
+                        runtime_context["process_semantic_models"],
+                    )
                 )
                 self.runtime.bulk_update_context(runtime_context)
                 return
@@ -5079,6 +5624,13 @@ class AdaptiveCognitivePipeline:
             {},
         )
 
+        process_registry_report = self._register_process_semantic_contexts(
+            runtime_context["process_semantic_models"],
+        )
+        runtime_context[
+            "process_context_registry_report"
+        ] = process_registry_report
+
         runtime_context[
             "dependency_completeness_audit"
         ] = (
@@ -5093,6 +5645,160 @@ class AdaptiveCognitivePipeline:
             "process_semantic_synthesis",
             module_start,
         )
+
+    def _register_process_semantic_contexts(
+        self,
+        process_models,
+    ):
+
+        process_models = (
+            process_models
+            if isinstance(process_models, dict)
+            else {}
+        )
+        process_contexts = []
+        for concept, model in process_models.items():
+            if not isinstance(model, dict):
+                continue
+            if not (
+                model.get("process_semantic_model_generated")
+                or model.get("process_context_generated")
+            ):
+                continue
+            process_contexts.append({
+                **model,
+                "context_id": (
+                    model.get("context_id")
+                    or model.get("context_name")
+                    or f"process_context:{concept}"
+                ),
+                "context_type": "PROCESS_CONTEXT",
+                "concept": model.get("concept", concept),
+                "confidence": model.get(
+                    "confidence",
+                    model.get("process_context_strength", 0.86),
+                ),
+                "source": "process_semantic_synthesis",
+                "dependency_source": "process_dependency_chains",
+            })
+
+        registration_report = self.context_registry.register_batch(
+            process_contexts,
+            source="process_semantic_synthesis",
+        )
+        registered = registration_report.get("registered_contexts", [])
+        self.performance_counters["process_context_count"] = len([
+            context
+            for context in self.context_registry.all_contexts()
+            if context.get("context_type") == "PROCESS_CONTEXT"
+        ])
+        return {
+            **registration_report,
+            "system": "process_context_registry",
+            "process_context_count": len(registered),
+            "process_contexts": registered,
+        }
+
+    def _derive_nonsemantic_contexts(
+        self,
+        semantic_contexts,
+        runtime_context,
+    ):
+
+        derived_contexts = []
+        for context in semantic_contexts:
+            if not isinstance(context, dict):
+                continue
+
+            concept = context.get("concept", "runtime_context")
+            process_context = context.get("process_context", {})
+            if isinstance(process_context, dict) and process_context:
+                derived_contexts.append({
+                    **process_context,
+                    "context_id": (
+                        process_context.get("context_id")
+                        or process_context.get("context_name")
+                        or f"process_context:{concept}"
+                    ),
+                    "context_type": "PROCESS_CONTEXT",
+                    "concept": process_context.get("concept", concept),
+                    "confidence": process_context.get(
+                        "confidence",
+                        process_context.get(
+                            "process_context_strength",
+                            context.get("confidence", 0.0),
+                        ),
+                    ),
+                    "source": "semantic_context_builder.process_context",
+                    "source_semantic_context": context.get("context_id"),
+                    "dependency_chain": context.get("dependency_chain", []),
+                })
+
+            causal_score = context.get("causal_score")
+            try:
+                causal_confidence = float(causal_score)
+            except (TypeError, ValueError):
+                causal_confidence = 0.0
+            if causal_confidence > 0.0:
+                derived_contexts.append({
+                    "context_id": f"causal_context:{concept}",
+                    "context_type": "CAUSAL_CONTEXT",
+                    "concept": concept,
+                    "confidence": round(causal_confidence, 4),
+                    "causal_score": round(causal_confidence, 4),
+                    "dependency_chain": context.get("dependency_chain", []),
+                    "process_context": process_context,
+                    "source": "semantic_context_builder.causal_score",
+                    "source_semantic_context": context.get("context_id"),
+                })
+
+            world_context = context.get("world_context", {})
+            if not world_context:
+                world_context = runtime_context.get("world_model_report", {})
+            if isinstance(world_context, dict) and world_context:
+                world_confidence = (
+                    world_context.get("confidence")
+                    or world_context.get("world_confidence")
+                    or world_context.get("stability_score")
+                    or context.get("stability_score")
+                    or context.get("confidence")
+                    or 0.0
+                )
+                derived_contexts.append({
+                    **world_context,
+                    "context_id": (
+                        world_context.get("context_id")
+                        or world_context.get("context_name")
+                        or f"world_context:{concept}"
+                    ),
+                    "context_type": "WORLD_CONTEXT",
+                    "concept": world_context.get("concept", concept),
+                    "confidence": world_confidence,
+                    "source": "semantic_context_builder.world_context",
+                    "source_semantic_context": context.get("context_id"),
+                    "dependency_chain": context.get("dependency_chain", []),
+                })
+
+        return derived_contexts
+
+    def _context_type_counts(self, contexts):
+
+        counts = {
+            "SEMANTIC_CONTEXT": 0,
+            "PROCESS_CONTEXT": 0,
+            "CAUSAL_CONTEXT": 0,
+            "WORLD_CONTEXT": 0,
+        }
+        for context in contexts:
+            if not isinstance(context, dict):
+                continue
+            context_type = str(
+                context.get("context_type")
+                or "SEMANTIC_CONTEXT"
+            )
+            if context_type in counts:
+                counts[context_type] += 1
+        return counts
 
     # ========================================
     # CONTEXT -> PROMOTION -> TRUTH
@@ -5259,8 +5965,25 @@ class AdaptiveCognitivePipeline:
             semantic_contexts,
             source="context_truth_advancement",
         )
-        registered_contexts = registration_report.get("registered_contexts", [])
+        registered_semantic_contexts = registration_report.get(
+            "registered_contexts",
+            [],
+        )
+        typed_contexts = self._derive_nonsemantic_contexts(
+            semantic_contexts,
+            runtime_context,
+        )
+        typed_registration_report = self.context_registry.register_batch(
+            typed_contexts,
+            source="context_truth_advancement.typed_contexts",
+        )
+        registered_typed_contexts = typed_registration_report.get(
+            "registered_contexts",
+            [],
+        )
+        registered_contexts = self.context_registry.all_contexts()
         hierarchy_report = self.context_hierarchy_engine.build(registered_contexts)
+        type_counts = self._context_type_counts(registered_contexts)
 
         context_discovery_report = {
             "system": "context_discovery",
@@ -5273,10 +5996,12 @@ class AdaptiveCognitivePipeline:
             "contexts_rejected": (
                 semantic_report.get("contexts_rejected", 0)
                 + registration_report.get("contexts_rejected", 0)
+                + typed_registration_report.get("contexts_rejected", 0)
             ),
             "rejection_reasons": (
                 list(semantic_report.get("rejection_reasons", []))
                 + list(registration_report.get("rejection_reasons", []))
+                + list(typed_registration_report.get("rejection_reasons", []))
             ),
             "registered_contexts": registered_contexts,
             "result_count": len(registered_contexts),
@@ -5288,6 +6013,24 @@ class AdaptiveCognitivePipeline:
         }
         runtime_context["context_discovery_report"] = context_discovery_report
         runtime_context["context_registry_report"] = self.context_registry.report()
+        runtime_context["typed_context_registry_report"] = {
+            **typed_registration_report,
+            "system": "typed_context_registry",
+            "typed_contexts": registered_typed_contexts,
+            "process_context_count": type_counts["PROCESS_CONTEXT"],
+            "causal_context_count": type_counts["CAUSAL_CONTEXT"],
+            "world_context_count": type_counts["WORLD_CONTEXT"],
+        }
+        runtime_context["causal_validation_reports"] = {
+            context.get("context_id"): context
+            for context in registered_contexts
+            if context.get("context_type") == "CAUSAL_CONTEXT"
+        }
+        runtime_context["world_context_reports"] = {
+            context.get("context_id"): context
+            for context in registered_contexts
+            if context.get("context_type") == "WORLD_CONTEXT"
+        }
         runtime_context["semantic_context_report"] = {
             **semantic_report,
             "contexts_registered": len(registered_contexts),
@@ -5301,30 +6044,34 @@ class AdaptiveCognitivePipeline:
         runtime_context["context_hierarchy_report"] = hierarchy_report
 
         self.performance_counters["context_created"] += len(created_contexts)
-        self.performance_counters["context_registered"] += len(registered_contexts)
+        self.performance_counters["context_registered"] += len(
+            registered_semantic_contexts
+        ) + len(registered_typed_contexts)
         self.performance_counters["context_lost"] += max(
-            len(semantic_contexts) - len(registered_contexts),
+            (
+                len(semantic_contexts)
+                + len(typed_contexts)
+                - len(registered_semantic_contexts)
+                - len(registered_typed_contexts)
+            ),
             0,
         )
         self.performance_counters["context_count"] = len(registered_contexts)
         self.performance_counters["registered_context_count"] = len(
             registered_contexts
         )
-        self.performance_counters["semantic_context_count"] = len([
-            context
-            for context in registered_contexts
-            if context.get("context_type") == "SEMANTIC_CONTEXT"
-        ])
-        self.performance_counters["causal_context_count"] = len([
-            context
-            for context in registered_contexts
-            if context.get("context_type") == "CAUSAL_CONTEXT"
-        ])
-        self.performance_counters["world_context_count"] = len([
-            context
-            for context in registered_contexts
-            if context.get("context_type") == "WORLD_CONTEXT"
-        ])
+        self.performance_counters["semantic_context_count"] = (
+            type_counts["SEMANTIC_CONTEXT"]
+        )
+        self.performance_counters["process_context_count"] = (
+            type_counts["PROCESS_CONTEXT"]
+        )
+        self.performance_counters["causal_context_count"] = (
+            type_counts["CAUSAL_CONTEXT"]
+        )
+        self.performance_counters["world_context_count"] = (
+            type_counts["WORLD_CONTEXT"]
+        )
         self.performance_counters["context_confidence_total"] += sum(
             float(context.get("confidence", 0.0) or 0.0)
             for context in registered_contexts
@@ -5586,6 +6333,125 @@ class AdaptiveCognitivePipeline:
             commit_report.get("committed_truths", [])
             + commit_report.get("probationary_truths", [])
         )
+        runtime_context["CONTEXT_LINEAGE_GRAPH"] = {
+            "system": "context_lineage_graph",
+            "report_state": "final",
+            "contexts": [
+                {
+                    "context_id": context.get("context_id"),
+                    "concept": context.get("concept"),
+                    "origin": context.get(
+                        "origin",
+                        context.get("source", "semantic_context_builder"),
+                    ),
+                    "source_concept": context.get("concept"),
+                    "source_dependency_chain": (
+                        dependency_chains.get(context.get("concept"), {})
+                        if isinstance(dependency_chains, dict)
+                        else {}
+                    ),
+                    "source_observation": context.get("source_observation"),
+                    "source_process_context": context.get("process_context"),
+                    "source_semantic_context": (
+                        context
+                        if context.get("context_type") == "SEMANTIC_CONTEXT"
+                        else None
+                    ),
+                    "registration_stage": "context_truth_advancement",
+                    "consumer_stages": [
+                        "contextual_truth_engine",
+                        "promotion_engine",
+                        "truth_candidate_engine",
+                    ],
+                }
+                for context in registered_contexts
+                if isinstance(context, dict)
+            ],
+            "dependency_backed_context_count": sum(
+                1
+                for context in registered_contexts
+                if isinstance(context, dict)
+                and isinstance(dependency_chains, dict)
+                and bool(dependency_chains.get(context.get("concept")))
+            ),
+            "independent_context_count": sum(
+                1
+                for context in registered_contexts
+                if isinstance(context, dict)
+                and (
+                    not isinstance(dependency_chains, dict)
+                    or not dependency_chains.get(context.get("concept"))
+                )
+            ),
+        }
+        runtime_context["TRUTH_LINEAGE_GRAPH"] = {
+            "system": "truth_lineage_graph",
+            "report_state": "final",
+            "candidates": [
+                {
+                    "concept": candidate.get("concept"),
+                    "evidence": candidate.get("supporting_tasks", []),
+                    "supporting_contexts": [
+                        context.get("context_id")
+                        for context in candidate.get("supporting_contexts", [])
+                        if isinstance(context, dict)
+                    ],
+                    "supporting_dependency_chains":
+                    candidate.get("supporting_dependencies", []),
+                    "promotion_engine": "promotion_engine",
+                    "candidate_state": candidate.get("candidate_state"),
+                }
+                for candidate in truth_candidates
+                if isinstance(candidate, dict)
+            ],
+            "committed_truths": [
+                {
+                    "concept": truth.get("concept"),
+                    "truth_state": truth.get("truth_state"),
+                    "evidence": truth.get("supporting_tasks", []),
+                    "supporting_contexts": [
+                        context.get("context_id")
+                        for context in truth.get("supporting_contexts", [])
+                        if isinstance(context, dict)
+                    ],
+                    "supporting_dependency_chains":
+                    truth.get("supporting_dependencies", []),
+                    "promotion_engine": "truth_commit_engine",
+                }
+                for truth in commit_report.get("committed_truths", [])
+                if isinstance(truth, dict)
+            ],
+        }
+        truth_bypasses = []
+        for truth in commit_report.get("committed_truths", []):
+            if not isinstance(truth, dict):
+                continue
+            if not truth.get("supporting_dependencies"):
+                truth_bypasses.append({
+                    "concept": truth.get("concept"),
+                    "bypass": "missing_dependency_support",
+                })
+            if not truth.get("supporting_contexts"):
+                truth_bypasses.append({
+                    "concept": truth.get("concept"),
+                    "bypass": "missing_context_support",
+                })
+            if float(truth.get("causal_validation_score", 0.0) or 0.0) <= 0.0:
+                truth_bypasses.append({
+                    "concept": truth.get("concept"),
+                    "bypass": "missing_causal_support",
+                })
+            if not truth.get("commit_ready"):
+                truth_bypasses.append({
+                    "concept": truth.get("concept"),
+                    "bypass": "missing_promotion_evaluation",
+                })
+        runtime_context["TRUTH_BYPASS_REPORT"] = {
+            "system": "truth_bypass_detector",
+            "report_state": "final",
+            "bypass_detected": bool(truth_bypasses),
+            "bypasses": truth_bypasses,
+        }
         runtime_context["context_truth_pipeline_telemetry"] = {
             "context_created": self.performance_counters["context_created"],
             "context_lookup_count": self.context_reuse_engine.lookup_count,

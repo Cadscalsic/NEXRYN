@@ -194,10 +194,23 @@ def safe_print_context(results, report_level="normal"):
                     "architecture_bottleneck_report",
                     {},
                 )
+                performance_report = (
+                    compact_report_builder.compact_performance_report(
+                        results.get("performance_report", {}),
+                    )
+                )
                 print({
+                    "system": "runtime_final_context",
+                    "report_state": "final",
+                    "status": (
+                        "failed"
+                        if results.get("failed_tasks", 0)
+                        else "ok"
+                    ),
                     "tasks_executed": results.get("tasks_executed", 0),
                     "successful_tasks": results.get("successful_tasks", 0),
                     "failed_tasks": results.get("failed_tasks", 0),
+                    "incomplete_tasks": results.get("incomplete_tasks", 0),
                     "architecture_bottleneck":
                     architecture_report.get("architecture_bottleneck"),
                     "recommended_next_step":
@@ -206,10 +219,23 @@ def safe_print_context(results, report_level="normal"):
                     architecture_report.get("dependency_chain_depth"),
                     "dependency_chain_coverage":
                     architecture_report.get("dependency_chain_coverage"),
-                    "performance_report":
-                    compact_report_builder.compact_performance_report(
-                        results.get("performance_report", {}),
-                    ),
+                    "resource_usage": {
+                        "execution_time":
+                        performance_report.get("execution_time"),
+                        "total_runtime_seconds":
+                        performance_report.get("total_runtime_seconds"),
+                        "cache_hits": performance_report.get("cache_hits"),
+                        "cache_misses": performance_report.get("cache_misses"),
+                        "reuse_rate": performance_report.get("reuse_rate"),
+                        "strategy_hits":
+                        performance_report.get("strategy_hits"),
+                        "truth_hits": performance_report.get("truth_hits"),
+                        "context_hits": performance_report.get("context_hits"),
+                        "estimated_runtime_saved":
+                        performance_report.get("estimated_runtime_saved"),
+                        "estimated_compute_saved":
+                        performance_report.get("estimated_compute_saved"),
+                    },
                 })
             elif training_report:
                 from runtime.learning.training_report import (
@@ -252,11 +278,15 @@ def safe_print_context(results, report_level="normal"):
 # RUNTIME OUTPUT HELPERS
 # ============================================
 
-def print_training_batch_summary(training_batch, verbose=False):
+def print_training_batch_summary(
+    training_batch,
+    verbose=False,
+    report_level="normal",
+):
     from runtime.reporting.compact_report_builder import (
-        MAX_TASKS_DISPLAYED,
         compact_report_builder,
     )
+    from runtime.reporting.output_governor import output_governor
 
     print("\n==================================================")
     print("NEXRYN :: TRAINING ASSISTANT BATCH")
@@ -266,24 +296,40 @@ def print_training_batch_summary(training_batch, verbose=False):
         print(compact_report_builder.compact_context(training_batch))
         return
 
-    selected_files = training_batch.get("selected_task_files", [])
+    selected_files = list(training_batch.get("selected_task_files", []) or [])
     print("training_mode:", training_batch.get("training_mode"))
     print("selected_tasks:", training_batch.get("selected_task_count", 0))
     print("tasks_completed:", 0)
     print("tasks_failed:", 0)
     print("tasks_remaining:", training_batch.get("selected_task_count", 0))
     print("current_batch_size:", training_batch.get("selected_task_count", 0))
-    print("recent_tasks:", list(selected_files or [])[-MAX_TASKS_DISPLAYED:])
-    print("prioritized_concepts:", training_batch.get("prioritized_concepts", []))
+    print(
+        "selected_task_files:",
+        output_governor.limit(
+            selected_files,
+            output_governor.max_visible_tasks,
+        ),
+    )
+    if report_level != "minimal":
+        print(
+            "prioritized_concepts:",
+            output_governor.limit(
+                training_batch.get("prioritized_concepts", []),
+                output_governor.max_visible_candidates,
+            ),
+        )
     selection_report = training_batch.get("selection_diversity_report", {})
-    if selection_report:
+    if selection_report and report_level != "minimal":
         print()
         print("TRAINING SELECTION DIVERSITY REPORT")
         print(
             "total_available_tasks=",
             selection_report.get("total_available_tasks", 0),
             "selected_tasks=",
-            selection_report.get("selected_tasks", []),
+            output_governor.limit(
+                selection_report.get("selected_tasks", []),
+                output_governor.max_visible_tasks,
+            ),
             "selection_mode=",
             selection_report.get("selection_mode"),
             "random_seed=",
@@ -306,6 +352,11 @@ def print_training_batch_summary(training_batch, verbose=False):
 
 
 class _MinimalRuntimePrintFilter:
+    ALLOWED_MARKERS = {
+        "CRITICAL",
+        "FATAL",
+        "RUNTIME WARNING",
+    }
     HEAVY_MARKERS = {
         "predicted_grid",
         "counterfactual_candidates",
@@ -327,7 +378,6 @@ class _MinimalRuntimePrintFilter:
             self._suppress_next_payload = False
             return
         if not args:
-            self.original_print(*args, **kwargs)
             return
         text_args = []
         for arg in args:
@@ -346,6 +396,9 @@ class _MinimalRuntimePrintFilter:
                 self._suppress_next_payload = True
                 return
             text_args.append(text)
+        joined = " ".join(text_args).upper()
+        if not any(marker in joined for marker in self.ALLOWED_MARKERS):
+            return
         self.original_print(*text_args, **kwargs)
 
     def _is_heavy(self, value):
@@ -493,6 +546,47 @@ def _metric_number(value, default=0.0):
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def task_execution_status(task_result):
+    if not isinstance(task_result, dict):
+        return "failed"
+    evaluation = task_result.get("evaluation_result", {})
+    if not isinstance(evaluation, dict):
+        evaluation = {}
+    success_state = str(
+        evaluation.get("success_state")
+        or task_result.get("success_state")
+        or ""
+    )
+    task_status = str(
+        evaluation.get("task_status")
+        or task_result.get("task_status")
+        or ""
+    )
+    if (
+        task_result.get("pipeline_incomplete") is True
+        or task_result.get("evaluation_complete") is False
+        or evaluation.get("pipeline_incomplete") is True
+        or task_status == "TASK_INCOMPLETE"
+        or success_state in {
+            "PREDICTION_NOT_PRODUCED",
+            "TARGET_OUTPUT_MISSING",
+        }
+    ):
+        return "incomplete"
+    if evaluation.get("success") is True or evaluation.get("exact_success") is True:
+        return "completed"
+    if success_state in {
+        "SUCCESS",
+        "EXACT_SUCCESS",
+        "SUCCESS_WITH_RESIDUALS",
+        "HIGH_VALUE_PARTIAL_SUCCESS",
+        "LEARNING_PROGRESS",
+        "PARTIAL_SUCCESS",
+    }:
+        return "completed"
+    return "failed"
 
 
 def build_runtime_metric_bridge(
@@ -747,7 +841,7 @@ parser.add_argument(
     "--report-level",
     type=str,
     default=None,
-    choices=["minimal", "normal", "full"],
+    choices=["minimal", "normal", "full", "debug", "audit"],
     help="Runtime report detail level",
 )
 
@@ -1025,11 +1119,13 @@ try:
     print_training_batch_summary(
         training_batch,
         verbose=args.verbose,
+        report_level=args.report_level,
     )
 
     all_results = []
     successful_tasks = 0
     failed_tasks = 0
+    incomplete_tasks = 0
     first_task_started = False
     main_module_timings = []
     task_execution_timings = []
@@ -1148,12 +1244,18 @@ try:
                             )
                         )
 
-            successful_tasks += 1
+            task_status = task_execution_status(task_result)
+            if task_status == "completed":
+                successful_tasks += 1
+            elif task_status == "failed":
+                failed_tasks += 1
+            else:
+                incomplete_tasks += 1
 
             all_results.append(
                 {
                     "task": task_file,
-                    "status": "completed",
+                    "status": task_status,
                     "result": task_result,
                 }
             )
@@ -1218,6 +1320,7 @@ try:
     training_assistant_report = training_assistant.complete_cycle(
         successful_tasks=successful_tasks,
         failed_tasks=failed_tasks,
+        incomplete_tasks=incomplete_tasks,
     )
     record_main_timing("training_assistant_complete", module_start)
 
@@ -1257,7 +1360,7 @@ try:
         )
     concept_lifecycle_elapsed = round(time.perf_counter() - module_start, 4)
     if (
-        args.report_level != "full"
+        args.report_level not in {"full", "debug", "audit"}
         and not concept_lifecycle_report.get("concept_lifecycle_compressed")
     ):
         from runtime.reporting.compact_report_builder import (
@@ -1748,6 +1851,88 @@ try:
     record_main_timing("performance_intelligence_report", module_start)
     module_timings.append(main_module_timings[-1])
 
+    def synchronize_training_report_metrics(
+        training_report,
+        performance_report,
+        performance_intelligence_report,
+    ):
+        if not isinstance(training_report, dict):
+            return training_report
+        if isinstance(performance_report, dict):
+            training_report["performance_report"] = performance_report
+            reuse_authority = performance_report.get(
+                "adaptive_reuse_engine",
+                {},
+            )
+            if not isinstance(reuse_authority, dict):
+                reuse_authority = {}
+            for key in (
+                "strategy_hits",
+                "strategy_misses",
+                "truth_hits",
+                "truth_misses",
+                "context_hits",
+                "context_misses",
+                "program_hits",
+                "program_misses",
+                "reuse_rate",
+                "estimated_compute_saved",
+                "estimated_runtime_saved",
+            ):
+                value = performance_report.get(key)
+                if value is not None:
+                    reuse_authority[key] = value
+            performance_report["adaptive_reuse_engine"] = reuse_authority
+            training_report["reuse_metric_authority"] = reuse_authority
+            training_report["cache_metric_authority"] = {
+                key: performance_report.get(key)
+                for key in (
+                    "cache_hits",
+                    "cache_misses",
+                    "cache_hit_rate",
+                )
+                if performance_report.get(key) is not None
+            }
+        if isinstance(performance_intelligence_report, dict):
+            training_report["PERFORMANCE_REPORT"] = (
+                performance_intelligence_report
+            )
+            training_report["performance_intelligence_report"] = (
+                performance_intelligence_report
+            )
+            memory = performance_intelligence_report.get(
+                "memory_efficiency",
+                {},
+            )
+            if isinstance(memory, dict):
+                training_report.setdefault(
+                    "performance_report",
+                    {},
+                ).update({
+                    key: value
+                    for key, value in memory.items()
+                    if key
+                    in {
+                        "strategy_hits",
+                        "strategy_misses",
+                        "truth_hits",
+                        "truth_misses",
+                        "context_hits",
+                        "context_misses",
+                        "program_hits",
+                        "program_misses",
+                        "reuse_rate",
+                    }
+                    and value is not None
+                })
+        return training_report
+
+    training_report = synchronize_training_report_metrics(
+        training_report,
+        performance_report,
+        performance_intelligence_report,
+    )
+
     module_start = time.perf_counter()
     truth_candidate_report = collect_governance_reports(
         all_results,
@@ -1845,6 +2030,7 @@ try:
         "tasks_executed": len(all_results),
         "successful_tasks": successful_tasks,
         "failed_tasks": failed_tasks,
+        "incomplete_tasks": incomplete_tasks,
 
         # Diagnostics bridge
         "concepts": concepts,
@@ -2068,13 +2254,15 @@ if runtime_status == "completed" and isinstance(results, dict):
         total_tasks = max(1, int(results.get("tasks_executed", 0) or 0))
         successful_tasks = int(results.get("successful_tasks", 0) or 0)
         failed_tasks = int(results.get("failed_tasks", 0) or 0)
+        incomplete_tasks = int(results.get("incomplete_tasks", 0) or 0)
+        unresolved_tasks = failed_tasks + incomplete_tasks
         evaluation_context = {
             **results,
             "accuracy": successful_tasks / total_tasks,
-            "difference_count": failed_tasks,
-            "episode_completed": failed_tasks == 0,
-            "retry_allowed": failed_tasks != 0,
-            "shutdown_mode": "fast" if failed_tasks == 0 else "normal",
+            "difference_count": unresolved_tasks,
+            "episode_completed": unresolved_tasks == 0,
+            "retry_allowed": unresolved_tasks != 0,
+            "shutdown_mode": "fast" if unresolved_tasks == 0 else "normal",
             "execution_time": execution_time,
         }
         evaluated_context = EvaluationController(
@@ -2150,7 +2338,11 @@ safe_print_context(
     report_level=effective_report_level,
 )
 
-if isinstance(results, dict) and results.get("performance_report"):
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("performance_report")
+):
     from runtime.reporting.compact_report_builder import (
         compact_report_builder,
     )
@@ -2164,7 +2356,11 @@ if isinstance(results, dict) and results.get("performance_report"):
         )
     )
 
-if isinstance(results, dict) and results.get("RUNTIME ATTRIBUTION REPORT"):
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("RUNTIME ATTRIBUTION REPORT")
+):
     from runtime.reporting.compact_report_builder import (
         compact_report_builder,
     )
@@ -2179,7 +2375,11 @@ if isinstance(results, dict) and results.get("RUNTIME ATTRIBUTION REPORT"):
         )
     )
 
-if isinstance(results, dict) and results.get("PERFORMANCE_REPORT"):
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("PERFORMANCE_REPORT")
+):
     from runtime.reporting.compact_report_builder import (
         compact_report_builder,
     )
@@ -2283,7 +2483,26 @@ runtime_metadata = build_runtime_metadata(
 print("\n==================================================")
 print("NEXRYN :: RUNTIME METADATA")
 print("==================================================\n")
-print(runtime_metadata)
+if effective_report_level == "minimal":
+    print({
+        "system": "runtime_metadata",
+        "report_state": "final",
+        "status": runtime_metadata.get("runtime_status"),
+        "mode": runtime_metadata.get("mode"),
+        "report_level": runtime_metadata.get("report_level"),
+        "execution_time": runtime_metadata.get("execution_time"),
+        "training_batch_size": runtime_metadata.get("training_batch_size"),
+        "tasks_directory": runtime_metadata.get("tasks_directory"),
+        "governance_budget_seconds":
+        runtime_metadata.get("governance_budget_seconds"),
+        "governance_budget_exceeded":
+        runtime_metadata.get("governance_budget_exceeded"),
+        "cache_boot_loaded": runtime_metadata.get("cache_boot_loaded"),
+        "cache_boot_skipped": runtime_metadata.get("cache_boot_skipped"),
+        "timestamp": runtime_metadata.get("timestamp"),
+    })
+else:
+    print(runtime_metadata)
 
 
 # ============================================

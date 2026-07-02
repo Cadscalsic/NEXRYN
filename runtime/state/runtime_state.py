@@ -56,6 +56,8 @@ class RuntimeState:
 
         self.disabled_tools = []
 
+        self.runtime_tool_requests = {}
+
         self.cache_metrics = None
 
         self.concept_version_hashes = {}
@@ -333,6 +335,33 @@ class RuntimeState:
         self.context[
             "disabled_tools"
         ] = self.disabled_tools
+
+        self.runtime_tool_requests = {
+            tool_name: {
+                "tool_name": tool_name,
+                "request_state": "REQUESTED",
+                "requested_by": "tool_selection",
+            }
+            for tool_name in self.enabled_tools
+        }
+
+        self.context[
+            "runtime_tool_requests"
+        ] = self.runtime_tool_requests
+
+        if "dependency_reasoning" in self.runtime_tool_requests:
+
+            self.context[
+                "dependency_lifecycle_report"
+            ] = {
+                **self.context.get("dependency_lifecycle_report", {}),
+                "system": "dependency_runtime",
+                "report_state": "pending",
+                "dependency_activation_state": "REQUESTED",
+                "dependency_requested_by": "tool_selection",
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+            }
 
         return selection
 

@@ -118,14 +118,15 @@ def test_training_report_exposes_compact_results_and_concept_memory(capsys):
         "ledger_average_contradiction_score"
     ] == 0.0552
     assert report["truth_commit_evaluations"] == {}
-    assert "CONCEPT DEBUG REPORT" in output
-    assert "CONCEPT ADVANCEMENT AUDIT" in output
-    assert "missing_promotion_score=True" in output
-    assert "missing_epistemic_graduation=True" in output
-    assert "TRUTH CANDIDATE REPORT" in output
-    assert "TRUTH COMMIT REPORT" in output
-    assert "symbolic_remapping 2 DISCOVERING" in output
-    assert "ledger_average_contradiction=0.0552" in output
+    assert "RUNTIME INTELLIGENCE DASHBOARD" in output
+    assert "CONCEPT REPORT" in output
+    assert "FAILURES" in output
+    assert "'concept_name': 'symbolic_remapping'" in output
+    assert "TRUTH REPORT" in output
+    assert "RECOMMENDATIONS" in output
+    assert "CACHE REPORT" in output
+    assert "'current_stage': 'DISCOVERING'" in output
+    assert "'contradiction_score': 0.0552" in output
     assert "effective_contradiction=0.14" not in output
     assert "contradiction_threshold=0.1" not in output
     assert "dict_keys" not in output
@@ -158,8 +159,9 @@ def test_training_report_minimal_prints_compact_concept_report(capsys):
     print_training_report(report, report_level="minimal")
     output = capsys.readouterr().out
 
-    assert "COMPACT CONCEPT REPORT" in output
-    assert "replication stage=" in output
+    assert "RUNTIME INTELLIGENCE DASHBOARD" in output
+    assert "CONCEPT REPORT" in output
+    assert "'concept_name': 'replication'" in output
     assert "TRUTH CANDIDATE REPORT" not in output
     assert "effective_contradiction=" not in output
 
@@ -187,10 +189,10 @@ def test_training_report_prints_curriculum_coverage_report(capsys):
     print_training_report(report)
     output = capsys.readouterr().out
 
-    assert "CURRICULUM COVERAGE REPORT" in output
-    assert "total_tasks=12" in output
-    assert "multi_concept_tasks=5" in output
-    assert "curriculum_balance_score=0.91" in output
+    assert "RUNTIME INTELLIGENCE DASHBOARD" in output
+    assert "TASK MANAGER" in output
+    assert "CACHE REPORT" in output
+    assert "TRUTH REPORT" in output
 
 
 def test_training_report_prints_selection_diversity_report(capsys):
@@ -215,11 +217,36 @@ def test_training_report_prints_selection_diversity_report(capsys):
     print_training_report(report)
     output = capsys.readouterr().out
 
-    assert "TRAINING SELECTION DIVERSITY REPORT" in output
-    assert "selected_tasks=['task_011.json', 'task_022.json']" in output
-    assert "selection_mode=weighted_random" in output
-    assert "previous_batch_overlap_count=0" in output
-    assert "diversity_score=1.0" in output
+    assert "RUNTIME INTELLIGENCE DASHBOARD" in output
+    assert "TASK MANAGER" in output
+    assert "CACHE REPORT" in output
+    assert "TRUTH REPORT" in output
+    assert "RECOMMENDATIONS" in output
+
+
+def test_training_report_counts_incomplete_tasks(capsys):
+    report = build_training_report(
+        training_batch={"selected_task_count": 1},
+        multi_task_results=[{
+            "task": "task_057.json",
+            "status": "incomplete",
+            "result": {
+                "evaluation_result": {
+                    "success_state": "PREDICTION_NOT_PRODUCED",
+                    "task_status": "TASK_INCOMPLETE",
+                },
+            },
+        }],
+    )
+
+    print_training_report(report, report_level="minimal")
+    output = capsys.readouterr().out
+
+    assert report["successful_tasks"] == 0
+    assert report["failed_tasks"] == 0
+    assert report["incomplete_tasks"] == 1
+    assert "'incomplete': 1" in output
+    assert "'total': 1" in output
 
 
 def test_training_report_preserves_context_candidate_in_discovery_mode():
@@ -440,8 +467,8 @@ def test_training_report_normalizes_semantic_context_and_prints_string_propertie
     print_training_report(report)
     output = capsys.readouterr().out
 
-    assert "SEMANTIC CONTEXT REPORT" in output
-    assert "creates_objects" in output
+    assert "CONTEXT REPORT" in output
+    assert "'semantic_context_count': 1" in output
     assert "CONTEXT PRINT FAILURE" not in output
 
 
@@ -614,23 +641,17 @@ def test_training_report_detects_architecture_bottleneck_plateau(capsys):
     ][0]["exact_blocker"] == [
         "promotion_gate_blocked:context_strength",
     ]
-    assert "ARCHITECTURE BOTTLENECK REPORT" in output
-    assert "bottleneck_type=NO_ARCHITECTURE_BOTTLENECK_DETECTED" in output
-    assert (
-        "dependency_reasoning_operator_available=True"
-        in output
-    )
-    assert (
-        "process_dependency_memory_available=True"
-        in output
-    )
-    assert "recommended_next_step=continue_adaptive_training" in output
-    assert "process_dependency_links_loaded=" in output
-    assert "process_dependency_links_used=" in output
-    assert "dependency_chain_depth=" in output
-    assert "dependency_chain_coverage=" in output
-    assert "boundary_refinement_dependency concept=growth" in output
-    assert "dependency_ready_boundary_refinement_blocker concept=growth" in output
+    assert "DEPENDENCY REPORT" in output
+    assert "NO_ARCHITECTURE_BOTTLENECK_DETECTED" in output
+    assert "'dependency_activation_state': 'NOT_REQUESTED'" in output
+    assert "RECOMMENDATIONS" in output
+    assert "'continue_adaptive_training'" in output
+    assert "'dependency_chain_coverage':" in output
+    assert "'dependency_chains_executed':" in output
+    assert "'dependency_chain_depth':" in output
+    assert "'dependency_coherence':" in output
+    assert "WARNINGS" in output
+    assert "TRUTH REPORT" in output
 
 
 def test_architecture_bottleneck_uses_typed_process_dependency_evidence():
@@ -868,8 +889,8 @@ def test_architecture_report_uses_executed_dependency_telemetry(capsys):
 
     print_training_report(report)
     output = capsys.readouterr().out
-    assert "DEPENDENCY TELEMETRY REPORT" in output
-    assert "dependency_telemetry concept=shape_preservation" in output
+    assert "DEPENDENCY REPORT" in output
+    assert "'dependency_chain_depth':" in output
 
 
 def test_boundary_refinement_prefers_reasoned_dependency_chain():
@@ -1178,10 +1199,10 @@ def test_training_report_extracts_process_context_discovery_reports(capsys):
 
     print_training_report(report)
     output = capsys.readouterr().out
-    assert "CONTEXT DISCOVERY REPORT" in output
-    assert "context=growth_context" in output
-    assert "transitions=1" in output
-    assert "confidence=0.9276" in output
+    assert "CONTEXT REPORT" in output
+    assert "'context_count': 1" in output
+    assert "TRUTH REPORT" in output
+    assert "RECOMMENDATIONS" in output
 
 
 def test_training_report_bridges_cognition_layer_contexts_to_candidates():
@@ -1333,7 +1354,8 @@ def test_training_report_prints_real_strategy_objects(capsys):
     print_training_report(report)
 
     output = capsys.readouterr().out
-    assert "growth state=STRATEGY_REUSED score=0.94" in output
+    assert "CACHE REPORT" in output
+    assert "'strategy_hits': 2" in output
     assert "None state=None score=None method=None" not in output
 
 
@@ -1357,8 +1379,64 @@ def test_training_report_prints_counterfactual_reuse_objects(capsys):
     print_training_report(report)
 
     output = capsys.readouterr().out
-    assert "COUNTERFACTUAL REUSE REPORT" in output
-    assert (
-        "growth state=COUNTERFACTUAL_REUSED score=0.94 "
-        "learned_from=committed_truth_and_accepted_hypothesis"
-    ) in output
+    assert "RUNTIME INTELLIGENCE DASHBOARD" in output
+    assert "CACHE REPORT" in output
+
+
+def test_training_report_dashboard_uses_aggregated_performance_report(capsys):
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_reuse.json",
+            "status": "completed",
+            "result": {
+                "performance_report": {
+                    "strategy_hits": 15,
+                    "truth_hits": 15,
+                    "context_hits": 5,
+                    "reuse_rate": 0.5667,
+                    "adaptive_reuse_engine": {
+                        "strategy_hits": 15,
+                        "truth_hits": 15,
+                        "context_hits": 5,
+                        "reuse_rate": 0.5667,
+                    },
+                },
+                "knowledge_reuse_report": {
+                    "strategy_hits": 0,
+                    "truth_hits": 0,
+                    "context_hits": 0,
+                    "reuse_rate": 0.0,
+                },
+            },
+        }],
+    )
+
+    print_training_report(report)
+
+    output = capsys.readouterr().out
+    assert report["performance_report"]["strategy_hits"] == 15
+    assert report["performance_report"]["truth_hits"] == 15
+    assert report["performance_report"]["context_hits"] == 5
+    assert report["performance_report"]["reuse_rate"] == 0.5667
+    assert "'strategy_hits': 15" in output
+    assert "'truth_hits': 15" in output
+    assert "'context_hits': 5" in output
+    assert "'reuse_rate': 0.5667" in output
+
+
+def test_dependency_enabled_tool_reports_requested_not_not_requested():
+    report = build_training_report(
+        multi_task_results=[{
+            "task": "task_dependency.json",
+            "status": "completed",
+            "result": {
+                "enabled_tools": ["dependency_reasoning"],
+                "tool_selection_report": {
+                    "enabled_tools": ["dependency_reasoning"],
+                },
+            },
+        }],
+    )
+
+    architecture = report["architecture_bottleneck_report"]
+    assert architecture["dependency_activation_state"] == "REQUESTED"

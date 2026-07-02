@@ -4,9 +4,15 @@ from copy import deepcopy
 import json
 from typing import Any
 
+from runtime.reporting.output_governor import (
+    ADVANCED_REPORT_LEVELS,
+    HISTORICAL_ARCHIVE_KEYS,
+    output_governor,
+)
 
-MAX_TASKS_DISPLAYED = 5
-MAX_HISTORY_DISPLAYED = 5
+
+MAX_TASKS_DISPLAYED = 3
+MAX_HISTORY_DISPLAYED = 3
 MAX_SOURCES_DISPLAYED = 10
 MAX_DEPENDENCIES_DISPLAYED = 10
 MAX_FULL_ENTRIES_DISPLAYED = 20
@@ -47,6 +53,7 @@ class CompactReportBuilder:
         "counterfactual_candidates",
     }
     HISTORICAL_LIST_KEYS = {
+        *HISTORICAL_ARCHIVE_KEYS,
         "observed_tasks",
         "task_sources",
         "training_files",
@@ -183,7 +190,9 @@ class CompactReportBuilder:
     def compact_performance_report(self, report: dict) -> dict:
         report = report if isinstance(report, dict) else {}
         return {
-            "system": report.get("system"),
+            "system": report.get("system", "performance_report"),
+            "report_state": report.get("report_state", "final"),
+            "status": report.get("status", "ok"),
             "execution_time": report.get(
                 "execution_time",
                 report.get("total_runtime_seconds"),
@@ -266,6 +275,9 @@ class CompactReportBuilder:
             "estimated_runtime_saved": report.get(
                 "estimated_runtime_saved",
             ),
+            "estimated_compute_saved": report.get(
+                "estimated_compute_saved",
+            ),
             "skipped_reports_count": report.get("skipped_reports_count"),
             "premature_reports_prevented": report.get(
                 "premature_reports_prevented",
@@ -312,23 +324,47 @@ class CompactReportBuilder:
         def compact_concept(concept):
             promotion = concept.get("truth_candidate_promotion", {})
             promotion = promotion if isinstance(promotion, dict) else {}
+            concept_name = concept.get("concept") or concept.get("concept_name")
+            history_count = sum(
+                self._count_items(concept.get(key))
+                for key in self.HISTORICAL_LIST_KEYS
+                if key in concept
+            )
             return {
-                "concept": concept.get("concept"),
-                "state": concept.get("state"),
-                "used_task_count": concept.get("used_task_count"),
+                "concept_name": concept_name,
+                "current_stage": concept.get(
+                    "current_stage",
+                    concept.get(
+                        "promotion_stage",
+                        concept.get("state", concept.get("lifecycle_state")),
+                    ),
+                ),
+                "confidence": concept.get(
+                    "confidence",
+                    concept.get("independent_success_rate", 0.0),
+                ),
+                "support_score": concept.get(
+                    "support_score",
+                    concept.get("independent_success_rate", 0.0),
+                ),
+                "contradiction_score": concept.get(
+                    "contradiction_score",
+                    concept.get(
+                        "average_contradiction_score",
+                        concept.get("ledger_average_contradiction_score", 0.0),
+                    ),
+                ),
                 "promotion_score": concept.get("promotion_score"),
-                "promotion_stage": concept.get("promotion_stage"),
+                "observation_count": concept.get(
+                    "observation_count",
+                    concept.get("used_task_count", 0),
+                ),
                 "candidate_ready": concept.get("candidate_ready"),
-                "eligible_for_context": concept.get("eligible_for_context"),
-                "eligible_for_truth_candidate":
-                concept.get("eligible_for_truth_candidate"),
-                "blocked_metrics": list(concept.get("blocked_metrics", [])),
-                "average_contradiction_score":
-                concept.get("average_contradiction_score"),
+                "last_updated": concept.get("last_updated"),
+                "state": concept.get("state", concept.get("lifecycle_state")),
+                "history_count": history_count,
                 "promotion_dependency_score":
                 promotion.get("promotion_dependency_score"),
-                "promotion_dependency_bonus":
-                promotion.get("promotion_dependency_bonus"),
                 "dependency_confidence": promotion.get("dependency_confidence"),
                 "dependency_chain_depth":
                 promotion.get("dependency_chain_depth"),
@@ -343,6 +379,8 @@ class CompactReportBuilder:
 
         compact = {
             "system": report.get("system", "concept_maturity_tracker"),
+            "report_state": report.get("report_state", "final"),
+            "status": report.get("status", "ok"),
             "states": list(report.get("states", [])),
             "concepts": [
                 compact_concept(concept)
@@ -416,6 +454,8 @@ class CompactReportBuilder:
     def report(self) -> dict:
         return {
             "system": "compact_report_builder",
+            "report_state": "final",
+            "status": "ok",
             "compact_reports_generated": self.compact_reports_generated,
             "heavy_keys_removed": self.heavy_keys_removed,
             "arrays_summarized": self.arrays_summarized,
@@ -483,6 +523,8 @@ class CompactReportBuilder:
             "minimal": MAX_HISTORY_DISPLAYED,
             "normal": 10,
             "full": MAX_FULL_ENTRIES_DISPLAYED,
+            "debug": MAX_FULL_ENTRIES_DISPLAYED,
+            "audit": MAX_FULL_ENTRIES_DISPLAYED,
         }[level]
         if self._is_array_like(value):
             self.arrays_summarized += 1
@@ -754,6 +796,11 @@ class CompactReportBuilder:
 
     def _historical_summary(self, key, value, level):
         count = self._count_items(value)
+        if level not in ADVANCED_REPORT_LEVELS:
+            prefix, _recent_key = self._summary_names_for(key)
+            return {prefix: count}
+        if level == "audit":
+            return {key: deepcopy(value), f"{key}_count": count}
         limit = self._historical_limit_for(key, level)
         recent = self._recent_items(value, limit)
         prefix, recent_key = self._summary_names_for(key)
@@ -854,12 +901,7 @@ class CompactReportBuilder:
             return str(value)
 
     def _level(self, level):
-        level = str(level or "normal").lower()
-        if level == "summary":
-            return "normal"
-        if level not in {"minimal", "normal", "full"}:
-            return "normal"
-        return level
+        return output_governor.normalize_level(level)
 
 
 compact_report_builder = CompactReportBuilder()

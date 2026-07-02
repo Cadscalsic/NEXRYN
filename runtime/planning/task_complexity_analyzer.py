@@ -10,6 +10,16 @@ import json
 @dataclass
 class TaskProfile:
 
+    task_id: str
+
+    task_family: str
+
+    target_concepts: list
+
+    suspected_concepts: list
+
+    required_capabilities: list
+
     complexity: str
 
     object_count: int
@@ -135,7 +145,60 @@ class TaskComplexityAnalyzer:
             dependency_depth,
         )
 
+        task_id = str(
+            task_context.get("task_id")
+            or task_context.get("task_path")
+            or task_context.get("task_file")
+            or self.last_task_signature
+        )
+        task_family = str(
+            task_context.get("task_family")
+            or task_context.get("concept_family")
+            or ""
+        )
+        target_concepts = self._as_list(
+            task_context.get("target_concepts")
+            or task_context.get("concepts")
+        )
+        target_concepts = list(dict.fromkeys([
+            *target_concepts,
+            *self._concepts_from_task_identity(task_id, task_family),
+        ]))
+        suspected_concepts = self._as_list(
+            task_context.get("suspected_concepts")
+            or task_context.get("priority_concepts")
+        )
+        suspected_concepts = list(dict.fromkeys([
+            *suspected_concepts,
+            *self._concepts_from_task_identity(task_id, task_family),
+        ]))
+        required_capabilities = self._as_list(
+            task_context.get("required_capabilities")
+        )
+        if any(
+            concept in target_concepts
+            for concept in (
+                "object_counting",
+                "cardinality",
+                "numerical_reasoning",
+                "set_reasoning",
+            )
+        ):
+            required_capabilities = list(dict.fromkeys([
+                *required_capabilities,
+                "object_tracking",
+                "counting",
+                "dependency_reasoning",
+            ]))
+
         return TaskProfile(
+            task_id=str(
+                task_id
+            ),
+            task_family=task_family,
+            target_concepts=target_concepts,
+            suspected_concepts=suspected_concepts,
+            required_capabilities=required_capabilities,
             complexity=complexity,
             object_count=int(object_count),
             estimated_concepts=int(estimated_concepts),
@@ -178,6 +241,49 @@ class TaskComplexityAnalyzer:
             default=str,
         )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+
+    def _as_list(self, value):
+
+        if value is None:
+            return []
+
+        if isinstance(value, list):
+            return value
+
+        if isinstance(value, (tuple, set)):
+            return list(value)
+
+        return [value]
+
+    def _concepts_from_task_identity(self, task_id, task_family):
+
+        signal_text = f"{task_id} {task_family}".lower()
+        concepts = []
+        if any(
+            marker in signal_text
+            for marker in (
+                "object_counting",
+                "object counting",
+                "counting",
+                "count_by_color",
+                "count by color",
+                "cardinality",
+                "quantity",
+                "numerical",
+                "number",
+                "set_reasoning",
+                "set reasoning",
+            )
+        ):
+            concepts.extend([
+                "object_counting",
+                "cardinality",
+                "quantity_preservation",
+                "quantity_transformation",
+                "numerical_reasoning",
+                "set_reasoning",
+            ])
+        return list(dict.fromkeys(concepts))
 
     def _classify(
         self,

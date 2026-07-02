@@ -96,6 +96,38 @@ DEFAULT_TYPED_PROCESS_DEPENDENCIES = {
         ("occupied_cell_count", "preserves", "coverage_pattern", 0.87),
         ("coverage_pattern", "enables", "density_preservation", 0.86),
     ],
+    "object_counting": [
+        ("object_counting", "requires", "object_identity", 0.91),
+        ("object_counting", "requires", "cardinality", 0.92),
+        ("cardinality", "derives_from", "object_set_membership", 0.90),
+        ("object_set_membership", "requires", "object_segmentation", 0.89),
+        ("object_counting", "constrains", "quantity_preservation", 0.88),
+    ],
+    "cardinality": [
+        ("cardinality", "requires", "object_set_membership", 0.91),
+        ("object_set_membership", "requires", "object_identity", 0.90),
+        ("cardinality", "enables", "numerical_reasoning", 0.89),
+    ],
+    "quantity_preservation": [
+        ("quantity_preservation", "requires", "cardinality", 0.91),
+        ("quantity_preservation", "preserves", "object_count", 0.90),
+        ("object_count", "derives_from", "object_set_membership", 0.89),
+    ],
+    "quantity_transformation": [
+        ("quantity_transformation", "requires", "cardinality", 0.91),
+        ("quantity_transformation", "modifies", "object_count", 0.90),
+        ("object_count", "derives_from", "object_set_membership", 0.89),
+    ],
+    "numerical_reasoning": [
+        ("numerical_reasoning", "requires", "cardinality", 0.91),
+        ("numerical_reasoning", "requires", "quantity_comparison", 0.89),
+        ("quantity_comparison", "derives_from", "object_count", 0.88),
+    ],
+    "set_reasoning": [
+        ("set_reasoning", "requires", "object_set_membership", 0.91),
+        ("set_reasoning", "requires", "cardinality", 0.90),
+        ("object_set_membership", "requires", "object_identity", 0.89),
+    ],
 }
 
 

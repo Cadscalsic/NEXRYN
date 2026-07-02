@@ -131,6 +131,31 @@ def test_learning_progress_is_terminal_runtime_shutdown():
     assert decision.max_reasoning_depth == 0
 
 
+def test_success_semantics_preserves_high_value_near_success():
+    evaluation, report = SuccessSemanticsEngine().apply(
+        {
+            "accuracy": 0.9429,
+            "difference_count": 2,
+            "success": False,
+            "exact_success": False,
+            "partial_success": True,
+            "high_value_partial_success": True,
+            "success_state": "HIGH_VALUE_PARTIAL_SUCCESS",
+        },
+        {
+            "predicted_output": [[0, 0, 0, 0, 0, 0, 0]] * 5,
+            "output_grid": [[1, 1, 0, 0, 0, 0, 0]]
+            + [[0, 0, 0, 0, 0, 0, 0]] * 4,
+        },
+    )
+
+    assert evaluation["success_state"] == "HIGH_VALUE_PARTIAL_SUCCESS"
+    assert evaluation["failure_detected"] is False
+    assert evaluation["partial_success"] is True
+    assert evaluation["retry_allowed"] is False
+    assert report["termination_reason"] == "NEAR_SUCCESS_WITH_SMALL_RESIDUAL"
+
+
 def test_motivation_rewards_success_with_residuals_without_penalty():
     context = trusted_residual_context()
     context["evaluation_result"] = {

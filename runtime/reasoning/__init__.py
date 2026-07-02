@@ -144,6 +144,34 @@ from runtime.reasoning.generalization import (
     generalization_engine
 )
 
+from runtime.reasoning.residual_reasoning_engine import (
+
+    ResidualReasoningEngine,
+
+    residual_reasoning_engine
+)
+
+from runtime.reasoning.spatial_residual_repair import (
+
+    SpatialResidualRepair,
+
+    spatial_residual_repair
+)
+
+from runtime.reasoning.object_residual_repair import (
+
+    ObjectResidualRepair,
+
+    object_residual_repair
+)
+
+from runtime.reasoning.counterfactual_repair_engine import (
+
+    CounterfactualRepairEngine,
+
+    counterfactual_repair_engine
+)
+
 # ============================================
 # EXPORTS
 # ============================================
@@ -257,4 +285,24 @@ __all__ = [
     "SpatialReasoningEngine",
 
     "spatial_reasoning_engine",
+
+    # ========================================
+    # RESIDUAL REPAIR
+    # ========================================
+
+    "ResidualReasoningEngine",
+
+    "residual_reasoning_engine",
+
+    "SpatialResidualRepair",
+
+    "spatial_residual_repair",
+
+    "ObjectResidualRepair",
+
+    "object_residual_repair",
+
+    "CounterfactualRepairEngine",
+
+    "counterfactual_repair_engine",
 ]

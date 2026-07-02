@@ -153,7 +153,8 @@ class ProcessContextRegistry:
             ),
         })
 
-        registered = self.register(context)
+        self.register(context)
+        registered = context.as_dict(compact=False)
 
         return {
             **registered,

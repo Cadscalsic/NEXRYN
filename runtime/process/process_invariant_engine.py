@@ -14,6 +14,12 @@ PROCESS_INVARIANTS = {
     "size_preservation": ["object_extent_preserved", "identity_preserved"],
     "symbolic_remapping": ["symbol_identity_preserved", "mapping_consistent"],
     "density_preservation": ["density_ratio_preserved", "coverage_preserved"],
+    "object_counting": ["object_identity_preserved", "cardinality_consistent"],
+    "cardinality": ["set_membership_stable", "cardinality_consistent"],
+    "quantity_preservation": ["object_count_preserved"],
+    "quantity_transformation": ["object_count_delta_consistent"],
+    "numerical_reasoning": ["numeric_relation_consistent"],
+    "set_reasoning": ["set_membership_stable"],
 }
 
 

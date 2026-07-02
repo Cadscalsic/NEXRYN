@@ -256,6 +256,83 @@ def build_training_report(
 
         dependency_telemetry_report = collect_dependency_telemetry()
 
+        def collect_dependency_lifecycle():
+            states = []
+            times = []
+            executions = []
+            for item in multi_task_results:
+                result = item.get("result", {})
+                if not isinstance(result, dict):
+                    continue
+                enabled_tools = set(result.get("enabled_tools", []) or [])
+                tool_selection_report = result.get("tool_selection_report", {})
+                if isinstance(tool_selection_report, dict):
+                    enabled_tools.update(
+                        tool_selection_report.get("enabled_tools", []) or []
+                    )
+                runtime_tool_requests = result.get("runtime_tool_requests", {})
+                dependency_request = (
+                    runtime_tool_requests.get("dependency_reasoning", {})
+                    if isinstance(runtime_tool_requests, dict)
+                    else {}
+                )
+                if (
+                    "dependency_reasoning" in enabled_tools
+                    or dependency_request.get("request_state") == "REQUESTED"
+                ):
+                    states.append("REQUESTED")
+                for key in (
+                    "dependency_lifecycle_report",
+                    "dependency_reasoning_report",
+                    "performance_report",
+                    "PERFORMANCE_REPORT",
+                ):
+                    report = result.get(key, {})
+                    if not isinstance(report, dict):
+                        continue
+                    state = (
+                        report.get("dependency_activation_state")
+                        or report.get("dependency_lifecycle_state")
+                    )
+                    if state:
+                        states.append(str(state).upper())
+                    time_value = report.get(
+                        "dependency_time",
+                        report.get(
+                            "dependency_reasoning_time",
+                            report.get("dependency_reasoning_time_seconds"),
+                        ),
+                    )
+                    if time_value is not None:
+                        times.append(safe_float(time_value))
+                    executed = report.get("dependency_chains_executed")
+                    if executed is not None:
+                        executions.append(safe_int(executed))
+            precedence = [
+                "COMPLETED",
+                "EXECUTING",
+                "ACTIVATED",
+                "FAILED",
+                "SKIPPED",
+                "REQUESTED",
+                "NOT_REQUESTED",
+            ]
+            state = next(
+                (
+                    candidate
+                    for candidate in precedence
+                    if candidate in states
+                ),
+                "NOT_REQUESTED",
+            )
+            return {
+                "dependency_activation_state": state,
+                "dependency_reasoning_time": round(max(times or [0.0]), 4),
+                "dependency_chains_executed": max(executions or [0]),
+            }
+
+        dependency_lifecycle = collect_dependency_lifecycle()
+
         try:
             from core.dependency import (
                 DependencyReasoningOperator,
@@ -948,6 +1025,12 @@ def build_training_report(
             process_dependency_links_loaded,
             "process_dependency_links_used":
             process_dependency_links_used,
+            "dependency_chains_executed":
+            dependency_lifecycle["dependency_chains_executed"],
+            "dependency_reasoning_time":
+            dependency_lifecycle["dependency_reasoning_time"],
+            "dependency_activation_state":
+            dependency_lifecycle["dependency_activation_state"],
             "dependency_chain_depth": (
                 max(chain_depths)
                 if chain_depths
@@ -3182,6 +3265,134 @@ def build_training_report(
     concept_lifecycle_report["training_diversity_report"] = (
         training_diversity_report
     )
+
+    def aggregate_runtime_performance_report():
+        def number(value):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0.0
+
+        numeric_keys = (
+            "cache_hits",
+            "cache_misses",
+            "strategy_hits",
+            "strategy_misses",
+            "truth_hits",
+            "truth_misses",
+            "context_hits",
+            "context_misses",
+            "program_hits",
+            "program_misses",
+            "estimated_compute_saved",
+            "estimated_runtime_saved",
+        )
+        totals = {key: 0.0 for key in numeric_keys}
+        reuse_rates = []
+        registry_contexts = []
+        for item in multi_task_results:
+            result = item.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            sources = []
+            performance = result.get("performance_report", {})
+            if isinstance(performance, dict):
+                sources.append(performance)
+                adaptive_reuse = performance.get("adaptive_reuse_engine", {})
+                if isinstance(adaptive_reuse, dict):
+                    sources.append(adaptive_reuse)
+            intelligence = (
+                result.get("PERFORMANCE_REPORT")
+                or result.get("performance_intelligence_report")
+                or {}
+            )
+            if isinstance(intelligence, dict):
+                memory = intelligence.get("memory_efficiency", {})
+                if isinstance(memory, dict):
+                    sources.append(memory)
+            for source in sources:
+                for key in numeric_keys:
+                    if key in source:
+                        totals[key] = max(totals[key], number(source.get(key)))
+                if source.get("reuse_rate") is not None:
+                    reuse_rates.append(number(source.get("reuse_rate")))
+            registry_report = result.get("context_registry_report", {})
+            if isinstance(registry_report, dict):
+                contexts = registry_report.get("contexts", [])
+                if isinstance(contexts, list):
+                    registry_contexts.extend(
+                        context
+                        for context in contexts
+                        if isinstance(context, dict)
+                    )
+
+        performance = {
+            key: (
+                int(value)
+                if key.endswith("_hits") or key.endswith("_misses")
+                else round(value, 4)
+            )
+            for key, value in totals.items()
+        }
+        queries = sum(
+            totals[key]
+            for key in (
+                "cache_hits",
+                "cache_misses",
+                "strategy_hits",
+                "strategy_misses",
+                "truth_hits",
+                "truth_misses",
+                "context_hits",
+                "context_misses",
+                "program_hits",
+                "program_misses",
+            )
+        )
+        reuse_events = sum(
+            totals[key]
+            for key in (
+                "cache_hits",
+                "strategy_hits",
+                "truth_hits",
+                "context_hits",
+                "program_hits",
+            )
+        )
+        performance["reuse_rate"] = round(
+            max(reuse_rates or [reuse_events / max(queries, 1)]),
+            4,
+        )
+        performance["cache_hit_rate"] = round(
+            totals["cache_hits"]
+            / max(totals["cache_hits"] + totals["cache_misses"], 1),
+            4,
+        )
+        performance["adaptive_reuse_engine"] = {
+            key: performance[key]
+            for key in (
+                "strategy_hits",
+                "strategy_misses",
+                "truth_hits",
+                "truth_misses",
+                "context_hits",
+                "context_misses",
+                "program_hits",
+                "program_misses",
+                "reuse_rate",
+                "estimated_compute_saved",
+                "estimated_runtime_saved",
+            )
+        }
+        return performance, {
+            "system": "context_registry",
+            "report_state": "final",
+            "contexts": registry_contexts,
+        }
+
+    runtime_performance_report, runtime_context_registry_report = (
+        aggregate_runtime_performance_report()
+    )
     architecture_bottleneck_report = build_architecture_bottleneck_report(
         causal_validation_reports,
         context_discovery_reports,
@@ -3207,6 +3418,10 @@ def build_training_report(
             item.get("status") == "failed"
             for item in task_results
         ),
+        "incomplete_tasks": sum(
+            item.get("status") == "incomplete"
+            for item in task_results
+        ),
         "multi_task_results": task_results,
         "concepts_discovered": {
             concept: stats["used_task_count"]
@@ -3229,6 +3444,10 @@ def build_training_report(
         strategy_reuse_report,
         "knowledge_reuse_report":
         concept_lifecycle_report.get("knowledge_reuse_report", {}),
+        "performance_report":
+        runtime_performance_report,
+        "context_registry_report":
+        runtime_context_registry_report,
         "truth_graduation_report":
         truth_graduation_report,
         "core_knowledge_registry_report":
@@ -3324,81 +3543,115 @@ def _count(items):
 
 
 def _print_minimal_training_report(report):
-    from runtime.reporting.compact_report_builder import MAX_TASKS_DISPLAYED
+    _print_runtime_dashboard(report, report_level="minimal")
 
-    task_results = report.get("multi_task_results", [])
-    tasks_executed = report.get("tasks_executed", [])
-    failed_tasks = report.get("failed_tasks", 0)
-    successful_tasks = report.get("successful_tasks", 0)
-    print("TRAINING REPORT")
-    print()
-    print("selected_tasks:", report.get("tasks_selected", 0))
-    print("tasks_completed:", successful_tasks)
-    print("tasks_failed:", failed_tasks)
-    print(
-        "tasks_remaining:",
-        max(report.get("tasks_selected", 0) - successful_tasks - failed_tasks, 0),
+
+def _print_runtime_dashboard(report, report_level="normal"):
+    from runtime.reporting.output_governor import output_governor
+
+    dashboard = output_governor.runtime_dashboard(
+        report,
+        level=report_level,
     )
-    print("tasks_executed_count:", _count(tasks_executed))
-    print("recent_tasks:", _recent_items(tasks_executed, MAX_TASKS_DISPLAYED))
-    print("multi_task_result_count:", _count(task_results))
-    print("concept_count:", _count(report.get("concepts_discovered", {})))
+    summary = dashboard.get("summary", {})
+    metrics = dashboard.get("metrics", {})
+
+    print("RUNTIME INTELLIGENCE DASHBOARD")
     print()
-    print("COMPACT CONCEPT REPORT")
+    print("system:", dashboard.get("system"))
+    print("report_state:", dashboard.get("report_state"))
+    print("status:", dashboard.get("status"))
+    print("timestamp:", dashboard.get("timestamp"))
     print()
-    for concept, stats in report.get("concept_memory", {}).items():
-        print(
-            concept,
-            "stage="
-            f"{stats.get('promotion_stage', stats.get('lifecycle_state', 'DISCOVERING'))}",
-            "score="
-            f"{stats.get('promotion_score')}",
-            "ready="
-            f"{stats.get('candidate_ready', stats.get('preliminary_truth_candidate_ready', False))}",
-            "blocked="
-            f"{stats.get('blocked_metrics', [])}",
-        )
-    promotion_items = (
-        report.get("concept_lifecycle", {}).get(
-            "promotion_report",
-            [],
-        )
-        if isinstance(report.get("concept_lifecycle"), dict)
-        else []
-    )
-    if promotion_items:
-        print()
-        print("PROMOTION REPORT")
-        print()
-        for item in promotion_items:
-            print(
-                item.get("concept"),
-                "stage="
-                f"{item.get('current_stage')}",
-                "score="
-                f"{item.get('promotion_score')}",
-                "ready="
-                f"{item.get('candidate_ready')}",
-                "blocked="
-                f"{item.get('blocked_reason') or []}",
-            )
-    architecture_report = report.get("architecture_bottleneck_report", {})
-    if architecture_report:
-        print()
-        print("ARCHITECTURE BOTTLENECK REPORT")
-        print(
-            "bottleneck_type="
-            f"{architecture_report.get('bottleneck_type')}",
-            "dependency_chain_depth="
-            f"{architecture_report.get('dependency_chain_depth')}",
-            "dependency_chain_coverage="
-            f"{architecture_report.get('dependency_chain_coverage')}",
-            "recommended_next_step="
-            f"{architecture_report.get('recommended_next_step')}",
-        )
+    print("TASK MANAGER")
+    print("selected_tasks:", summary.get("selected_tasks", []))
+    print("active_tasks:", summary.get("active_tasks", []))
+    print("completed_tasks:", summary.get("completed_tasks", 0))
+    print("failed_tasks:", summary.get("failed_tasks", 0))
+    print("skipped_tasks:", summary.get("skipped_tasks", 0))
+    print("training_batch_size:", summary.get("training_batch_size", 0))
+    print("execution_progress:", summary.get("execution_progress", {}))
     print()
-    print("TRUTH COMMIT REPORT")
-    print("truth_commit_count:", _count(report.get("truth_commit_evaluations", {})))
+    print("CONCEPT REPORT")
+    for concept in summary.get("concepts", []):
+        print(concept)
+    print()
+    print("DEPENDENCY REPORT")
+    print({
+        key: metrics.get(key)
+        for key in [
+            "dependency_chains_executed",
+            "dependency_chain_depth",
+            "dependency_chain_coverage",
+            "dependency_coherence",
+            "dependency_reasoning_time",
+            "dependency_activation_state",
+            "dependency_failures",
+        ]
+    })
+    if report_level != "minimal":
+        print()
+        print("CONTEXT REPORT")
+        print({
+            key: metrics.get(key)
+            for key in [
+                "context_count",
+                "semantic_context_count",
+                "process_context_count",
+                "causal_context_count",
+                "world_context_count",
+                "context_generation_time",
+                "context_confidence",
+                "context_registration_rate",
+            ]
+        })
+        print()
+        print("TRUTH REPORT")
+        print({
+            key: metrics.get(key)
+            for key in [
+                "discovering_count",
+                "supported_count",
+                "validated_count",
+                "candidate_count",
+                "committed_count",
+                "locked_truth_count",
+                "promotion_rate",
+                "truth_commit_rate",
+                "promotion_failures",
+                "blocking_factors",
+            ]
+        })
+        print()
+        print("CACHE REPORT")
+        print({
+            key: metrics.get(key)
+            for key in [
+                "cache_hits",
+                "cache_misses",
+                "reuse_rate",
+                "strategy_hits",
+                "truth_hits",
+                "context_hits",
+                "estimated_compute_saved",
+                "estimated_runtime_saved",
+            ]
+        })
+    warnings = dashboard.get("warnings", [])
+    failures = dashboard.get("failures", [])
+    recommendations = dashboard.get("recommendations", [])
+    if warnings:
+        print()
+        print("WARNINGS")
+        print(warnings)
+    if failures:
+        print()
+        print("FAILURES")
+        print(failures)
+    if recommendations:
+        print()
+        print("RECOMMENDATIONS")
+        print(recommendations)
 
 
 def print_training_report(report, report_level="normal"):
@@ -3412,23 +3665,34 @@ def print_training_report(report, report_level="normal"):
     if report_level == "minimal":
         _print_minimal_training_report(report)
         return
+    if report_level == "normal":
+        _print_runtime_dashboard(report, report_level=report_level)
+        return
     detail_limit = (
         MAX_HISTORY_DISPLAYED
-        if report_level != "full"
+        if report_level not in {"full", "debug", "audit"}
         else min(20, MAX_DEPENDENCIES_DISPLAYED * 2)
     )
     task_results = report.get("multi_task_results", [])
     tasks_executed = report.get("tasks_executed", [])
     failed_tasks = report.get("failed_tasks", 0)
     successful_tasks = report.get("successful_tasks", 0)
+    incomplete_tasks = report.get("incomplete_tasks", 0)
     print("TRAINING REPORT")
     print()
     print("selected_tasks:", report.get("tasks_selected", 0))
     print("tasks_completed:", successful_tasks)
     print("tasks_failed:", failed_tasks)
+    print("tasks_incomplete:", incomplete_tasks)
     print(
         "tasks_remaining:",
-        max(report.get("tasks_selected", 0) - successful_tasks - failed_tasks, 0),
+        max(
+            report.get("tasks_selected", 0)
+            - successful_tasks
+            - failed_tasks
+            - incomplete_tasks,
+            0,
+        ),
     )
     print("current_batch_size:", report.get("tasks_selected", 0))
     print("tasks_executed_count:", _count(tasks_executed))

@@ -63,6 +63,58 @@ class ToolSelectionEngine:
             enabled.add("spatial_reasoning")
             reasons["spatial_reasoning"] = "spatial complexity above baseline"
 
+        task_identity = " ".join(
+            str(getattr(task_profile, key, "") or "")
+            for key in (
+                "task_id",
+                "task_path",
+                "task_file",
+                "concept_family",
+                "task_family",
+            )
+        ).lower()
+        concept_signals = []
+        for key in (
+            "target_concepts",
+            "suspected_concepts",
+            "required_capabilities",
+        ):
+            value = getattr(task_profile, key, [])
+            if isinstance(value, (list, tuple, set)):
+                concept_signals.extend(value)
+            elif value:
+                concept_signals.append(value)
+        concept_text = " ".join(
+            str(concept)
+            for concept in concept_signals
+            if concept
+        ).lower()
+        if any(
+            marker in f"{task_identity} {concept_text}"
+            for marker in (
+                "spatial",
+                "relative_position",
+                "left_of",
+                "right_of",
+                "above",
+                "below",
+                "inside",
+                "outside",
+                "containment",
+                "path_finding",
+                "route_completion",
+                "component_merging",
+                "component_splitting",
+                "topology_change",
+                "topological",
+                "connectivity",
+            )
+        ):
+            enabled.add("spatial_reasoning")
+            reasons["spatial_reasoning"] = (
+                "task identity or target concepts indicate spatial reasoning"
+            )
+
         if (
             reasoning_budget.max_dependency_depth > 0
             and (

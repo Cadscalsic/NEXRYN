@@ -23,7 +23,9 @@ class FailureAnalyzer:
 
         cognitive_cycle,
 
-        evaluation_result
+        evaluation_result,
+
+        introspection_report=None
     ):
 
         reasoning = cognitive_cycle.get(
@@ -44,6 +46,14 @@ class FailureAnalyzer:
         execution = cognitive_cycle.get(
             "execution",
             {}
+        )
+        introspection = (
+            introspection_report
+            if isinstance(introspection_report, dict)
+            else evaluation_result.get(
+                "introspection_report",
+                {}
+            )
         )
 
         terminal_success = evaluation_result.get(
@@ -86,9 +96,12 @@ class FailureAnalyzer:
             ) is True,
 
             "reasoning_depth":
-            reasoning.get(
+            introspection.get(
                 "reasoning_depth",
-                0
+                reasoning.get(
+                    "reasoning_depth",
+                    0
+                )
             ),
 
             "cognitive_complexity":
@@ -98,21 +111,36 @@ class FailureAnalyzer:
             ),
 
             "semantic_density":
-            semantics.get(
-                "concept_count",
-                0
+            introspection.get(
+                "semantic_concept_count",
+                semantics.get(
+                    "concept_count",
+                    0
+                )
             ),
 
             "route_count":
-            routing.get(
-                "route_count",
-                0
+            introspection.get(
+                "active_routes",
+                routing.get(
+                    "route_count",
+                    0
+                )
             ),
 
             "execution_nodes":
-            execution.get(
-                "node_count",
-                0
+            introspection.get(
+                "execution_nodes",
+                execution.get(
+                    "node_count",
+                    0
+                )
+            ),
+
+            "pipeline_activity":
+            introspection.get(
+                "pipeline_activity",
+                {}
             ),
 
             "failure_causes":

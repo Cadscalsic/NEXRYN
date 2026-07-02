@@ -3,6 +3,7 @@
 # ============================================
 
 from datetime import datetime
+import numpy as np
 
 from runtime.evaluation.evaluation_engine import (
     UnifiedEvaluationEngine
@@ -38,6 +39,22 @@ from runtime.meta.supervisor.program_memory_learning import (
 
 from runtime.memory import (
     latent_reasoning_reservoir
+)
+
+from runtime.reasoning.residual_reasoning_engine import (
+    residual_reasoning_engine
+)
+
+from runtime.reasoning.spatial_residual_repair import (
+    spatial_residual_repair
+)
+
+from runtime.reasoning.object_residual_repair import (
+    object_residual_repair
+)
+
+from runtime.reasoning.counterfactual_repair_engine import (
+    counterfactual_repair_engine
 )
 
 
@@ -82,9 +99,300 @@ reflective_meta_learning_engine = (
 )
 
 
+def _run_residual_repair(
+    context,
+    predicted_output,
+    target_output,
+    evaluation_result,
+):
+
+    residual_report = residual_reasoning_engine.analyze(
+        predicted_output,
+        target_output,
+        runtime_context=context,
+        evaluation_result=evaluation_result,
+    )
+    spatial_report = spatial_residual_repair.propose(
+        predicted_output,
+        residual_report,
+        runtime_context=context,
+    )
+    object_report = object_residual_repair.propose(
+        predicted_output,
+        residual_report,
+        runtime_context=context,
+    )
+    candidate_report = {
+        "system": "repair_candidate_report",
+        "report_state": "final",
+        "repair_candidates": (
+            list(residual_report.get("repair_candidates", []))
+            + list(spatial_report.get("repair_candidates", []))
+            + list(object_report.get("repair_candidates", []))
+        ),
+    }
+    candidate_report["candidate_count"] = len(
+        candidate_report["repair_candidates"]
+    )
+
+    local_repair_report = {
+        "system": "localized_repair_report",
+        "report_state": "final",
+        "repair_mode": residual_report.get("repair_mode"),
+        "activated": (
+            residual_report.get("repair_mode") == "LOCALIZED_REPAIR_MODE"
+        ),
+        "reason": None,
+    }
+
+    if not local_repair_report["activated"]:
+        local_repair_report["reason"] = residual_report.get("repair_mode")
+        final_report = {
+            "system": "final_repair_report",
+            "report_state": "final",
+            "repair_accepted": False,
+            "reason": local_repair_report["reason"],
+            "before_accuracy": evaluation_result.get("accuracy", 0.0),
+            "after_accuracy": evaluation_result.get("accuracy", 0.0),
+            "before_difference_count":
+            evaluation_result.get("difference_count"),
+            "after_difference_count":
+            evaluation_result.get("difference_count"),
+            "cells_corrected": 0,
+            "repair_attempts": 0,
+            "repair_successes": 0,
+            "repair_failures": 0,
+            "repair_success_rate": 0.0,
+            "localized_repairs": 0,
+            "counterfactual_repairs": 0,
+            "context_guided_repairs": 0,
+            "dependency_guided_repairs": 0,
+            "truth_guided_repairs": 0,
+            "average_residual_reduction": 0.0,
+        }
+        return {
+            "evaluation_result": evaluation_result,
+            "predicted_output": predicted_output,
+            "residual_reasoning_report": residual_report,
+            "repair_candidate_report": candidate_report,
+            "localized_repair_report": local_repair_report,
+            "spatial_residual_repair_report": spatial_report,
+            "object_residual_repair_report": object_report,
+            "final_repair_report": final_report,
+        }
+
+    final_report = counterfactual_repair_engine.repair(
+        predicted_output,
+        target_output,
+        [
+            residual_report,
+            spatial_report,
+            object_report,
+            candidate_report,
+        ],
+        max_passes=3,
+        max_residual_cells=2,
+        minimum_repair_accuracy=(
+            evaluation_result.get("high_value_partial_accuracy", 0.90)
+            if evaluation_result.get("high_value_partial_success") is True
+            else 0.95
+        ),
+    )
+    repaired_output = final_report.get("repaired_output", predicted_output)
+    if final_report.get("repair_accepted") is True:
+        repaired_evaluation = evaluation_engine.evaluate(
+            repaired_output,
+            target_output,
+        )
+        final_report["accepted_evaluation"] = repaired_evaluation
+        local_repair_report["reason"] = "repair_improved_prediction"
+        return {
+            "evaluation_result": repaired_evaluation,
+            "predicted_output": repaired_output,
+            "pre_repair_evaluation": evaluation_result,
+            "residual_reasoning_report": residual_report,
+            "repair_candidate_report": candidate_report,
+            "localized_repair_report": local_repair_report,
+            "spatial_residual_repair_report": spatial_report,
+            "object_residual_repair_report": object_report,
+            "final_repair_report": final_report,
+        }
+
+    local_repair_report["reason"] = final_report.get(
+        "reason",
+        "no_candidate_improved_prediction",
+    )
+    return {
+        "evaluation_result": evaluation_result,
+        "predicted_output": predicted_output,
+        "residual_reasoning_report": residual_report,
+        "repair_candidate_report": candidate_report,
+        "localized_repair_report": local_repair_report,
+        "spatial_residual_repair_report": spatial_report,
+        "object_residual_repair_report": object_report,
+        "final_repair_report": final_report,
+    }
+
+
 # ============================================
 # EVALUATION STAGE
 # ============================================
+
+def _incomplete_evaluation_context(
+    context,
+    stage_report,
+    reason,
+    success_state,
+):
+
+    evaluation_result = {
+        "success": False,
+        "partial_success": False,
+        "exact_success": False,
+        "accuracy": 0.0,
+        "prediction_accuracy": 0.0,
+        "correct_cells": 0,
+        "total_cells": 0,
+        "difference_count": None,
+        "success_state": success_state,
+        "task_status": "TASK_INCOMPLETE",
+        "evaluation_status": "INCOMPLETE",
+        "pipeline_incomplete": True,
+        "reason": reason,
+        "retry_allowed": True,
+        "failure_is_pipeline_robustness": True,
+    }
+
+    success_semantics_report = {
+        "success_state": success_state,
+        "exact_success": False,
+        "episode_completed": False,
+        "termination_reason": reason,
+        "shutdown_mode": "continue",
+        "background_task_control": {},
+        "residual_analysis": {
+            "status": "skipped",
+            "reason": reason,
+        },
+    }
+
+    failure_analysis = {
+        "failure_detected": False,
+        "failure_causes": [],
+        "diagnostic_signals": [
+            reason,
+            "evaluation_consumed_context_before_prediction_was_available",
+        ],
+        "pipeline_incomplete": True,
+    }
+
+    recovery_plan = {
+        "failure_detected": False,
+        "recovery_actions": [
+            "ensure_prediction_stage_populates_predicted_output",
+            "skip_evaluation_until_prediction_exists",
+        ],
+        "action_count": 2,
+        "retry_allowed": True,
+        "reason": reason,
+    }
+
+    evaluation_metrics = {
+        "history_size": len(evaluation_engine.get_history()),
+        "recent_episodes": 0,
+        "introspection_insights": 0,
+        "failure_detected": False,
+        "episode_completed": False,
+        "success_state": success_state,
+        "pipeline_incomplete": True,
+    }
+
+    stage_report.update({
+        "status": "incomplete",
+        "runtime_health": "degraded",
+        "evaluation_metrics": evaluation_metrics,
+        "reason": reason,
+        "success_state": success_state,
+    })
+
+    context["evaluation_result"] = evaluation_result
+    context["success_semantics_report"] = success_semantics_report
+    context["SUCCESS_SEMANTICS_AUDIT_REPORT"] = (
+        success_semantics_engine.build_audit_report()
+    )
+    context["residual_analysis"] = success_semantics_report[
+        "residual_analysis"
+    ]
+    context["RESIDUAL_ANALYSIS_REPORT"] = context["residual_analysis"]
+    context["success_state"] = success_state
+    context["task_status"] = "TASK_INCOMPLETE"
+    context["pipeline_incomplete"] = True
+    context["prediction_not_produced"] = (
+        success_state == "PREDICTION_NOT_PRODUCED"
+    )
+    context["episode_completed"] = False
+    context["termination_reason"] = reason
+    context["shutdown_mode"] = "continue"
+    context["background_task_control"] = {}
+    context["learning_signal"] = {
+        "recorded": False,
+        "success_state": success_state,
+        "residual_analysis": context["residual_analysis"],
+        "failure_history_incremented": False,
+    }
+    context["world_model_sync_report"] = {
+        "status": "skipped",
+        "reason": reason,
+    }
+    context["latent_reasoning_reactivation"] = {
+        "status": "skipped",
+        "reason": reason,
+    }
+    context["latent_reasoning_report"] = (
+        latent_reasoning_reservoir.build_report()
+    )
+    context["meta_success_rate"] = 0.0
+    context["evaluation_history"] = evaluation_engine.get_history()
+    context["evaluation_complete"] = False
+    context["temporal_report"] = {}
+    context["recent_episodes"] = []
+    context["introspection_report"] = {
+        "status": "skipped",
+        "reason": reason,
+    }
+    context["introspection_insights"] = []
+    context["introspection_summary"] = {
+        "status": "skipped",
+        "reason": reason,
+    }
+    context["failure_analysis"] = failure_analysis
+    context["recovery_plan"] = recovery_plan
+    context["failure_summary"] = {
+        "failure_count": 0,
+        "pipeline_incomplete": True,
+    }
+    context["reflective_learning_report"] = {
+        "status": "skipped",
+        "reason": reason,
+    }
+    context["program_memory_report"] = {
+        "status": "skipped",
+        "reason": "validated_prediction_required",
+        "program_saved": False,
+    }
+    context["evaluation_metrics"] = evaluation_metrics
+    context["evaluation_stage_report"] = stage_report
+
+    print(
+        "EVALUATION INCOMPLETE:\n"
+    )
+
+    print(
+        evaluation_result
+    )
+
+    return context
+
 
 def evaluation_stage(context):
 
@@ -146,14 +454,20 @@ def evaluation_stage(context):
 
     if predicted_output is None:
 
-        raise ValueError(
-            "Missing predicted_output"
+        return _incomplete_evaluation_context(
+            context,
+            stage_report,
+            "missing_predicted_output",
+            "PREDICTION_NOT_PRODUCED",
         )
 
     if output_grid is None:
 
-        raise ValueError(
-            "Missing output_grid"
+        return _incomplete_evaluation_context(
+            context,
+            stage_report,
+            "missing_output_grid",
+            "TARGET_OUTPUT_MISSING",
         )
 
     # ========================================
@@ -188,6 +502,20 @@ def evaluation_stage(context):
             target_output
         )
     )
+
+    repair_result = _run_residual_repair(
+        context,
+        predicted_output,
+        target_output,
+        evaluation_result,
+    )
+    evaluation_result = repair_result["evaluation_result"]
+    predicted_output = repair_result["predicted_output"]
+    context["predicted_output"] = predicted_output
+    if repair_result.get("pre_repair_evaluation"):
+        context["pre_repair_evaluation_result"] = (
+            repair_result["pre_repair_evaluation"]
+        )
 
     evaluation_result, success_semantics_report = (
         success_semantics_engine.apply(
@@ -323,7 +651,9 @@ def evaluation_stage(context):
 
                 cognitive_cycle,
 
-                evaluation_result
+                evaluation_result,
+
+                context
             )
         )
 
@@ -355,7 +685,9 @@ def evaluation_stage(context):
 
             cognitive_cycle,
 
-            evaluation_result
+            evaluation_result,
+
+            introspection_report
         )
     )
 
@@ -481,6 +813,77 @@ def evaluation_stage(context):
         "success_state":
         evaluation_result.get(
             "success_state"
+        ),
+
+        "residual_count":
+        repair_result["residual_reasoning_report"].get(
+            "residual_count",
+            0,
+        ),
+
+        "residual_type":
+        repair_result["residual_reasoning_report"].get(
+            "residual_type",
+        ),
+
+        "repair_attempts":
+        repair_result["final_repair_report"].get(
+            "repair_attempts",
+            0,
+        ),
+
+        "repair_successes":
+        repair_result["final_repair_report"].get(
+            "repair_successes",
+            0,
+        ),
+
+        "repair_failures":
+        repair_result["final_repair_report"].get(
+            "repair_failures",
+            0,
+        ),
+
+        "repair_success_rate":
+        repair_result["final_repair_report"].get(
+            "repair_success_rate",
+            0.0,
+        ),
+
+        "localized_repairs":
+        repair_result["final_repair_report"].get(
+            "localized_repairs",
+            0,
+        ),
+
+        "counterfactual_repairs":
+        repair_result["final_repair_report"].get(
+            "counterfactual_repairs",
+            0,
+        ),
+
+        "context_guided_repairs":
+        repair_result["final_repair_report"].get(
+            "context_guided_repairs",
+            0,
+        ),
+
+        "dependency_guided_repairs":
+        repair_result["final_repair_report"].get(
+            "dependency_guided_repairs",
+            0,
+        ),
+
+        "truth_guided_repairs":
+        repair_result["final_repair_report"].get(
+            "truth_guided_repairs",
+            0,
+        ),
+
+        "average_residual_reduction":
+        repair_result["final_repair_report"].get(
+            "average_residual_reduction",
+            0.0,
         )
     }
 
@@ -556,6 +959,37 @@ def evaluation_stage(context):
     context[
         "RESIDUAL_ANALYSIS_REPORT"
     ] = residual_analysis
+
+    context[
+        "residual_reasoning_report"
+    ] = repair_result["residual_reasoning_report"]
+
+    context[
+        "REPAIR_CANDIDATE_REPORT"
+    ] = repair_result["repair_candidate_report"]
+
+    context[
+        "LOCALIZED_REPAIR_REPORT"
+    ] = repair_result["localized_repair_report"]
+
+    context[
+        "SPATIAL_RESIDUAL_REPAIR_REPORT"
+    ] = repair_result["spatial_residual_repair_report"]
+
+    context[
+        "OBJECT_RESIDUAL_REPAIR_REPORT"
+    ] = repair_result["object_residual_repair_report"]
+
+    context[
+        "FINAL_REPAIR_REPORT"
+    ] = repair_result["final_repair_report"]
+
+    context[
+        "residual_repair_applied"
+    ] = repair_result["final_repair_report"].get(
+        "repair_accepted",
+        False,
+    )
 
     context[
         "success_state"
@@ -651,6 +1085,30 @@ def evaluation_stage(context):
     context[
         "introspection_summary"
     ] = introspection_summary
+
+    context[
+        "semantic_attribution_report"
+    ] = {
+        "semantic_concept_count":
+        introspection_report.get(
+            "semantic_concept_count",
+            0
+        ),
+        "attributed_concepts":
+        introspection_report.get(
+            "attributed_concepts",
+            []
+        ),
+        "semantic_attribution_evidence":
+        introspection_report.get(
+            "semantic_attribution_evidence",
+            {}
+        ),
+        "semantic_attribution_source":
+        introspection_report.get(
+            "semantic_attribution_source"
+        ),
+    }
 
     context[
         "failure_analysis"

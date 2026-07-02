@@ -346,6 +346,8 @@ class UnifiedEvaluationEngine:
         partial_success = self.partial_success_engine.evaluate(
             accuracy,
             exact_success=success,
+            difference_count=difference_count,
+            final_score=final_score,
         )
 
         # ====================================

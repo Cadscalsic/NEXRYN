@@ -1616,6 +1616,1319 @@ class SemanticAbstractionEngine:
         return abstractions
 
     # ============================================
+    # CONTEXTUAL CONCEPT EXTRACTION
+    # ============================================
+
+    def extract_contextual_concepts(
+
+        self,
+
+        evidence_context
+    ):
+
+        if not isinstance(
+            evidence_context,
+            dict
+        ):
+
+            return {
+                "concepts": [],
+                "concept_count": 0,
+                "evidence": {},
+            }
+
+        concepts = []
+        evidence = {}
+
+        count_delta = self._count_delta_from_context(
+            evidence_context
+        )
+
+        if count_delta is not None:
+
+            evidence[
+                "object_count_delta"
+            ] = count_delta
+
+            if count_delta > 0:
+
+                concepts.extend([
+                    "object_count_increase",
+                    "object_creation",
+                ])
+
+            elif count_delta < 0:
+
+                concepts.extend([
+                    "object_count_decrease",
+                    "object_removal",
+                ])
+
+        density_delta = self._density_delta_from_context(
+            evidence_context
+        )
+
+        if density_delta is not None:
+
+            evidence[
+                "density_delta"
+            ] = density_delta
+
+            if density_delta > 0:
+
+                concepts.append(
+                    "density_increase"
+                )
+
+            elif density_delta < 0:
+
+                concepts.append(
+                    "density_reduction"
+                )
+
+        color_report = self._color_delta_from_context(
+            evidence_context
+        )
+
+        if color_report:
+
+            evidence[
+                "color_delta"
+            ] = color_report
+
+            if color_report.get(
+                "colors_removed"
+            ):
+
+                concepts.append(
+                    "color_elimination"
+                )
+
+            if color_report.get(
+                "colors_added"
+            ):
+
+                concepts.append(
+                    "color_introduction"
+                )
+
+            if color_report.get(
+                "colors_changed"
+            ):
+
+                concepts.append(
+                    "symbolic_remapping"
+                )
+
+        symmetry_report = self._symmetry_delta_from_context(
+            evidence_context
+        )
+
+        if symmetry_report:
+
+            evidence[
+                "symmetry_delta"
+            ] = symmetry_report
+
+            if symmetry_report.get(
+                "symmetry_created"
+            ):
+
+                concepts.append(
+                    "symmetry_creation"
+                )
+
+            elif symmetry_report.get(
+                "symmetry_removed"
+            ):
+
+                concepts.append(
+                    "symmetry_break"
+                )
+
+            elif symmetry_report.get(
+                "symmetry_changed"
+            ):
+
+                concepts.append(
+                    "symmetry_transform"
+                )
+
+        pattern_report = self._pattern_delta_from_context(
+            evidence_context,
+            density_delta,
+            symmetry_report,
+        )
+
+        if pattern_report:
+
+            evidence[
+                "pattern_delta"
+            ] = pattern_report
+
+            concepts.extend(
+                pattern_report.get(
+                    "concepts",
+                    []
+                )
+            )
+
+        spatial_report = self._spatial_delta_from_context(
+            evidence_context
+        )
+
+        if spatial_report:
+
+            evidence[
+                "spatial_delta"
+            ] = spatial_report
+
+            concepts.extend(
+                spatial_report.get(
+                    "concepts",
+                    []
+                )
+            )
+
+        if len(
+            {
+                concept
+                for concept in concepts
+                if concept
+            }
+        ) >= 2:
+
+            concepts.append(
+                "transformation_sequence"
+            )
+
+        unique_concepts = list(
+            dict.fromkeys(
+                concept
+                for concept in concepts
+                if concept
+            )
+        )
+
+        return {
+            "concepts": unique_concepts,
+            "concept_count": len(unique_concepts),
+            "evidence": evidence,
+            "source": "contextual_transformation_evidence",
+        }
+
+    def _color_delta_from_context(
+        self,
+        evidence_context
+    ):
+
+        input_summary = evidence_context.get(
+            "input_summary",
+            {}
+        )
+
+        output_summary = evidence_context.get(
+            "output_summary",
+            {}
+        )
+
+        if not isinstance(input_summary, dict):
+            input_summary = {}
+
+        if not isinstance(output_summary, dict):
+            output_summary = {}
+
+        input_colors = self._summary_colors(input_summary)
+        output_colors = self._summary_colors(output_summary)
+
+        if input_colors is None or output_colors is None:
+            return {}
+
+        colors_removed = sorted(input_colors - output_colors)
+        colors_added = sorted(output_colors - input_colors)
+
+        return {
+            "input_colors": sorted(input_colors),
+            "output_colors": sorted(output_colors),
+            "colors_removed": colors_removed,
+            "colors_added": colors_added,
+            "colors_changed": bool(colors_removed or colors_added),
+        }
+
+    def _summary_colors(self, summary):
+
+        for key in (
+            "colors",
+            "unique_colors",
+            "nonzero_colors",
+        ):
+
+            value = summary.get(
+                key
+            )
+
+            if isinstance(value, dict):
+                return {
+                    color
+                    for color in value.keys()
+                    if str(color) != "0"
+                }
+
+            if isinstance(value, (list, tuple, set)):
+                return {
+                    color
+                    for color in value
+                    if str(color) != "0"
+                }
+
+        return None
+
+    def _symmetry_delta_from_context(
+        self,
+        evidence_context
+    ):
+
+        input_summary = evidence_context.get(
+            "input_summary",
+            {}
+        )
+
+        output_summary = evidence_context.get(
+            "output_summary",
+            {}
+        )
+
+        if not isinstance(input_summary, dict):
+            input_summary = {}
+
+        if not isinstance(output_summary, dict):
+            output_summary = {}
+
+        input_symmetric = self._summary_symmetric(
+            input_summary
+        )
+
+        output_symmetric = self._summary_symmetric(
+            output_summary
+        )
+
+        changed = self._symmetry_changed_from_context(
+            evidence_context
+        )
+
+        if input_symmetric is None and output_symmetric is None and not changed:
+            return {}
+
+        return {
+            "input_symmetric": input_symmetric,
+            "output_symmetric": output_symmetric,
+            "symmetry_changed": bool(
+                changed
+                or input_symmetric != output_symmetric
+            ),
+            "symmetry_created": (
+                input_symmetric is False
+                and output_symmetric is True
+            ),
+            "symmetry_removed": (
+                input_symmetric is True
+                and output_symmetric is False
+            ),
+        }
+
+    def _summary_symmetric(self, summary):
+
+        horizontal = summary.get(
+            "horizontal_symmetry"
+        )
+
+        vertical = summary.get(
+            "vertical_symmetry"
+        )
+
+        if horizontal is None and vertical is None:
+            return None
+
+        return bool(horizontal or vertical)
+
+    def _pattern_delta_from_context(
+        self,
+        evidence_context,
+        density_delta=None,
+        symmetry_report=None,
+    ):
+
+        signal_text = self._context_signal_text(
+            evidence_context
+        )
+
+        pattern_signaled = any(
+            marker in signal_text
+            for marker in (
+                "pattern_completion",
+                "pattern completion",
+                "pattern_extension",
+                "pattern extension",
+                "missing_pattern",
+                "missing pattern",
+                "sequence_completion",
+                "sequence completion",
+            )
+        )
+
+        if not pattern_signaled:
+            return {}
+
+        symmetry_created = bool(
+            isinstance(symmetry_report, dict)
+            and symmetry_report.get("symmetry_created")
+        )
+
+        concepts = [
+            "pattern_completion",
+            "pattern_extension",
+            "missing_pattern_recovery",
+        ]
+
+        if symmetry_created:
+            concepts.append(
+                "symmetry_guided_completion"
+            )
+
+        return {
+            "concepts": list(dict.fromkeys(concepts)),
+            "evidence": {
+                "task_pattern_signal": signal_text,
+                "density_delta": density_delta,
+                "symmetry_created": symmetry_created,
+            },
+        }
+
+    def _spatial_delta_from_context(
+        self,
+        evidence_context
+    ):
+
+        concepts = []
+        evidence = {}
+
+        signal_text = self._context_signal_text(
+            evidence_context
+        )
+
+        signal_concepts = self._concepts_from_spatial_signals(
+            signal_text
+        )
+
+        if signal_concepts:
+
+            concepts.extend(
+                signal_concepts
+            )
+
+            evidence[
+                "task_spatial_signal"
+            ] = signal_text
+
+        path_report = self._path_delta_from_context(
+            signal_text
+        )
+
+        if path_report:
+
+            evidence[
+                "path_signature"
+            ] = path_report
+
+            concepts.extend(
+                path_report.get(
+                    "concepts",
+                    []
+                )
+            )
+
+        input_grid = self._context_grid(
+            evidence_context,
+            "input_grid"
+        )
+        output_grid = self._context_grid(
+            evidence_context,
+            "output_grid"
+        )
+
+        if input_grid and output_grid:
+
+            geometry_report = self._geometry_delta(
+                input_grid,
+                output_grid
+            )
+
+            if geometry_report:
+
+                evidence[
+                    "geometry_signature"
+                ] = geometry_report
+
+                concepts.extend(
+                    geometry_report.get(
+                        "concepts",
+                        []
+                    )
+                )
+
+            topology_report = self._topology_delta(
+                input_grid,
+                output_grid
+            )
+
+            if topology_report:
+
+                evidence[
+                    "topology_signature"
+                ] = topology_report
+
+                concepts.extend(
+                    topology_report.get(
+                        "concepts",
+                        []
+                    )
+                )
+
+        unique_concepts = list(
+            dict.fromkeys(
+                concept
+                for concept in concepts
+                if concept
+            )
+        )
+
+        if not unique_concepts:
+            return {}
+
+        return {
+            "concepts": unique_concepts,
+            "evidence": evidence,
+        }
+
+    def _context_signal_text(
+        self,
+        evidence_context
+    ):
+
+        fields = []
+
+        for key in (
+            "task_id",
+            "task_path",
+            "task_file",
+            "task_family",
+            "concept_family",
+            "goal_type",
+        ):
+
+            value = evidence_context.get(
+                key
+            )
+
+            if value:
+                fields.append(
+                    str(value)
+                )
+
+        for parent_key in (
+            "cognitive_cycle",
+            "task_profile",
+            "task_profile_report",
+            "selection_report",
+        ):
+
+            parent = evidence_context.get(
+                parent_key,
+                {}
+            )
+
+            if not isinstance(parent, dict):
+                continue
+
+            for key in (
+                "task_id",
+                "task_path",
+                "task_file",
+                "task_family",
+                "concept_family",
+                "goal_type",
+            ):
+
+                value = parent.get(
+                    key
+                )
+
+                if value:
+                    fields.append(
+                        str(value)
+                    )
+
+        for key in (
+            "target_concepts",
+            "suspected_concepts",
+            "priority_concepts",
+            "required_capabilities",
+            "enabled_tools",
+        ):
+
+            value = evidence_context.get(
+                key,
+                []
+            )
+
+            if isinstance(value, (list, tuple, set)):
+                fields.extend(
+                    str(item)
+                    for item in value
+                    if item
+                )
+            elif value:
+                fields.append(
+                    str(value)
+                )
+
+        for parent_key in (
+            "cognitive_cycle",
+            "task_profile",
+            "task_profile_report",
+            "selection_report",
+        ):
+
+            parent = evidence_context.get(
+                parent_key,
+                {}
+            )
+
+            if not isinstance(parent, dict):
+                continue
+
+            for key in (
+                "target_concepts",
+                "suspected_concepts",
+                "priority_concepts",
+                "required_capabilities",
+                "enabled_tools",
+            ):
+
+                value = parent.get(
+                    key,
+                    []
+                )
+
+                if isinstance(value, (list, tuple, set)):
+                    fields.extend(
+                        str(item)
+                        for item in value
+                        if item
+                    )
+                elif value:
+                    fields.append(
+                        str(value)
+                    )
+
+        return " ".join(fields).lower()
+
+    def _concepts_from_spatial_signals(
+        self,
+        signal_text
+    ):
+
+        concepts = []
+
+        signal_map = (
+            (
+                (
+                    "object_counting",
+                    "object counting",
+                    "counting",
+                    "count_by_color",
+                    "count by color",
+                    "cardinality",
+                    "quantity",
+                    "numerical",
+                    "number",
+                    "set_reasoning",
+                    "set reasoning",
+                ),
+                (
+                    "object_counting",
+                    "cardinality",
+                    "quantity_preservation",
+                    "quantity_transformation",
+                    "numerical_reasoning",
+                    "set_reasoning",
+                ),
+            ),
+            (
+                (
+                    "pattern_completion",
+                    "pattern completion",
+                    "missing_pattern",
+                    "missing pattern",
+                    "pattern_extension",
+                    "pattern extension",
+                ),
+                (
+                    "pattern_completion",
+                    "pattern_extension",
+                    "missing_pattern_recovery",
+                ),
+            ),
+            (
+                ("path_finding", "path finding", "maze", "shortest_path"),
+                (
+                    "path_finding",
+                    "route_completion",
+                    "reachability",
+                    "path_construction",
+                ),
+            ),
+            (
+                ("route_completion", "route completion"),
+                ("route_completion", "path_construction", "reachability"),
+            ),
+            (
+                ("rotation_reflection", "rotation reflection"),
+                ("rotation_reflection", "orientation_change"),
+            ),
+            (
+                ("rotation", "rotate"),
+                ("rotation", "orientation_change"),
+            ),
+            (
+                ("reflection", "mirror", "flip"),
+                ("reflection", "orientation_change"),
+            ),
+            (
+                ("relative_position", "left_of", "right_of", "above", "below"),
+                ("relative_position", "spatial_relation"),
+            ),
+            (
+                (
+                    "inside",
+                    "outside",
+                    "inside_outside",
+                    "inside outside",
+                    "containment",
+                    "contained",
+                ),
+                (
+                    "containment",
+                    "inside_outside",
+                    "relative_position",
+                    "spatial_relation",
+                ),
+            ),
+            (
+                (
+                    "component_merging",
+                    "component merging",
+                    "component_merge",
+                    "merge_components",
+                ),
+                (
+                    "component_merging",
+                    "connectivity_change",
+                    "topology_change",
+                ),
+            ),
+            (
+                (
+                    "component_splitting",
+                    "component splitting",
+                    "component_split",
+                    "split_components",
+                ),
+                (
+                    "component_splitting",
+                    "connectivity_change",
+                    "topology_change",
+                ),
+            ),
+            (
+                (
+                    "bridge_creation",
+                    "bridge creation",
+                    "component_connection",
+                    "component connection",
+                ),
+                (
+                    "bridge_creation",
+                    "component_connection",
+                    "connectivity_change",
+                    "topology_change",
+                ),
+            ),
+            (
+                (
+                    "hole_removal",
+                    "hole removal",
+                    "remove_hole",
+                    "topology repair",
+                    "topology_repair",
+                    "connectivity restoration",
+                    "connectivity_restoration",
+                ),
+                (
+                    "hole_removal",
+                    "topology_repair",
+                    "connectivity_restoration",
+                    "topology_change",
+                ),
+            ),
+            (
+                (
+                    "topology_change",
+                    "topological",
+                    "connectivity",
+                    "hole_creation",
+                    "bridge_destruction",
+                ),
+                (
+                    "topology_change",
+                    "connectivity_change",
+                ),
+            ),
+            (
+                ("scaling", "scale", "enlargement", "shrinking"),
+                ("scaling", "scale_transformation"),
+            ),
+        )
+
+        for markers, mapped_concepts in signal_map:
+
+            if any(
+                marker in signal_text
+                for marker in markers
+            ):
+
+                concepts.extend(
+                    mapped_concepts
+                )
+
+        return list(
+            dict.fromkeys(
+                concepts
+            )
+        )
+
+    def _context_grid(
+        self,
+        evidence_context,
+        key
+    ):
+
+        value = evidence_context.get(
+            key
+        )
+
+        if hasattr(
+            value,
+            "grid"
+        ):
+
+            value = value.grid
+
+        if value is None:
+            return None
+
+        if hasattr(
+            value,
+            "tolist"
+        ):
+
+            value = value.tolist()
+
+        if (
+            isinstance(value, list)
+            and value
+            and all(
+                isinstance(row, list)
+                for row in value
+            )
+        ):
+
+            return value
+
+        return None
+
+    def _path_delta_from_context(
+        self,
+        signal_text
+    ):
+
+        if not any(
+            marker in signal_text
+            for marker in (
+                "path_finding",
+                "path finding",
+                "route_completion",
+                "route completion",
+                "maze",
+                "shortest_path",
+            )
+        ):
+            return {}
+
+        concepts = [
+            "path_finding",
+            "route_completion",
+            "reachability",
+            "path_construction",
+        ]
+
+        return {
+            "path_signature": "goal_directed_path_construction",
+            "route_signature": "inferred_route_completion",
+            "reachability_delta": "reachable_path_added",
+            "concepts": concepts,
+        }
+
+    def _geometry_delta(
+        self,
+        input_grid,
+        output_grid
+    ):
+
+        concepts = []
+        signatures = {}
+
+        if self._same_grid(
+            self._rotate_clockwise(input_grid),
+            output_grid
+        ):
+
+            concepts.extend([
+                "rotation",
+                "orientation_change",
+            ])
+            signatures[
+                "rotation_signature"
+            ] = "clockwise_90"
+
+        elif self._same_grid(
+            self._rotate_clockwise(
+                self._rotate_clockwise(input_grid)
+            ),
+            output_grid
+        ):
+
+            concepts.extend([
+                "rotation",
+                "orientation_change",
+            ])
+            signatures[
+                "rotation_signature"
+            ] = "rotation_180"
+
+        elif self._same_grid(
+            self._rotate_counterclockwise(input_grid),
+            output_grid
+        ):
+
+            concepts.extend([
+                "rotation",
+                "orientation_change",
+            ])
+            signatures[
+                "rotation_signature"
+            ] = "counterclockwise_90"
+
+        if self._same_grid(
+            self._reflect_horizontal(input_grid),
+            output_grid
+        ):
+
+            concepts.extend([
+                "reflection",
+                "orientation_change",
+            ])
+            signatures[
+                "reflection_signature"
+            ] = "horizontal"
+
+        if self._same_grid(
+            self._reflect_vertical(input_grid),
+            output_grid
+        ):
+
+            concepts.extend([
+                "reflection",
+                "orientation_change",
+            ])
+            signatures[
+                "reflection_signature"
+            ] = "vertical"
+
+        if self._nonzero_centroid(input_grid) != self._nonzero_centroid(
+            output_grid
+        ):
+
+            concepts.extend([
+                "relative_position",
+                "spatial_relation",
+            ])
+            signatures[
+                "relative_position_delta"
+            ] = {
+                "input_centroid": self._nonzero_centroid(input_grid),
+                "output_centroid": self._nonzero_centroid(output_grid),
+            }
+
+        if not concepts:
+            return {}
+
+        signatures[
+            "concepts"
+        ] = list(
+            dict.fromkeys(
+                concepts
+            )
+        )
+
+        return signatures
+
+    def _topology_delta(
+        self,
+        input_grid,
+        output_grid
+    ):
+
+        input_components = self._connected_component_count(
+            input_grid
+        )
+        output_components = self._connected_component_count(
+            output_grid
+        )
+
+        input_holes = self._hole_count(
+            input_grid
+        )
+        output_holes = self._hole_count(
+            output_grid
+        )
+
+        concepts = []
+        signatures = {
+            "input_components": input_components,
+            "output_components": output_components,
+            "component_delta": output_components - input_components,
+            "input_holes": input_holes,
+            "output_holes": output_holes,
+            "hole_delta": output_holes - input_holes,
+        }
+
+        if output_components < input_components:
+
+            concepts.extend([
+                "component_merging",
+                "connectivity_change",
+                "topology_change",
+            ])
+
+            signatures[
+                "component_merge_delta"
+            ] = input_components - output_components
+
+        elif output_components > input_components:
+
+            concepts.extend([
+                "component_splitting",
+                "connectivity_change",
+                "topology_change",
+            ])
+
+            signatures[
+                "component_split_delta"
+            ] = output_components - input_components
+
+        if output_holes > input_holes:
+
+            concepts.extend([
+                "hole_creation",
+                "topology_change",
+            ])
+
+        elif output_holes < input_holes:
+
+            concepts.extend([
+                "hole_removal",
+                "topology_repair",
+                "connectivity_restoration",
+                "topology_change",
+            ])
+
+        if not concepts:
+            return {}
+
+        signatures[
+            "concepts"
+        ] = list(
+            dict.fromkeys(
+                concepts
+            )
+        )
+
+        return signatures
+
+    def _connected_component_count(
+        self,
+        grid
+    ):
+
+        height = len(grid)
+        width = len(grid[0]) if height else 0
+        visited = set()
+        count = 0
+
+        for row in range(height):
+
+            for column in range(width):
+
+                if grid[row][column] == 0:
+                    continue
+
+                if (row, column) in visited:
+                    continue
+
+                count += 1
+                stack = [
+                    (
+                        row,
+                        column,
+                    )
+                ]
+                visited.add(
+                    (
+                        row,
+                        column,
+                    )
+                )
+
+                while stack:
+
+                    current_row, current_column = stack.pop()
+
+                    for next_row, next_column in (
+                        (current_row - 1, current_column),
+                        (current_row + 1, current_column),
+                        (current_row, current_column - 1),
+                        (current_row, current_column + 1),
+                    ):
+
+                        if (
+                            next_row < 0
+                            or next_column < 0
+                            or next_row >= height
+                            or next_column >= width
+                        ):
+                            continue
+
+                        if grid[next_row][next_column] == 0:
+                            continue
+
+                        point = (
+                            next_row,
+                            next_column,
+                        )
+
+                        if point in visited:
+                            continue
+
+                        visited.add(
+                            point
+                        )
+                        stack.append(
+                            point
+                        )
+
+        return count
+
+    def _hole_count(
+        self,
+        grid
+    ):
+
+        height = len(grid)
+        width = len(grid[0]) if height else 0
+
+        if height < 3 or width < 3:
+            return 0
+
+        visited = set()
+        holes = 0
+
+        for row in range(height):
+
+            for column in range(width):
+
+                if grid[row][column] != 0:
+                    continue
+
+                if (row, column) in visited:
+                    continue
+
+                touches_boundary = False
+                stack = [
+                    (
+                        row,
+                        column,
+                    )
+                ]
+                visited.add(
+                    (
+                        row,
+                        column,
+                    )
+                )
+
+                while stack:
+
+                    current_row, current_column = stack.pop()
+
+                    if (
+                        current_row in {0, height - 1}
+                        or current_column in {0, width - 1}
+                    ):
+                        touches_boundary = True
+
+                    for next_row, next_column in (
+                        (current_row - 1, current_column),
+                        (current_row + 1, current_column),
+                        (current_row, current_column - 1),
+                        (current_row, current_column + 1),
+                    ):
+
+                        if (
+                            next_row < 0
+                            or next_column < 0
+                            or next_row >= height
+                            or next_column >= width
+                        ):
+                            continue
+
+                        if grid[next_row][next_column] != 0:
+                            continue
+
+                        point = (
+                            next_row,
+                            next_column,
+                        )
+
+                        if point in visited:
+                            continue
+
+                        visited.add(
+                            point
+                        )
+                        stack.append(
+                            point
+                        )
+
+                if not touches_boundary:
+                    holes += 1
+
+        return holes
+
+    def _same_grid(
+        self,
+        left,
+        right
+    ):
+
+        return (
+            isinstance(left, list)
+            and isinstance(right, list)
+            and left == right
+        )
+
+    def _rotate_clockwise(
+        self,
+        grid
+    ):
+
+        if not grid:
+            return []
+
+        return [
+            list(row)
+            for row in zip(
+                *grid[::-1]
+            )
+        ]
+
+    def _rotate_counterclockwise(
+        self,
+        grid
+    ):
+
+        if not grid:
+            return []
+
+        return [
+            list(row)
+            for row in zip(
+                *grid
+            )
+        ][::-1]
+
+    def _reflect_horizontal(
+        self,
+        grid
+    ):
+
+        return grid[::-1]
+
+    def _reflect_vertical(
+        self,
+        grid
+    ):
+
+        return [
+            row[::-1]
+            for row in grid
+        ]
+
+    def _nonzero_centroid(
+        self,
+        grid
+    ):
+
+        points = []
+
+        for row_index, row in enumerate(grid):
+
+            for column_index, value in enumerate(row):
+
+                if value != 0:
+
+                    points.append(
+                        (
+                            row_index,
+                            column_index,
+                        )
+                    )
+
+        if not points:
+            return None
+
+        return (
+            round(
+                sum(point[0] for point in points) / len(points),
+                3
+            ),
+            round(
+                sum(point[1] for point in points) / len(points),
+                3
+            ),
+        )
+
+    # ============================================
     # BUILD SEMANTIC GRAPH
     # ============================================
 
