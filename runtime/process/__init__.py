@@ -60,6 +60,18 @@ from runtime.process.process_context_runtime import (
     ProcessContextRuntime,
     process_context_runtime,
 )
+from runtime.process.process_context_generator import (
+    ProcessContextGenerator,
+    process_context_generator,
+)
+from runtime.process.process_context_simulator import (
+    ProcessContextSimulator,
+    process_context_simulator,
+)
+from runtime.process.state_transition_builder import (
+    StateTransitionBuilder,
+    state_transition_builder,
+)
 from runtime.process.typed_process_dependency_memory import (
     TypedProcessDependency,
     TypedProcessDependencyMemory,
@@ -88,10 +100,13 @@ __all__ = [
     "ProcessStateGraph",
     "ProcessState",
     "ProcessContextModel",
+    "ProcessContextGenerator",
     "ProcessContextRuntime",
+    "ProcessContextSimulator",
     "ProcessSimulator",
     "ProcessStrengthEstimator",
     "StateTransitionEngine",
+    "StateTransitionBuilder",
     "ProcessTransitionGraph",
     "ProcessTransitionExtractor",
     "ReasonedDependencyChain",
@@ -99,6 +114,9 @@ __all__ = [
     "TypedProcessDependencyMemory",
     "process_semantic_engine",
     "process_context_runtime",
+    "process_context_generator",
+    "process_context_simulator",
     "process_simulator",
     "state_transition_engine",
+    "state_transition_builder",
 ]

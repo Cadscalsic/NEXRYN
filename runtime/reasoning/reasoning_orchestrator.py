@@ -1178,6 +1178,24 @@ class ReasoningOrchestrator:
                 {},
             ),
 
+            "DEPENDENCY_EXECUTION_REPORT":
+            dependency_activation_report.get(
+                "DEPENDENCY_EXECUTION_REPORT",
+                {},
+            ),
+
+            "DEPENDENCY_GRAPH_REPORT":
+            dependency_activation_report.get(
+                "DEPENDENCY_GRAPH_REPORT",
+                {},
+            ),
+
+            "dependency_execution_bridge_report":
+            dependency_activation_report.get(
+                "dependency_execution_bridge_report",
+                {},
+            ),
+
             "dependency_activation_state":
             dependency_activation_report.get(
                 "dependency_activation_state"
@@ -1224,6 +1242,66 @@ class ReasoningOrchestrator:
                 0.0,
             ),
 
+            "dependency_execution_count":
+            dependency_activation_report.get(
+                "dependency_execution_count",
+                0,
+            ),
+
+            "dependency_execution_time":
+            dependency_activation_report.get(
+                "dependency_execution_time",
+                0.0,
+            ),
+
+            "dependency_execution_success_rate":
+            dependency_activation_report.get(
+                "dependency_execution_success_rate",
+                0.0,
+            ),
+
+            "dependency_runtime_utilization":
+            dependency_activation_report.get(
+                "dependency_runtime_utilization",
+                0.0,
+            ),
+
+            "dependency_graph_count":
+            dependency_activation_report.get(
+                "dependency_graph_count",
+                0,
+            ),
+
+            "dependency_node_count":
+            dependency_activation_report.get(
+                "dependency_node_count",
+                0,
+            ),
+
+            "dependency_edge_count":
+            dependency_activation_report.get(
+                "dependency_edge_count",
+                0,
+            ),
+
+            "dependency_graph_depth":
+            dependency_activation_report.get(
+                "dependency_graph_depth",
+                0,
+            ),
+
+            "dependency_graph_reuse_rate":
+            dependency_activation_report.get(
+                "dependency_graph_reuse_rate",
+                0.0,
+            ),
+
+            "dependency_graph_validation_score":
+            dependency_activation_report.get(
+                "dependency_graph_validation_score",
+                0.0,
+            ),
+
             "process_context_count":
             dependency_activation_report.get(
                 "process_context_count",
@@ -1255,9 +1333,33 @@ class ReasoningOrchestrator:
                 {},
             ),
 
+            "PROCESS_CONTEXT_GENERATION_REPORT":
+            process_context_runtime_report.get(
+                "PROCESS_CONTEXT_GENERATION_REPORT",
+                {},
+            ),
+
             "process_context_depth":
             process_context_runtime_report.get(
                 "process_context_depth",
+                0,
+            ),
+
+            "process_state_count":
+            process_context_runtime_report.get(
+                "process_state_count",
+                0,
+            ),
+
+            "process_transition_count":
+            process_context_runtime_report.get(
+                "process_transition_count",
+                0,
+            ),
+
+            "process_depth":
+            process_context_runtime_report.get(
+                "process_depth",
                 0,
             ),
 
@@ -1273,6 +1375,12 @@ class ReasoningOrchestrator:
                 0.0,
             ),
 
+            "process_generation_time":
+            process_context_runtime_report.get(
+                "process_generation_time",
+                0.0,
+            ),
+
             "state_transition_count":
             process_context_runtime_report.get(
                 "state_transition_count",
@@ -1282,6 +1390,12 @@ class ReasoningOrchestrator:
             "process_reuse_rate":
             process_context_runtime_report.get(
                 "process_reuse_rate",
+                0.0,
+            ),
+
+            "process_validation_score":
+            process_context_runtime_report.get(
+                "process_validation_score",
                 0.0,
             ),
 

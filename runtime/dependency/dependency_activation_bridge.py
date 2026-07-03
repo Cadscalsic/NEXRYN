@@ -5,13 +5,21 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.dependency.dependency_activation_enforcer import (
+    dependency_activation_enforcer,
+)
 from runtime.dependency.dependency_activation_manager import (
-    DEPENDENCY_COMPLETED,
     DEPENDENCY_NOT_REQUIRED,
     DEPENDENCY_REQUIRED,
     DependencyActivationManager,
 )
+from runtime.dependency.dependency_activation_trace import (
+    SKIP_REPORT_KEY,
+    TRACE_REPORT_KEY,
+    DependencyActivationTrace,
+)
 from runtime.dependency.dependency_chain_builder import DependencyChainBuilder
+from runtime.dependency.dependency_execution_bridge import DependencyExecutionBridge
 from runtime.dependency.dependency_graph_builder import DependencyGraphBuilder
 
 
@@ -32,6 +40,21 @@ class DependencyActivationBridge:
             "process_semantics",
             "causal_reasoning",
         },
+        "falling": {
+            "dependency_reasoning",
+            "process_semantics",
+            "causal_reasoning",
+        },
+        "support": {
+            "dependency_reasoning",
+            "process_semantics",
+            "causal_reasoning",
+        },
+        "collision": {
+            "dependency_reasoning",
+            "process_semantics",
+            "causal_reasoning",
+        },
         "connectivity_change": {"dependency_reasoning", "process_semantics"},
         "topology_change": {"dependency_reasoning", "process_semantics"},
         "relative_position": {"dependency_reasoning"},
@@ -48,6 +71,9 @@ class DependencyActivationBridge:
         "relative_position",
         "spatial_relation",
         "gravity",
+        "falling",
+        "support",
+        "collision",
         "multi_step_reasoning",
     }
 
@@ -56,6 +82,9 @@ class DependencyActivationBridge:
         "transformation_sequence",
         "multi_step_reasoning",
         "gravity",
+        "falling",
+        "support",
+        "collision",
         "connectivity_change",
         "topology_change",
     }
@@ -74,11 +103,13 @@ class DependencyActivationBridge:
         activation_manager: DependencyActivationManager | None = None,
         graph_builder: DependencyGraphBuilder | None = None,
         chain_builder: DependencyChainBuilder | None = None,
+        execution_bridge: DependencyExecutionBridge | None = None,
         process_engine=None,
     ):
         self.activation_manager = activation_manager or DependencyActivationManager()
         self.graph_builder = graph_builder or DependencyGraphBuilder()
         self.chain_builder = chain_builder or DependencyChainBuilder()
+        self.execution_bridge = execution_bridge or DependencyExecutionBridge()
         self.process_engine = process_engine
         self.activation_history = []
 
@@ -90,9 +121,20 @@ class DependencyActivationBridge:
     ) -> dict[str, Any]:
         runtime_context = runtime_context if isinstance(runtime_context, Mapping) else {}
         concepts = self._collect_concepts(detected_concepts, runtime_context)
+        mutable_context = dict(runtime_context)
+        trace = DependencyActivationTrace()
+        trace.detect_concepts(concepts)
+        enforcement = dependency_activation_enforcer.enforce(
+            concepts,
+            mutable_context,
+            trace=trace,
+        )
+        mutable_context = enforcement["runtime_context"]
         selected = sorted(set(selected_tools or self._selected_tools(runtime_context)))
         required_tools = self._required_tools(concepts)
         required_tool_set = set(required_tools)
+        if enforcement.get("activation_required") and "dependency_reasoning" not in selected:
+            selected = sorted(set(selected) | {"dependency_reasoning"})
         activated_tools = sorted(
             set(selected).intersection(required_tool_set)
             | required_tool_set
@@ -105,39 +147,55 @@ class DependencyActivationBridge:
 
         graph_report = self.graph_builder.build(
             concepts,
-            runtime_context=runtime_context,
+            runtime_context=mutable_context,
         )
         links = graph_report.get("dependency_links", [])
+        trace.set_dependency_candidates(
+            [link.get("source") for link in links if isinstance(link, Mapping)]
+        )
         activation_decision = self.activation_manager.evaluate(
             {
-                **dict(runtime_context),
+                **mutable_context,
                 "detected_concepts": concepts,
                 "enabled_tools": activated_tools,
                 "process_note": " ".join(concepts),
             },
-            task_profile=runtime_context.get("task_profile", {}),
+            task_profile=mutable_context.get("task_profile", {}),
             links_loaded=len(links),
         )
+        if required_tools:
+            trace.approve(
+                requested_tool="dependency_reasoning",
+                approved_by=self.system_name,
+                reason=activation_decision.get("dependency_activation_reason"),
+            )
+        trace.enter_runtime(self.system_name, concepts)
 
-        dependency_reports = []
-        if "dependency_reasoning" in activated_tools and links:
-            for chain in graph_report.get("dependency_chains", []) or []:
-                dependency_reports.append(
-                    self.chain_builder.build(
-                        chain.get("concept", ""),
-                        links,
-                        observed_contradictions=runtime_context.get(
-                            "observed_contradictions",
-                            runtime_context.get("contradictions", []),
-                        ),
-                    )
-                )
+        execution_report = self.execution_bridge.execute(
+            activation_request={
+                "requested_tool": "dependency_reasoning",
+                "detected_concepts": concepts,
+                "required_tools": required_tools,
+            },
+            activation_decision=activation_decision,
+            concepts=concepts,
+            activated_tools=activated_tools,
+            graph_report=graph_report,
+            runtime_context=mutable_context,
+        )
+        dependency_reports = execution_report.get("dependency_reports", [])
 
         process_contexts = []
-        if "process_semantics" in activated_tools and graph_report.get("dependency_chains"):
+        if "process_semantics" in activated_tools and dependency_reports:
             process_engine = self._process_engine()
-            for chain in graph_report.get("dependency_chains", []) or []:
-                process_concept = chain.get("process_concept")
+            for chain in dependency_reports:
+                process_concept = (
+                    graph_report.get("dependency_chains", [{}])[0].get(
+                        "process_concept",
+                    )
+                    if graph_report.get("dependency_chains")
+                    else chain.get("concept")
+                )
                 if not process_concept:
                     continue
                 process_contexts.append(
@@ -148,14 +206,17 @@ class DependencyActivationBridge:
                             "typed_dependency_relations": links,
                             "typed_process_dependencies_enabled": True,
                             "process_dependency_links_loaded": len(links),
-                            "process_dependency_links_used": len(links),
+                            "process_dependency_links_used": max(
+                                len(chain.get("chain", []) or []),
+                                len(links),
+                            ),
                             "dependency_confidence": chain.get(
                                 "dependency_confidence",
                                 0.0,
                             ),
                         },
                         runtime_context={
-                            **dict(runtime_context),
+                            **mutable_context,
                             "dependency_confidence": chain.get(
                                 "dependency_confidence",
                                 0.0,
@@ -189,6 +250,7 @@ class DependencyActivationBridge:
             dependency_reports,
             process_contexts,
             causal_contexts,
+            execution_report,
         )
         failures = list(validation.get("structured_warnings", []))
 
@@ -215,6 +277,49 @@ class DependencyActivationBridge:
             ]
         )
         causal_context_count = len(causal_contexts)
+        trace.exit_runtime(
+            self.system_name,
+            executed=bool(
+                dependency_chain_count
+                or process_context_count
+                or causal_context_count
+            ),
+            failure=(
+                "activation_required_but_no_runtime_outputs"
+                if required_tools
+                and not (
+                    dependency_chain_count
+                    or process_context_count
+                    or causal_context_count
+                )
+                else None
+            ),
+        )
+        missing_warning = trace.assert_requested_when_concepts_exist()
+        skip_reports = []
+        if skipped_tools:
+            for tool in skipped_tools:
+                skip_reports.append(
+                    trace.skip_report(
+                        requested_tool=tool,
+                        activation_attempted=bool(required_tools),
+                        activation_blocked=True,
+                        block_reason=skip_reasons.get(tool),
+                        blocking_module=self.system_name,
+                        blocking_condition="selected_tool_not_required",
+                    )
+                )
+        if required_tools and not dependency_chain_count and "dependency_reasoning" in required_tools:
+            skip_reports.append(
+                trace.skip_report(
+                    requested_tool="dependency_reasoning",
+                    activation_attempted=True,
+                    activation_blocked=True,
+                    block_reason="no_dependency_chains_executed",
+                    blocking_module=self.system_name,
+                    blocking_condition="dependency_runtime_output_empty",
+                )
+            )
         required_count = max(len(required_tools), 1)
         success_count = len(
             [
@@ -236,7 +341,7 @@ class DependencyActivationBridge:
         )
         success_rate = round(success_count / required_count, 4)
         activation_state = (
-            DEPENDENCY_COMPLETED
+            "ACTIVATED"
             if success_count > 0 and not failures
             else activation_decision.get("activation_state", DEPENDENCY_REQUIRED)
             if required_tools
@@ -252,6 +357,23 @@ class DependencyActivationBridge:
             "skip_reasons": skip_reasons,
             "dependency_graph_report": graph_report,
             "dependency_reports": dependency_reports,
+            "dependency_execution_bridge_report": execution_report,
+            "DEPENDENCY_EXECUTION_REPORT": execution_report.get(
+                "DEPENDENCY_EXECUTION_REPORT",
+                {},
+            ),
+            "dependency_graph_discovery_report": execution_report.get(
+                "dependency_graph_discovery_report",
+                {},
+            ),
+            "DEPENDENCY_GRAPH_REPORT": execution_report.get(
+                "DEPENDENCY_GRAPH_REPORT",
+                {},
+            ),
+            "dependency_output_registry_report": execution_report.get(
+                "dependency_output_registry_report",
+                {},
+            ),
             "process_contexts": process_contexts,
             "causal_contexts": causal_contexts,
             "dependency_chains_generated": dependency_chain_count,
@@ -262,6 +384,9 @@ class DependencyActivationBridge:
             "causal_contexts_generated": causal_context_count,
             "activation_failures": failures,
             "activation_validation": validation,
+            SKIP_REPORT_KEY: skip_reports,
+            TRACE_REPORT_KEY: trace.report(),
+            "activation_request_count": len(trace.activation_requests),
             "dependency_activation_state": activation_state,
             "dependency_activation_reason": self._activation_reason(
                 concepts,
@@ -277,10 +402,30 @@ class DependencyActivationBridge:
             "process_context_count": process_context_count,
             "causal_context_count": causal_context_count,
             "activation_success_rate": success_rate,
-            "dependency_chains_executed": dependency_chain_count,
-            "dependency_chain_depth": dependency_depth,
             "dependency_chain_coverage": round(dependency_coverage, 4),
             "dependency_reasoning_time": 0.0 if dependency_chain_count == 0 else 0.0001,
+            "dependency_execution_count": 1 if execution_report.get("execution_started") else 0,
+            "dependency_execution_time": execution_report.get("execution_duration", 0.0),
+            "dependency_chains_executed": dependency_chain_count,
+            "dependency_chain_depth": dependency_depth,
+            "dependency_execution_success_rate": (
+                1.0 if execution_report.get("execution_success") else 0.0
+            ),
+            "dependency_runtime_utilization": (
+                1.0 if execution_report.get("execution_started") else 0.0
+            ),
+            "dependency_graph_count": execution_report.get("dependency_graph_count", 0),
+            "dependency_node_count": execution_report.get("dependency_node_count", 0),
+            "dependency_edge_count": execution_report.get("dependency_edge_count", 0),
+            "dependency_graph_depth": execution_report.get("dependency_graph_depth", 0),
+            "dependency_graph_reuse_rate": execution_report.get(
+                "dependency_graph_reuse_rate",
+                0.0,
+            ),
+            "dependency_graph_validation_score": execution_report.get(
+                "dependency_graph_validation_score",
+                0.0,
+            ),
             "timestamp": str(datetime.utcnow()),
         }
         report["DEPENDENCY_ACTIVATION_REPORT"] = {
@@ -292,12 +437,34 @@ class DependencyActivationBridge:
                 "skipped_tools",
                 "dependency_chains_generated",
                 "dependency_depth",
+                "dependency_execution_count",
+                "dependency_execution_time",
+                "dependency_graph_count",
+                "dependency_node_count",
+                "dependency_edge_count",
+                "dependency_graph_depth",
                 "process_contexts_generated",
                 "causal_contexts_generated",
                 "activation_failures",
                 "skip_reasons",
             ]
         }
+        report["DEPENDENCY_ACTIVATION_REPORT"].update({
+            "activation_requests": trace.report()["activation_requests"],
+            "activation_approvals": trace.report()["activation_approvals"],
+            "activation_executions": trace.report()["activation_executions"],
+            "dependency_execution_result": execution_report.get(
+                "gateway_report",
+                {},
+            ).get("DEPENDENCY_EXECUTION_RESULT", {}),
+            "activation_failures": (
+                report["DEPENDENCY_ACTIVATION_REPORT"]["activation_failures"]
+                + trace.report()["activation_failures"]
+            ),
+            "activation_success_rate": success_rate,
+            "skip_reports": skip_reports,
+            "missing_warning": missing_warning,
+        })
         self.activation_history.append(report)
         return report
 
@@ -382,12 +549,42 @@ class DependencyActivationBridge:
                 tools.update({"dependency_reasoning", "process_semantics", "causal_reasoning"})
         return sorted(tools)
 
-    def _validate(self, concepts, dependency_reports, process_contexts, causal_contexts):
+    def _validate(
+        self,
+        concepts,
+        dependency_reports,
+        process_contexts,
+        causal_contexts,
+        execution_report=None,
+    ):
+        execution_report = execution_report if isinstance(execution_report, Mapping) else {}
         warnings = []
         concept_set = set(concepts)
+        if (
+            concept_set.intersection(self.DEPENDENCY_CONCEPTS)
+            and not execution_report.get("execution_started")
+        ):
+            warnings.append({
+                "type": "DEPENDENCY_EXECUTION_FAILURE",
+                "message": "dependency activation approved but execution did not start",
+            })
+        if (
+            execution_report.get("execution_started")
+            and not execution_report.get("execution_completed")
+        ):
+            warnings.append({
+                "type": "DEPENDENCY_EXECUTION_FAILURE",
+                "message": "dependency execution started but did not complete",
+            })
+        if execution_report.get("execution_failures"):
+            for failure in execution_report.get("execution_failures", []):
+                warnings.append({
+                    "type": "DEPENDENCY_EXECUTION_FAILURE",
+                    "message": str(failure),
+                })
         if concept_set.intersection(self.DEPENDENCY_CONCEPTS) and not dependency_reports:
             warnings.append({
-                "type": "dependency_activation_missing",
+                "type": "DEPENDENCY_EXECUTION_FAILURE",
                 "message": "dependency concepts detected but no dependency chains executed",
             })
         if concept_set.intersection(self.PROCESS_CONCEPTS) and not process_contexts:

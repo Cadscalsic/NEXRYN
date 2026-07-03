@@ -15,6 +15,26 @@ def test_graph_builder_creates_dependency_chain_for_path_finding():
     assert report["dependency_depth"] > 0
     assert report["dependency_coverage"] == 1.0
     assert report["dependency_graph"]["edge_count"] > 0
+    assert report["DEPENDENCY_GRAPH_REPORT"]["graphs_generated"] == 1
+    assert report["dependency_node_count"] > 0
+    assert report["dependency_edge_count"] > 0
+
+
+def test_graph_builder_creates_typed_dependency_graph_for_gravity():
+    report = DependencyGraphBuilder().build(["gravity"])
+    graph = report["dependency_graph"]
+    node_types = {node["node_family"] for node in graph["nodes"]}
+    edge_types = {edge["edge_type"] for edge in graph["edges"]}
+    labels = [node["label"] for node in graph["nodes"]]
+
+    assert "unsupported_object" in labels
+    assert "falling" in labels
+    assert "collision" in labels
+    assert "rest_state" in labels
+    assert {"CONDITION", "CONSTRAINT", "STATE"}.issubset(node_types)
+    assert {"requires", "causes"}.issubset(edge_types)
+    assert report["graph_confidence"] > 0.0
+    assert report["support_score"] > 0.0
 
 
 def test_bridge_activates_dependency_and_process_runtime():
@@ -38,6 +58,16 @@ def test_bridge_activates_dependency_and_process_runtime():
     assert report["dependency_chain_coverage"] > 0.0
     assert report["process_context_count"] > 0
     assert report["dependency_runtime_triggered"] is True
+    assert report["dependency_activation_state"] == "ACTIVATED"
+    assert report["DEPENDENCY_EXECUTION_REPORT"]["executions_started"] == 1
+    assert report["DEPENDENCY_EXECUTION_REPORT"]["chains_generated"] > 0
+    assert report["dependency_execution_count"] == 1
+    assert report["dependency_execution_success_rate"] == 1.0
+    assert report["DEPENDENCY_GRAPH_REPORT"]["graphs_generated"] == 1
+    assert report["dependency_graph_count"] > 0
+    assert report["dependency_node_count"] > 0
+    assert report["dependency_edge_count"] > 0
+    assert report["dependency_graph_validation_score"] > 0.0
     assert activation["activation_failures"] == []
 
 
@@ -74,6 +104,61 @@ def test_bridge_emits_warning_when_required_tool_is_not_executable():
     assert report["activation_failures"] == []
 
 
+def test_mandatory_activation_concepts_execute_through_gateway():
+    report = DependencyActivationBridge().activate(
+        detected_concepts=[
+            "gravity",
+            "falling",
+            "support",
+            "collision",
+            "path_finding",
+            "route_completion",
+            "bridge_creation",
+            "component_connection",
+            "transformation_sequence",
+            "multi_step_reasoning",
+        ],
+        selected_tools=[
+            "dependency_reasoning",
+            "process_semantics",
+            "causal_reasoning",
+        ],
+    )
+
+    execution = report["DEPENDENCY_EXECUTION_REPORT"]
+    chains = {
+        item["concept"]: item["resolved_dependency_chain"]
+        for item in report["dependency_reports"]
+    }
+
+    assert report["dependency_activation_state"] == "ACTIVATED"
+    assert execution["executions_started"] == 1
+    assert execution["executions_completed"] == 1
+    assert execution["chains_generated"] == 10
+    assert report["dependency_chains_executed"] == 10
+    assert report["dependency_execution_count"] == 1
+    assert report["dependency_runtime_utilization"] == 1.0
+    assert chains["gravity"] == [
+        "gravity",
+        "unsupported_object",
+        "fall",
+        "rest_state",
+    ]
+    assert chains["path_finding"] == [
+        "path_finding",
+        "start",
+        "reachable_nodes",
+        "goal",
+    ]
+    assert chains["bridge_creation"] == [
+        "bridge_creation",
+        "component_A",
+        "connector",
+        "component_B",
+    ]
+    assert report["activation_failures"] == []
+
+
 def test_orchestrator_surfaces_dependency_activation_telemetry():
     report = ReasoningOrchestrator().run_orchestration_cycle(
         {
@@ -100,3 +185,7 @@ def test_orchestrator_surfaces_dependency_activation_telemetry():
     assert report["dependency_chain_depth"] > 0
     assert report["process_context_count"] > 0
     assert report["dependency_runtime_triggered"] is True
+    assert report["DEPENDENCY_GRAPH_REPORT"]["graphs_generated"] == 1
+    assert report["dependency_graph_count"] > 0
+    assert report["dependency_node_count"] > 0
+    assert report["dependency_edge_count"] > 0

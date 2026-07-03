@@ -12,6 +12,7 @@ from runtime.process.process_context_registry import (
     ProcessContext,
     ProcessContextRegistry,
 )
+from runtime.process.process_context_generator import ProcessContextGenerator
 from runtime.process.process_simulator import process_simulator
 from runtime.process.state_transition_engine import state_transition_engine
 
@@ -69,11 +70,13 @@ class ProcessContextRuntime:
         simulator=None,
         memory=None,
         registry: ProcessContextRegistry | None = None,
+        generator: ProcessContextGenerator | None = None,
     ):
         self.transition_engine = transition_engine or state_transition_engine
         self.simulator = simulator or process_simulator
         self.memory = memory or process_context_memory
         self.registry = registry or ProcessContextRegistry()
+        self.generator = generator or ProcessContextGenerator(memory=self.memory)
         self.runtime_history = []
 
     def run(
@@ -101,13 +104,23 @@ class ProcessContextRuntime:
             runtime_context,
         )
         families = self._discover_families(concepts, dependency_chains)
-        models = self._generate_hypotheses(
+        generation_report = self.generator.generate(
+            dependency_graph_report=self._dependency_graph_report(
+                dependency_activation_report,
+                runtime_context,
+            ),
+            runtime_context=runtime_context,
+            input_grid=input_grid,
+            output_grid=output_grid,
+        )
+        models = list(generation_report.get("process_contexts", []) or [])
+        models.extend(self._generate_hypotheses(
             families,
             concepts,
             dependency_chains,
             input_grid,
             output_grid,
-        )
+        ))
         models.extend(self._memory_hypotheses(families))
         evaluated = self._evaluate_models(models, input_grid, output_grid)
         selected = evaluated[0] if evaluated else None
@@ -171,6 +184,11 @@ class ProcessContextRuntime:
         report = {
             "system": self.system_name,
             "process_contexts": evaluated,
+            "process_context_generation_report": generation_report,
+            "PROCESS_CONTEXT_GENERATION_REPORT": generation_report.get(
+                "PROCESS_CONTEXT_GENERATION_REPORT",
+                {},
+            ),
             "selected_process_context": selected or {},
             "registered_contexts": registered,
             "process_contexts_generated": process_context_count,
@@ -183,11 +201,23 @@ class ProcessContextRuntime:
             "reuse_hits": reuse_hits,
             "promotion_status": promotion_status,
             "process_context_count": process_context_count,
+            "process_state_count": state_count,
+            "process_transition_count": transition_count,
             "process_context_depth": process_depth,
+            "process_depth": process_depth,
             "process_context_confidence": round(float(process_confidence), 4),
             "process_simulation_time": 0.0001 if evaluated else 0.0,
+            "process_generation_time": generation_report.get(
+                "process_generation_time",
+                0.0,
+            ),
             "state_transition_count": transition_count,
             "process_reuse_rate": round(reuse_hits / max(process_context_count, 1), 4),
+            "process_validation_score": (
+                selected.get("validation", {}).get("process_validation_score", 0.0)
+                if selected
+                else 0.0
+            ),
             "process_success_rate": round(success_count / max(process_context_count, 1), 4),
             "timestamp": str(datetime.utcnow()),
         }
@@ -203,6 +233,7 @@ class ProcessContextRuntime:
                 "simulation_accuracy",
                 "reuse_hits",
                 "promotion_status",
+                "process_generation_time",
             ]
         }
         self.runtime_history.append(report)
@@ -429,6 +460,25 @@ class ProcessContextRuntime:
             )
         candidates.extend(runtime_context.get("dependency_chains", []) or [])
         return [dict(item) for item in candidates if isinstance(item, Mapping)]
+
+    def _dependency_graph_report(self, dependency_activation_report, runtime_context):
+        if isinstance(dependency_activation_report, Mapping):
+            discovery = dependency_activation_report.get(
+                "dependency_graph_discovery_report",
+                {},
+            )
+            if isinstance(discovery, Mapping) and discovery.get("dependency_graph"):
+                return discovery
+            graph_report = dependency_activation_report.get(
+                "dependency_graph_report",
+                {},
+            )
+            if isinstance(graph_report, Mapping) and graph_report.get("dependency_graph"):
+                return graph_report
+        discovery = runtime_context.get("dependency_graph_discovery_report", {})
+        if isinstance(discovery, Mapping) and discovery.get("dependency_graph"):
+            return discovery
+        return runtime_context.get("dependency_graph_report", {})
 
     def _dependency_items(self, dependency_chain):
         if isinstance(dependency_chain, Mapping):

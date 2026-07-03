@@ -2745,6 +2745,7 @@ if runtime_status == "completed" and isinstance(results, dict):
             "evaluation_metrics",
             {},
         )
+        
         results["evaluation_report"] = evaluated_context.get(
             "evaluation_report",
             {},

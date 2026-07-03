@@ -17,7 +17,9 @@ from runtime.state.runtime_state import RuntimeState
 from runtime.scheduler.runtime_scheduler import RuntimeScheduler
 from runtime.dependency import (
     DependencyChainExecutor,
+    DependencyActivationTrace,
     dependency_activation_manager,
+    dependency_activation_enforcer,
 )
 from runtime.context.context_integrity_guard import context_integrity_guard
 from runtime.process import ProcessSemanticEngine
@@ -4856,6 +4858,40 @@ class AdaptiveCognitivePipeline:
         runtime_context["dependency_activation_reason"] = (
             activation_decision.get("dependency_activation_reason")
         )
+        detected_dependency_concepts = list(
+            activation_decision.get("matched_signals", []) or []
+        )
+        for report_key in (
+            "semantic_attribution_report",
+            "introspection_report",
+        ):
+            report = runtime_context.get(report_key, {})
+            if isinstance(report, dict):
+                detected_dependency_concepts.extend(
+                    report.get("attributed_concepts", []) or []
+                )
+                detected_dependency_concepts.extend(
+                    report.get("concepts", []) or []
+                )
+        for item in runtime_context.get("semantic_abstractions", []) or []:
+            if isinstance(item, dict):
+                detected_dependency_concepts.append(item.get("concept"))
+            else:
+                detected_dependency_concepts.append(item)
+        activation_trace = DependencyActivationTrace()
+        activation_trace.detect_concepts(detected_dependency_concepts)
+        enforcement = dependency_activation_enforcer.enforce(
+            detected_dependency_concepts,
+            runtime_context,
+            trace=activation_trace,
+        )
+        runtime_context = enforcement["runtime_context"]
+        activation_trace = enforcement["trace"]
+        runtime_context["dependency_activation_enforcer_report"] = {
+            key: value
+            for key, value in enforcement.items()
+            if key not in {"runtime_context", "trace"}
+        }
         if activation_decision.get("activation_state") in {
             "DEPENDENCY_REQUIRED",
             "DEPENDENCY_RECOMMENDED",
@@ -4906,6 +4942,24 @@ class AdaptiveCognitivePipeline:
                 link_usage["dependency_links_skipped"]
             )
             dependency_time = round(time.perf_counter() - module_start, 4)
+            skip_report = activation_trace.skip_report(
+                requested_tool="dependency_reasoning",
+                activation_attempted=bool(
+                    link_usage["dependency_activation_attempted"]
+                ),
+                activation_blocked=bool(
+                    link_usage["dependency_activation_blocked"]
+                ),
+                block_reason=skipped.get("skip_reason"),
+                blocking_module="legacy_pipeline.run_dependency_reasoning_cycle",
+                blocking_condition="layer_not_allowed",
+            )
+            activation_trace.exit_runtime(
+                "dependency_reasoning",
+                executed=False,
+                failure=skipped.get("skip_reason"),
+            )
+            missing_warning = activation_trace.assert_requested_when_concepts_exist()
             runtime_context[
                 "dependency_reasoning_report"
             ] = {
@@ -4922,6 +4976,10 @@ class AdaptiveCognitivePipeline:
                 "dependency_chain_generation_failed": False,
                 "dependency_chain_failure_reason":
                 skipped.get("skip_reason"),
+                "DEPENDENCY_SKIP_REPORT": skip_report,
+                "DEPENDENCY_ACTIVATION_TRACE_REPORT":
+                activation_trace.report(),
+                "DEPENDENCY_ACTIVATION_MISSING": missing_warning,
             }
             runtime_context[
                 "process_dependency_chains"
@@ -4949,6 +5007,12 @@ class AdaptiveCognitivePipeline:
                 "process_dependency_links_loaded": links_loaded,
                 "process_dependency_links_used": 0,
             }
+            runtime_context["DEPENDENCY_SKIP_REPORT"] = skip_report
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE_REPORT"] = (
+                activation_trace.report()
+            )
+            if missing_warning:
+                runtime_context["DEPENDENCY_ACTIVATION_MISSING"] = missing_warning
             runtime_context[
                 "dependency_lifecycle_report"
             ] = {
@@ -5013,6 +5077,28 @@ class AdaptiveCognitivePipeline:
                 "dependency_chain_failure_reason":
                 "disabled_by_tool_selection",
             })
+            skip_report = activation_trace.skip_report(
+                requested_tool="dependency_reasoning",
+                activation_attempted=bool(
+                    link_usage["dependency_activation_attempted"]
+                ),
+                activation_blocked=True,
+                block_reason="disabled_by_tool_selection",
+                blocking_module="legacy_pipeline.run_dependency_reasoning_cycle",
+                blocking_condition="tool_not_requested_or_enabled",
+            )
+            activation_trace.exit_runtime(
+                "dependency_reasoning",
+                executed=False,
+                failure="disabled_by_tool_selection",
+            )
+            missing_warning = activation_trace.assert_requested_when_concepts_exist()
+            runtime_context["dependency_reasoning_report"].update({
+                "DEPENDENCY_SKIP_REPORT": skip_report,
+                "DEPENDENCY_ACTIVATION_TRACE_REPORT":
+                activation_trace.report(),
+                "DEPENDENCY_ACTIVATION_MISSING": missing_warning,
+            })
 
             runtime_context[
                 "process_dependency_chains"
@@ -5038,6 +5124,12 @@ class AdaptiveCognitivePipeline:
                 link_usage["process_dependency_links_loaded"],
                 "process_dependency_links_used": 0,
             }
+            runtime_context["DEPENDENCY_SKIP_REPORT"] = skip_report
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE_REPORT"] = (
+                activation_trace.report()
+            )
+            if missing_warning:
+                runtime_context["DEPENDENCY_ACTIVATION_MISSING"] = missing_warning
             runtime_context[
                 "dependency_lifecycle_report"
             ] = {
@@ -5063,6 +5155,10 @@ class AdaptiveCognitivePipeline:
 
         concepts = self._dependency_reasoning_concepts(
             runtime_context
+        )
+        activation_trace.enter_runtime(
+            "dependency_reasoning",
+            concepts,
         )
         attribution_report = runtime_context.get(
             "semantic_attribution_report",
@@ -5603,6 +5699,26 @@ class AdaptiveCognitivePipeline:
             dependency_time,
             requested=dependency_requested,
         )
+        if dependency_reports:
+            activation_trace.exit_runtime(
+                "dependency_reasoning",
+                executed=True,
+            )
+        else:
+            activation_trace.skip_report(
+                requested_tool="dependency_reasoning",
+                activation_attempted=bool(dependency_requested),
+                activation_blocked=True,
+                block_reason="no_dependency_concepts_available",
+                blocking_module="legacy_pipeline.run_dependency_reasoning_cycle",
+                blocking_condition="empty_dependency_concept_selection",
+            )
+            activation_trace.exit_runtime(
+                "dependency_reasoning",
+                executed=False,
+                failure="no_dependency_concepts_available",
+            )
+        missing_warning = activation_trace.assert_requested_when_concepts_exist()
         runtime_context[
             "DEPENDENCY_EXECUTION_TRACE"
         ] = runtime_context["dependency_execution_trace"]
@@ -5642,6 +5758,15 @@ class AdaptiveCognitivePipeline:
                 else 0.0
             ),
         }
+        runtime_context["DEPENDENCY_ACTIVATION_TRACE_REPORT"] = (
+            activation_trace.report()
+        )
+        if activation_trace.skip_reasons:
+            runtime_context["DEPENDENCY_SKIP_REPORT"] = (
+                activation_trace.skip_reasons[-1]
+            )
+        if missing_warning:
+            runtime_context["DEPENDENCY_ACTIVATION_MISSING"] = missing_warning
         runtime_context[
             "dependency_lifecycle_report"
         ] = {
@@ -5677,6 +5802,12 @@ class AdaptiveCognitivePipeline:
             runtime_context["DEPENDENCY_ACTIVATION_TRACE"].get(
                 "dependency_usage_rate",
             ),
+            "DEPENDENCY_ACTIVATION_TRACE_REPORT":
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE_REPORT"],
+            "DEPENDENCY_SKIP_REPORT":
+            runtime_context.get("DEPENDENCY_SKIP_REPORT"),
+            "DEPENDENCY_ACTIVATION_MISSING":
+            runtime_context.get("DEPENDENCY_ACTIVATION_MISSING"),
             "downstream_consumers": [
                 "context_truth_advancement",
                 "promotion_engine",
@@ -5771,6 +5902,12 @@ class AdaptiveCognitivePipeline:
             dependency_lifecycle_state,
             "dependency_time":
             dependency_time,
+            "DEPENDENCY_ACTIVATION_TRACE_REPORT":
+            runtime_context["DEPENDENCY_ACTIVATION_TRACE_REPORT"],
+            "DEPENDENCY_SKIP_REPORT":
+            runtime_context.get("DEPENDENCY_SKIP_REPORT"),
+            "DEPENDENCY_ACTIVATION_MISSING":
+            runtime_context.get("DEPENDENCY_ACTIVATION_MISSING"),
         }
 
         self.runtime.bulk_update_context(

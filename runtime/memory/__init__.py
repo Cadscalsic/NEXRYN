@@ -198,6 +198,13 @@ from runtime.memory.dynamic_concept_memory import (
     dynamic_concept_memory
 )
 
+from runtime.memory.dependency_graph_memory import (
+
+    DependencyGraphMemory,
+
+    dependency_graph_memory
+)
+
 __all__ = [
     "WorkingMemory",
     "EpisodicMemory",
@@ -238,5 +245,7 @@ __all__ = [
     "CausalContextMemory",
     "causal_context_memory",
     "DynamicConceptMemory",
-    "dynamic_concept_memory"
+    "dynamic_concept_memory",
+    "DependencyGraphMemory",
+    "dependency_graph_memory"
 ]
