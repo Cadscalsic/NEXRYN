@@ -2,48 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from time import perf_counter
 from typing import Any, Mapping
 
+from runtime.context.process_context_models import ProcessContext
 from runtime.memory.process_context_memory import ProcessContextMemory
 from runtime.process.process_context_simulator import ProcessContextSimulator
 from runtime.process.process_context_validator import ProcessContextValidator
 from runtime.process.state_transition_builder import StateTransitionBuilder
-
-
-@dataclass
-class ProcessContext:
-    process_id: str
-    process_family: str
-    source_graph: dict[str, Any]
-    initial_state: dict[str, Any]
-    intermediate_states: list[dict[str, Any]]
-    final_state: dict[str, Any]
-    transition_sequence: list[str]
-    constraints: list[str]
-    expected_outcomes: list[str]
-    confidence: float
-    transition_events: list[dict[str, Any]] = field(default_factory=list)
-    dependencies: list[str] = field(default_factory=list)
-    transition_confidence: float = 0.0
-    state_confidence: float = 0.0
-    process_confidence: float = 0.0
-    support_score: float = 0.0
-    contradiction_score: float = 0.0
-    validation: dict[str, Any] = field(default_factory=dict)
-    simulation: dict[str, Any] = field(default_factory=dict)
-    reuse_hit: bool = False
-    concept: str = ""
-
-    def as_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["context_name"] = self.process_id
-        data["process_context_confidence"] = round(float(self.confidence or 0.0), 4)
-        data["state_count"] = 2 + len(self.intermediate_states)
-        data["process_depth"] = len(self.transition_sequence)
-        return data
 
 
 class ProcessContextGenerator:

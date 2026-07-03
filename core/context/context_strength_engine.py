@@ -10,7 +10,7 @@ from runtime.context.context_governance_registry import (
     context_from_governance_report,
     governance_process_report,
 )
-from runtime.context.process_context_registry import (
+from runtime.context.process_context_report_builder import (
     context_from_registry_report,
     process_report_from_registry_context,
 )
