@@ -445,6 +445,9 @@ from runtime.planning import (
 from runtime.routing import (
     pre_reasoning_router,
 )
+from runtime.budget.deep_mode_budget_manager import (
+    deep_mode_budget_manager,
+)
 
 from runtime.profiling import (
     performance_reporter,
@@ -1478,11 +1481,13 @@ class AdaptiveCognitivePipeline:
             },
             "deep": {
                 "telemetry_enabled": True,
-                "cache_dependencies": False,
+                "cache_dependencies": True,
                 "report_level": "full",
-                "max_concepts": None,
-                "governance_budget_seconds": None,
-                "full_governance": True,
+                "max_chain_depth": 6,
+                "max_dependency_depth": 6,
+                "max_concepts": 12,
+                "governance_budget_seconds": 20,
+                "full_governance": False,
             },
         }[mode]
 
@@ -1504,6 +1509,10 @@ class AdaptiveCognitivePipeline:
             report_level = str(report_level).lower()
             if report_level in {"minimal", "normal", "full"}:
                 budget["report_level"] = report_level
+        if mode == "deep":
+            budget = deep_mode_budget_manager.constrain_reasoning_budget(
+                budget,
+            )
 
         self.reasoning_budget = budget
         return dict(self.reasoning_budget)
@@ -1640,6 +1649,10 @@ class AdaptiveCognitivePipeline:
             **runtime_context,
             "requested_mode": self.requested_budget_mode
             or self.reasoning_budget.get("mode"),
+            "audit_sections_requested": self.reasoning_budget.get(
+                "audit_sections_requested",
+                [],
+            ),
         }
         execution_plan = (
             self.pre_reasoning_router
@@ -2135,6 +2148,8 @@ class AdaptiveCognitivePipeline:
             adaptive_cache_report["compaction_ratio"],
             "pre_reasoning_router_enabled":
             self.performance_counters["pre_reasoning_router_enabled"],
+            "pre_reasoning_execution_plan":
+            runtime_context.get("pre_reasoning_execution_plan", {}),
             "task_profiles_generated":
             self.performance_counters["task_profiles_generated"],
             "selective_execution_enabled":
@@ -2908,6 +2923,36 @@ class AdaptiveCognitivePipeline:
     # STAGE EXECUTION
     # ========================================
 
+    def _deep_task_budget_exceeded_report(self, runtime_context, next_stage=None):
+
+        if self.reasoning_budget.get("mode") != "deep":
+            return None
+        deep_budget = self.reasoning_budget.get("deep_budget", {})
+        elapsed = round(
+            time.perf_counter()
+            - self.performance_counters.get("task_start", time.perf_counter()),
+            4,
+        )
+        if not deep_mode_budget_manager.task_budget_exceeded(
+            elapsed,
+            deep_budget,
+        ):
+            return None
+        report = {
+            "system": "deep_mode_task_guard",
+            "warning": "TASK_RUNTIME_BUDGET_EXCEEDED",
+            "task_runtime_seconds": elapsed,
+            "max_task_runtime_seconds":
+            deep_budget.get("max_task_runtime_seconds", 30.0),
+            "next_stage_deferred": next_stage,
+            "partial_diagnostics_saved": True,
+        }
+        runtime_context["TASK_RUNTIME_BUDGET_EXCEEDED"] = report
+        runtime_context["task_runtime_budget_exceeded"] = True
+        runtime_context["termination_reason"] = "TASK_RUNTIME_BUDGET_EXCEEDED"
+        runtime_context["incomplete_due_to_budget"] = True
+        return report
+
     def run_stage_cycle(self):
 
         stage_cycle_start = time.perf_counter()
@@ -2922,6 +2967,18 @@ class AdaptiveCognitivePipeline:
             stage_name = stage.get(
                 "stage_name"
             )
+
+            budget_report = self._deep_task_budget_exceeded_report(
+                runtime_context,
+                next_stage=stage_name,
+            )
+            if budget_report:
+                execution_trace.append({
+                    "stage_name": stage_name,
+                    "status": "deferred",
+                    "reason": "TASK_RUNTIME_BUDGET_EXCEEDED",
+                })
+                break
 
             stage_callable = stage.get(
                 "callable"
@@ -3242,6 +3299,13 @@ class AdaptiveCognitivePipeline:
                 raise RuntimeError(
                     f"Pipeline stage failed: {stage_name}"
                 ) from failure_error
+
+            budget_report = self._deep_task_budget_exceeded_report(
+                runtime_context,
+                next_stage="next_stage",
+            )
+            if budget_report:
+                break
 
         runtime_context[
             "execution_trace"
@@ -12070,6 +12134,8 @@ class AdaptiveCognitivePipeline:
         post_success_mode="fast",
         profile=False,
         profile_level="minimal",
+        audit_sections_requested=None,
+        deep_budget_overrides=None,
     ):
 
         self.profiling_enabled = bool(profile)
@@ -12100,6 +12166,29 @@ class AdaptiveCognitivePipeline:
             cache_dependencies=cache_dependencies,
             report_level=report_level,
         )
+        if self.reasoning_budget.get("mode") == "deep":
+            deep_budget = deep_mode_budget_manager.build_budget(
+                **(deep_budget_overrides or {})
+            )
+            self.reasoning_budget = (
+                deep_mode_budget_manager.constrain_reasoning_budget(
+                    self.reasoning_budget,
+                    deep_budget,
+                )
+            )
+            self.reasoning_budget["audit_sections_requested"] = list(
+                audit_sections_requested or []
+            )
+            self.reasoning_budget["report_level"] = (
+                deep_mode_budget_manager.bounded_report_level(
+                    "deep",
+                    self.reasoning_budget.get("report_level", "full"),
+                    {
+                        f"audit_{section}": True
+                        for section in audit_sections_requested or []
+                    },
+                )
+            )
 
         self.prepare_task_run()
 

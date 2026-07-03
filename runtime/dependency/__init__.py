@@ -18,18 +18,30 @@ from runtime.dependency.dependency_activation_manager import (
     DependencyActivationManager,
     dependency_activation_manager,
 )
+from runtime.dependency.dependency_graph_builder import (
+    DependencyGraphBuilder,
+    dependency_graph_builder,
+)
+from runtime.dependency.dependency_activation_bridge import (
+    DependencyActivationBridge,
+    dependency_activation_bridge,
+)
 
 __all__ = [
+    "DependencyActivationBridge",
     "DependencyActivationManager",
     "DependencyChainBuilder",
     "DependencyChainExecutor",
     "DependencyCoherenceEngine",
+    "DependencyGraphBuilder",
     "DependencyGraphEngine",
     "DependencyTraceEngine",
     "DependencyVisibilityEngine",
     "ExplanationEngine",
     "ReasonedDependencyChain",
+    "dependency_activation_bridge",
     "dependency_activation_manager",
     "dependency_coherence_engine",
+    "dependency_graph_builder",
     "dependency_visibility_engine",
 ]

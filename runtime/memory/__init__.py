@@ -163,6 +163,41 @@ from runtime.memory.horizon import (
     horizon_memory_manager
 )
 
+from runtime.memory.transformation_memory import (
+
+    TransformationMemory,
+
+    transformation_memory
+)
+
+from runtime.memory.color_mapping_memory import (
+
+    ColorMappingMemory,
+
+    color_mapping_memory
+)
+
+from runtime.memory.process_context_memory import (
+
+    ProcessContextMemory,
+
+    process_context_memory
+)
+
+from runtime.memory.causal_context_memory import (
+
+    CausalContextMemory,
+
+    causal_context_memory
+)
+
+from runtime.memory.dynamic_concept_memory import (
+
+    DynamicConceptMemory,
+
+    dynamic_concept_memory
+)
+
 __all__ = [
     "WorkingMemory",
     "EpisodicMemory",
@@ -193,5 +228,15 @@ __all__ = [
     "MemoryCompressionRuntime",
     "memory_compression_runtime",
     "HorizonMemoryManager",
-    "horizon_memory_manager"
+    "horizon_memory_manager",
+    "TransformationMemory",
+    "transformation_memory",
+    "ColorMappingMemory",
+    "color_mapping_memory",
+    "ProcessContextMemory",
+    "process_context_memory",
+    "CausalContextMemory",
+    "causal_context_memory",
+    "DynamicConceptMemory",
+    "dynamic_concept_memory"
 ]

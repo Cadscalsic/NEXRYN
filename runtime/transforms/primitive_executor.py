@@ -848,6 +848,65 @@ class PrimitiveExecutor:
         return output
 
     # ========================================
+    # GENERIC TRANSLATE
+    # ========================================
+
+    def translate(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.zeros_like(
+            grid
+        )
+
+        parameters = parameters or {}
+
+        translation = parameters.get(
+            "translation",
+            [
+                parameters.get("delta_row", 0),
+                parameters.get("delta_col", 0)
+            ]
+        )
+
+        delta_row = int(
+            translation[0]
+        )
+
+        delta_col = int(
+            translation[1]
+        )
+
+        for row, col in np.argwhere(
+            grid != 0
+        ):
+
+            target_row = int(row) + delta_row
+
+            target_col = int(col) + delta_col
+
+            if (
+                0 <= target_row < output.shape[0]
+                and
+                0 <= target_col < output.shape[1]
+            ):
+
+                output[
+                    target_row,
+                    target_col
+                ] = grid[
+                    row,
+                    col
+                ]
+
+        return output
+
+    # ========================================
     # REPLACE COLOR
     # ========================================
 
@@ -1059,6 +1118,211 @@ class PrimitiveExecutor:
         )
 
     # ========================================
+    # MIRROR VERTICAL
+    # ========================================
+
+    def mirror_vertical(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        return np.flipud(
+            grid
+        )
+
+    # ========================================
+    # ROTATE GRID
+    # ========================================
+
+    def rotate_grid(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        parameters = parameters or {}
+
+        degrees = int(
+            parameters.get(
+                "degrees",
+                parameters.get(
+                    "rotation",
+                    90
+                )
+            )
+        )
+
+        return np.rot90(
+            grid,
+            k=(degrees // 90) % 4
+        )
+
+    # ========================================
+    # CONSTRUCT PATH
+    # ========================================
+
+    def construct_path(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.array(
+            grid,
+            copy=True
+        )
+
+        parameters = parameters or {}
+
+        non_zero = np.argwhere(
+            output != 0
+        )
+
+        if len(non_zero) < 2:
+
+            return output
+
+        start = parameters.get(
+            "start",
+            non_zero[0].tolist()
+        )
+
+        end = parameters.get(
+            "end",
+            non_zero[-1].tolist()
+        )
+
+        path_color = int(
+            parameters.get(
+                "path_color",
+                output[
+                    int(start[0]),
+                    int(start[1])
+                ]
+            )
+        )
+
+        row = int(start[0])
+
+        col = int(start[1])
+
+        end_row = int(end[0])
+
+        end_col = int(end[1])
+
+        while row != end_row:
+
+            output[
+                row,
+                col
+            ] = path_color
+
+            row += 1 if end_row > row else -1
+
+        while col != end_col:
+
+            output[
+                row,
+                col
+            ] = path_color
+
+            col += 1 if end_col > col else -1
+
+        output[
+            end_row,
+            end_col
+        ] = path_color
+
+        return output
+
+    # ========================================
+    # CONNECT COMPONENTS
+    # ========================================
+
+    def connect_components(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        return self.construct_path(
+            grid,
+            parameters
+        )
+
+    # ========================================
+    # FILL REGION
+    # ========================================
+
+    def fill_region(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.array(
+            grid,
+            copy=True
+        )
+
+        parameters = parameters or {}
+
+        fill_color = int(
+            parameters.get(
+                "fill_color",
+                parameters.get(
+                    "path_color",
+                    1
+                )
+            )
+        )
+
+        non_zero = np.argwhere(
+            output != 0
+        )
+
+        if len(non_zero) == 0:
+
+            return output
+
+        min_row = int(np.min(non_zero[:, 0]))
+        max_row = int(np.max(non_zero[:, 0]))
+        min_col = int(np.min(non_zero[:, 1]))
+        max_col = int(np.max(non_zero[:, 1]))
+
+        region = output[
+            min_row:max_row + 1,
+            min_col:max_col + 1
+        ]
+
+        region[
+            region == 0
+        ] = fill_color
+
+        output[
+            min_row:max_row + 1,
+            min_col:max_col + 1
+        ] = region
+
+        return output
+
+    # ========================================
     # PRESERVE GRID
     # ========================================
 
@@ -1147,6 +1411,9 @@ class PrimitiveExecutor:
             "object_level_translate":
             self.object_level_translate,
 
+            "translate":
+            self.translate,
+
             "replace_color":
             self.replace_color,
 
@@ -1158,6 +1425,48 @@ class PrimitiveExecutor:
 
             "mirror_object":
             self.mirror_object,
+
+            "mirror_horizontal":
+            self.mirror_object,
+
+            "mirror_vertical":
+            self.mirror_vertical,
+
+            "rotate":
+            self.rotate_grid,
+
+            "rotate_grid":
+            self.rotate_grid,
+
+            "construct_path":
+            self.construct_path,
+
+            "connect_components":
+            self.connect_components,
+
+            "fill_region":
+            self.fill_region,
+
+            "recolor":
+            self.replace_color,
+
+            "duplicate":
+            self.duplicate_object,
+
+            "replicate":
+            self.duplicate_object,
+
+            "grow":
+            self.grow_topology,
+
+            "expand":
+            self.expand_pattern,
+
+            "scale_up":
+            self.expand_grid,
+
+            "scale_down":
+            self.shrink_grid,
 
             "preserve_objects":
             self.preserve_grid,

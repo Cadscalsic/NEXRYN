@@ -122,6 +122,17 @@ class DependencyCoherenceEngine:
             + (1.0 - len(missing) / max(len(dependencies), 1)) * 0.27
             + relation_semantics_score * 0.15
         )
+        explicit_support_complete = (
+            bool(dependencies)
+            and not missing
+            and all(item.get("supported") for item in dependencies)
+            and all(
+                clamp(item.get("confidence", item.get("support_score", 1.0))) >= 1.0
+                for item in dependencies
+            )
+        )
+        if explicit_support_complete:
+            dependency_coherence = 1.0
         if dependency_coherence >= 0.80:
             risk = "LOW"
         elif dependency_coherence >= 0.55:

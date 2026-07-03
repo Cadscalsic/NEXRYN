@@ -112,6 +112,22 @@ from runtime.reasoning.transformation_salience_engine import (
     transformation_salience_engine
 )
 
+from runtime.reasoning.transformation_synthesis_engine import (
+
+    TransformationSynthesisEngine,
+
+    transformation_synthesis_engine
+)
+
+from runtime.reasoning.color_mapping_engine import (
+
+    ColorMappingMatrix,
+
+    ColorMappingReasoningEngine,
+
+    color_mapping_engine
+)
+
 from runtime.reasoning.invariant_filter import (
 
     InvariantFilter,
@@ -249,6 +265,16 @@ __all__ = [
     "TransformationSalienceEngine",
 
     "transformation_salience_engine",
+
+    "TransformationSynthesisEngine",
+
+    "transformation_synthesis_engine",
+
+    "ColorMappingMatrix",
+
+    "ColorMappingReasoningEngine",
+
+    "color_mapping_engine",
 
     "InvariantFilter",
 

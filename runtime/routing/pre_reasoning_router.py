@@ -184,8 +184,42 @@ class PreReasoningRouter:
                     "semantic_context",
                 })
         else:
-            required.update(ALL_LAYERS)
-            deferred.clear()
+            diagnostic_layers = {
+                "deep_governance",
+                "self_improvement",
+                "adaptive_memory_update",
+                "world_model",
+                "truth_commit",
+            }
+            optional.difference_update(diagnostic_layers)
+            optional.update({
+                "adaptive_reuse",
+                "causal_validation",
+                "context_hierarchy",
+                "meta_cognition",
+            })
+            if (
+                task_profile.get("confidence", 1.0) < 0.82
+                or dependency_policy["activate"]
+                or context_policy["activate"]
+            ):
+                required.update({
+                    "dependency_reasoning",
+                    "process_semantic_synthesis",
+                    "causal_validation",
+                })
+            audit_sections = set(context.get("audit_sections_requested", []) or [])
+            if "truth" in audit_sections:
+                optional.update({"truth_candidate", "truth_commit"})
+            if "dependencies" in audit_sections:
+                required.update({"dependency_reasoning", "process_semantic_synthesis"})
+            if "lineage" in audit_sections:
+                optional.add("context_hierarchy")
+            if "cache" in audit_sections:
+                optional.add("adaptive_memory_update")
+            if "concepts" in audit_sections:
+                optional.add("self_improvement")
+            deferred.update(diagnostic_layers - required - optional)
 
         if context.get("new_concept_detected") is True:
             required.add("dependency_reasoning")
@@ -204,7 +238,7 @@ class PreReasoningRouter:
 
         enabled = set(required)
         if mode == "deep":
-            enabled = set(ALL_LAYERS)
+            enabled.update(layer for layer in optional if layer not in deferred)
         elif mode == "adaptive":
             enabled.update(layer for layer in optional if layer not in deferred)
         elif safety_overrides:
@@ -308,7 +342,7 @@ class PreReasoningRouter:
             dependency_policy["reason"],
             "router_decision_trace": router_decision_trace,
             "escalation_level": escalation_level,
-            "execution_mode": "full" if mode == "deep" else "selective",
+            "execution_mode": "selective_deep" if mode == "deep" else "selective",
             "mode": mode,
             "confidence": task_profile.get("confidence", 0.0),
         }
@@ -316,7 +350,7 @@ class PreReasoningRouter:
             "layers_enabled_count": len(plan["enabled_layers"]),
             "layers_disabled_count": len(plan["disabled_layers"]),
             "layers_deferred_count": len(plan["deferred_layers"]),
-            "full_stack_avoided": mode != "deep" and bool(plan["disabled_layers"]),
+            "full_stack_avoided": bool(plan["disabled_layers"] or plan["deferred_layers"]),
             "estimated_layers_skipped": len(plan["disabled_layers"]) + len(plan["deferred_layers"]),
             "estimated_runtime_saved": round(
                 (len(plan["disabled_layers"]) + len(plan["deferred_layers"])) * 0.12,

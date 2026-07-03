@@ -114,6 +114,10 @@ class ProcessContextRegistry:
         self.max_contexts = max_contexts
         self.registration_count = 0
         self.replacement_count = 0
+        self.usage_frequency: dict[str, int] = {}
+        self.reuse_frequency: dict[str, int] = {}
+        self.success_records: dict[str, list[float]] = {}
+        self.process_evolution: dict[str, list[dict[str, Any]]] = {}
 
     def register(self, process_context: ProcessContext) -> dict[str, Any]:
         name = str(process_context.name)
@@ -123,12 +127,60 @@ class ProcessContextRegistry:
 
         self._contexts[name] = process_context
         self.registration_count += 1
+        self.usage_frequency[name] = self.usage_frequency.get(name, 0) + 1
+        self.process_evolution.setdefault(name, [])
+        self.process_evolution[name].append({
+            "event": "registered",
+            "context_strength": clamp(process_context.context_strength),
+            "transition_count": len(process_context.transition_signature),
+        })
 
         if len(self._contexts) > self.max_contexts:
             oldest_key = next(iter(self._contexts))
             self._contexts.pop(oldest_key, None)
 
         return process_context.as_dict(compact=True)
+
+    def record_usage(
+        self,
+        context_name: str,
+        success: bool | None = None,
+        accuracy: float | None = None,
+        reused: bool = False,
+    ) -> dict[str, Any]:
+        name = str(context_name)
+        self.usage_frequency[name] = self.usage_frequency.get(name, 0) + 1
+        if reused:
+            self.reuse_frequency[name] = self.reuse_frequency.get(name, 0) + 1
+        if accuracy is not None:
+            self.success_records.setdefault(name, [])
+            self.success_records[name].append(clamp(accuracy))
+        elif success is not None:
+            self.success_records.setdefault(name, [])
+            self.success_records[name].append(1.0 if success else 0.0)
+        self.process_evolution.setdefault(name, [])
+        self.process_evolution[name].append({
+            "event": "used",
+            "success": success,
+            "accuracy": accuracy,
+            "reused": reused,
+        })
+        return self.lifecycle_report(name)
+
+    def lifecycle_report(self, context_name: str) -> dict[str, Any]:
+        name = str(context_name)
+        successes = self.success_records.get(name, [])
+        return {
+            "context_name": name,
+            "usage_frequency": self.usage_frequency.get(name, 0),
+            "reuse_frequency": self.reuse_frequency.get(name, 0),
+            "success_rate": (
+                round(sum(successes) / len(successes), 4)
+                if successes
+                else 0.0
+            ),
+            "process_evolution": list(self.process_evolution.get(name, [])),
+        }
 
     def register_semantic_model(self, model: Mapping[str, Any]) -> dict[str, Any]:
         context = process_context_from_mapping({
@@ -204,12 +256,23 @@ class ProcessContextRegistry:
             "visible_context_count": len(visible),
             "registration_count": self.registration_count,
             "replacement_count": self.replacement_count,
+            "usage_frequency": dict(self.usage_frequency),
+            "reuse_frequency": dict(self.reuse_frequency),
+            "success_rate": self._success_rates(),
+            "process_evolution": dict(self.process_evolution),
             "compact_report": compact,
             "process_context_registration_rate": (
                 round(len(visible) / len(contexts), 4)
                 if contexts
                 else 1.0
             ),
+        }
+
+    def _success_rates(self) -> dict[str, float]:
+        return {
+            name: round(sum(values) / len(values), 4)
+            for name, values in self.success_records.items()
+            if values
         }
 
 

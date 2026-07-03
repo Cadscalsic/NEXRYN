@@ -323,6 +323,27 @@ class CompactReportBuilder:
                 report.get("metric_source_warnings", []),
                 5,
             ),
+            "canonical_metrics": self._compact_value(
+                report.get("canonical_metrics", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "METRIC_RECONCILIATION_REPORT": self._compact_value(
+                report.get("METRIC_RECONCILIATION_REPORT", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "METRIC_RECONCILIATION_WARNING": report.get(
+                "METRIC_RECONCILIATION_WARNING",
+            ),
+            "DEEP_MODE_OPTIMIZATION_REPORT": self._compact_value(
+                report.get("DEEP_MODE_OPTIMIZATION_REPORT", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
         }
 
     def compact_concept_lifecycle_report(

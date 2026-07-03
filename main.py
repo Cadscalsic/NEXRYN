@@ -609,8 +609,23 @@ def build_runtime_metric_bridge(
     runtime_metrics=None,
 ):
     from runtime.profiling.metric_bridge import runtime_metric_bridge
+    from runtime.metrics.canonical_metric_registry import (
+        CanonicalMetricRegistry,
+    )
+    from runtime.metrics.metric_validation_engine import MetricValidationEngine
+    from runtime.metrics.unified_metric_store import UnifiedMetricStore
+    from runtime.observability.runtime_observability_layer import (
+        RuntimeObservabilityLayer,
+    )
 
     runtime_metrics = runtime_metrics or {}
+    registry = CanonicalMetricRegistry()
+    store = UnifiedMetricStore(registry=registry)
+    observability = RuntimeObservabilityLayer(
+        store=store,
+        registry=registry,
+        validator=MetricValidationEngine(store=store),
+    )
     concept_memory = training_report.get("concept_memory", {})
     contexts = normalize_context_diagnostics(training_report)
     completed_tasks = sum(
@@ -663,6 +678,18 @@ def build_runtime_metric_bridge(
         if isinstance(report, dict):
             metric_sources.append(report)
 
+    source_payloads = {}
+    for index, mapping in enumerate(metric_sources):
+        producer = str(mapping.get("system") or f"metric_source_{index}")
+        source_name = f"{producer}:{index}"
+        source_payloads[source_name] = mapping
+        observability.ingest_report(
+            mapping,
+            producer=producer,
+            source=source_name,
+            confidence=0.80,
+        )
+
     for mapping in metric_sources:
         if "dependency_chain_depth" in mapping:
             depth = int(_metric_number(mapping.get("dependency_chain_depth")))
@@ -696,6 +723,12 @@ def build_runtime_metric_bridge(
         module_timings=module_timings,
         runtime_metrics=runtime_metrics,
     )
+    observability.ingest_report(
+        timing_bridge,
+        producer="runtime_metric_bridge",
+        source="timing_bridge",
+        confidence=0.95,
+    )
 
     concepts_processed = max(concept_candidates + semantic_counts + [0])
     dependency_chain_depth = max(dependency_depths or [0])
@@ -717,6 +750,31 @@ def build_runtime_metric_bridge(
         if (dependency_executor_cache_hits or dependency_executor_cache_misses)
         else max(reported_dependency_executions, dependency_chain_reports)
     )
+    bridge_metrics = {
+        "dependency_chain_depth": dependency_chain_depth,
+        "dependency_depth": dependency_chain_depth,
+        "dependency_chains_executed": dependency_chains_executed,
+        "cache_hits": sum(
+            int(_metric_number(report.get("cache_hits")))
+            for report in task_performance_reports
+        ),
+        "cache_misses": sum(
+            int(_metric_number(report.get("cache_misses")))
+            for report in task_performance_reports
+        ),
+    }
+    for metric_name, value in bridge_metrics.items():
+        observability.store.update_metric(
+            metric_name,
+            value,
+            producer=observability.store.registry.owner_for(metric_name),
+            source="runtime_metric_bridge",
+            confidence=0.98,
+        )
+    reconciliation = observability.build_reconciliation_report(
+        source_payloads,
+    )
+    canonical_metrics = reconciliation.get("canonical_metrics", {})
 
     warnings = []
     if concepts_processed == 0 and completed_tasks:
@@ -730,10 +788,31 @@ def build_runtime_metric_bridge(
             semantic_counts + [concepts_processed],
         ),
         "context_count": len(contexts),
-        "dependency_chain_depth": dependency_chain_depth,
+        "dependency_chain_depth": int(
+            _metric_number(
+                canonical_metrics.get(
+                    "dependency_chain_depth",
+                    dependency_chain_depth,
+                )
+            )
+        ),
         "dependency_chain_coverage": round(dependency_chain_coverage, 4),
-        "dependency_chains_executed": dependency_chains_executed,
+        "dependency_chains_executed": int(
+            _metric_number(
+                canonical_metrics.get(
+                    "dependency_chains_executed",
+                    dependency_chains_executed,
+                )
+            )
+        ),
         "dependency_chain_reports_observed": dependency_chain_reports,
+        "canonical_metrics": canonical_metrics,
+        "METRIC_RECONCILIATION_REPORT":
+        reconciliation["METRIC_RECONCILIATION_REPORT"],
+        "METRIC_SOURCE_AUDIT": reconciliation["METRIC_SOURCE_AUDIT"],
+        "METRIC_CONFLICT_REPORT": reconciliation["METRIC_CONFLICT_REPORT"],
+        "METRIC_RECONCILIATION_WARNING":
+        reconciliation["METRIC_RECONCILIATION_WARNING"],
         **timing_bridge,
         "metric_bridge": {
             "concept_sources": {
@@ -991,7 +1070,77 @@ parser.add_argument(
     help="Show truth candidates",
 )
 
+parser.add_argument(
+    "--audit-concepts",
+    action="store_true",
+    help="Expand concept lifecycle diagnostics in deep/full reports",
+)
+
+parser.add_argument(
+    "--audit-dependencies",
+    action="store_true",
+    help="Expand dependency diagnostics in deep/full reports",
+)
+
+parser.add_argument(
+    "--audit-truth",
+    action="store_true",
+    help="Expand truth diagnostics in deep/full reports",
+)
+
+parser.add_argument(
+    "--audit-cache",
+    action="store_true",
+    help="Expand cache diagnostics in deep/full reports",
+)
+
+parser.add_argument(
+    "--audit-lineage",
+    action="store_true",
+    help="Expand lineage diagnostics in deep/full reports",
+)
+
+parser.add_argument(
+    "--deep-max-total-runtime",
+    type=float,
+    default=None,
+    help="Maximum total deep-mode runtime budget in seconds",
+)
+
+parser.add_argument(
+    "--deep-max-task-runtime",
+    type=float,
+    default=None,
+    help="Maximum per-task deep-mode runtime budget in seconds",
+)
+
+parser.add_argument(
+    "--deep-max-report-time",
+    type=float,
+    default=None,
+    help="Maximum deep-mode report generation budget in seconds",
+)
+
+parser.add_argument(
+    "--deep-max-concept-lifecycle-time",
+    type=float,
+    default=None,
+    help="Maximum deep-mode concept lifecycle budget in seconds",
+)
+
 args = parser.parse_args()
+from runtime.budget.deep_mode_budget_manager import deep_mode_budget_manager
+
+deep_audit_flags = deep_mode_budget_manager.audit_flags_from_args(args)
+deep_audit_sections = deep_mode_budget_manager.requested_sections(
+    deep_audit_flags,
+)
+deep_budget = deep_mode_budget_manager.build_budget(
+    max_total_runtime_seconds=args.deep_max_total_runtime,
+    max_task_runtime_seconds=args.deep_max_task_runtime,
+    max_report_time_seconds=args.deep_max_report_time,
+    max_concept_lifecycle_seconds=args.deep_max_concept_lifecycle_time,
+)
 effective_report_level = args.report_level or {
     "fast": "minimal",
     "adaptive": "normal",
@@ -1216,6 +1365,8 @@ try:
                     post_success_mode=args.post_success_mode,
                     profile=args.profile,
                     profile_level=args.profile_level,
+                    audit_sections_requested=deep_audit_sections,
+                    deep_budget_overrides=deep_budget.as_dict(),
                 )
             if first_task_started and "first_task_completed" not in (
                 runtime_watchdog.checkpoints
@@ -1322,6 +1473,30 @@ try:
             "module": f"task_execution:{task_file}",
             "seconds": task_execution_elapsed,
         })
+        if (
+            args.mode == "deep"
+            and deep_mode_budget_manager.task_budget_exceeded(
+                task_execution_elapsed,
+                deep_budget,
+            )
+        ):
+            budget_warning = {
+                "system": "deep_mode_task_guard",
+                "warning": "TASK_RUNTIME_BUDGET_EXCEEDED",
+                "task": task_file,
+                "task_runtime_seconds": task_execution_elapsed,
+                "max_task_runtime_seconds":
+                deep_budget.max_task_runtime_seconds,
+                "partial_diagnostics_saved": True,
+            }
+            if all_results and all_results[-1].get("task") == task_file:
+                all_results[-1].setdefault("result", {})
+                if isinstance(all_results[-1]["result"], dict):
+                    all_results[-1]["result"][
+                        "TASK_RUNTIME_BUDGET_EXCEEDED"
+                    ] = budget_warning
+            runtime_metrics["task_budget_exceeded"] = True
+            print(budget_warning)
         runtime_metrics["task_execution_time_seconds"] = round(
             runtime_metrics.get("task_execution_time_seconds", 0.0)
             + task_execution_elapsed,
@@ -1346,12 +1521,24 @@ try:
     record_main_timing("ledger_report", module_start)
 
     module_start = time.perf_counter()
+    concepts_recomputed = 0
+    concepts_reused = 0
     concept_lifecycle_report = (
         pipeline
         .concept_lifecycle_manager
         .knowledge_maturity_report
     )
-    if not concept_lifecycle_report.get("concepts"):
+    deep_concept_audit_requested = (
+        args.mode == "deep"
+        and deep_mode_budget_manager.should_expand(
+            "concepts",
+            deep_audit_flags,
+        )
+    )
+    if (
+        not concept_lifecycle_report.get("concepts")
+        and not (args.mode == "deep" and not deep_concept_audit_requested)
+    ):
         concept_lifecycle_report = (
             pipeline
             .concept_lifecycle_manager
@@ -1370,9 +1557,36 @@ try:
                 },
             )
         )
+        concepts_recomputed = len(
+            concept_lifecycle_report.get("concepts", []) or []
+        )
+    elif args.mode == "deep" and not deep_concept_audit_requested:
+        concept_lifecycle_report = {
+            "system": "concept_maturity_tracker",
+            "report_state": "summary",
+            "status": "ok",
+            "concept_lifecycle_compressed": True,
+            "lifecycle_processing_mode": "delta_summary",
+            "summary_first_reporting": True,
+            "lazy_expansion_required_for_full_details": "--audit-concepts",
+            "concepts": [],
+            "concept_count": len(
+                concept_lifecycle_report.get("concepts", []) or []
+            ),
+            "ledger_entry_count": len(
+                ledger_report.get("entries", [])
+                if isinstance(ledger_report, dict)
+                else []
+            ),
+            "cache_reuse_enabled": True,
+        }
+        concepts_reused = concept_lifecycle_report["concept_count"]
     concept_lifecycle_elapsed = round(time.perf_counter() - module_start, 4)
     if (
-        args.report_level not in {"full", "debug", "audit"}
+        (
+            args.report_level not in {"full", "debug", "audit"}
+            or (args.mode == "deep" and not deep_concept_audit_requested)
+        )
         and not concept_lifecycle_report.get("concept_lifecycle_compressed")
     ):
         from runtime.reporting.compact_report_builder import (
@@ -1389,12 +1603,20 @@ try:
         pipeline.concept_lifecycle_manager.knowledge_maturity_report = (
             concept_lifecycle_report
         )
-    elif concept_lifecycle_elapsed > 2.0:
-        concept_lifecycle_report["report_budget_seconds"] = 2.0
+    elif deep_mode_budget_manager.concept_lifecycle_budget_exceeded(
+        concept_lifecycle_elapsed,
+        deep_budget,
+    ):
+        concept_lifecycle_report["report_budget_seconds"] = (
+            deep_budget.max_concept_lifecycle_seconds
+        )
         concept_lifecycle_report["report_elapsed_seconds"] = (
             concept_lifecycle_elapsed
         )
         concept_lifecycle_report["report_budget_exceeded"] = True
+        concept_lifecycle_report["report_truncated_reason"] = (
+            "deep_concept_lifecycle_budget"
+        )
     if selection_training_diversity_report:
         concept_lifecycle_report["selection_training_diversity_report"] = (
             selection_training_diversity_report
@@ -1414,7 +1636,13 @@ try:
         multi_task_results=all_results,
         ledger_report=ledger_report,
         concept_lifecycle_report=concept_lifecycle_report,
-        include_truth_evaluations=True,
+        include_truth_evaluations=(
+            args.mode != "deep"
+            or deep_mode_budget_manager.should_expand(
+                "truth",
+                deep_audit_flags,
+            )
+        ),
     )
     if (
         selection_training_diversity_report.get(
@@ -1517,6 +1745,7 @@ try:
         module_timings=module_timings,
         runtime_metrics=runtime_metrics,
     )
+    canonical_metrics = metric_bridge.get("canonical_metrics", {})
     record_main_timing("build_runtime_metric_bridge", module_start)
     module_timings.append(main_module_timings[-1])
     slowest_modules = sorted(
@@ -1541,25 +1770,37 @@ try:
         "concepts_processed": metric_bridge["concepts_processed"],
         "semantic_concept_count": metric_bridge["semantic_concept_count"],
         "context_count": metric_bridge["context_count"],
-        "cache_hits": sum(
+        "cache_hits": canonical_metrics.get(
+            "cache_hits",
+            sum(
             report.get("cache_hits", 0)
             for report in task_performance_reports
+            ),
         ),
-        "cache_misses": sum(
+        "cache_misses": canonical_metrics.get(
+            "cache_misses",
+            sum(
             report.get("cache_misses", 0)
             for report in task_performance_reports
+            ),
         ),
-        "strategy_hits": sum(
+        "strategy_hits": canonical_metrics.get(
+            "strategy_hits",
+            sum(
             report.get("strategy_hits", 0)
             for report in task_performance_reports
+            ),
         ),
         "strategy_misses": sum(
             report.get("strategy_misses", 0)
             for report in task_performance_reports
         ),
-        "context_hits": sum(
+        "context_hits": canonical_metrics.get(
+            "context_hits",
+            sum(
             report.get("context_hits", 0)
             for report in task_performance_reports
+            ),
         ),
         "context_misses": sum(
             report.get("context_misses", 0)
@@ -1573,9 +1814,12 @@ try:
             report.get("program_misses", 0)
             for report in task_performance_reports
         ),
-        "truth_hits": sum(
+        "truth_hits": canonical_metrics.get(
+            "truth_hits",
+            sum(
             report.get("truth_hits", 0)
             for report in task_performance_reports
+            ),
         ),
         "truth_misses": sum(
             report.get("truth_misses", 0)
@@ -1692,6 +1936,16 @@ try:
         "module_timings": module_timings,
         "metric_bridge": metric_bridge["metric_bridge"],
         "metric_source_warnings": metric_bridge["metric_source_warnings"],
+        "canonical_metrics": canonical_metrics,
+        "METRIC_RECONCILIATION_REPORT":
+        metric_bridge.get("METRIC_RECONCILIATION_REPORT", {}),
+        "METRIC_SOURCE_AUDIT": metric_bridge.get("METRIC_SOURCE_AUDIT", {}),
+        "METRIC_CONFLICT_REPORT": metric_bridge.get(
+            "METRIC_CONFLICT_REPORT",
+            {},
+        ),
+        "METRIC_RECONCILIATION_WARNING":
+        metric_bridge.get("METRIC_RECONCILIATION_WARNING", False),
     }
     reuse_total = (
         performance_report["cache_hits"]
@@ -1764,6 +2018,22 @@ try:
         "truth_candidate_count":
         concept_lifecycle_report.get("truth_candidate_count", 0),
     })
+    for metric_name in (
+        "reasoning_depth",
+        "active_routes",
+        "strategy_hits",
+        "truth_hits",
+        "context_hits",
+        "cache_hits",
+        "cache_misses",
+        "reuse_rate",
+        "prediction_accuracy",
+        "repair_success_rate",
+        "process_context_count",
+        "causal_context_count",
+    ):
+        if metric_name in canonical_metrics:
+            performance_report[metric_name] = canonical_metrics[metric_name]
     record_main_timing("assemble_performance_report", module_start)
     module_timings.append(main_module_timings[-1])
     slowest_modules = sorted(
@@ -1860,6 +2130,40 @@ try:
         performance_report=performance_report,
         profile_level=args.profile_level,
     )
+    if isinstance(performance_intelligence_report, dict):
+        cognitive_efficiency = performance_intelligence_report.setdefault(
+            "cognitive_efficiency",
+            {},
+        )
+        if isinstance(cognitive_efficiency, dict):
+            for metric_name in ("reasoning_depth", "active_routes"):
+                if metric_name in canonical_metrics:
+                    cognitive_efficiency[metric_name] = (
+                        canonical_metrics[metric_name]
+                    )
+        memory_efficiency = performance_intelligence_report.setdefault(
+            "memory_efficiency",
+            {},
+        )
+        if isinstance(memory_efficiency, dict):
+            for metric_name in (
+                "strategy_hits",
+                "truth_hits",
+                "context_hits",
+                "reuse_rate",
+                "cache_hits",
+                "cache_misses",
+            ):
+                if metric_name in canonical_metrics:
+                    memory_efficiency[metric_name] = (
+                        canonical_metrics[metric_name]
+                    )
+        performance_intelligence_report[
+            "METRIC_RECONCILIATION_REPORT"
+        ] = performance_report.get("METRIC_RECONCILIATION_REPORT", {})
+        performance_intelligence_report[
+            "canonical_metrics"
+        ] = canonical_metrics
     record_main_timing("performance_intelligence_report", module_start)
     module_timings.append(main_module_timings[-1])
     from runtime.reporting.report_budget_manager import report_budget_manager
@@ -1886,6 +2190,19 @@ try:
         total_runtime_seconds,
         performance_report,
     )
+    if args.mode == "deep":
+        report_budget_report["report_budget_seconds"] = (
+            deep_budget.max_report_time_seconds
+        )
+        report_budget_report["report_budget_exceeded"] = (
+            deep_mode_budget_manager.report_budget_exceeded(
+                report_generation_cost,
+                deep_budget,
+            )
+        )
+        report_budget_report["report_compression_required"] = (
+            report_budget_report["report_budget_exceeded"]
+        )
     performance_report.update({
         "report_generation_cost":
         report_budget_report["report_generation_cost"],
@@ -1910,6 +2227,7 @@ try:
         report_budget_report["report_compression_ratio"],
         "concept_lifecycle_cost": concept_lifecycle_elapsed,
     })
+    runtime_metrics["deep_budget"] = deep_budget.as_dict()
 
     def synchronize_training_report_metrics(
         training_report,
@@ -2076,6 +2394,77 @@ try:
             for context in contexts.values()
         ],
     }
+    layers_requested = sorted({
+        layer
+        for report in task_performance_reports
+        for layer in (
+            report.get("pre_reasoning_execution_plan", {})
+            if isinstance(report.get("pre_reasoning_execution_plan"), dict)
+            else {}
+        ).get("required_layers", [])
+    })
+    layers_executed = sorted({
+        layer
+        for report in task_performance_reports
+        for layer in (
+            report.get("pre_reasoning_execution_plan", {})
+            if isinstance(report.get("pre_reasoning_execution_plan"), dict)
+            else {}
+        ).get("enabled_layers", [])
+    })
+    layers_deferred = sorted({
+        layer
+        for report in task_performance_reports
+        for layer in (
+            report.get("pre_reasoning_execution_plan", {})
+            if isinstance(report.get("pre_reasoning_execution_plan"), dict)
+            else {}
+        ).get("deferred_layers", [])
+    })
+    reports_generated = [
+        "training_report",
+        "performance_report",
+        "runtime_attribution_report",
+        "performance_intelligence_report",
+    ]
+    reports_skipped = []
+    if args.mode == "deep" and not deep_concept_audit_requested:
+        reports_skipped.append("expanded_concept_lifecycle_report")
+    if args.mode == "deep" and not deep_mode_budget_manager.should_expand(
+        "truth",
+        deep_audit_flags,
+    ):
+        reports_skipped.append("expanded_truth_evaluations")
+    if report_budget_report.get("report_compression_required"):
+        reports_skipped.append("unbounded_full_report_expansion")
+    deep_mode_optimization_report = deep_mode_budget_manager.build_report(
+        mode=args.mode,
+        deep_budget=deep_budget,
+        audit_flags=deep_audit_flags,
+        layers_requested=layers_requested,
+        layers_executed=layers_executed,
+        layers_deferred=layers_deferred,
+        reports_generated=reports_generated,
+        reports_skipped=reports_skipped,
+        concepts_recomputed=concepts_recomputed,
+        concepts_reused=concepts_reused,
+        elapsed={
+            "total_runtime_seconds": total_runtime_seconds,
+            "report_generation_seconds": report_generation_cost,
+            "concept_lifecycle_seconds": concept_lifecycle_elapsed,
+            "task_runtime_seconds": runtime_metrics.get(
+                "task_execution_time_seconds",
+                0.0,
+            ),
+        },
+        task_budget_exceeded=runtime_metrics.get(
+            "task_budget_exceeded",
+            False,
+        ),
+    )
+    performance_report["DEEP_MODE_OPTIMIZATION_REPORT"] = (
+        deep_mode_optimization_report
+    )
 
     results = {
         "multi_task_results": all_results,
@@ -2140,6 +2529,18 @@ try:
         "truth_graveyard_consistency_report":
         truth_graveyard_consistency_report,
         "report_budget_report": report_budget_report,
+        "DEEP_MODE_OPTIMIZATION_REPORT": deep_mode_optimization_report,
+        "deep_mode_optimization_report": deep_mode_optimization_report,
+        "METRIC_RECONCILIATION_REPORT":
+        performance_report.get("METRIC_RECONCILIATION_REPORT", {}),
+        "METRIC_SOURCE_AUDIT":
+        performance_report.get("METRIC_SOURCE_AUDIT", {}),
+        "METRIC_CONFLICT_REPORT":
+        performance_report.get("METRIC_CONFLICT_REPORT", {}),
+        "METRIC_RECONCILIATION_WARNING":
+        performance_report.get("METRIC_RECONCILIATION_WARNING", False),
+        "canonical_metrics":
+        performance_report.get("canonical_metrics", {}),
     }
     governance_budget_exceeded = any(
         isinstance(item.get("result"), dict)
@@ -2167,6 +2568,12 @@ try:
     )
     results["runtime_watchdog_report"] = runtime_watchdog.report()
     results["runtime_metadata"] = dict(runtime_metrics)
+    results["runtime_metadata"]["canonical_metrics"] = (
+        performance_report.get("canonical_metrics", {})
+    )
+    results["runtime_metadata"]["METRIC_RECONCILIATION_REPORT"] = (
+        performance_report.get("METRIC_RECONCILIATION_REPORT", {})
+    )
     record_main_timing("assemble_final_context", module_start)
     module_timings.append(main_module_timings[-1])
     performance_report["module_timings"] = module_timings
@@ -2332,6 +2739,7 @@ if runtime_status == "completed" and isinstance(results, dict):
         results["evaluation_result"] = evaluated_context.get(
             "evaluation_result",
             {},
+
         )
         results["evaluation_metrics"] = evaluated_context.get(
             "evaluation_metrics",
@@ -2395,6 +2803,12 @@ print("NEXRYN :: FINAL CONTEXT")
 print("==================================================\n")
 
 final_report_level = effective_report_level
+if args.mode == "deep":
+    final_report_level = deep_mode_budget_manager.bounded_report_level(
+        args.mode,
+        effective_report_level,
+        deep_audit_flags,
+    )
 if (
     isinstance(results, dict)
     and results.get("report_budget_report", {}).get("report_budget_exceeded")

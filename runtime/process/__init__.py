@@ -47,6 +47,19 @@ from runtime.process.process_strength_estimator import ProcessStrengthEstimator
 from runtime.process.process_transition_extractor import (
     ProcessTransitionExtractor,
 )
+from runtime.process.state_transition_engine import (
+    StateTransitionEngine,
+    state_transition_engine,
+)
+from runtime.process.process_simulator import (
+    ProcessSimulator,
+    process_simulator,
+)
+from runtime.process.process_context_runtime import (
+    ProcessContextModel,
+    ProcessContextRuntime,
+    process_context_runtime,
+)
 from runtime.process.typed_process_dependency_memory import (
     TypedProcessDependency,
     TypedProcessDependencyMemory,
@@ -74,11 +87,18 @@ __all__ = [
     "ProcessInvariantEngine",
     "ProcessStateGraph",
     "ProcessState",
+    "ProcessContextModel",
+    "ProcessContextRuntime",
+    "ProcessSimulator",
     "ProcessStrengthEstimator",
+    "StateTransitionEngine",
     "ProcessTransitionGraph",
     "ProcessTransitionExtractor",
     "ReasonedDependencyChain",
     "TypedProcessDependency",
     "TypedProcessDependencyMemory",
     "process_semantic_engine",
+    "process_context_runtime",
+    "process_simulator",
+    "state_transition_engine",
 ]
