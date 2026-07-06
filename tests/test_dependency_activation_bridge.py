@@ -189,3 +189,37 @@ def test_orchestrator_surfaces_dependency_activation_telemetry():
     assert report["dependency_graph_count"] > 0
     assert report["dependency_node_count"] > 0
     assert report["dependency_edge_count"] > 0
+
+
+def test_selected_dependency_reasoning_generates_audit_and_request():
+    report = DependencyActivationBridge().activate(
+        detected_concepts=[],
+        selected_tools=["dependency_reasoning"],
+        runtime_context={
+            "enabled_tools": ["dependency_reasoning", "process_semantics"],
+            "tool_selection_report": {
+                "enabled_tools": ["dependency_reasoning", "process_semantics"],
+            },
+            "cognitive_budget_report": {
+                "process_semantics_enabled": True,
+                "dependency_reasoning_enabled": True,
+            },
+        },
+    )
+
+    audit = report["DEPENDENCY_ACTIVATION_AUDIT_REPORT"]
+    failure = report["DEPENDENCY_ACTIVATION_FAILURE_REPORT"]
+
+    assert audit["selected_tools"] == ["dependency_reasoning"]
+    assert audit["activation_request_generated"] is True
+    assert audit["selection_checkpoint"] == "request_created"
+    assert audit["process_semantics_enabled"] is True
+    assert audit["dependency_reasoning_enabled"] is True
+    assert audit["activation_request_count"] == 1
+    assert audit["dependency_activation_state"] == "REQUESTED"
+    assert report["dependency_activation_state"] == "REQUESTED"
+    assert report["dependency_execution_count"] == 1
+    assert report["dependency_runtime_triggered"] is True
+    assert report["DEPENDENCY_EXECUTION_REPORT"]["executions_started"] == 1
+    assert failure["failure_detected"] is False
+    assert report["activation_failures"] == []

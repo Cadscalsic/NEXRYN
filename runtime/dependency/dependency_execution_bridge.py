@@ -44,6 +44,7 @@ class DependencyExecutionBridge:
             activation_decision,
             activated_tools or [],
             normalized,
+            activation_request,
         )
         execution = self.gateway.execute(
             concepts=normalized,
@@ -118,8 +119,16 @@ class DependencyExecutionBridge:
         activation_decision: Mapping[str, Any],
         activated_tools: list[str],
         concepts: list[str],
+        activation_request: Mapping[str, Any] | None = None,
     ) -> bool:
         if "dependency_reasoning" in set(activated_tools or []):
+            return True
+        request_state = str(
+            activation_request.get("request_state", "")
+            if isinstance(activation_request, Mapping)
+            else ""
+        ).upper()
+        if request_state == "REQUESTED":
             return True
         state = str(activation_decision.get("activation_state", "")).upper()
         if state in {"DEPENDENCY_REQUIRED", "DEPENDENCY_RECOMMENDED"}:

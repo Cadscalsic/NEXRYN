@@ -1178,6 +1178,18 @@ class ReasoningOrchestrator:
                 {},
             ),
 
+            "DEPENDENCY_ACTIVATION_AUDIT_REPORT":
+            dependency_activation_report.get(
+                "DEPENDENCY_ACTIVATION_AUDIT_REPORT",
+                {},
+            ),
+
+            "DEPENDENCY_ACTIVATION_FAILURE_REPORT":
+            dependency_activation_report.get(
+                "DEPENDENCY_ACTIVATION_FAILURE_REPORT",
+                {},
+            ),
+
             "DEPENDENCY_EXECUTION_REPORT":
             dependency_activation_report.get(
                 "DEPENDENCY_EXECUTION_REPORT",

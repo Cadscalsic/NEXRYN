@@ -10,6 +10,7 @@ from runtime.dependency.dependency_activation_enforcer import (
 )
 from runtime.dependency.dependency_activation_manager import (
     DEPENDENCY_NOT_REQUIRED,
+    DEPENDENCY_RECOMMENDED,
     DEPENDENCY_REQUIRED,
     DependencyActivationManager,
 )
@@ -124,15 +125,66 @@ class DependencyActivationBridge:
         mutable_context = dict(runtime_context)
         trace = DependencyActivationTrace()
         trace.detect_concepts(concepts)
+        selected = sorted(set(selected_tools or self._selected_tools(runtime_context)))
+        required_tools = self._required_tools(concepts)
+        required_tool_set = set(required_tools)
         enforcement = dependency_activation_enforcer.enforce(
             concepts,
             mutable_context,
             trace=trace,
         )
         mutable_context = enforcement["runtime_context"]
-        selected = sorted(set(selected_tools or self._selected_tools(runtime_context)))
-        required_tools = self._required_tools(concepts)
-        required_tool_set = set(required_tools)
+        activation_request_generated = bool(
+            enforcement.get("activation_request_generated")
+        )
+        selection_checkpoint = "no_request"
+        if activation_request_generated:
+            selection_checkpoint = "request_created"
+        elif "dependency_reasoning" in selected and not concepts:
+            selection_checkpoint = "request_created"
+            reason = (
+                mutable_context.get("dependency_activation_reason")
+                or "dependency_reasoning_selected_without_detected_concepts"
+            )
+            trace.request(
+                requested_tool="dependency_reasoning",
+                requested_by=self.system_name,
+                reason=reason,
+                concepts=concepts,
+            )
+            existing_requests = mutable_context.get("runtime_tool_requests", {})
+            if isinstance(existing_requests, dict):
+                existing_requests = dict(existing_requests)
+            else:
+                existing_requests = {}
+            mutable_context["runtime_tool_requests"] = {
+                **existing_requests,
+                "dependency_reasoning": {
+                    "tool_name": "dependency_reasoning",
+                    "request_state": "REQUESTED",
+                    "requested_by": self.system_name,
+                    "activation_state": DEPENDENCY_REQUIRED,
+                    "reason": reason,
+                    "matched_signals": list(concepts),
+                    "trace_request": {
+                        "requested_tool": "dependency_reasoning",
+                        "requested_by": self.system_name,
+                        "request_state": "REQUESTED",
+                        "reason": reason,
+                    },
+                },
+            }
+            mutable_context["enabled_tools"] = sorted(
+                set(mutable_context.get("enabled_tools", []) or [])
+                | {"dependency_reasoning"}
+            )
+            mutable_context["dependency_activation_reason"] = reason
+            activation_request_generated = True
+        elif enforcement.get("activation_already_requested"):
+            selection_checkpoint = "existing_request"
+        elif selected:
+            selection_checkpoint = "selection_only"
+
         if enforcement.get("activation_required") and "dependency_reasoning" not in selected:
             selected = sorted(set(selected) | {"dependency_reasoning"})
         activated_tools = sorted(
@@ -171,18 +223,44 @@ class DependencyActivationBridge:
             )
         trace.enter_runtime(self.system_name, concepts)
 
-        execution_report = self.execution_bridge.execute(
-            activation_request={
-                "requested_tool": "dependency_reasoning",
-                "detected_concepts": concepts,
-                "required_tools": required_tools,
-            },
-            activation_decision=activation_decision,
-            concepts=concepts,
-            activated_tools=activated_tools,
-            graph_report=graph_report,
-            runtime_context=mutable_context,
-        )
+        execution_report = {}
+        if concepts or required_tools or activation_request_generated:
+            execution_report = self.execution_bridge.execute(
+                activation_request={
+                    "requested_tool": "dependency_reasoning",
+                    "detected_concepts": concepts,
+                    "required_tools": required_tools,
+                },
+                activation_decision=activation_decision,
+                concepts=concepts,
+                activated_tools=activated_tools,
+                graph_report=graph_report,
+                runtime_context=mutable_context,
+            )
+        else:
+            execution_report = {
+                "execution_started": False,
+                "execution_completed": False,
+                "execution_success": False,
+                "execution_duration": 0.0,
+                "chains_generated": 0,
+                "dependency_depth": 0,
+                "dependency_confidence": 0.0,
+                "failure_reason": None,
+                "execution_failures": [],
+                "dependency_outputs": [],
+                "dependency_reports": [],
+                "dependency_graph_discovery_report": {},
+                "DEPENDENCY_GRAPH_REPORT": {},
+                "dependency_graph_count": 0,
+                "dependency_node_count": 0,
+                "dependency_edge_count": 0,
+                "dependency_graph_depth": 0,
+                "dependency_graph_reuse_rate": 0.0,
+                "dependency_graph_validation_score": 0.0,
+                "dependency_output_registry_report": {},
+                "gateway_report": {},
+            }
         dependency_reports = execution_report.get("dependency_reports", [])
 
         process_contexts = []
@@ -343,9 +421,31 @@ class DependencyActivationBridge:
         activation_state = (
             "ACTIVATED"
             if success_count > 0 and not failures
+            else "REQUESTED"
+            if activation_request_generated
+            and not success_count
             else activation_decision.get("activation_state", DEPENDENCY_REQUIRED)
             if required_tools
             else DEPENDENCY_NOT_REQUIRED
+        )
+        audit_report = self._build_activation_audit_report(
+            selected=selected,
+            required_tools=required_tools,
+            activation_request_generated=activation_request_generated,
+            activation_already_requested=enforcement.get("activation_already_requested"),
+            selection_checkpoint=selection_checkpoint,
+            concepts=concepts,
+            activation_decision=activation_decision,
+            execution_report=execution_report,
+            runtime_context=mutable_context,
+        )
+        failure_report = self._build_activation_failure_report(
+            requested_tool="dependency_reasoning",
+            activation_request_generated=activation_request_generated,
+            activation_state=activation_state,
+            failures=failures,
+            execution_report=execution_report,
+            trace=trace,
         )
 
         report = {
@@ -388,12 +488,20 @@ class DependencyActivationBridge:
             TRACE_REPORT_KEY: trace.report(),
             "activation_request_count": len(trace.activation_requests),
             "dependency_activation_state": activation_state,
+            "DEPENDENCY_ACTIVATION_AUDIT_REPORT": audit_report,
+            "DEPENDENCY_ACTIVATION_FAILURE_REPORT": failure_report,
             "dependency_activation_reason": self._activation_reason(
                 concepts,
                 required_tools,
                 activation_decision,
             ),
-            "dependency_runtime_triggered": bool(dependency_chain_count > 0),
+            "dependency_runtime_triggered": bool(
+                activation_request_generated
+                or execution_report.get("execution_started")
+                or dependency_chain_count > 0
+                or process_context_count > 0
+                or causal_context_count > 0
+            ),
             "dependency_graph_size": graph_report.get("dependency_graph", {}).get(
                 "edge_count",
                 0,
@@ -467,6 +575,92 @@ class DependencyActivationBridge:
         })
         self.activation_history.append(report)
         return report
+
+    def _build_activation_audit_report(
+        self,
+        *,
+        selected: list[str],
+        required_tools: list[str],
+        activation_request_generated: bool,
+        activation_already_requested: bool | None,
+        selection_checkpoint: str,
+        concepts: list[str],
+        activation_decision: Mapping[str, Any],
+        execution_report: Mapping[str, Any],
+        runtime_context: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        selected_set = set(selected)
+        budget_report = runtime_context.get("cognitive_budget_report", {})
+        if not isinstance(budget_report, Mapping):
+            budget_report = {}
+        process_semantics_enabled = bool(
+            "process_semantics" in selected_set
+            or bool(runtime_context.get("process_semantics_enabled"))
+            or bool(budget_report.get("process_semantics_enabled"))
+        )
+        dependency_reasoning_enabled = bool(
+            "dependency_reasoning" in selected_set
+            or bool(runtime_context.get("dependency_reasoning_enabled"))
+            or bool(budget_report.get("dependency_reasoning_enabled"))
+        )
+        return {
+            "system": "dependency_activation_audit",
+            "selected_tools": sorted(selected),
+            "required_tools": sorted(required_tools),
+            "activation_required": bool(required_tools),
+            "activation_request_generated": bool(activation_request_generated),
+            "activation_already_requested": bool(activation_already_requested),
+            "selection_checkpoint": selection_checkpoint,
+            "detected_concepts": list(concepts),
+            "process_semantics_enabled": process_semantics_enabled,
+            "dependency_reasoning_enabled": dependency_reasoning_enabled,
+            "activation_request_count": 1 if activation_request_generated else 0,
+            "dependency_activation_state": (
+                "REQUESTED"
+                if activation_request_generated
+                else str(
+                    activation_decision.get("activation_state", DEPENDENCY_NOT_REQUIRED)
+                )
+            ),
+            "activation_state": (
+                "REQUESTED"
+                if activation_request_generated
+                else str(
+                    activation_decision.get("activation_state", DEPENDENCY_NOT_REQUIRED)
+                )
+            ),
+            "execution_started": bool(execution_report.get("execution_started")),
+            "execution_completed": bool(execution_report.get("execution_completed")),
+            "execution_success": bool(execution_report.get("execution_success")),
+        }
+
+    def _build_activation_failure_report(
+        self,
+        *,
+        requested_tool: str,
+        activation_request_generated: bool,
+        activation_state: str,
+        failures: list[dict[str, Any]],
+        execution_report: Mapping[str, Any],
+        trace: DependencyActivationTrace,
+    ) -> dict[str, Any]:
+        failure_messages = [str(item.get("message", item)) for item in failures]
+        failure_detected = bool(
+            failure_messages
+            or (
+                requested_tool in {"dependency_reasoning"}
+                and not activation_request_generated
+                and activation_state == DEPENDENCY_NOT_REQUIRED
+            )
+        )
+        return {
+            "system": "dependency_activation_failure",
+            "requested_tool": requested_tool,
+            "failure_detected": failure_detected,
+            "failure_messages": failure_messages,
+            "execution_failures": list(execution_report.get("execution_failures", []) or []),
+            "trace_failures": trace.report().get("activation_failures", []),
+        }
 
     def _process_engine(self):
         if self.process_engine is None:

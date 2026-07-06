@@ -4914,6 +4914,7 @@ class AdaptiveCognitivePipeline:
                 "dependency_chains_executed": 0,
                 "dependency_outputs_generated": 0,
             }
+            runtime_context["dependency_runtime_requested"] = True
 
         if (
             not dependency_requested
@@ -5152,6 +5153,17 @@ class AdaptiveCognitivePipeline:
                 module_start,
             )
             return
+
+        runtime_context["dependency_runtime_requested"] = True
+        runtime_context["dependency_lifecycle_report"] = {
+            **runtime_context.get("dependency_lifecycle_report", {}),
+            "system": "dependency_runtime",
+            "report_state": "running",
+            "dependency_activation_state": "EXECUTING",
+            "dependency_requested_by": "runtime_execution",
+            "dependency_chains_executed": 0,
+            "dependency_outputs_generated": 0,
+        }
 
         concepts = self._dependency_reasoning_concepts(
             runtime_context

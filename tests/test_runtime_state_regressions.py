@@ -113,6 +113,71 @@ def test_dependency_reasoning_budget_reuses_unchanged_cached_chain():
     assert context["dependency_reasoning_report"]["telemetry_enabled"] is False
 
 
+def test_dependency_reasoning_cycle_marks_runtime_request():
+
+    pipeline = AdaptiveCognitivePipeline()
+    pipeline.configure_reasoning_budget(
+        mode="fast",
+        max_concepts=1,
+        cache_dependencies=False,
+    )
+    pipeline.prepare_task_run()
+    pipeline.runtime.bulk_update_context({
+        "semantic_abstractions": [
+            {
+                "concept": "shape_preservation",
+                "confidence": 0.92,
+            },
+        ],
+    })
+
+    pipeline.run_dependency_reasoning_cycle()
+    context = pipeline.runtime.get_context()
+
+    assert context["dependency_runtime_requested"] is True
+    assert context["dependency_lifecycle_report"][
+        "dependency_activation_state"
+    ] == "COMPLETED"
+    assert context["dependency_reasoning_report"]["reasoning_invoked"] is True
+    assert context["dependency_reasoning_report"][
+        "dependency_activation_state"
+    ] == "COMPLETED"
+
+
+def test_dependency_request_is_generated_for_transformational_concepts():
+
+    pipeline = AdaptiveCognitivePipeline()
+    pipeline.configure_reasoning_budget(
+        mode="fast",
+        max_concepts=1,
+        cache_dependencies=False,
+    )
+    pipeline.prepare_task_run()
+    pipeline.runtime.bulk_update_context({
+        "semantic_abstractions": [
+            {
+                "concept": "rotation_reflection",
+                "confidence": 0.92,
+            },
+            {
+                "concept": "transformation_sequence",
+                "confidence": 0.9,
+            },
+        ],
+        "enabled_tools": ["dependency_reasoning", "process_semantics"],
+        "tool_selection_report": {
+            "enabled_tools": ["dependency_reasoning", "process_semantics"],
+        },
+    })
+
+    pipeline.run_dependency_reasoning_cycle()
+    context = pipeline.runtime.get_context()
+    requests = context.get("runtime_tool_requests", {})
+
+    assert requests.get("dependency_reasoning", {}).get("request_state") == "REQUESTED"
+    assert context.get("dependency_runtime_requested") is True
+
+
 def test_semantic_concepts_activate_dependency_context_and_context_cache(tmp_path):
 
     pipeline = AdaptiveCognitivePipeline()
