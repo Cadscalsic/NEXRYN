@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from time import perf_counter
 from typing import Any, Mapping
 
 from runtime.causal.causal_inference_engine import (
@@ -34,6 +35,7 @@ class CausalContextRuntime:
         color_mapping_report: Mapping[str, Any] | None = None,
         runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        started_at = perf_counter()
         runtime_context = runtime_context if isinstance(runtime_context, Mapping) else {}
         if input_grid is None:
             input_grid = runtime_context.get("input_grid")
@@ -51,14 +53,17 @@ class CausalContextRuntime:
             output_grid=output_grid,
             runtime_context=runtime_context,
         )
+        inference_time = round(perf_counter() - started_at, 6)
         contexts = list(inference.get("causal_contexts", []) or [])
         contexts.extend(self._memory_contexts(inference.get("causal_families_detected", [])))
+        simulation_started = perf_counter()
         evaluated = self._evaluate_contexts(
             contexts,
             input_grid,
             output_grid,
             process_context_report or {},
         )
+        simulation_time = round(perf_counter() - simulation_started, 6)
         selected = evaluated[0] if evaluated else {}
         for context in evaluated:
             self.memory.remember(
@@ -84,6 +89,13 @@ class CausalContextRuntime:
             context.get("cause_effect_pair", {
                 "cause": context.get("cause"),
                 "effect": context.get("effect"),
+                "confidence": context.get("confidence", 0.0),
+                "evidence": context.get("evidence", {}),
+                "dependency_source": context.get("dependency_source", ""),
+                "process_source": context.get("process_source", ""),
+                "truth_source": context.get("truth_source", ""),
+                "temporal_order": context.get("temporal_order", 0),
+                "activation_reason": context.get("activation_reason", ""),
             })
             for context in evaluated
         ]
@@ -114,42 +126,77 @@ class CausalContextRuntime:
         )
         report = {
             "system": self.system_name,
+            "causal_runtime_called": True,
+            "causal_generation_attempted": True,
             "causal_contexts": evaluated,
             "selected_causal_context": selected,
             "causal_context_count": causal_context_count,
+            "causal_graph_count": 1 if evaluated else 0,
             "causal_families_detected": causal_families,
             "cause_effect_pairs": cause_effect_pairs,
+            "causal_graph": inference.get("causal_graph", self._causal_graph(evaluated)),
+            "event_transitions": inference.get("event_transitions", []),
+            "root_cause_candidates": inference.get("root_cause_candidates", []),
+            "propagation_chains": inference.get("propagation_chains", []),
             "causal_confidence": round(float(confidence), 4),
             "causal_validation_score": round(float(validation_score), 4),
             "causal_simulation_accuracy": round(float(simulation_accuracy), 4),
             "causal_reuse_hits": reuse_hits,
             "causal_failures": failures,
+            "blocked_contexts": inference.get("blocked_contexts", []),
+            "block_reasons": inference.get("block_reasons", []),
             "causal_context_depth": max(
                 [
-                    len(context.get("supporting_dependencies", []) or [])
+                    len(
+                        context.get("causal_chain", [])
+                        or context.get("supporting_dependencies", [])
+                        or []
+                    )
                     for context in evaluated
                 ]
                 or [0]
             ),
-            "causal_inference_time": 0.0001 if evaluated else 0.0,
-            "causal_simulation_time": 0.0001 if evaluated else 0.0,
+            "causal_chain_depth": max(
+                [
+                    len(context.get("causal_chain", []) or [])
+                    for context in evaluated
+                ]
+                or [0]
+            ),
+            "causal_inference_time": max(inference_time, 0.0001) if evaluated else inference_time,
+            "causal_simulation_time": max(simulation_time, 0.0001) if evaluated else simulation_time,
+            "generation_time": round(perf_counter() - started_at, 6),
             "causal_success_rate": round(success_count / max(causal_context_count, 1), 4),
             "causal_reuse_rate": round(reuse_hits / max(causal_context_count, 1), 4),
             "causal_prediction_gain": round(float(prediction_gain), 4),
+            "confidence_distribution": self._confidence_distribution(evaluated),
+            "generation_summary": self._generation_summary(
+                causal_context_count,
+                inference.get("block_reasons", []),
+            ),
             "timestamp": str(datetime.utcnow()),
         }
         report["CAUSAL_CONTEXT_REPORT"] = {
-            key: report[key]
-            for key in [
-                "causal_context_count",
-                "causal_families_detected",
-                "cause_effect_pairs",
-                "causal_confidence",
-                "causal_validation_score",
-                "causal_simulation_accuracy",
-                "causal_reuse_hits",
-                "causal_failures",
-            ]
+            "causal_runtime_called": report["causal_runtime_called"],
+            "causal_generation_attempted": report["causal_generation_attempted"],
+            "causal_context_count": report["causal_context_count"],
+            "causal_graph_count": report["causal_graph_count"],
+            "cause_effect_pairs": report["cause_effect_pairs"],
+            "causal_chain_depth": report["causal_chain_depth"],
+            "root_causes": report["root_cause_candidates"],
+            "propagation_paths": report["propagation_chains"],
+            "generated_contexts": report["causal_contexts"],
+            "blocked_contexts": report["blocked_contexts"],
+            "block_reasons": report["block_reasons"],
+            "generation_time": report["generation_time"],
+            "confidence_distribution": report["confidence_distribution"],
+            "generation_summary": report["generation_summary"],
+            "causal_families_detected": report["causal_families_detected"],
+            "causal_confidence": report["causal_confidence"],
+            "causal_validation_score": report["causal_validation_score"],
+            "causal_simulation_accuracy": report["causal_simulation_accuracy"],
+            "causal_reuse_hits": report["causal_reuse_hits"],
+            "causal_failures": report["causal_failures"],
         }
         self.runtime_history.append(report)
         return report
@@ -210,6 +257,56 @@ class CausalContextRuntime:
                     )
                     contexts.append(context)
         return contexts
+
+    def _confidence_distribution(self, contexts):
+        low = medium = high = 0
+        for context in contexts:
+            confidence = float(context.get("confidence", 0.0) or 0.0)
+            if confidence >= 0.80:
+                high += 1
+            elif confidence >= 0.60:
+                medium += 1
+            else:
+                low += 1
+        return {
+            "high": high,
+            "medium": medium,
+            "low": low,
+        }
+
+    def _generation_summary(self, count, block_reasons):
+        if count > 0:
+            return "generated_causal_contexts_from_runtime_evidence"
+        return {
+            "state": "CAUSAL_CONTEXT_BLOCKED",
+            "reasons": list(block_reasons or []),
+        }
+
+    def _causal_graph(self, contexts):
+        nodes = sorted({
+            value
+            for context in contexts
+            for value in (
+                context.get("cause"),
+                context.get("effect"),
+            )
+            if value
+        })
+        edges = [
+            {
+                "source": context.get("cause"),
+                "target": context.get("effect"),
+                "confidence": context.get("confidence", 0.0),
+                "temporal_order": context.get("temporal_order", 0),
+            }
+            for context in contexts
+        ]
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+        }
 
 
 causal_context_runtime = CausalContextRuntime()

@@ -1179,6 +1179,508 @@ def build_training_report(
         }
         for item in multi_task_results
     ]
+
+    def aggregate_execution_layer_audit_report():
+        audits = []
+        for item in multi_task_results:
+            result = item.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            audit = (
+                result.get("EXECUTION_LAYER_AUDIT_REPORT")
+                or result.get("execution_layer_audit_report")
+            )
+            if not isinstance(audit, dict):
+                continue
+            audits.append({
+                **audit,
+                "task": item.get("task"),
+                "status": item.get("status"),
+            })
+
+        def union_list(key):
+            values = []
+            for audit in audits:
+                values.extend(audit.get(key, []) or [])
+            normalized = []
+            for value in values:
+                try:
+                    hash(value)
+                    normalized.append(value)
+                except TypeError:
+                    normalized.append(str(value))
+            return sorted(set(normalized))
+
+        def concat_list(key):
+            values = []
+            for audit in audits:
+                entries = audit.get(key, []) or []
+                if isinstance(entries, list):
+                    values.extend(
+                        entry
+                        for entry in entries
+                        if not (
+                            isinstance(entry, dict)
+                            and entry.get("recursive_context_reference") is True
+                        )
+                    )
+            return values
+
+        dependency_selected = any(
+            audit.get("dependency_tool_selected") is True
+            for audit in audits
+        )
+        dependency_request_created = any(
+            audit.get("dependency_activation_request_created") is True
+            for audit in audits
+        )
+        process_selected = any(
+            audit.get("process_tool_selected") is True
+            for audit in audits
+        )
+        process_stage_created = any(
+            audit.get("process_stage_created") is True
+            for audit in audits
+        )
+        causal_selected = any(
+            audit.get("causal_tool_selected") is True
+            for audit in audits
+        )
+        causal_stage_created = any(
+            audit.get("causal_stage_created") is True
+            for audit in audits
+        )
+        silent_drop = any(
+            audit.get("silent_drop_detected") is True
+            for audit in audits
+        )
+        suspected_breakpoints = [
+            audit.get("suspected_breakpoint")
+            for audit in audits
+            if audit.get("suspected_breakpoint")
+            and audit.get("suspected_breakpoint") != "none_detected"
+        ]
+        raw_budget_blocks = concat_list("budget_blocks")
+        selective_blocks = concat_list("selective_execution_blocks")
+        def to_int(value):
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        active_routes = max(
+            [to_int(audit.get("active_routes")) for audit in audits] or [0]
+        )
+        execution_nodes = max(
+            [to_int(audit.get("execution_nodes")) for audit in audits] or [0]
+        )
+        selected_tools_union = union_list("selected_tools")
+        enabled_layers_union = union_list("enabled_layers")
+        disabled_layers_union = union_list("disabled_layers")
+        deferred_layers_union = union_list("deferred_layers")
+        missing_execution_nodes = union_list("missing_execution_nodes")
+        layer_aliases = {
+            "dependency_reasoning": "dependency_reasoning",
+            "process_semantics": "process_semantic_synthesis",
+            "causal_validation": "causal_validation",
+            "truth_governance": "truth_candidate",
+            "identity_governance": "deep_governance",
+            "object_tracking": "object_detection",
+            "spatial_reasoning": "inference",
+            "color_mapping": "transformation_solver",
+        }
+        route_to_node_mapping = {
+            tool: {
+                "mapped_layer": layer_aliases.get(tool),
+                "layer_enabled": layer_aliases.get(tool) in set(enabled_layers_union),
+                "execution_node": None
+                if tool in missing_execution_nodes
+                else "runtime_activity_node",
+                "execution_node_created": tool not in missing_execution_nodes,
+            }
+            for tool in selected_tools_union
+        }
+        pruned_routes = [
+            {
+                "route": route,
+                "mapped_layer": layer_aliases.get(route),
+                "reason": None,
+                "pruned_without_reason": active_routes > execution_nodes,
+            }
+            for route in missing_execution_nodes
+        ]
+        budget_blocks = []
+        if raw_budget_blocks:
+            if process_selected and not process_stage_created:
+                budget_blocks.append({
+                    "tool": "process_semantics",
+                    "state": "BLOCKED_BY_BUDGET",
+                    "reason": "process_semantics_enabled=False",
+                })
+            if dependency_selected and not dependency_request_created:
+                budget_blocks.append({
+                    "tool": "dependency_reasoning",
+                    "state": "BLOCKED_BY_BUDGET",
+                    "reason": "dependency_budget_block_reported",
+                })
+        suspected_breakpoint = (
+            suspected_breakpoints[0]
+            if suspected_breakpoints
+            else "none_detected"
+        )
+        recommended_next_fix = (
+            "surface_budget_block_before_runtime_execution"
+            if budget_blocks
+            else "surface_selective_execution_block_before_runtime_execution"
+            if selective_blocks
+            else "add_intent_compiler_from_selected_tools_to_runtime_tool_requests"
+            if suspected_breakpoint == "tool_selection_to_execution_plan"
+            else "add_stage_compiler_or_explicit_non_stage_diagnostic_for_selected_tools"
+            if suspected_breakpoint == "tool_selection_to_runtime_stage"
+            else "map_active_routes_to_execution_nodes_or_record_prune_reasons"
+            if suspected_breakpoint == "route_to_execution_node_compilation"
+            else "no_execution_layer_drop_detected"
+        )
+
+        dependency_states = [
+            audit.get("dependency_activation_state")
+            for audit in audits
+            if audit.get("dependency_activation_state")
+        ]
+        return {
+            "system": "execution_layer_audit",
+            "report_state": "final",
+            "EXECUTION_LAYER_AUDIT_REPORT": True,
+            "selected_tools": selected_tools_union,
+            "enabled_layers": enabled_layers_union,
+            "disabled_layers": disabled_layers_union,
+            "deferred_layers": deferred_layers_union,
+            "active_routes": active_routes,
+            "execution_nodes": execution_nodes,
+            "route_to_node_mapping": route_to_node_mapping,
+            "pruned_routes": pruned_routes,
+            "missing_execution_nodes": missing_execution_nodes,
+            "dependency_tool_selected": dependency_selected,
+            "dependency_activation_request_created":
+            dependency_request_created,
+            "dependency_activation_state": (
+                dependency_states[0] if dependency_states else "NOT_REQUESTED"
+            ),
+            "process_tool_selected": process_selected,
+            "process_stage_created": process_stage_created,
+            "causal_tool_selected": causal_selected,
+            "causal_stage_created": causal_stage_created,
+            "budget_blocks": budget_blocks,
+            "selective_execution_blocks": selective_blocks,
+            "silent_drop_detected": silent_drop,
+            "suspected_breakpoint": suspected_breakpoint,
+            "recommended_next_fix": recommended_next_fix,
+            "per_task_report_count": len(audits),
+        }
+
+    def aggregate_execution_plan_report():
+        reports = []
+        for item in multi_task_results:
+            result = item.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            report = (
+                result.get("EXECUTION_PLAN_REPORT")
+                or result.get("execution_plan_report")
+            )
+            if isinstance(report, dict):
+                reports.append(report)
+
+        def to_int(value, default=0):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        def to_float(value, default=0.0):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def union_list(key):
+            values = []
+            for report in reports:
+                entries = report.get(key, []) or []
+                if isinstance(entries, list):
+                    values.extend(entries)
+            normalized = []
+            for value in values:
+                try:
+                    hash(value)
+                    normalized.append(value)
+                except TypeError:
+                    normalized.append(str(value))
+            return sorted(set(normalized))
+
+        def concat_nodes(key):
+            nodes = []
+            for report in reports:
+                entries = report.get(key, []) or []
+                if isinstance(entries, list):
+                    nodes.extend(
+                        node
+                        for node in entries
+                        if not (
+                            isinstance(node, dict)
+                            and node.get("recursive_context_reference") is True
+                        )
+                    )
+            return nodes
+
+        selected_tools_union = union_list("selected_tools")
+        stage_map = {
+            "dependency_reasoning": "dependency_execution",
+            "process_semantics": "process_semantic_execution",
+            "causal_validation": "causal_validation_execution",
+            "truth_governance": "truth_governance_execution",
+            "identity_governance": "identity_governance_execution",
+            "object_tracking": "object_tracking_execution",
+            "color_mapping": "color_mapping_execution",
+            "spatial_reasoning": "spatial_reasoning_execution",
+            "contradiction_checks": "contradiction_check_execution",
+        }
+        raw_blocked = concat_nodes("blocked_nodes")
+        blocked_tools = {
+            node.get("originating_tool")
+            for node in raw_blocked
+            if isinstance(node, dict)
+            and node.get("originating_tool")
+        }
+        raw_pruning = concat_nodes("pruning_log")
+        pruning_by_tool = {
+            item.get("tool"): item
+            for item in raw_pruning
+            if isinstance(item, dict)
+            and item.get("tool")
+        }
+        all_nodes = []
+        for index, tool in enumerate(selected_tools_union):
+            status = "BLOCKED" if tool in blocked_tools else "PENDING"
+            all_nodes.append({
+                "node_id": f"aggregate_exec_{index + 1}_{tool}",
+                "stage": stage_map.get(tool, f"{tool}_execution"),
+                "originating_tool": tool,
+                "originating_concept": None,
+                "activation_reason": "aggregated_from_task_execution_plans",
+                "status": status,
+                "parent_node": (
+                    f"aggregate_exec_{index}_{selected_tools_union[index - 1]}"
+                    if index > 0
+                    else None
+                ),
+                "child_nodes": (
+                    [f"aggregate_exec_{index + 2}_{selected_tools_union[index + 1]}"]
+                    if index + 1 < len(selected_tools_union)
+                    else []
+                ),
+            })
+
+        def clone_node(node):
+            return {
+                **node,
+                "child_nodes": list(node.get("child_nodes", []) or []),
+            }
+
+        generated_nodes = [
+            clone_node(node)
+            for node in all_nodes
+            if node.get("status") != "BLOCKED"
+        ]
+        dependency_nodes = [
+            clone_node(node) for node in all_nodes
+            if node.get("originating_tool") == "dependency_reasoning"
+        ]
+        process_nodes = [
+            clone_node(node) for node in all_nodes
+            if node.get("originating_tool") == "process_semantics"
+        ]
+        causal_nodes = [
+            clone_node(node) for node in all_nodes
+            if node.get("originating_tool") == "causal_validation"
+        ]
+        blocked_nodes = [
+            clone_node(node)
+            for node in all_nodes if node.get("status") == "BLOCKED"
+        ]
+        deferred_nodes = []
+        pruning_log = [
+            {
+                "tool": tool,
+                "node_id": f"aggregate_exec_{selected_tools_union.index(tool) + 1}_{tool}",
+                "decision": item.get("decision", "BLOCKED"),
+                "reason": item.get("reason", "blocked_in_task_execution_plan"),
+            }
+            for tool, item in pruning_by_tool.items()
+            if tool in selected_tools_union
+        ]
+        execution_order = [
+            node.get("node_id")
+            for node in generated_nodes
+        ]
+        active_routes = max(
+            [
+                to_int(report.get("active_routes"))
+                for report in reports
+            ] or [0]
+        )
+        execution_nodes = max(
+            [
+                to_int(report.get("execution_nodes"))
+                for report in reports
+            ] or [0]
+        )
+        confidences = [
+            to_float(report.get("planner_confidence"))
+            for report in reports
+            if report.get("planner_confidence") is not None
+        ]
+        return {
+            "system": "execution_planner",
+            "report_state": "final",
+            "EXECUTION_PLAN_REPORT": True,
+            "selected_tools": selected_tools_union,
+            "attributed_concepts": union_list("attributed_concepts"),
+            "generated_intents": [
+                {
+                    "tool": tool,
+                    "reason": "aggregated_from_task_execution_plans",
+                    "confidence": 0.75,
+                    "priority": len(selected_tools_union) - index,
+                    "estimated_cost": 1.0,
+                    "required_budget": {},
+                    "required_contexts": [],
+                    "required_truths": [],
+                    "dependencies": [],
+                    "activation_state": (
+                        "BLOCKED" if tool in blocked_tools else "REQUESTED"
+                    ),
+                }
+                for index, tool in enumerate(selected_tools_union)
+            ],
+            "generated_execution_nodes": generated_nodes,
+            "dependency_nodes": dependency_nodes,
+            "process_nodes": process_nodes,
+            "causal_nodes": causal_nodes,
+            "blocked_nodes": blocked_nodes,
+            "deferred_nodes": deferred_nodes,
+            "pruning_log": pruning_log,
+            "execution_order": list(dict.fromkeys(execution_order)),
+            "active_routes": active_routes,
+            "execution_nodes": execution_nodes,
+            "planner_confidence": (
+                round(sum(confidences) / len(confidences), 4)
+                if confidences
+                else 0.0
+            ),
+            "planner_summary": {
+                "task_reports": len(reports),
+                "nodes_generated": len(generated_nodes),
+                "dependency_nodes": len(dependency_nodes),
+                "process_nodes": len(process_nodes),
+                "causal_nodes": len(causal_nodes),
+                "blocked_nodes": len(blocked_nodes),
+                "deferred_nodes": len(deferred_nodes),
+            },
+        }
+
+    def aggregate_execution_dispatch_report():
+        reports = []
+        for item in multi_task_results:
+            result = item.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            report = (
+                result.get("EXECUTION_DISPATCH_REPORT")
+                or result.get("execution_dispatch_report")
+            )
+            if isinstance(report, dict):
+                reports.append(report)
+
+        def to_int(value, default=0):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        def sum_key(key):
+            return sum(to_int(report.get(key)) for report in reports)
+
+        def any_key(key):
+            return any(bool(report.get(key)) for report in reports)
+
+        def concat_clean(key):
+            items = []
+            for report in reports:
+                entries = report.get(key, []) or []
+                if isinstance(entries, list):
+                    for entry in entries:
+                        if isinstance(entry, dict):
+                            items.append({
+                                item_key: item_value
+                                for item_key, item_value in entry.items()
+                                if item_key != "runtime_context"
+                            })
+                        else:
+                            items.append(entry)
+            return items
+
+        block_reasons = {}
+        for report in reports:
+            reasons = report.get("block_reasons", {})
+            if isinstance(reasons, dict):
+                block_reasons.update(reasons)
+
+        return {
+            "system": "execution_dispatcher",
+            "report_state": "final",
+            "EXECUTION_DISPATCH_REPORT": True,
+            "execution_plan_received": any_key("execution_plan_received"),
+            "execution_nodes_received": sum_key("execution_nodes_received"),
+            "nodes_ready": sum_key("nodes_ready"),
+            "nodes_dispatched": sum_key("nodes_dispatched"),
+            "nodes_completed": sum_key("nodes_completed"),
+            "nodes_failed": sum_key("nodes_failed"),
+            "nodes_blocked": sum_key("nodes_blocked"),
+            "execution_nodes_completed": sum_key("execution_nodes_completed"),
+            "dependency_nodes_dispatched":
+            sum_key("dependency_nodes_dispatched"),
+            "process_nodes_dispatched": sum_key("process_nodes_dispatched"),
+            "causal_nodes_dispatched": sum_key("causal_nodes_dispatched"),
+            "dependency_runtime_called":
+            any_key("dependency_runtime_called"),
+            "process_runtime_called": any_key("process_runtime_called"),
+            "causal_runtime_called": any_key("causal_runtime_called"),
+            "dependency_chains_executed":
+            sum_key("dependency_chains_executed"),
+            "process_context_count": sum_key("process_context_count"),
+            "causal_context_count": sum_key("causal_context_count"),
+            "execution_failures": concat_clean("execution_failures"),
+            "block_reasons": block_reasons,
+            "planned_nodes_after_dispatch": concat_clean(
+                "planned_nodes_after_dispatch"
+            ),
+            "execution_summary": {
+                "task_reports": len(reports),
+                "completed": sum_key("nodes_completed"),
+                "failed": sum_key("nodes_failed"),
+                "blocked": sum_key("nodes_blocked"),
+                "dependency_runtime_called":
+                any_key("dependency_runtime_called"),
+                "process_runtime_called": any_key("process_runtime_called"),
+                "causal_runtime_called": any_key("causal_runtime_called"),
+                "dependency_chains_executed":
+                sum_key("dependency_chains_executed"),
+                "process_context_count": sum_key("process_context_count"),
+                "causal_context_count": sum_key("causal_context_count"),
+            },
+        }
+
     candidate_evaluations = {}
     truth_commit_evaluations = {}
     candidate_context_evaluations = {}
@@ -3288,6 +3790,10 @@ def build_training_report(
             "estimated_runtime_saved",
         )
         totals = {key: 0.0 for key in numeric_keys}
+        context_totals = {
+            "process_context_count": 0.0,
+            "causal_context_count": 0.0,
+        }
         reuse_rates = []
         registry_contexts = []
         for item in multi_task_results:
@@ -3310,6 +3816,17 @@ def build_training_report(
                 memory = intelligence.get("memory_efficiency", {})
                 if isinstance(memory, dict):
                     sources.append(memory)
+            dispatch_report = (
+                result.get("EXECUTION_DISPATCH_REPORT")
+                or result.get("execution_dispatch_report")
+                or {}
+            )
+            if isinstance(dispatch_report, dict):
+                for key in context_totals:
+                    context_totals[key] = max(
+                        context_totals[key],
+                        number(dispatch_report.get(key)),
+                    )
             for source in sources:
                 for key in numeric_keys:
                     if key in source:
@@ -3368,6 +3885,10 @@ def build_training_report(
             / max(totals["cache_hits"] + totals["cache_misses"], 1),
             4,
         )
+        performance.update({
+            key: int(value)
+            for key, value in context_totals.items()
+        })
         performance["adaptive_reuse_engine"] = {
             key: performance[key]
             for key in (
@@ -3403,6 +3924,9 @@ def build_training_report(
         else candidate_context_evaluations,
     )
     concept_advancement_audit = build_concept_advancement_audit()
+    execution_plan_report = aggregate_execution_plan_report()
+    execution_dispatch_report = aggregate_execution_dispatch_report()
+    execution_layer_audit_report = aggregate_execution_layer_audit_report()
     return {
         "system": "training_report",
         "tasks_selected": training_batch.get("selected_task_count", 0),
@@ -3423,6 +3947,12 @@ def build_training_report(
             for item in task_results
         ),
         "multi_task_results": task_results,
+        "EXECUTION_PLAN_REPORT": execution_plan_report,
+        "execution_plan_report": dict(execution_plan_report),
+        "EXECUTION_DISPATCH_REPORT": execution_dispatch_report,
+        "execution_dispatch_report": dict(execution_dispatch_report),
+        "EXECUTION_LAYER_AUDIT_REPORT": execution_layer_audit_report,
+        "execution_layer_audit_report": dict(execution_layer_audit_report),
         "concepts_discovered": {
             concept: stats["used_task_count"]
             for concept, stats in concept_memory.items()
@@ -3555,6 +4085,29 @@ def _print_runtime_dashboard(report, report_level="normal"):
     )
     summary = dashboard.get("summary", {})
     metrics = dashboard.get("metrics", {})
+    execution_dispatch_report = (
+        report.get("EXECUTION_DISPATCH_REPORT")
+        or report.get("execution_dispatch_report")
+        or {}
+    )
+    if isinstance(execution_dispatch_report, dict):
+        for key in (
+            "dependency_chains_executed",
+            "process_context_count",
+            "causal_context_count",
+        ):
+            value = execution_dispatch_report.get(key)
+            if value not in (None, "", [], {}):
+                metrics[key] = value
+    audit_report_for_metrics = (
+        report.get("EXECUTION_LAYER_AUDIT_REPORT")
+        or report.get("execution_layer_audit_report")
+        or {}
+    )
+    if isinstance(audit_report_for_metrics, dict):
+        state = audit_report_for_metrics.get("dependency_activation_state")
+        if state:
+            metrics["dependency_activation_state"] = state
 
     print("RUNTIME INTELLIGENCE DASHBOARD")
     print()
@@ -3590,6 +4143,28 @@ def _print_runtime_dashboard(report, report_level="normal"):
         ]
     })
     if report_level != "minimal":
+        execution_plan_report = (
+            report.get("EXECUTION_PLAN_REPORT")
+            or report.get("execution_plan_report")
+            or {}
+        )
+        if isinstance(execution_plan_report, dict):
+            print()
+            print("EXECUTION_PLAN_REPORT")
+            print(execution_plan_report)
+        if isinstance(execution_dispatch_report, dict):
+            print()
+            print("EXECUTION_DISPATCH_REPORT")
+            print(execution_dispatch_report)
+        audit_report = (
+            report.get("EXECUTION_LAYER_AUDIT_REPORT")
+            or report.get("execution_layer_audit_report")
+            or {}
+        )
+        if isinstance(audit_report, dict):
+            print()
+            print("EXECUTION_LAYER_AUDIT_REPORT")
+            print(audit_report)
         print()
         print("CONTEXT REPORT")
         print({

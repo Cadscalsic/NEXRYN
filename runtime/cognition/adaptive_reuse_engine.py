@@ -53,6 +53,7 @@ class AdaptiveReuseEngine:
         })
         self.reused_assets: list[dict[str, Any]] = []
         self.missed_opportunities: list[dict[str, Any]] = []
+        self.last_experience_reuse_report: dict[str, Any] = {}
 
     def evaluate_reuse(self, runtime_context: dict[str, Any] | None = None) -> dict[str, Any]:
         started_at = time.perf_counter()
@@ -71,6 +72,11 @@ class AdaptiveReuseEngine:
             result.update(self.report())
             result["evaluation_time_seconds"] = round(time.perf_counter() - started_at, 4)
             return result
+
+        experience_reuse_report = self._evaluate_experience_reuse(runtime_context)
+        self._merge_experience_reuse_report(experience_reuse_report, runtime_context)
+        if experience_reuse_report.get("reused_assets"):
+            result["reused_assets"].update(experience_reuse_report["reused_assets"])
 
         reuse_calls = [
             ("truth", self.reuse_truth),
@@ -91,6 +97,8 @@ class AdaptiveReuseEngine:
 
         result["skip_redundant_reasoning"] = bool(result["reused_assets"])
         result["dependency_reasoning_skipped"] = "dependency_snapshot" in result["reused_assets"]
+        result["ADAPTIVE_REUSE_REPORT"] = experience_reuse_report
+        result["experience_reuse_report"] = experience_reuse_report
         result.update(self.report())
         result["evaluation_time_seconds"] = round(time.perf_counter() - started_at, 4)
         return result
@@ -156,7 +164,105 @@ class AdaptiveReuseEngine:
             "reuse_rate": round(hits / total, 4) if total else 0.0,
             "top_reused_assets": self.reused_assets[-10:],
             "reuse_opportunities_missed": self.missed_opportunities[-10:],
+            "ADAPTIVE_REUSE_REPORT": self.last_experience_reuse_report,
+            "experience_reuse_report": self.last_experience_reuse_report,
         }
+
+    def _evaluate_experience_reuse(self, runtime_context: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from runtime.adaptive_reuse import adaptive_reuse_layer
+
+            report = adaptive_reuse_layer.evaluate(runtime_context)
+        except Exception as error:
+            report = {
+                "system": "adaptive_reuse_layer",
+                "ADAPTIVE_REUSE_REPORT": True,
+                "retrieval_attempts": 1,
+                "retrieval_successes": 0,
+                "reuse_failures": [{
+                    "reason": "adaptive_reuse_layer_error",
+                    "error": str(error),
+                }],
+                "reused_assets": {},
+            }
+        self.last_experience_reuse_report = report
+        return report
+
+    def _merge_experience_reuse_report(
+        self,
+        report: dict[str, Any],
+        runtime_context: dict[str, Any] | None = None,
+    ) -> None:
+        if not isinstance(report, dict):
+            return
+        runtime_context = runtime_context if isinstance(runtime_context, dict) else {}
+        hit_map = {
+            "truth_hits": "truth_hits",
+            "strategy_hits": "strategy_hits",
+            "context_hits": "context_hits",
+            "program_hits": "program_hits",
+            "dependency_snapshot_hits": "dependency_snapshot_hits",
+        }
+        merged_hits = 0
+        for source_key, counter_key in hit_map.items():
+            value = int(self._number(report.get(source_key), 0) or 0)
+            if value <= 0:
+                continue
+            if (
+                source_key == "truth_hits"
+                and (
+                    runtime_context.get("truth_commitments")
+                    or runtime_context.get("reusable_truth_commitments")
+                )
+            ):
+                continue
+            if (
+                source_key == "dependency_snapshot_hits"
+                and self._cache_has_entries("dependency_snapshot")
+            ):
+                continue
+            if counter_key in self.counters:
+                self.counters[counter_key] += value
+            merged_hits += value
+        self.counters["cache_hits"] += merged_hits
+        if merged_hits == 0:
+            self.counters["cache_misses"] += int(
+                self._number(report.get("cache_misses"), 1) or 1
+            )
+        self.counters["estimated_compute_saved"] = round(
+            self.counters["estimated_compute_saved"]
+            + self._number(report.get("estimated_compute_saved"), 0.0),
+            4,
+        )
+        self.counters["estimated_runtime_saved"] = round(
+            self.counters["estimated_runtime_saved"]
+            + self._number(report.get("estimated_runtime_saved"), 0.0),
+            4,
+        )
+        if report.get("dependency_snapshot_hits") or report.get("dependency_hits"):
+            self.counters["estimated_dependency_saved"] = round(
+                self.counters["estimated_dependency_saved"]
+                + self._number(report.get("estimated_runtime_saved"), 0.0),
+                4,
+            )
+        for reuse_type in ("truth", "strategy", "program", "context", "dependency_snapshot"):
+            asset = (report.get("reused_assets") or {}).get(reuse_type)
+            if asset:
+                self.reused_assets.append({
+                    "reuse_type": reuse_type,
+                    "concept": self._concept(asset, {}, reuse_type),
+                    "source": "experience_memory",
+                })
+
+    def _cache_has_entries(self, cache_type: str) -> bool:
+        store = self.cache_manager.caches.get(cache_type)
+        if store is None:
+            return False
+        try:
+            store.load_with_timeout(self.cache_manager.cache_load_timeout_seconds)
+        except Exception:
+            return False
+        return bool(getattr(store, "entries", {}))
 
     def _lookup_any(
         self,
@@ -197,7 +303,7 @@ class AdaptiveReuseEngine:
         identity_ready = context.get("identity_runtime_ready")
         if identity_state not in {None, "IDENTITY_RUNTIME_STABLE"}:
             return False, "identity_runtime_unstable"
-        if identity_ready is not True:
+        if identity_ready is False:
             return False, "identity_runtime_not_ready"
         if self._number(context.get("semantic_drift"), 0.0) > self.thresholds["semantic_drift"]:
             return False, "semantic_drift_above_threshold"

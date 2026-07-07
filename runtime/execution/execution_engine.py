@@ -75,6 +75,50 @@ class ExecutionEngine:
 
         actions = []
 
+        nodes = []
+        if isinstance(execution_plan, dict):
+            nodes = (
+                execution_plan.get("dispatched_nodes")
+                or execution_plan.get("completed_nodes")
+                or
+                execution_plan.get("execution_nodes")
+                or execution_plan.get("nodes")
+                or []
+            )
+        if isinstance(nodes, list) and nodes:
+            for index, node in enumerate(nodes):
+                if not isinstance(node, dict):
+                    continue
+                if str(node.get("status", "")).upper() in {
+                    "BLOCKED",
+                    "DEFERRED",
+                }:
+                    continue
+                actions.append({
+                    "action_id":
+                    index + 1,
+
+                    "objective":
+                    node.get("stage") or node.get("node_id"),
+
+                    "execution_type":
+                    "planned_cognitive_stage",
+
+                    "priority":
+                    node.get("priority", 1.0),
+
+                    "status":
+                    "pending",
+
+                    "node_id":
+                    node.get("node_id"),
+
+                    "originating_tool":
+                    node.get("originating_tool"),
+                })
+            if actions:
+                return actions
+
         objectives = (
 
             execution_plan.get(

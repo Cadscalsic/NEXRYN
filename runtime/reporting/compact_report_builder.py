@@ -131,6 +131,12 @@ class CompactReportBuilder:
         "slowest_modules",
         "top_bottlenecks",
         "performance_report",
+        "EXECUTION_PLAN_REPORT",
+        "execution_plan_report",
+        "EXECUTION_DISPATCH_REPORT",
+        "execution_dispatch_report",
+        "EXECUTION_LAYER_AUDIT_REPORT",
+        "execution_layer_audit_report",
         "evaluation_result",
         "answer",
         "shutdown_mode",
@@ -507,6 +513,18 @@ class CompactReportBuilder:
             value = context[key]
             if key == "performance_report" and isinstance(value, dict):
                 compact[key] = self.compact_performance_report(value)
+            elif key in {
+                "EXECUTION_PLAN_REPORT",
+                "execution_plan_report",
+                "EXECUTION_DISPATCH_REPORT",
+                "execution_dispatch_report",
+            } and isinstance(value, dict):
+                compact[key] = deepcopy(value)
+            elif key in {
+                "EXECUTION_LAYER_AUDIT_REPORT",
+                "execution_layer_audit_report",
+            } and isinstance(value, dict):
+                compact[key] = deepcopy(value)
             elif key == "evaluation_result" and isinstance(value, dict):
                 compact[key] = {
                     item: value.get(item)
@@ -572,6 +590,20 @@ class CompactReportBuilder:
                     compact[f"{key}_summary"] = (
                         self._counterfactual_candidates_summary(item)
                     )
+                    continue
+                if key in {
+                    "EXECUTION_PLAN_REPORT",
+                    "execution_plan_report",
+                    "EXECUTION_DISPATCH_REPORT",
+                    "execution_dispatch_report",
+                } and isinstance(item, dict):
+                    compact[key] = deepcopy(item)
+                    continue
+                if key in {
+                    "EXECUTION_LAYER_AUDIT_REPORT",
+                    "execution_layer_audit_report",
+                } and isinstance(item, dict):
+                    compact[key] = deepcopy(item)
                     continue
                 if key in self.HISTORICAL_LIST_KEYS:
                     compact.update(self._historical_summary(key, item, level))

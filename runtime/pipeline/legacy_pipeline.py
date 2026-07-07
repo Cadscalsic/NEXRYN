@@ -465,6 +465,11 @@ from runtime.security import (
     security_reporter,
 )
 
+from runtime.execution import (
+    execution_dispatcher,
+    execution_planner,
+)
+
 from runtime.world_governance import (
     cognitive_budget_controller,
     incentive_reporter,
@@ -1418,6 +1423,7 @@ class AdaptiveCognitivePipeline:
             "full_stack_avoided": False,
             "estimated_layers_skipped": 0,
             "estimated_runtime_saved": 0.0,
+            "estimated_compute_saved": 0.0,
             "skipped_reports_count": 0,
             "premature_reports_prevented": 0,
             "context_created": 0,
@@ -1708,6 +1714,285 @@ class AdaptiveCognitivePipeline:
         )
         return execution_plan
 
+    def _build_execution_planner_context(
+        self,
+        runtime_context,
+        reasoning_budget=None,
+    ):
+
+        runtime_context = runtime_context if isinstance(runtime_context, dict) else {}
+        tool_selection_report = runtime_context.get("tool_selection_report", {})
+        if not isinstance(tool_selection_report, dict):
+            tool_selection_report = {}
+        enabled_tools = sorted(
+            set(runtime_context.get("enabled_tools", []) or [])
+            | set(tool_selection_report.get("enabled_tools", []) or [])
+            | set(tool_selection_report.get("selected_tools", []) or [])
+        )
+        attribution_report = runtime_context.get(
+            "semantic_attribution_report",
+            {},
+        )
+        if not isinstance(attribution_report, dict):
+            attribution_report = {}
+        introspection_report = runtime_context.get("introspection_report", {})
+        if not isinstance(introspection_report, dict):
+            introspection_report = {}
+        attributed_concepts = list(
+            dict.fromkeys(
+                list(attribution_report.get("attributed_concepts", []) or [])
+                + list(introspection_report.get("attributed_concepts", []) or [])
+            )
+        )
+        active_routes = (
+            introspection_report.get("active_routes")
+            or len(enabled_tools)
+        )
+        plan_result = execution_planner.plan(
+            enabled_tools=enabled_tools,
+            attributed_concepts=attributed_concepts,
+            semantic_contexts=runtime_context.get(
+                "semantic_context_report",
+                runtime_context.get("semantic_contexts"),
+            ),
+            truth_candidates=runtime_context.get(
+                "truth_candidate_report",
+                runtime_context.get("truth_candidates"),
+            ),
+            active_routes=active_routes,
+            runtime_budget=(
+                reasoning_budget
+                or runtime_context.get("current_reasoning_budget")
+            ),
+            task_profile=runtime_context.get(
+                "pre_reasoning_task_profile",
+                runtime_context.get("task_profile"),
+            ),
+            runtime_context=runtime_context,
+        )
+        planner_report = plan_result.get("EXECUTION_PLAN_REPORT", {})
+        generated_plan = plan_result.get("execution_plan", {})
+        existing_plan = self._execution_plan(runtime_context)
+        runtime_context["planner_execution_plan"] = generated_plan
+        runtime_context["EXECUTION_PLAN_REPORT"] = planner_report
+        runtime_context["execution_plan_report"] = planner_report
+        runtime_context["execution_graph"] = plan_result.get(
+            "execution_graph",
+            {},
+        )
+        runtime_context["execution_nodes"] = plan_result.get(
+            "execution_nodes",
+            [],
+        )
+        runtime_context["dependency_execution_nodes"] = generated_plan.get(
+            "dependency_nodes",
+            [],
+        )
+        runtime_context["process_execution_nodes"] = generated_plan.get(
+            "process_nodes",
+            [],
+        )
+        runtime_context["causal_execution_nodes"] = generated_plan.get(
+            "causal_nodes",
+            [],
+        )
+        runtime_context["blocked_execution_nodes"] = generated_plan.get(
+            "blocked_nodes",
+            [],
+        )
+        runtime_context["deferred_execution_nodes"] = generated_plan.get(
+            "deferred_nodes",
+            [],
+        )
+        runtime_context["execution_order"] = generated_plan.get(
+            "execution_order",
+            [],
+        )
+        if isinstance(existing_plan, dict):
+            runtime_context["execution_plan"] = {
+                **existing_plan,
+                "planner_execution_plan": generated_plan,
+                "execution_nodes": generated_plan.get("execution_nodes", []),
+                "nodes": generated_plan.get("execution_nodes", []),
+                "dependency_nodes": generated_plan.get("dependency_nodes", []),
+                "process_nodes": generated_plan.get("process_nodes", []),
+                "causal_nodes": generated_plan.get("causal_nodes", []),
+                "blocked_nodes": generated_plan.get("blocked_nodes", []),
+                "deferred_nodes": generated_plan.get("deferred_nodes", []),
+                "pruning_log": generated_plan.get("pruning_log", []),
+                "execution_order": generated_plan.get("execution_order", []),
+                "execution_planner_integrated": True,
+            }
+        runtime_context["runtime_tool_requests"] = {
+            **runtime_context.get("runtime_tool_requests", {}),
+            **plan_result.get("dependency_requests", {}),
+            **plan_result.get("process_requests", {}),
+            **plan_result.get("causal_requests", {}),
+        }
+        self._attach_planner_lifecycle_reports(runtime_context, plan_result)
+        return runtime_context
+
+    def _dispatch_execution_plan_context(
+        self,
+        runtime_context,
+        reasoning_budget=None,
+    ):
+
+        runtime_context = runtime_context if isinstance(runtime_context, dict) else {}
+        dispatch_result = execution_dispatcher.dispatch(
+            execution_plan=runtime_context.get(
+                "planner_execution_plan",
+                runtime_context.get("execution_plan", {}),
+            ),
+            runtime_context=runtime_context,
+            runtime_budget=(
+                reasoning_budget
+                or runtime_context.get("current_reasoning_budget")
+            ),
+        )
+        dispatch_report = dispatch_result.get(
+            "EXECUTION_DISPATCH_REPORT",
+            {},
+        )
+        runtime_updates = dispatch_result.get("runtime_updates", {})
+        if isinstance(runtime_updates, dict):
+            runtime_context.update(runtime_updates)
+
+        dispatched_plan = dispatch_result.get("dispatched_execution_plan", {})
+        if isinstance(dispatched_plan, dict):
+            runtime_context["dispatched_execution_plan"] = dispatched_plan
+            runtime_context["execution_plan"] = {
+                **self._execution_plan(runtime_context),
+                "dispatched_execution_plan": dispatched_plan,
+                "execution_nodes": dispatched_plan.get("execution_nodes", []),
+                "nodes": dispatched_plan.get("nodes", []),
+                "execution_dispatcher_integrated": True,
+            }
+        runtime_context["EXECUTION_DISPATCH_REPORT"] = dispatch_report
+        runtime_context["execution_dispatch_report"] = dispatch_report
+        runtime_context["execution_dispatch_runtime_results"] = (
+            dispatch_result.get("runtime_results", {})
+        )
+        self._sync_dispatcher_runtime_metrics(runtime_context, dispatch_report)
+        return runtime_context
+
+    def _sync_dispatcher_runtime_metrics(
+        self,
+        runtime_context,
+        dispatch_report,
+    ):
+
+        dependency_report = runtime_context.get(
+            "dependency_lifecycle_report",
+            {},
+        )
+        if isinstance(dependency_report, dict):
+            chains = dependency_report.get("dependency_chains_executed", 0)
+            try:
+                chains = int(chains or 0)
+            except (TypeError, ValueError):
+                chains = 0
+            if chains > 0:
+                self.performance_counters["dependency_activation_attempted"] += 1
+                self.performance_counters["dependency_chain_generation_attempted"] += (
+                    chains
+                )
+                self.performance_counters["dependency_chain_generation_successful"] += (
+                    chains
+                )
+                self.performance_counters["dependency_chains_executed"] += chains
+            elif (
+                isinstance(dispatch_report, dict)
+                and dispatch_report.get("dependency_runtime_called")
+            ):
+                self.performance_counters["dependency_activation_attempted"] += 1
+                self.performance_counters["dependency_chain_generation_failed"] += 1
+
+        process_report = runtime_context.get(
+            "process_context_runtime_report",
+            runtime_context.get("process_context_report", {}),
+        )
+        if isinstance(process_report, dict):
+            process_count = process_report.get("process_context_count", 0)
+            try:
+                process_count = int(process_count or 0)
+            except (TypeError, ValueError):
+                process_count = 0
+            self.performance_counters["process_context_count"] = max(
+                self.performance_counters.get("process_context_count", 0),
+                process_count,
+            )
+
+        causal_report = runtime_context.get(
+            "causal_context_runtime_report",
+            runtime_context.get("causal_context_report", {}),
+        )
+        if isinstance(causal_report, dict):
+            causal_count = causal_report.get("causal_context_count", 0)
+            try:
+                causal_count = int(causal_count or 0)
+            except (TypeError, ValueError):
+                causal_count = 0
+            self.performance_counters["causal_context_count"] = max(
+                self.performance_counters.get("causal_context_count", 0),
+                causal_count,
+            )
+
+    def _attach_planner_lifecycle_reports(self, runtime_context, plan_result):
+
+        planner_report = plan_result.get("EXECUTION_PLAN_REPORT", {})
+        dependency_requests = plan_result.get("dependency_requests", {})
+        process_requests = plan_result.get("process_requests", {})
+        causal_requests = plan_result.get("causal_requests", {})
+        if dependency_requests:
+            request = dependency_requests.get("dependency_reasoning", {})
+            runtime_context["dependency_lifecycle_report"] = {
+                **runtime_context.get("dependency_lifecycle_report", {}),
+                "system": "dependency_runtime",
+                "report_state": "pending",
+                "dependency_activation_state": request.get(
+                    "activation_state",
+                    "REQUESTED",
+                ),
+                "dependency_requested_by": "execution_planner",
+                "dependency_activation_reason": request.get("reason"),
+                "dependency_execution_node_created": True,
+                "dependency_chains_executed": 0,
+                "dependency_outputs_generated": 0,
+            }
+        if process_requests:
+            request = process_requests.get("process_semantics", {})
+            runtime_context["process_execution_request_report"] = {
+                "system": "process_semantic_execution",
+                "report_state": "pending",
+                "process_activation_state": request.get(
+                    "activation_state",
+                    "REQUESTED",
+                ),
+                "process_requested_by": "execution_planner",
+                "process_stage_created": bool(
+                    planner_report.get("process_nodes")
+                ),
+                "process_context_count": 0,
+                "reason": request.get("reason"),
+            }
+        if causal_requests:
+            request = causal_requests.get("causal_validation", {})
+            runtime_context["causal_execution_request_report"] = {
+                "system": "causal_validation_execution",
+                "report_state": "pending",
+                "causal_activation_state": request.get(
+                    "activation_state",
+                    "REQUESTED",
+                ),
+                "causal_requested_by": "execution_planner",
+                "causal_stage_created": bool(
+                    planner_report.get("causal_nodes")
+                ),
+                "causal_context_count": 0,
+                "reason": request.get("reason"),
+            }
+
     def _stable_hash(self, payload):
 
         try:
@@ -1951,6 +2236,7 @@ class AdaptiveCognitivePipeline:
         )
         dependency_state = self._dependency_activation_state(
             dependency_time,
+            requested=self._dependency_reasoning_requested(runtime_context),
         )
         introspection_report = runtime_context.get(
             "introspection_report",
@@ -1966,6 +2252,23 @@ class AdaptiveCognitivePipeline:
             "dependency_lifecycle_report",
             {},
         )
+        if (
+            dependency_time <= 0
+            and isinstance(dependency_lifecycle_report, dict)
+        ):
+            try:
+                dependency_time = round(
+                    float(
+                        dependency_lifecycle_report.get(
+                            "dependency_time",
+                            0.0,
+                        )
+                        or 0.0
+                    ),
+                    4,
+                )
+            except (TypeError, ValueError):
+                dependency_time = 0.0
         lifecycle_cost = round(
             sum(
                 float(item.get("seconds", 0.0) or 0.0)
@@ -2167,7 +2470,17 @@ class AdaptiveCognitivePipeline:
             "estimated_layers_skipped":
             self.performance_counters["estimated_layers_skipped"],
             "estimated_runtime_saved":
-            self.performance_counters["estimated_runtime_saved"],
+            max(
+                self.performance_counters["estimated_runtime_saved"],
+                adaptive_reuse_report["estimated_runtime_saved"],
+                adaptive_cache_report["estimated_runtime_saved"],
+            ),
+            "estimated_compute_saved":
+            max(
+                self.performance_counters["estimated_compute_saved"],
+                adaptive_reuse_report["estimated_compute_saved"],
+                adaptive_cache_report["estimated_compute_saved"],
+            ),
             "skipped_reports_count":
             self.performance_counters["skipped_reports_count"],
             "premature_reports_prevented":
@@ -2415,6 +2728,416 @@ class AdaptiveCognitivePipeline:
             "reconciliation_reason": reason,
         }
 
+    def _build_execution_layer_audit_report(self, runtime_context=None):
+
+        runtime_context = (
+            runtime_context
+            if isinstance(runtime_context, dict)
+            else self.runtime.get_context()
+        )
+        runtime_context = (
+            runtime_context
+            if isinstance(runtime_context, dict)
+            else {}
+        )
+        tool_selection_report = runtime_context.get(
+            "tool_selection_report",
+            {},
+        )
+        if not isinstance(tool_selection_report, dict):
+            tool_selection_report = {}
+        selected_tools = sorted(
+            set(runtime_context.get("enabled_tools", []) or [])
+            | set(tool_selection_report.get("enabled_tools", []) or [])
+            | set(tool_selection_report.get("selected_tools", []) or [])
+        )
+        execution_plan = self._execution_plan(runtime_context)
+        enabled_layers = list(execution_plan.get("enabled_layers", []) or [])
+        disabled_layers = list(execution_plan.get("disabled_layers", []) or [])
+        deferred_layers = list(execution_plan.get("deferred_layers", []) or [])
+        skip_reasons = execution_plan.get("skip_reasons", {})
+        if not isinstance(skip_reasons, dict):
+            skip_reasons = {}
+
+        introspection_report = runtime_context.get(
+            "introspection_report",
+            {},
+        )
+        if not isinstance(introspection_report, dict):
+            introspection_report = {}
+        planner_report = runtime_context.get("EXECUTION_PLAN_REPORT", {})
+        if not isinstance(planner_report, dict):
+            planner_report = runtime_context.get("execution_plan_report", {})
+        if not isinstance(planner_report, dict):
+            planner_report = {}
+        active_routes = int(
+            introspection_report.get("active_routes", 0)
+            or planner_report.get("active_routes", 0)
+            or len(selected_tools)
+        )
+        execution_nodes = int(
+            planner_report.get("execution_nodes", 0)
+            or introspection_report.get("execution_nodes", 0)
+            or self._inferred_execution_node_count(runtime_context)
+        )
+        runtime_tool_requests = runtime_context.get(
+            "runtime_tool_requests",
+            {},
+        )
+        if not isinstance(runtime_tool_requests, dict):
+            runtime_tool_requests = {}
+
+        dependency_tool_selected = "dependency_reasoning" in selected_tools
+        process_tool_selected = "process_semantics" in selected_tools
+        causal_tool_selected = "causal_validation" in selected_tools
+        dependency_request = runtime_tool_requests.get(
+            "dependency_reasoning",
+            {},
+        )
+        dependency_activation_request_created = (
+            isinstance(dependency_request, dict)
+            and dependency_request.get("request_state") == "REQUESTED"
+        )
+        dependency_time = self._module_time("dependency_reasoning")
+        dependency_activation_state = self._dependency_activation_state(
+            dependency_time,
+            requested=dependency_activation_request_created,
+        )
+        lifecycle_report = runtime_context.get(
+            "dependency_lifecycle_report",
+            {},
+        )
+        if isinstance(lifecycle_report, dict):
+            dependency_activation_state = lifecycle_report.get(
+                "dependency_activation_state",
+                dependency_activation_state,
+            )
+
+        process_stage_created = bool(planner_report.get("process_nodes")) or self._stage_created(
+            "process_semantics",
+            runtime_context,
+        )
+        causal_stage_created = bool(planner_report.get("causal_nodes")) or self._stage_created(
+            "causal_validation",
+            runtime_context,
+        )
+        route_to_node_mapping = self._route_to_node_mapping(
+            selected_tools,
+            enabled_layers,
+            runtime_context,
+            planner_report,
+        )
+        pruned_routes = self._pruned_routes(
+            selected_tools,
+            route_to_node_mapping,
+            skip_reasons,
+            active_routes,
+            execution_nodes,
+        )
+        missing_execution_nodes = [
+            route
+            for route, mapping in route_to_node_mapping.items()
+            if mapping.get("execution_node_created") is not True
+        ]
+        budget_blocks = self._execution_layer_budget_blocks(
+            selected_tools,
+            runtime_context,
+        )
+        selective_execution_blocks = (
+            self._selective_execution_blocks(
+                selected_tools,
+                enabled_layers,
+                disabled_layers,
+                deferred_layers,
+                skip_reasons,
+            )
+        )
+
+        silent_drop_detected = False
+        suspected_breakpoint = "none_detected"
+        if dependency_tool_selected and not dependency_activation_request_created:
+            silent_drop_detected = True
+            suspected_breakpoint = "tool_selection_to_execution_plan"
+        if process_tool_selected and not process_stage_created:
+            silent_drop_detected = True
+            if suspected_breakpoint == "none_detected":
+                suspected_breakpoint = "tool_selection_to_runtime_stage"
+        if causal_tool_selected and not causal_stage_created:
+            silent_drop_detected = True
+            if suspected_breakpoint == "none_detected":
+                suspected_breakpoint = "tool_selection_to_runtime_stage"
+        if active_routes > execution_nodes and pruned_routes:
+            silent_drop_detected = True
+            if suspected_breakpoint == "none_detected":
+                suspected_breakpoint = "route_to_execution_node_compilation"
+
+        return {
+            "system": "execution_layer_audit",
+            "report_state": "final",
+            "EXECUTION_LAYER_AUDIT_REPORT": True,
+            "selected_tools": selected_tools,
+            "enabled_layers": sorted(enabled_layers),
+            "disabled_layers": sorted(disabled_layers),
+            "deferred_layers": sorted(deferred_layers),
+            "active_routes": active_routes,
+            "execution_nodes": execution_nodes,
+            "route_to_node_mapping": route_to_node_mapping,
+            "pruned_routes": pruned_routes,
+            "missing_execution_nodes": missing_execution_nodes,
+            "dependency_tool_selected": dependency_tool_selected,
+            "dependency_activation_request_created":
+            dependency_activation_request_created,
+            "dependency_activation_state": dependency_activation_state,
+            "process_tool_selected": process_tool_selected,
+            "process_stage_created": process_stage_created,
+            "causal_tool_selected": causal_tool_selected,
+            "causal_stage_created": causal_stage_created,
+            "budget_blocks": budget_blocks,
+            "selective_execution_blocks": selective_execution_blocks,
+            "silent_drop_detected": silent_drop_detected,
+            "suspected_breakpoint": suspected_breakpoint,
+            "recommended_next_fix":
+            self._execution_layer_recommended_next_fix(
+                suspected_breakpoint,
+                budget_blocks,
+                selective_execution_blocks,
+            ),
+        }
+
+    def _attach_execution_layer_audit_report(self, runtime_context):
+
+        runtime_context = runtime_context if isinstance(runtime_context, dict) else {}
+        report = self._build_execution_layer_audit_report(runtime_context)
+        runtime_context["EXECUTION_LAYER_AUDIT_REPORT"] = report
+        runtime_context["execution_layer_audit_report"] = dict(report)
+        return runtime_context
+
+    def _inferred_execution_node_count(self, runtime_context):
+
+        return len([
+            key
+            for key in (
+                "predicted_output",
+                "prediction_report",
+                "evaluation_result",
+                "residual_analysis",
+            )
+            if runtime_context.get(key) is not None
+        ])
+
+    def _module_time(self, module_name):
+
+        return round(
+            sum(
+                float(item.get("seconds", 0.0) or 0.0)
+                for item in self.performance_counters.get(
+                    "module_timings",
+                    [],
+                )
+                if isinstance(item, dict)
+                and item.get("module") == module_name
+            ),
+            4,
+        )
+
+    def _stage_created(self, tool_name, runtime_context):
+
+        layer_name = {
+            "process_semantics": "process_semantic_synthesis",
+            "causal_validation": "causal_validation",
+        }.get(tool_name, tool_name)
+        stage_names = set(self.completed_stages) | {
+            item.get("stage")
+            for item in self.stage_execution_history
+            if isinstance(item, dict)
+        }
+        return layer_name in stage_names
+
+    def _route_to_node_mapping(
+        self,
+        selected_tools,
+        enabled_layers,
+        runtime_context,
+        planner_report=None,
+    ):
+
+        layer_aliases = {
+            "dependency_reasoning": "dependency_reasoning",
+            "process_semantics": "process_semantic_synthesis",
+            "causal_validation": "causal_validation",
+            "truth_governance": "truth_candidate",
+            "identity_governance": "deep_governance",
+            "object_tracking": "object_detection",
+            "spatial_reasoning": "inference",
+            "color_mapping": "transformation_solver",
+        }
+        planner_report = planner_report if isinstance(planner_report, dict) else {}
+        planner_node_items = []
+        for key in (
+            "generated_execution_nodes",
+            "dependency_nodes",
+            "process_nodes",
+            "causal_nodes",
+            "blocked_nodes",
+            "deferred_nodes",
+        ):
+            planner_node_items.extend(planner_report.get(key, []) or [])
+        planner_nodes = {
+            node.get("originating_tool"): node
+            for node in planner_node_items
+            if isinstance(node, dict)
+        }
+        execution_node_keys = {
+            "predicted_output": "prediction_output_node",
+            "prediction_report": "prediction_report_node",
+            "evaluation_result": "evaluation_node",
+            "residual_analysis": "residual_analysis_node",
+        }
+        available_nodes = [
+            node_name
+            for key, node_name in execution_node_keys.items()
+            if runtime_context.get(key) is not None
+        ]
+        mapping = {}
+        for index, tool_name in enumerate(selected_tools):
+            layer_name = layer_aliases.get(tool_name)
+            planner_node = planner_nodes.get(tool_name, {})
+            node_name = (
+                planner_node.get("node_id")
+                or (
+                    available_nodes[index]
+                    if index < len(available_nodes)
+                    else None
+                )
+            )
+            mapping[tool_name] = {
+                "mapped_layer": layer_name,
+                "layer_enabled": layer_name in set(enabled_layers),
+                "execution_node": node_name,
+                "execution_node_created": node_name is not None,
+                "planner_status": planner_node.get("status"),
+            }
+        return mapping
+
+    def _pruned_routes(
+        self,
+        selected_tools,
+        route_to_node_mapping,
+        skip_reasons,
+        active_routes,
+        execution_nodes,
+    ):
+
+        if active_routes <= execution_nodes:
+            return []
+        pruned = []
+        for route in selected_tools:
+            mapping = route_to_node_mapping.get(route, {})
+            if mapping.get("execution_node_created") is True:
+                continue
+            layer_name = mapping.get("mapped_layer")
+            reason = skip_reasons.get(layer_name)
+            pruned.append({
+                "route": route,
+                "mapped_layer": layer_name,
+                "reason": reason,
+                "pruned_without_reason": reason is None,
+            })
+        return pruned
+
+    def _execution_layer_budget_blocks(self, selected_tools, runtime_context):
+
+        budget_report = runtime_context.get("cognitive_budget_report", {})
+        if not isinstance(budget_report, dict):
+            budget_report = {}
+        blocks = []
+        if (
+            "dependency_reasoning" in selected_tools
+            and int(budget_report.get("max_dependency_depth", 1) or 0) <= 0
+        ):
+            blocks.append({
+                "tool": "dependency_reasoning",
+                "state": "BLOCKED_BY_BUDGET",
+                "reason": "max_dependency_depth<=0",
+            })
+        if (
+            "process_semantics" in selected_tools
+            and budget_report.get("process_semantics_enabled") is False
+        ):
+            blocks.append({
+                "tool": "process_semantics",
+                "state": "BLOCKED_BY_BUDGET",
+                "reason": "process_semantics_enabled=False",
+            })
+        if (
+            selected_tools
+            and int(budget_report.get("max_active_routes", 1) or 0) <= 0
+        ):
+            for tool in selected_tools:
+                blocks.append({
+                    "tool": tool,
+                    "state": "BLOCKED_BY_BUDGET",
+                    "reason": "max_active_routes<=0",
+                })
+        return blocks
+
+    def _selective_execution_blocks(
+        self,
+        selected_tools,
+        enabled_layers,
+        disabled_layers,
+        deferred_layers,
+        skip_reasons,
+    ):
+
+        layer_aliases = {
+            "dependency_reasoning": "dependency_reasoning",
+            "process_semantics": "process_semantic_synthesis",
+            "causal_validation": "causal_validation",
+            "truth_governance": "truth_candidate",
+        }
+        blocks = []
+        enabled = set(enabled_layers)
+        disabled = set(disabled_layers)
+        deferred = set(deferred_layers)
+        for tool, layer in layer_aliases.items():
+            if tool not in selected_tools or layer in enabled:
+                continue
+            if layer in disabled or layer in deferred:
+                blocks.append({
+                    "tool": tool,
+                    "layer": layer,
+                    "state": "BLOCKED_BY_SELECTIVE_EXECUTION",
+                    "reason": (
+                        skip_reasons.get(layer)
+                        or (
+                            "deferred_by_selective_execution"
+                            if layer in deferred
+                            else "disabled_by_selective_execution"
+                        )
+                    ),
+                })
+        return blocks
+
+    def _execution_layer_recommended_next_fix(
+        self,
+        suspected_breakpoint,
+        budget_blocks,
+        selective_execution_blocks,
+    ):
+
+        if budget_blocks:
+            return "surface_budget_block_before_runtime_execution"
+        if selective_execution_blocks:
+            return "surface_selective_execution_block_before_runtime_execution"
+        if suspected_breakpoint == "tool_selection_to_execution_plan":
+            return "add_intent_compiler_from_selected_tools_to_runtime_tool_requests"
+        if suspected_breakpoint == "tool_selection_to_runtime_stage":
+            return "add_stage_compiler_or_explicit_non_stage_diagnostic_for_selected_tools"
+        if suspected_breakpoint == "route_to_execution_node_compilation":
+            return "map_active_routes_to_execution_nodes_or_record_prune_reasons"
+        return "no_execution_layer_drop_detected"
+
     def _dependency_activation_state(self, dependency_time, requested=False):
 
         attempted = self.performance_counters.get(
@@ -2546,6 +3269,10 @@ class AdaptiveCognitivePipeline:
         if not isinstance(runtime_context, dict):
             runtime_context = {}
 
+        runtime_context = self._attach_execution_layer_audit_report(
+            runtime_context,
+        )
+
         performance_report = runtime_context.get(
             "performance_report",
             self.performance_report(),
@@ -2590,6 +3317,7 @@ class AdaptiveCognitivePipeline:
     def _compact_final_context(self, context):
 
         level = self.reasoning_budget.get("report_level", "normal")
+        context = self._attach_execution_layer_audit_report(context)
         if level == "full":
             return context
 
@@ -4241,6 +4969,20 @@ class AdaptiveCognitivePipeline:
         )
         runtime_context.update(
             synchronized_context
+        )
+
+        runtime_context = self._build_execution_planner_context(
+            runtime_context,
+            reasoning_budget=reasoning_budget,
+        )
+
+        runtime_context = self._dispatch_execution_plan_context(
+            runtime_context,
+            reasoning_budget=reasoning_budget,
+        )
+
+        self.runtime.bulk_update_context(
+            runtime_context
         )
 
         meta_decision_report = self.run_meta_decision_cycle(
@@ -12397,7 +13139,17 @@ class AdaptiveCognitivePipeline:
         context["adaptive_reuse_report"] = adaptive_reuse_report
         context["ADAPTIVE_REUSE_REPORT"] = adaptive_reuse_report
         context["COGNITIVE_REUSE_REPORT"] = adaptive_reuse_report
+        context["experience_reuse_report"] = adaptive_reuse_report.get(
+            "experience_reuse_report",
+            adaptive_reuse_report.get("ADAPTIVE_REUSE_REPORT", {}),
+        )
         reused_assets = adaptive_reuse_report.get("reused_assets", {})
+        self.performance_counters["estimated_runtime_saved"] += float(
+            adaptive_reuse_report.get("estimated_runtime_saved", 0.0) or 0.0
+        )
+        self.performance_counters["estimated_compute_saved"] += float(
+            adaptive_reuse_report.get("estimated_compute_saved", 0.0) or 0.0
+        )
         if reused_assets:
             context["reusable_cognitive_assets"] = reused_assets
             context["skip_redundant_reasoning"] = adaptive_reuse_report.get(

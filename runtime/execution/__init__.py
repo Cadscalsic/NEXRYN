@@ -20,6 +20,17 @@ from runtime.execution.execution_readiness_explainer import (
     ExecutionReadinessExplainer,
     execution_readiness_explainer,
 )
+from runtime.execution.execution_planner import (
+    ExecutionIntent,
+    ExecutionNode,
+    ExecutionPlan,
+    ExecutionPlanner,
+    execution_planner,
+)
+from runtime.execution.execution_dispatcher import (
+    ExecutionDispatcher,
+    execution_dispatcher,
+)
 
 
 
@@ -44,4 +55,18 @@ __all__ = [
     "ExecutionReadinessExplainer",
 
     "execution_readiness_explainer",
+
+    "ExecutionIntent",
+
+    "ExecutionNode",
+
+    "ExecutionPlan",
+
+    "ExecutionPlanner",
+
+    "execution_planner",
+
+    "ExecutionDispatcher",
+
+    "execution_dispatcher",
 ]

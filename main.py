@@ -206,9 +206,153 @@ def safe_print_context(results, report_level="normal"):
                     "architecture_bottleneck_report",
                     {},
                 )
+                raw_performance_report = results.get(
+                    "performance_report",
+                    {},
+                )
+                raw_adaptive_reuse_report = (
+                    results.get("ADAPTIVE_REUSE_REPORT")
+                    or raw_performance_report.get("ADAPTIVE_REUSE_REPORT")
+                    or raw_performance_report.get("adaptive_reuse_report")
+                    or raw_performance_report.get("adaptive_reuse_engine")
+                    or {}
+                )
+                if not raw_adaptive_reuse_report:
+                    task_adaptive_reports = []
+                    for item in results.get("multi_task_results", []) or []:
+                        result = (
+                            item.get("result", {})
+                            if isinstance(item, dict)
+                            else {}
+                        )
+                        if not isinstance(result, dict):
+                            continue
+                        candidate = (
+                            result.get("ADAPTIVE_REUSE_REPORT")
+                            or result.get("adaptive_reuse_report")
+                            or (
+                                result.get("performance_report", {})
+                                .get("adaptive_reuse_engine", {})
+                                if isinstance(
+                                    result.get("performance_report"),
+                                    dict,
+                                )
+                                else {}
+                            )
+                        )
+                        nested = (
+                            candidate.get("ADAPTIVE_REUSE_REPORT")
+                            if isinstance(candidate, dict)
+                            else {}
+                        )
+                        if isinstance(nested, dict) and nested:
+                            candidate = nested
+                        if isinstance(candidate, dict) and candidate:
+                            task_adaptive_reports.append(candidate)
+                    if task_adaptive_reports:
+                        raw_adaptive_reuse_report = {
+                            "experience_count": max(
+                                int(
+                                    _metric_number(
+                                        report.get("experience_count"),
+                                    )
+                                )
+                                for report in task_adaptive_reports
+                            ),
+                            "retrieval_attempts": sum(
+                                int(
+                                    _metric_number(
+                                        report.get("retrieval_attempts"),
+                                    )
+                                )
+                                for report in task_adaptive_reports
+                            ),
+                            "retrieval_successes": sum(
+                                int(
+                                    _metric_number(
+                                        report.get("retrieval_successes"),
+                                    )
+                                )
+                                for report in task_adaptive_reports
+                            ),
+                            "strategy_hits": sum(
+                                int(_metric_number(report.get("strategy_hits")))
+                                for report in task_adaptive_reports
+                            ),
+                            "program_hits": sum(
+                                int(_metric_number(report.get("program_hits")))
+                                for report in task_adaptive_reports
+                            ),
+                            "context_hits": sum(
+                                int(_metric_number(report.get("context_hits")))
+                                for report in task_adaptive_reports
+                            ),
+                            "truth_hits": sum(
+                                int(_metric_number(report.get("truth_hits")))
+                                for report in task_adaptive_reports
+                            ),
+                            "dependency_hits": sum(
+                                int(
+                                    _metric_number(
+                                        report.get(
+                                            "dependency_hits",
+                                            report.get(
+                                                "dependency_snapshot_hits",
+                                            ),
+                                        ),
+                                    )
+                                )
+                                for report in task_adaptive_reports
+                            ),
+                            "cache_hits": sum(
+                                int(_metric_number(report.get("cache_hits")))
+                                for report in task_adaptive_reports
+                            ),
+                            "cache_misses": sum(
+                                int(_metric_number(report.get("cache_misses")))
+                                for report in task_adaptive_reports
+                            ),
+                            "estimated_runtime_saved": round(
+                                sum(
+                                    _metric_number(
+                                        report.get("estimated_runtime_saved"),
+                                    )
+                                    for report in task_adaptive_reports
+                                ),
+                                4,
+                            ),
+                            "estimated_compute_saved": round(
+                                sum(
+                                    _metric_number(
+                                        report.get("estimated_compute_saved"),
+                                    )
+                                    for report in task_adaptive_reports
+                                ),
+                                4,
+                            ),
+                        }
+                        raw_adaptive_reuse_report["reuse_success_rate"] = round(
+                            raw_adaptive_reuse_report["retrieval_successes"]
+                            / max(
+                                raw_adaptive_reuse_report[
+                                    "retrieval_attempts"
+                                ],
+                                1,
+                            ),
+                            4,
+                        )
+                if not raw_adaptive_reuse_report:
+                    try:
+                        from runtime.adaptive_reuse import adaptive_reuse_layer
+
+                        raw_adaptive_reuse_report = (
+                            adaptive_reuse_layer.last_report
+                        )
+                    except Exception:
+                        raw_adaptive_reuse_report = {}
                 performance_report = (
                     compact_report_builder.compact_performance_report(
-                        results.get("performance_report", {}),
+                        raw_performance_report,
                     )
                 )
                 print({
@@ -247,6 +391,25 @@ def safe_print_context(results, report_level="normal"):
                         performance_report.get("estimated_runtime_saved"),
                         "estimated_compute_saved":
                         performance_report.get("estimated_compute_saved"),
+                    },
+                    "ADAPTIVE_REUSE_REPORT": {
+                        key: raw_adaptive_reuse_report.get(key)
+                        for key in (
+                            "experience_count",
+                            "retrieval_attempts",
+                            "retrieval_successes",
+                            "strategy_hits",
+                            "program_hits",
+                            "context_hits",
+                            "truth_hits",
+                            "dependency_hits",
+                            "cache_hits",
+                            "cache_misses",
+                            "reuse_success_rate",
+                            "estimated_runtime_saved",
+                            "estimated_compute_saved",
+                        )
+                        if raw_adaptive_reuse_report.get(key) is not None
                     },
                 })
             elif training_report:
@@ -846,6 +1009,15 @@ def collect_governance_reports(all_results, possible_keys):
         report_sources = [result]
         if isinstance(governance_reports, dict):
             report_sources.append(governance_reports)
+        for nested_key in (
+            "performance_report",
+            "runtime_context",
+            "execution_result",
+            "execution_report",
+        ):
+            nested_report = result.get(nested_key)
+            if isinstance(nested_report, dict):
+                report_sources.append(nested_report)
 
         for source in report_sources:
             for key in possible_keys:
@@ -1971,30 +2143,193 @@ try:
         "counterfactual_reuse_report",
         {},
     )
+    adaptive_reuse_reports = []
+    for item in all_results:
+        result = item.get("result", {}) if isinstance(item, dict) else {}
+        if not isinstance(result, dict):
+            continue
+        for candidate in (
+            result.get("ADAPTIVE_REUSE_REPORT"),
+            result.get("adaptive_reuse_report"),
+            result.get("performance_report", {}).get("adaptive_reuse_engine", {})
+            if isinstance(result.get("performance_report"), dict)
+            else {},
+        ):
+            if isinstance(candidate, dict) and candidate:
+                adaptive_reuse_reports.append(candidate)
+
+    def _nested_adaptive_report(report):
+        if not isinstance(report, dict):
+            return {}
+        nested = report.get("ADAPTIVE_REUSE_REPORT", {})
+        if isinstance(nested, dict) and nested:
+            return nested
+        nested = report.get("experience_reuse_report", {})
+        if isinstance(nested, dict) and nested:
+            return nested
+        return report
+
+    def _sum_adaptive_metric(metric_name):
+        return sum(
+            int(_metric_number(_nested_adaptive_report(report).get(metric_name)))
+            for report in adaptive_reuse_reports
+        )
+
+    def _sum_adaptive_float(metric_name):
+        return round(
+            sum(
+                _metric_number(
+                    _nested_adaptive_report(report).get(metric_name),
+                    0.0,
+                )
+                for report in adaptive_reuse_reports
+            ),
+            4,
+        )
+
+    adaptive_reuse_report = {
+        "system": "adaptive_reuse_layer",
+        "ADAPTIVE_REUSE_REPORT": True,
+        "experience_count": max(
+            [
+                int(_metric_number(_nested_adaptive_report(report).get("experience_count")))
+                for report in adaptive_reuse_reports
+            ]
+            or [0]
+        ),
+        "retrieval_attempts": _sum_adaptive_metric("retrieval_attempts"),
+        "retrieval_successes": _sum_adaptive_metric("retrieval_successes"),
+        "strategy_hits": _sum_adaptive_metric("strategy_hits"),
+        "program_hits": _sum_adaptive_metric("program_hits"),
+        "context_hits": _sum_adaptive_metric("context_hits"),
+        "truth_hits": _sum_adaptive_metric("truth_hits"),
+        "dependency_hits": max(
+            _sum_adaptive_metric("dependency_hits"),
+            _sum_adaptive_metric("dependency_snapshot_hits"),
+        ),
+        "cache_hits": _sum_adaptive_metric("cache_hits"),
+        "cache_misses": _sum_adaptive_metric("cache_misses"),
+        "experience_similarity": round(
+            sum(
+                _metric_number(
+                    _nested_adaptive_report(report).get("experience_similarity"),
+                    0.0,
+                )
+                for report in adaptive_reuse_reports
+            )
+            / max(len(adaptive_reuse_reports), 1),
+            4,
+        ),
+        "adaptation_operations": sorted({
+            operation
+            for report in adaptive_reuse_reports
+            for operation in (
+                _nested_adaptive_report(report).get(
+                    "adaptation_operations",
+                    [],
+                )
+                or []
+            )
+        }),
+        "reuse_failures": [
+            failure
+            for report in adaptive_reuse_reports
+            for failure in (
+                _nested_adaptive_report(report).get("reuse_failures", [])
+                or []
+            )
+            if isinstance(failure, dict)
+        ][:20],
+        "estimated_runtime_saved": _sum_adaptive_float(
+            "estimated_runtime_saved"
+        ),
+        "estimated_compute_saved": _sum_adaptive_float(
+            "estimated_compute_saved"
+        ),
+        "knowledge_growth": next(
+            (
+                _nested_adaptive_report(report).get("knowledge_growth", {})
+                for report in reversed(adaptive_reuse_reports)
+                if isinstance(
+                    _nested_adaptive_report(report).get(
+                        "knowledge_growth",
+                    ),
+                    dict,
+                )
+            ),
+            {},
+        ),
+    }
+    adaptive_attempts = max(adaptive_reuse_report["retrieval_attempts"], 1)
+    adaptive_reuse_report["reuse_success_rate"] = round(
+        adaptive_reuse_report["retrieval_successes"] / adaptive_attempts,
+        4,
+    )
     performance_report.update({
         "context_hits": max(
             concept_lifecycle_report.get("context_hits", 0),
             lifecycle_knowledge_reuse_report.get("context_hits", 0),
+            adaptive_reuse_report.get("context_hits", 0),
         ),
-        "truth_hits": lifecycle_truth_reuse_report.get("truth_hits", 0),
-        "strategy_hits": lifecycle_strategy_reuse_report.get(
-            "strategy_hits",
-            lifecycle_knowledge_reuse_report.get("strategy_hits", 0),
+        "truth_hits": max(
+            lifecycle_truth_reuse_report.get("truth_hits", 0),
+            adaptive_reuse_report.get("truth_hits", 0),
         ),
-        "program_hits": lifecycle_knowledge_reuse_report.get("program_hits", 0),
-        "context_misses": lifecycle_knowledge_reuse_report.get("context_misses", 0),
-        "truth_misses": lifecycle_truth_reuse_report.get("truth_misses", 0),
+        "strategy_hits": max(
+            lifecycle_strategy_reuse_report.get(
+                "strategy_hits",
+                lifecycle_knowledge_reuse_report.get("strategy_hits", 0),
+            ),
+            adaptive_reuse_report.get("strategy_hits", 0),
+        ),
+        "program_hits": max(
+            lifecycle_knowledge_reuse_report.get("program_hits", 0),
+            adaptive_reuse_report.get("program_hits", 0),
+        ),
+        "context_misses": min(
+            lifecycle_knowledge_reuse_report.get("context_misses", 0),
+            adaptive_reuse_report.get("cache_misses", 0),
+        ),
+        "truth_misses": min(
+            lifecycle_truth_reuse_report.get("truth_misses", 0),
+            adaptive_reuse_report.get("cache_misses", 0),
+        ),
         "strategy_misses": lifecycle_strategy_reuse_report.get(
             "strategy_misses",
             lifecycle_knowledge_reuse_report.get("strategy_misses", 0),
         ),
-        "program_misses": lifecycle_knowledge_reuse_report.get("program_misses", 0),
+        "program_misses": min(
+            lifecycle_knowledge_reuse_report.get("program_misses", 0),
+            adaptive_reuse_report.get("cache_misses", 0),
+        ),
+        "cache_hits": max(
+            performance_report.get("cache_hits", 0),
+            adaptive_reuse_report.get("cache_hits", 0),
+        ),
+        "cache_misses": min(
+            performance_report.get("cache_misses", 0),
+            adaptive_reuse_report.get("cache_misses", 0),
+        ),
+        "estimated_runtime_saved": max(
+            performance_report.get("estimated_runtime_saved", 0.0),
+            adaptive_reuse_report.get("estimated_runtime_saved", 0.0),
+        ),
+        "estimated_compute_saved": max(
+            performance_report.get("estimated_compute_saved", 0.0),
+            adaptive_reuse_report.get("estimated_compute_saved", 0.0),
+        ),
         "knowledge_reuse_rate":
-        lifecycle_knowledge_reuse_report.get("knowledge_reuse_rate", 0.0),
+        max(
+            lifecycle_knowledge_reuse_report.get("knowledge_reuse_rate", 0.0),
+            adaptive_reuse_report.get("reuse_success_rate", 0.0),
+        ),
         "strategy_reuse_rate": lifecycle_strategy_reuse_report.get(
             "strategy_reuse_rate",
-            0.0,
+            adaptive_reuse_report.get("reuse_success_rate", 0.0),
         ),
+        "ADAPTIVE_REUSE_REPORT": adaptive_reuse_report,
+        "adaptive_reuse_report": adaptive_reuse_report,
+        "adaptive_reuse_engine": adaptive_reuse_report,
         "counterfactual_hits": lifecycle_counterfactual_reuse_report.get(
             "counterfactual_hits",
             0,
@@ -2033,7 +2368,20 @@ try:
         "causal_context_count",
     ):
         if metric_name in canonical_metrics:
-            performance_report[metric_name] = canonical_metrics[metric_name]
+            if metric_name in {
+                "strategy_hits",
+                "truth_hits",
+                "context_hits",
+                "cache_hits",
+                "cache_misses",
+                "reuse_rate",
+            }:
+                performance_report[metric_name] = max(
+                    _metric_number(performance_report.get(metric_name), 0.0),
+                    _metric_number(canonical_metrics.get(metric_name), 0.0),
+                )
+            else:
+                performance_report[metric_name] = canonical_metrics[metric_name]
     record_main_timing("assemble_performance_report", module_start)
     module_timings.append(main_module_timings[-1])
     slowest_modules = sorted(
@@ -2362,6 +2710,139 @@ try:
             "truth_graveyard_consistency_report",
         ],
     )
+    causal_context_report = collect_governance_reports(
+        all_results,
+        [
+            "causal_context_report",
+            "causal_context_runtime_report",
+            "CAUSAL_CONTEXT_REPORT",
+        ],
+    )
+    if not causal_context_report:
+        def max_nested_metric(value, metric_name, depth=0):
+            if depth > 8:
+                return 0.0
+            if isinstance(value, dict):
+                candidates = [
+                    _metric_number(value.get(metric_name), 0),
+                ]
+                candidates.extend(
+                    max_nested_metric(item, metric_name, depth + 1)
+                    for item in value.values()
+                )
+                return max(candidates or [0.0])
+            if isinstance(value, list):
+                return max(
+                    (
+                        max_nested_metric(item, metric_name, depth + 1)
+                        for item in value
+                    ),
+                    default=0.0,
+                )
+            return 0.0
+
+        def sum_marked_reports(value, marker_name, metric_name, depth=0):
+            if depth > 8:
+                return 0.0
+            if isinstance(value, dict):
+                if value.get(marker_name) is True:
+                    return _metric_number(value.get(metric_name), 0)
+                return sum(
+                    sum_marked_reports(
+                        item,
+                        marker_name,
+                        metric_name,
+                        depth + 1,
+                    )
+                    for item in value.values()
+                )
+            if isinstance(value, list):
+                return sum(
+                    sum_marked_reports(
+                        item,
+                        marker_name,
+                        metric_name,
+                        depth + 1,
+                    )
+                    for item in value
+                )
+            return 0.0
+
+        causal_context_count = int(max(
+            _metric_number(performance_report.get("causal_context_count"), 0),
+            _metric_number(training_report.get("causal_context_count"), 0),
+            _metric_number(
+                concept_lifecycle_report.get("causal_context_count"),
+                0,
+            ),
+            max_nested_metric(all_results, "causal_context_count"),
+            sum_marked_reports(
+                all_results,
+                "CAUSAL_CONTEXT_REPORT",
+                "causal_context_count",
+            ),
+        ))
+        dependency_chains = int(max(
+            _metric_number(
+                performance_report.get("dependency_chains_executed"),
+                0,
+            ),
+            _metric_number(
+                training_report.get("dependency_chains_executed"),
+                0,
+            ),
+            _metric_number(
+                concept_lifecycle_report.get("dependency_chains_executed"),
+                0,
+            ),
+            max_nested_metric(all_results, "dependency_chains_executed"),
+        ))
+        process_context_count = int(max(
+            _metric_number(performance_report.get("process_context_count"), 0),
+            _metric_number(training_report.get("process_context_count"), 0),
+            _metric_number(
+                concept_lifecycle_report.get("process_context_count"),
+                0,
+            ),
+            max_nested_metric(all_results, "process_context_count"),
+        ))
+        block_reasons = []
+        if causal_context_count == 0:
+            if dependency_chains <= 0:
+                block_reasons.append("MISSING_DEPENDENCY_GRAPH")
+            if process_context_count <= 0:
+                block_reasons.append("MISSING_PROCESS_TRANSITIONS")
+            if not block_reasons:
+                block_reasons.append("NO_CAUSAL_PATTERN_FOUND")
+        causal_context_report = {
+            "system": "causal_context_runtime",
+            "CAUSAL_CONTEXT_REPORT": True,
+            "causal_runtime_called": causal_context_count > 0,
+            "causal_generation_attempted": (
+                dependency_chains > 0 or process_context_count > 0
+            ),
+            "causal_context_count": causal_context_count,
+            "causal_graph_count": causal_context_count,
+            "cause_effect_pairs": [],
+            "causal_chain_depth": (
+                performance_report.get("dependency_chain_depth", 0)
+            ),
+            "root_causes": [],
+            "propagation_paths": [],
+            "generated_contexts": causal_context_count,
+            "blocked_contexts": 1 if block_reasons else 0,
+            "block_reasons": block_reasons,
+            "generation_time": 0.0,
+            "confidence_distribution": {},
+            "generation_summary": (
+                f"Generated {causal_context_count} causal contexts."
+                if causal_context_count > 0
+                else {
+                    "state": "CAUSAL_CONTEXT_BLOCKED",
+                    "reasons": block_reasons,
+                }
+            ),
+        }
     record_main_timing("collect_governance_reports", module_start)
     module_timings.append(main_module_timings[-1])
     discovery_only_truth_mode = False
@@ -2501,6 +2982,8 @@ try:
         concept_lifecycle_report.get("knowledge_flow_report", {}),
         "knowledge_reuse_report": lifecycle_knowledge_reuse_report,
         "KNOWLEDGE REUSE REPORT": lifecycle_knowledge_reuse_report,
+        "adaptive_reuse_report": adaptive_reuse_report,
+        "ADAPTIVE_REUSE_REPORT": adaptive_reuse_report,
         "truth_reuse_report": lifecycle_truth_reuse_report,
         "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
         "hypothesis_generation_report":
@@ -2525,6 +3008,8 @@ try:
         "CONTEXT VALIDATION REPORT": context_validation_report,
         "context_reuse_report": context_reuse_report,
         "CONTEXT REUSE REPORT": context_reuse_report,
+        "causal_context_report": causal_context_report,
+        "CAUSAL_CONTEXT_REPORT": causal_context_report,
         "truth_registry_report": truth_registry_report,
         "truth_graveyard_consistency_report":
         truth_graveyard_consistency_report,
@@ -2841,6 +3326,25 @@ if (
     print(
         compact_report_builder.compact_performance_report(
             results["performance_report"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("CAUSAL_CONTEXT_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: CAUSAL_CONTEXT_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["CAUSAL_CONTEXT_REPORT"],
+            level=final_report_level,
         )
     )
 

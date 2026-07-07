@@ -5,6 +5,7 @@ from runtime.dependency.dependency_activation_bridge import DependencyActivation
 from runtime.memory.causal_context_memory import CausalContextMemory
 from runtime.process.process_context_runtime import ProcessContextRuntime
 from runtime.reasoning.reasoning_orchestrator import ReasoningOrchestrator
+from runtime.execution.execution_dispatcher import ExecutionDispatcher
 
 
 def _path_process_bundle():
@@ -147,3 +148,86 @@ def test_orchestrator_surfaces_causal_context_runtime_telemetry():
     assert report["causal_context_depth"] > 0
     assert report["causal_success_rate"] > 0.0
     assert report["causal_simulation_time"] > 0.0
+
+
+def test_causal_runtime_generates_from_dependency_and_registered_process_context():
+    process = {
+        "process_context_count": 1,
+        "registered_contexts": [{
+            "name": "registered_bridge_process",
+            "concept": "bridge_creation",
+            "process_family": "bridge_creation",
+            "preconditions": ["components_disconnected"],
+            "transition_signature": ["components_disconnected->connector_introduced"],
+            "postconditions": ["components_connected"],
+            "dependency_links": ["connector_introduced", "components_connected"],
+            "context_strength": 0.88,
+        }],
+    }
+    dependency = {
+        "dependency_chains_executed": 1,
+        "dependency_reports": [{
+            "concept": "bridge_creation",
+            "resolved_dependency_chain": [
+                "components_disconnected",
+                "connector_introduced",
+                "components_connected",
+            ],
+            "dependency_confidence": 0.9,
+        }],
+    }
+
+    report = CausalContextRuntime(memory=CausalContextMemory()).run(
+        process_context_report=process,
+        dependency_activation_report=dependency,
+    )
+    causal = report["CAUSAL_CONTEXT_REPORT"]
+
+    assert causal["causal_runtime_called"] is True
+    assert causal["causal_generation_attempted"] is True
+    assert causal["causal_context_count"] > 0
+    assert causal["causal_graph_count"] > 0
+    assert causal["cause_effect_pairs"]
+    assert causal["propagation_paths"]
+    assert causal["block_reasons"] == []
+
+
+def test_causal_runtime_reports_explicit_block_reasons_when_generation_fails():
+    report = CausalContextRuntime(memory=CausalContextMemory()).run(
+        process_context_report={},
+        dependency_activation_report={},
+        runtime_context={},
+    )
+    causal = report["CAUSAL_CONTEXT_REPORT"]
+
+    assert causal["causal_context_count"] == 0
+    assert causal["blocked_contexts"]
+    assert "MISSING_DEPENDENCY_GRAPH" in causal["block_reasons"]
+    assert "MISSING_PROCESS_TRANSITIONS" in causal["block_reasons"]
+    assert causal["generation_summary"]["state"] == "CAUSAL_CONTEXT_BLOCKED"
+
+
+def test_dispatcher_reports_causal_context_blocked_with_reasons():
+    plan = {
+        "execution_nodes": [{
+            "node_id": "causal-1",
+            "originating_tool": "causal_validation",
+            "stage": "causal_context_generation",
+            "status": "pending",
+        }],
+    }
+
+    report = ExecutionDispatcher().dispatch(
+        execution_plan=plan,
+        runtime_context={
+            "process_context_report": {
+                "process_context_count": 0,
+            },
+            "enabled_tools": ["process_semantics"],
+        },
+    )
+    failed = report["EXECUTION_DISPATCH_REPORT"]["failed_nodes"][0]
+
+    assert failed["failure_reason"]["state"] == "CAUSAL_CONTEXT_BLOCKED"
+    assert "CAUSAL_CONTEXT_NOT_GENERATED" not in str(failed["failure_reason"])
+    assert failed["failure_reason"]["block_reasons"]
