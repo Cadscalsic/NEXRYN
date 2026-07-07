@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from time import perf_counter
 from typing import Any, Mapping
 
 from core.epistemic_models import clamp
@@ -15,6 +16,7 @@ from runtime.process.process_context_registry import (
 from runtime.process.process_context_generator import ProcessContextGenerator
 from runtime.process.process_simulator import process_simulator
 from runtime.process.state_transition_engine import state_transition_engine
+from runtime.instrumentation import runtime_lifecycle
 
 
 @dataclass
@@ -87,6 +89,18 @@ class ProcessContextRuntime:
         dependency_activation_report: Mapping[str, Any] | None = None,
         runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        execution_started_at = perf_counter()
+        lifecycle_execution = runtime_lifecycle.create(
+            module_name=self.system_name,
+            runtime_name="Process Runtime",
+            caller="reasoning_orchestrator",
+            trigger="process_context_generation",
+        )
+        runtime_lifecycle.requested(lifecycle_execution)
+        runtime_lifecycle.queued(lifecycle_execution)
+        runtime_lifecycle.started(lifecycle_execution)
+        runtime_lifecycle.running(lifecycle_execution)
+        execution_start = lifecycle_execution.start_timestamp
         runtime_context = runtime_context if isinstance(runtime_context, Mapping) else {}
         if input_grid is None:
             input_grid = runtime_context.get("input_grid")
@@ -180,9 +194,53 @@ class ProcessContextRuntime:
                 if model.get("validation", {}).get("process_validated")
             ]
         )
+        execution_end = str(datetime.utcnow())
+        elapsed_time = round(max(perf_counter() - execution_started_at, 0.0), 6)
+        if process_context_count > 0 and elapsed_time <= 0.0:
+            elapsed_time = 0.0001
+        input_count = len(concepts) + len(dependency_chains)
+        output_count = process_context_count + len(registered)
+        if process_context_count > 0:
+            runtime_lifecycle.completed(
+                lifecycle_execution,
+                completion_reason="process_contexts_generated",
+                output_count=output_count,
+                memory_cost=output_count,
+            )
+        else:
+            runtime_lifecycle.blocked(
+                lifecycle_execution,
+                "PROCESS_CONTEXT_NOT_GENERATED",
+                metadata={"concepts": concepts},
+            )
+        runtime_lifecycle.reported(lifecycle_execution)
+        lifecycle_data = lifecycle_execution.as_dict()
+        execution_end = lifecycle_data["execution_end"]
+        elapsed_time = max(lifecycle_data["elapsed_seconds"], elapsed_time)
 
         report = {
             "system": self.system_name,
+            "execution_start": execution_start,
+            "execution_end": execution_end,
+            "start_timestamp": execution_start,
+            "end_timestamp": execution_end,
+            "elapsed_time": elapsed_time,
+            "duration_seconds": elapsed_time,
+            "cpu_cost": lifecycle_data["cpu_cost"],
+            "memory_cost": output_count,
+            "input_count": input_count,
+            "output_count": output_count,
+            "success": process_context_count > 0,
+            "failure": None if process_context_count > 0 else "PROCESS_CONTEXT_NOT_GENERATED",
+            "invocation_count": 1,
+            "average_duration": elapsed_time,
+            "elapsed_seconds": elapsed_time,
+            "wall_clock_time": lifecycle_data["wall_clock_time"],
+            "cpu_time": lifecycle_data["cpu_time"],
+            "exclusive_time": lifecycle_data["exclusive_time"],
+            "inclusive_time": lifecycle_data["inclusive_time"],
+            "execution_id": lifecycle_data["execution_id"],
+            "runtime_lifecycle": lifecycle_data,
             "process_contexts": evaluated,
             "process_context_generation_report": generation_report,
             "PROCESS_CONTEXT_GENERATION_REPORT": generation_report.get(
@@ -207,9 +265,9 @@ class ProcessContextRuntime:
             "process_depth": process_depth,
             "process_context_confidence": round(float(process_confidence), 4),
             "process_simulation_time": 0.0001 if evaluated else 0.0,
-            "process_generation_time": generation_report.get(
-                "process_generation_time",
-                0.0,
+            "process_generation_time": max(
+                float(generation_report.get("process_generation_time", 0.0) or 0.0),
+                elapsed_time if process_context_count > 0 else 0.0,
             ),
             "state_transition_count": transition_count,
             "process_reuse_rate": round(reuse_hits / max(process_context_count, 1), 4),

@@ -2089,7 +2089,17 @@ try:
         "governance_time_seconds": metric_bridge["governance_time_seconds"],
         "dependency_reasoning_time_seconds":
         metric_bridge["dependency_reasoning_time_seconds"],
+        "reasoning_time_seconds": metric_bridge["reasoning_time_seconds"],
+        "truth_time_seconds": metric_bridge["truth_time_seconds"],
         "cache_time_seconds": metric_bridge["cache_time_seconds"],
+        "reuse_time_seconds": metric_bridge["reuse_time_seconds"],
+        "context_time_seconds": metric_bridge["context_time_seconds"],
+        "memory_time_seconds": metric_bridge["memory_time_seconds"],
+        "localization_time_seconds": metric_bridge["localization_time_seconds"],
+        "evaluation_time_seconds": metric_bridge["evaluation_time_seconds"],
+        "report_time_seconds": metric_bridge["report_time_seconds"],
+        "process_generation_time": metric_bridge["process_generation_time"],
+        "causal_generation_time": metric_bridge["causal_generation_time"],
         "finalization_time_seconds":
         metric_bridge["finalization_time_seconds"],
         "unattributed_runtime_seconds": round(
@@ -2768,6 +2778,147 @@ try:
                 )
             return 0.0
 
+        def collect_nested_causal_contexts(value, depth=0):
+            if depth > 8:
+                return []
+            contexts = []
+            if isinstance(value, dict):
+                for key in ("causal_contexts", "generated_contexts"):
+                    nested = value.get(key)
+                    if isinstance(nested, list):
+                        contexts.extend(
+                            item for item in nested if isinstance(item, dict)
+                        )
+                for item in value.values():
+                    contexts.extend(
+                        collect_nested_causal_contexts(item, depth + 1)
+                    )
+            elif isinstance(value, list):
+                for item in value:
+                    contexts.extend(
+                        collect_nested_causal_contexts(item, depth + 1)
+                    )
+            return contexts
+
+        def unique_contexts(contexts):
+            seen = set()
+            unique = []
+            for index, context in enumerate(contexts):
+                key = (
+                    context.get("context_id"),
+                    context.get("cause"),
+                    context.get("effect"),
+                    context.get("causal_family"),
+                    index if not context.get("cause") else "",
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                unique.append(context)
+            return unique
+
+        def relation_from_context(context, index):
+            cause = str(context.get("cause") or context.get("root_cause") or "unknown_cause")
+            effect = str(context.get("effect") or "unknown_effect")
+            dependencies = [
+                str(item)
+                for item in (context.get("supporting_dependencies", []) or [])
+                if item is not None
+            ]
+            processes = [
+                str(item)
+                for item in (context.get("supporting_processes", []) or [])
+                if item is not None
+            ]
+            truths = [
+                str(item)
+                for item in (context.get("supporting_truths", []) or [])
+                if item is not None
+            ]
+            confidence = round(float(
+                context.get("confidence", context.get("causal_confidence", 0.0)) or 0.0
+            ), 4)
+            validation = context.get("validation", {})
+            validated = (
+                validation.get("causal_context_validated")
+                if isinstance(validation, dict)
+                else None
+            )
+            support_count = len([
+                item for item in [
+                    context.get("evidence"),
+                    dependencies,
+                    processes or context.get("supporting_process"),
+                    truths,
+                    validation,
+                ]
+                if item
+            ])
+            return {
+                "relation_id": (
+                    context.get("relation_id")
+                    or f"causal_relation:fallback:{index}:{cause}->{effect}"
+                ),
+                "cause_id": cause,
+                "effect_id": effect,
+                "cause": cause,
+                "effect": effect,
+                "relation_type": str(
+                    context.get("relation_type")
+                    or context.get("causal_family")
+                    or "causal_relation"
+                ),
+                "confidence": confidence,
+                "support_count": support_count,
+                "contradicting_evidence": list(context.get("contradictions", []) or []),
+                "validation_status": (
+                    "validated" if validated else "unvalidated"
+                ),
+                "evidence": context.get("evidence", {}),
+                "temporal_order": int(context.get("temporal_order", index) or 0),
+                "dependency_reference": (
+                    context.get("dependency_source")
+                    or ",".join(dependencies)
+                ),
+                "process_reference": (
+                    context.get("process_source")
+                    or context.get("supporting_process")
+                    or ",".join(processes)
+                ),
+                "truth_reference": (
+                    context.get("truth_source")
+                    or ",".join(truths)
+                ),
+            }
+
+        def chain_from_context(context):
+            cause = str(context.get("cause") or context.get("root_cause") or "unknown_cause")
+            effect = str(context.get("effect") or "unknown_effect")
+            chain = (
+                context.get("propagation_chain")
+                or context.get("causal_chain")
+                or [cause, effect]
+            )
+            chain = [str(item) for item in chain if item is not None and str(item)]
+            if cause not in chain:
+                chain.insert(0, cause)
+            if effect not in chain:
+                chain.append(effect)
+            return list(dict.fromkeys(chain))
+
+        def confidence_distribution(relations):
+            distribution = {"high": 0, "medium": 0, "low": 0, "by_relation": {}}
+            for relation in relations:
+                confidence = float(relation.get("confidence", 0.0) or 0.0)
+                if confidence >= 0.80:
+                    distribution["high"] += 1
+                elif confidence >= 0.60:
+                    distribution["medium"] += 1
+                else:
+                    distribution["low"] += 1
+                distribution["by_relation"][relation["relation_id"]] = round(confidence, 4)
+            return distribution
+
         causal_context_count = int(max(
             _metric_number(performance_report.get("causal_context_count"), 0),
             _metric_number(training_report.get("causal_context_count"), 0),
@@ -2806,8 +2957,83 @@ try:
             ),
             max_nested_metric(all_results, "process_context_count"),
         ))
+        generated_contexts = unique_contexts(
+            collect_nested_causal_contexts(all_results)
+        )
+        effective_causal_context_count = max(
+            causal_context_count,
+            len(generated_contexts),
+        )
+        cause_effect_pairs = [
+            relation_from_context(context, index)
+            for index, context in enumerate(generated_contexts)
+            if context.get("cause") or context.get("effect") or context.get("root_cause")
+        ]
+        propagation_paths = [
+            {
+                "path_id": f"propagation_path:fallback:{index}",
+                "root_cause": context.get("root_cause") or context.get("cause"),
+                "observed_effect": context.get("effect"),
+                "final_state": chain_from_context(context)[-1],
+                "chain": chain_from_context(context),
+                "chain_depth": len(chain_from_context(context)),
+                "confidence": round(float(
+                    context.get("confidence", context.get("causal_confidence", 0.0)) or 0.0
+                ), 4),
+            }
+            for index, context in enumerate(generated_contexts)
+        ]
+        root_causes = list(dict.fromkeys(
+            str(context.get("root_cause") or context.get("cause"))
+            for context in generated_contexts
+            if context.get("root_cause") or context.get("cause")
+        ))
+        secondary_causes = list(dict.fromkeys(
+            str(dependency)
+            for context in generated_contexts
+            for dependency in (context.get("supporting_dependencies", []) or [])
+            if str(dependency) not in root_causes
+        ))
+        average_chain_depth = round(
+            sum(path["chain_depth"] for path in propagation_paths)
+            / max(len(propagation_paths), 1),
+            4,
+        ) if propagation_paths else 0.0
+        average_confidence = round(
+            sum(pair["confidence"] for pair in cause_effect_pairs)
+            / max(len(cause_effect_pairs), 1),
+            4,
+        ) if cause_effect_pairs else 0.0
+        highest_confidence_relation = (
+            max(cause_effect_pairs, key=lambda item: item["confidence"])
+            if cause_effect_pairs else {}
+        )
+        lowest_confidence_relation = (
+            min(cause_effect_pairs, key=lambda item: item["confidence"])
+            if cause_effect_pairs else {}
+        )
+        graph_nodes = sorted({
+            value
+            for pair in cause_effect_pairs
+            for value in (pair.get("cause_id"), pair.get("effect_id"))
+            if value
+        })
+        graph_edge_count = len(cause_effect_pairs)
+        possible_edges = len(graph_nodes) * max(len(graph_nodes) - 1, 0)
+        causal_density = round(
+            graph_edge_count / possible_edges,
+            4,
+        ) if possible_edges else 0.0
+        causal_graph_statistics = {
+            "node_count": len(graph_nodes),
+            "edge_count": graph_edge_count,
+            "relation_count": len(cause_effect_pairs),
+            "average_out_degree": round(graph_edge_count / max(len(graph_nodes), 1), 4),
+            "causal_density": causal_density,
+            "cycles_detected": False,
+        }
         block_reasons = []
-        if causal_context_count == 0:
+        if effective_causal_context_count == 0:
             if dependency_chains <= 0:
                 block_reasons.append("MISSING_DEPENDENCY_GRAPH")
             if process_context_count <= 0:
@@ -2821,28 +3047,71 @@ try:
             "causal_generation_attempted": (
                 dependency_chains > 0 or process_context_count > 0
             ),
-            "causal_context_count": causal_context_count,
-            "causal_graph_count": causal_context_count,
-            "cause_effect_pairs": [],
+            "causal_context_count": effective_causal_context_count,
+            "causal_graph_count": effective_causal_context_count,
+            "cause_effect_pairs": cause_effect_pairs,
             "causal_chain_depth": (
-                performance_report.get("dependency_chain_depth", 0)
+                max(
+                    _metric_number(performance_report.get("dependency_chain_depth", 0), 0),
+                    average_chain_depth,
+                )
             ),
-            "root_causes": [],
-            "propagation_paths": [],
-            "generated_contexts": causal_context_count,
+            "root_causes": root_causes,
+            "secondary_causes": secondary_causes,
+            "propagation_paths": propagation_paths,
+            "generated_contexts": generated_contexts or causal_context_count,
             "blocked_contexts": 1 if block_reasons else 0,
             "block_reasons": block_reasons,
             "generation_time": 0.0,
-            "confidence_distribution": {},
+            "confidence_distribution": confidence_distribution(cause_effect_pairs),
+            "causal_relation_count": len(cause_effect_pairs),
+            "average_chain_depth": average_chain_depth,
+            "average_confidence": average_confidence,
+            "highest_confidence_relation": highest_confidence_relation,
+            "lowest_confidence_relation": lowest_confidence_relation,
+            "causal_density": causal_density,
+            "causal_graph_statistics": causal_graph_statistics,
             "generation_summary": (
-                f"Generated {causal_context_count} causal contexts."
-                if causal_context_count > 0
+                f"Generated {effective_causal_context_count} causal contexts."
+                if effective_causal_context_count > 0
                 else {
                     "state": "CAUSAL_CONTEXT_BLOCKED",
                     "reasons": block_reasons,
                 }
             ),
         }
+    cognitive_capability_report = collect_governance_reports(
+        all_results,
+        [
+            "cognitive_capability_report",
+            "COGNITIVE_CAPABILITY_REPORT",
+        ],
+    )
+    if not cognitive_capability_report:
+        from runtime.capabilities import cognitive_capability_orchestrator
+
+        cognitive_capability_report = (
+            cognitive_capability_orchestrator.build_report(
+                runtime_context={
+                    "truth_commitments": truth_commit_report.get(
+                        "committed_truths",
+                        [],
+                    ),
+                    "reusable_truth_commitments": truth_registry_report.get(
+                        "truths",
+                        [],
+                    ),
+                    "adaptive_reuse_report": adaptive_reuse_report,
+                },
+                reports={
+                    "adaptive_reuse_report": adaptive_reuse_report,
+                    "causal_context_runtime_report": causal_context_report,
+                    "context_reuse_report": context_reuse_report,
+                    "truth_commit_report": truth_commit_report,
+                    "truth_registry_report": truth_registry_report,
+                },
+            )
+        )
     record_main_timing("collect_governance_reports", module_start)
     module_timings.append(main_module_timings[-1])
     discovery_only_truth_mode = False
@@ -2984,6 +3253,8 @@ try:
         "KNOWLEDGE REUSE REPORT": lifecycle_knowledge_reuse_report,
         "adaptive_reuse_report": adaptive_reuse_report,
         "ADAPTIVE_REUSE_REPORT": adaptive_reuse_report,
+        "cognitive_capability_report": cognitive_capability_report,
+        "COGNITIVE_CAPABILITY_REPORT": cognitive_capability_report,
         "truth_reuse_report": lifecycle_truth_reuse_report,
         "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
         "hypothesis_generation_report":
@@ -3010,6 +3281,10 @@ try:
         "CONTEXT REUSE REPORT": context_reuse_report,
         "causal_context_report": causal_context_report,
         "CAUSAL_CONTEXT_REPORT": causal_context_report,
+        "capabilities_executed":
+        cognitive_capability_report.get("capabilities_executed", []),
+        "capability_success_rate":
+        cognitive_capability_report.get("capability_success_rate", 0.0),
         "truth_registry_report": truth_registry_report,
         "truth_graveyard_consistency_report":
         truth_graveyard_consistency_report,
@@ -3100,6 +3375,8 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
     from runtime.performance.runtime_attribution_engine import (
         runtime_attribution_engine,
     )
+    from runtime.instrumentation import runtime_lifecycle
+    from runtime.metrics import runtime_metric_synchronizer
 
     final_performance_report = results["performance_report"]
     final_runtime_attribution_report = (
@@ -3143,11 +3420,112 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
             },
         )
     )
+    final_runtime_lifecycle_report = runtime_lifecycle.build_report()
+    final_performance_report["runtime_lifecycle_report"] = (
+        final_runtime_lifecycle_report
+    )
+    metric_sync_result = runtime_metric_synchronizer.synchronize(
+        performance_report=final_performance_report,
+        lifecycle_report=final_runtime_lifecycle_report,
+    )
+    final_performance_report = metric_sync_result["performance_report"]
+    results["performance_report"] = final_performance_report
+    final_metric_synchronization_report = (
+        metric_sync_result["RUNTIME_METRIC_SYNCHRONIZATION_REPORT"]
+    )
+    final_runtime_attribution_report = (
+        runtime_attribution_engine.build_report(
+            total_runtime=execution_time,
+            performance_report=final_performance_report,
+            runtime_metrics={
+                **runtime_metrics,
+                **final_performance_report.get("canonical_metrics", {}),
+                **{
+                    key: value
+                    for key, value in final_performance_report.items()
+                    if key.endswith("_time_seconds")
+                    or key.endswith("_generation_time")
+                },
+            },
+            module_timings=final_performance_report.get(
+                "module_timings",
+                [],
+            ),
+        )
+    )
+    final_performance_report["runtime_attribution_report"] = (
+        final_runtime_attribution_report
+    )
+    final_performance_report["runtime_breakdown"] = (
+        final_runtime_attribution_report["runtime_breakdown"]
+    )
+    final_performance_report["attributed_runtime_seconds"] = (
+        final_runtime_attribution_report["attributed_runtime"]
+    )
+    final_performance_report["unattributed_runtime_seconds"] = (
+        final_runtime_attribution_report["unattributed_runtime"]
+    )
+    final_performance_report["untracked_runtime_seconds"] = (
+        final_runtime_attribution_report["untracked_runtime"]
+    )
+    final_performance_report["unattributed_runtime_detector_report"] = (
+        unattributed_runtime_detector.detect(
+            final_runtime_attribution_report,
+            {
+                **runtime_metrics,
+                **final_performance_report.get("canonical_metrics", {}),
+                **final_performance_report,
+            },
+        )
+    )
+    from runtime.metrics.canonical_metric_registry import (
+        CanonicalMetricRegistry,
+    )
+    from runtime.metrics.metric_validation_engine import MetricValidationEngine
+    from runtime.metrics.unified_metric_store import UnifiedMetricStore
+    from runtime.observability.runtime_observability_layer import (
+        RuntimeObservabilityLayer,
+    )
+
+    observability_registry = CanonicalMetricRegistry()
+    observability_store = UnifiedMetricStore(registry=observability_registry)
+    observability_layer = RuntimeObservabilityLayer(
+        store=observability_store,
+        registry=observability_registry,
+        validator=MetricValidationEngine(store=observability_store),
+    )
+    final_observability_report = (
+        observability_layer.build_runtime_observability_report(
+            performance_report=final_performance_report,
+            runtime_attribution_report=final_runtime_attribution_report,
+            sources={
+                "performance_report": final_performance_report,
+                "runtime_attribution_report": final_runtime_attribution_report,
+            },
+        )
+    )
+    final_performance_report["runtime_observability_report"] = (
+        final_observability_report
+    )
     results["RUNTIME ATTRIBUTION REPORT"] = final_runtime_attribution_report
+    results["RUNTIME_LIFECYCLE_REPORT"] = final_runtime_lifecycle_report
+    results["RUNTIME_METRIC_SYNCHRONIZATION_REPORT"] = (
+        final_metric_synchronization_report
+    )
+    results["RUNTIME_OBSERVABILITY_REPORT"] = final_observability_report
     if isinstance(results.get("PERFORMANCE_REPORT"), dict):
         performance_intelligence = results["PERFORMANCE_REPORT"]
         performance_intelligence["runtime_attribution_report"] = (
             final_runtime_attribution_report
+        )
+        performance_intelligence["runtime_lifecycle_report"] = (
+            final_runtime_lifecycle_report
+        )
+        performance_intelligence["runtime_metric_synchronization_report"] = (
+            final_metric_synchronization_report
+        )
+        performance_intelligence["runtime_observability_report"] = (
+            final_observability_report
         )
         runtime_breakdown = final_runtime_attribution_report.get(
             "runtime_breakdown",

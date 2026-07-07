@@ -18,9 +18,13 @@ ATTRIBUTION_FIELDS = {
     "truth_time": ("truth_time_seconds",),
     "cache_time": ("cache_time_seconds",),
     "reuse_time": ("reuse_time_seconds",),
+    "process_time": ("process_generation_time", "process_time_seconds"),
+    "causal_time": ("causal_generation_time", "causal_time_seconds"),
     "governance_time": ("governance_time_seconds",),
     "localization_time": ("localization_time_seconds",),
     "memory_time": ("memory_time_seconds",),
+    "evaluation_time": ("evaluation_time_seconds",),
+    "training_time": ("training_time_seconds",),
     "reasoning_time": ("reasoning_time_seconds",),
     "report_time": ("report_time_seconds", "finalization_time_seconds"),
     "shutdown_time": ("shutdown_time_seconds",),
@@ -146,6 +150,14 @@ class RuntimeAttributionEngine:
                 categories["context_time"] += seconds
             elif "truth" in name:
                 categories["truth_time"] += seconds
+            elif "process" in name:
+                categories["process_time"] += seconds
+            elif "causal" in name:
+                categories["causal_time"] += seconds
+            elif "evaluation" in name or "eval" in name:
+                categories["evaluation_time"] += seconds
+            elif "training" in name:
+                categories["training_time"] += seconds
             elif "stage_cycle" in name:
                 categories["task_execution_time"] += seconds
             elif "task" in name or "stage" in name:

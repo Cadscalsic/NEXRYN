@@ -22,6 +22,7 @@ from runtime.dependency.dependency_activation_trace import (
 from runtime.dependency.dependency_chain_builder import DependencyChainBuilder
 from runtime.dependency.dependency_execution_bridge import DependencyExecutionBridge
 from runtime.dependency.dependency_graph_builder import DependencyGraphBuilder
+from runtime.instrumentation import runtime_lifecycle
 
 
 class DependencyActivationBridge:
@@ -121,6 +122,16 @@ class DependencyActivationBridge:
         runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         runtime_context = runtime_context if isinstance(runtime_context, Mapping) else {}
+        lifecycle_execution = runtime_lifecycle.create(
+            module_name=self.system_name,
+            runtime_name="Dependency Runtime",
+            caller="execution_dispatcher",
+            trigger="dependency_activation",
+        )
+        runtime_lifecycle.requested(lifecycle_execution)
+        runtime_lifecycle.queued(lifecycle_execution)
+        runtime_lifecycle.started(lifecycle_execution)
+        runtime_lifecycle.running(lifecycle_execution)
         concepts = self._collect_concepts(detected_concepts, runtime_context)
         mutable_context = dict(runtime_context)
         trace = DependencyActivationTrace()
@@ -428,6 +439,40 @@ class DependencyActivationBridge:
             if required_tools
             else DEPENDENCY_NOT_REQUIRED
         )
+        if dependency_chain_count or process_context_count or causal_context_count:
+            runtime_lifecycle.completed(
+                lifecycle_execution,
+                completion_reason="dependency_runtime_outputs_generated",
+                output_count=(
+                    dependency_chain_count
+                    + process_context_count
+                    + causal_context_count
+                ),
+                memory_cost=(
+                    dependency_chain_count
+                    + process_context_count
+                    + causal_context_count
+                ),
+            )
+        elif required_tools:
+            runtime_lifecycle.blocked(
+                lifecycle_execution,
+                "no_dependency_runtime_outputs",
+                metadata={"required_tools": required_tools},
+            )
+        else:
+            runtime_lifecycle.completed(
+                lifecycle_execution,
+                completion_reason="dependency_runtime_not_required",
+                output_count=0,
+                memory_cost=0,
+            )
+        runtime_lifecycle.reported(lifecycle_execution)
+        lifecycle_data = lifecycle_execution.as_dict()
+        dependency_runtime_duration = max(
+            float(execution_report.get("execution_duration", 0.0) or 0.0),
+            lifecycle_data["elapsed_seconds"],
+        )
         audit_report = self._build_activation_audit_report(
             selected=selected,
             required_tools=required_tools,
@@ -450,6 +495,30 @@ class DependencyActivationBridge:
 
         report = {
             "system": self.system_name,
+            "execution_id": lifecycle_data["execution_id"],
+            "execution_start": lifecycle_data["execution_start"],
+            "execution_end": lifecycle_data["execution_end"],
+            "start_timestamp": lifecycle_data["start_timestamp"],
+            "end_timestamp": lifecycle_data["end_timestamp"],
+            "elapsed_seconds": dependency_runtime_duration,
+            "elapsed_time": dependency_runtime_duration,
+            "duration_seconds": dependency_runtime_duration,
+            "wall_clock_time": lifecycle_data["wall_clock_time"],
+            "cpu_time": lifecycle_data["cpu_time"],
+            "exclusive_time": lifecycle_data["exclusive_time"],
+            "inclusive_time": lifecycle_data["inclusive_time"],
+            "cpu_cost": lifecycle_data["cpu_cost"],
+            "memory_cost": lifecycle_data["memory_cost"],
+            "input_count": len(concepts) + len(selected),
+            "output_count": lifecycle_data["output_count"],
+            "success": bool(
+                dependency_chain_count
+                or process_context_count
+                or causal_context_count
+                or not required_tools
+            ),
+            "failure": lifecycle_data["failure_reason"],
+            "runtime_lifecycle": lifecycle_data,
             "detected_concepts": concepts,
             "selected_tools": selected,
             "activated_tools": activated_tools,
@@ -511,9 +580,10 @@ class DependencyActivationBridge:
             "causal_context_count": causal_context_count,
             "activation_success_rate": success_rate,
             "dependency_chain_coverage": round(dependency_coverage, 4),
-            "dependency_reasoning_time": 0.0 if dependency_chain_count == 0 else 0.0001,
+            "dependency_reasoning_time": dependency_runtime_duration,
             "dependency_execution_count": 1 if execution_report.get("execution_started") else 0,
-            "dependency_execution_time": execution_report.get("execution_duration", 0.0),
+            "dependency_execution_time": dependency_runtime_duration,
+            "dependency_reasoning_time_seconds": dependency_runtime_duration,
             "dependency_chains_executed": dependency_chain_count,
             "dependency_chain_depth": dependency_depth,
             "dependency_execution_success_rate": (

@@ -1,4 +1,5 @@
 from runtime.profiling.performance_reporter import PerformanceReporter
+from runtime.profiling.metric_bridge import RuntimeMetricBridge
 from runtime.performance.runtime_attribution_engine import runtime_attribution_engine
 from runtime.reporting.compact_report_builder import CompactReportBuilder
 
@@ -141,3 +142,26 @@ def test_runtime_attribution_does_not_relabel_candidate_runtime_as_truth():
     assert breakdown["reasoning_time"] == 0.0
     assert breakdown["untracked_runtime"] == 13.0
     assert report["untracked_runtime"] == 13.0
+
+
+def test_runtime_metric_bridge_derives_full_observability_timings():
+    bridge = RuntimeMetricBridge().synchronize(
+        performance_report={"total_runtime_seconds": 2.0},
+        module_timings=[
+            {"module": "dependency_reasoning", "seconds": 0.11},
+            {"module": "reasoning_orchestrator", "seconds": 0.12},
+            {"module": "truth_commit_engine", "seconds": 0.13},
+            {"module": "adaptive_reuse_layer", "seconds": 0.14},
+            {"module": "cache_manager", "seconds": 0.15},
+            {"module": "process_context_runtime", "seconds": 0.16},
+            {"module": "causal_context_runtime", "seconds": 0.17},
+        ],
+    )
+
+    assert bridge["dependency_reasoning_time_seconds"] == 0.11
+    assert bridge["reasoning_time_seconds"] == 0.12
+    assert bridge["truth_time_seconds"] == 0.13
+    assert bridge["reuse_time_seconds"] == 0.14
+    assert bridge["cache_time_seconds"] == 0.15
+    assert bridge["process_generation_time"] == 0.16
+    assert bridge["causal_generation_time"] == 0.17

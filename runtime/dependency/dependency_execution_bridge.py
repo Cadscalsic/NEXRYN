@@ -9,6 +9,7 @@ from runtime.dependency.dependency_execution_gateway import (
     DependencyExecutionGateway,
     MANDATORY_EXECUTION_CONCEPTS,
 )
+from runtime.instrumentation import runtime_lifecycle
 
 
 class DependencyExecutionBridge:
@@ -29,6 +30,16 @@ class DependencyExecutionBridge:
         graph_report: Mapping[str, Any] | None = None,
         runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        lifecycle_execution = runtime_lifecycle.create(
+            module_name=self.system_name,
+            runtime_name="Dependency Runtime",
+            caller="execution_dispatcher",
+            trigger="dependency_execution",
+        )
+        runtime_lifecycle.requested(lifecycle_execution)
+        runtime_lifecycle.queued(lifecycle_execution)
+        runtime_lifecycle.started(lifecycle_execution)
+        runtime_lifecycle.running(lifecycle_execution)
         activation_request = (
             activation_request
             if isinstance(activation_request, Mapping)
@@ -60,14 +71,58 @@ class DependencyExecutionBridge:
             failures.append("DEPENDENCY_EXECUTION_FAILURE")
         if execution.get("failure_reason"):
             failures.append(execution["failure_reason"])
+        if execution.get("execution_success"):
+            runtime_lifecycle.completed(
+                lifecycle_execution,
+                completion_reason="dependency_execution_success",
+                output_count=int(execution.get("chains_generated", 0) or 0),
+                memory_cost=len(execution.get("dependency_outputs", []) or []),
+            )
+        elif approval:
+            runtime_lifecycle.failed(
+                lifecycle_execution,
+                failures[0] if failures else "DEPENDENCY_EXECUTION_FAILURE",
+            )
+        else:
+            runtime_lifecycle.blocked(
+                lifecycle_execution,
+                "activation_not_approved",
+            )
+        runtime_lifecycle.reported(lifecycle_execution)
+        lifecycle_data = lifecycle_execution.as_dict()
+        execution_duration = max(
+            float(execution.get("execution_duration", 0.0) or 0.0),
+            lifecycle_data["elapsed_seconds"],
+        )
 
         report = {
             "system": self.system_name,
+            "execution_id": lifecycle_data["execution_id"],
+            "execution_start": lifecycle_data["execution_start"],
+            "execution_end": lifecycle_data["execution_end"],
+            "start_timestamp": lifecycle_data["start_timestamp"],
+            "end_timestamp": lifecycle_data["end_timestamp"],
+            "elapsed_seconds": execution_duration,
+            "elapsed_time": execution_duration,
+            "duration_seconds": execution_duration,
+            "wall_clock_time": lifecycle_data["wall_clock_time"],
+            "cpu_time": lifecycle_data["cpu_time"],
+            "exclusive_time": lifecycle_data["exclusive_time"],
+            "inclusive_time": lifecycle_data["inclusive_time"],
+            "cpu_cost": lifecycle_data["cpu_cost"],
+            "memory_cost": lifecycle_data["memory_cost"],
+            "input_count": len(normalized),
+            "output_count": lifecycle_data["output_count"],
+            "success": bool(execution.get("execution_success")),
+            "failure": lifecycle_data["failure_reason"],
+            "runtime_lifecycle": lifecycle_data,
             "activation_approved": approval,
             "execution_started": execution.get("execution_started", False),
             "execution_completed": execution.get("execution_completed", False),
             "execution_success": execution.get("execution_success", False),
-            "execution_duration": execution.get("execution_duration", 0.0),
+            "execution_duration": execution_duration,
+            "dependency_reasoning_time": execution_duration,
+            "dependency_reasoning_time_seconds": execution_duration,
             "chains_generated": execution.get("chains_generated", 0),
             "dependency_depth": execution.get("dependency_depth", 0),
             "dependency_confidence": execution.get("dependency_confidence", 0.0),

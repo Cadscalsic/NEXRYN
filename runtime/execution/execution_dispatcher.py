@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from runtime.causal import causal_context_runtime
 from runtime.dependency import dependency_execution_bridge
+from runtime.instrumentation import runtime_lifecycle
 from runtime.process import process_context_runtime
 
 
@@ -43,6 +44,16 @@ class ExecutionDispatcher:
 
         plan = execution_plan if isinstance(execution_plan, Mapping) else {}
         context = runtime_context if isinstance(runtime_context, Mapping) else {}
+        lifecycle_execution = runtime_lifecycle.create(
+            module_name=self.system_name,
+            runtime_name="Execution Runtime",
+            caller="execution_planner",
+            trigger="execution_dispatch",
+        )
+        runtime_lifecycle.requested(lifecycle_execution)
+        runtime_lifecycle.queued(lifecycle_execution)
+        runtime_lifecycle.started(lifecycle_execution)
+        runtime_lifecycle.running(lifecycle_execution)
         budget = self._budget(runtime_budget, context)
         nodes = self._nodes(plan)
         pruning = self._pruning_reasons(plan)
@@ -214,6 +225,35 @@ class ExecutionDispatcher:
             },
             "timestamp": str(datetime.utcnow()),
         }
+        runtime_lifecycle.completed(
+            lifecycle_execution,
+            completion_reason="execution_dispatch_report_built",
+            output_count=len(completed_nodes) + len(failed_nodes) + len(blocked_nodes),
+            memory_cost=len(runtime_updates) + len(runtime_results),
+        )
+        runtime_lifecycle.reported(lifecycle_execution)
+        lifecycle_data = lifecycle_execution.as_dict()
+        report.update({
+            "execution_id": lifecycle_data["execution_id"],
+            "execution_start": lifecycle_data["execution_start"],
+            "execution_end": lifecycle_data["execution_end"],
+            "start_timestamp": lifecycle_data["start_timestamp"],
+            "end_timestamp": lifecycle_data["end_timestamp"],
+            "elapsed_seconds": lifecycle_data["elapsed_seconds"],
+            "elapsed_time": lifecycle_data["elapsed_seconds"],
+            "duration_seconds": lifecycle_data["elapsed_seconds"],
+            "wall_clock_time": lifecycle_data["wall_clock_time"],
+            "cpu_time": lifecycle_data["cpu_time"],
+            "exclusive_time": lifecycle_data["exclusive_time"],
+            "inclusive_time": lifecycle_data["inclusive_time"],
+            "cpu_cost": lifecycle_data["cpu_cost"],
+            "memory_cost": lifecycle_data["memory_cost"],
+            "input_count": len(nodes),
+            "output_count": lifecycle_data["output_count"],
+            "success": not failed_nodes,
+            "failure": None if not failed_nodes else "DISPATCH_FAILURES_RECORDED",
+            "runtime_lifecycle": lifecycle_data,
+        })
         return {
             "EXECUTION_DISPATCH_REPORT": report,
             "execution_dispatch_report": report,

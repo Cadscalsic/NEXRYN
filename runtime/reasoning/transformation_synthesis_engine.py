@@ -369,6 +369,66 @@ class TransformationSynthesisEngine:
                 1.0,
                 {"observation": "vertical_reflection_match"},
             ))
+        if source.ndim == 2 and source.shape[0] == source.shape[1]:
+            if np.array_equal(source.T, target):
+                candidates.append(self._candidate(
+                    "diagonal_reflection",
+                    self._program([
+                        {
+                            "operation": "rotate",
+                            "parameters": {"degrees": 90},
+                        },
+                        {
+                            "operation": "mirror_horizontal",
+                            "parameters": {},
+                        },
+                    ]),
+                    0.91,
+                    1.0,
+                    {
+                        "observation": "main_diagonal_reflection_match",
+                        "composition": ["rotate_90", "mirror_horizontal"],
+                    },
+                ))
+            anti_diagonal = np.fliplr(np.flipud(source.T))
+            if np.array_equal(anti_diagonal, target):
+                candidates.append(self._candidate(
+                    "anti_diagonal_reflection",
+                    self._program([
+                        {
+                            "operation": "rotate",
+                            "parameters": {"degrees": 270},
+                        },
+                        {
+                            "operation": "mirror_horizontal",
+                            "parameters": {},
+                        },
+                    ]),
+                    0.91,
+                    1.0,
+                    {
+                        "observation": "anti_diagonal_reflection_match",
+                        "composition": ["rotate_270", "mirror_horizontal"],
+                    },
+                ))
+        rotated_horizontal = np.fliplr(np.rot90(source, 1))
+        if np.array_equal(rotated_horizontal, target):
+            candidates.append(self._candidate(
+                "rotation_mirror_combination",
+                self._program([
+                    {
+                        "operation": "rotate",
+                        "parameters": {"degrees": 90},
+                    },
+                    {
+                        "operation": "mirror_horizontal",
+                        "parameters": {},
+                    },
+                ]),
+                0.88,
+                1.0,
+                {"observation": "rotation_then_horizontal_mirror_match"},
+            ))
         return candidates
 
     def _object_count_candidates(self, source, target):

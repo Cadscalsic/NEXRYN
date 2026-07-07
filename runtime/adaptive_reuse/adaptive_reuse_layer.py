@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Mapping
 
+from runtime.instrumentation import runtime_lifecycle
 from runtime.adaptive_reuse.episode_memory import EpisodeMemory
 from runtime.adaptive_reuse.experience_index import ExperienceIndex
 from runtime.adaptive_reuse.memory_consolidation import AdaptiveMemoryConsolidation
@@ -35,6 +37,17 @@ class AdaptiveReuseLayer:
         runtime_context: Mapping[str, Any] | None,
         top_k: int = 5,
     ) -> dict[str, Any]:
+        started_at = perf_counter()
+        lifecycle_execution = runtime_lifecycle.create(
+            module_name="adaptive_reuse_layer",
+            runtime_name="Reuse Runtime",
+            caller="main",
+            trigger="adaptive_reuse_evaluate",
+        )
+        runtime_lifecycle.requested(lifecycle_execution)
+        runtime_lifecycle.queued(lifecycle_execution)
+        runtime_lifecycle.started(lifecycle_execution)
+        runtime_lifecycle.running(lifecycle_execution)
         context = dict(runtime_context or {})
         experiences = self.experience_index.load()
         stats = ReuseStatistics(
@@ -113,6 +126,52 @@ class AdaptiveReuseLayer:
             for key, value in report["reused_assets"].items()
             if value
         }
+        reuse_success = bool(
+            stats.strategy_hits
+            or stats.program_hits
+            or stats.context_hits
+            or stats.truth_hits
+            or stats.dependency_hits
+        )
+        runtime_lifecycle.completed(
+            lifecycle_execution,
+            completion_reason=(
+                "adaptive_reuse_assets_found"
+                if reuse_success
+                else "adaptive_reuse_no_assets_found"
+            ),
+            output_count=len(report.get("reused_assets", {})),
+            memory_cost=len(report.get("reused_assets", {})),
+        )
+        runtime_lifecycle.reported(lifecycle_execution)
+        lifecycle_data = lifecycle_execution.as_dict()
+        reuse_time = max(
+            lifecycle_data["elapsed_seconds"],
+            round(max(perf_counter() - started_at, 0.0), 6),
+        )
+        report.update({
+            "execution_id": lifecycle_data["execution_id"],
+            "execution_start": lifecycle_data["execution_start"],
+            "execution_end": lifecycle_data["execution_end"],
+            "start_timestamp": lifecycle_data["start_timestamp"],
+            "end_timestamp": lifecycle_data["end_timestamp"],
+            "elapsed_seconds": reuse_time,
+            "elapsed_time": reuse_time,
+            "duration_seconds": reuse_time,
+            "wall_clock_time": lifecycle_data["wall_clock_time"],
+            "cpu_time": lifecycle_data["cpu_time"],
+            "exclusive_time": lifecycle_data["exclusive_time"],
+            "inclusive_time": lifecycle_data["inclusive_time"],
+            "cpu_cost": lifecycle_data["cpu_cost"],
+            "memory_cost": lifecycle_data["memory_cost"],
+            "input_count": len(context),
+            "output_count": lifecycle_data["output_count"],
+            "success": True,
+            "failure": None,
+            "reuse_time": reuse_time,
+            "reuse_time_seconds": reuse_time,
+            "runtime_lifecycle": lifecycle_data,
+        })
         self.last_report = report
         return report
 

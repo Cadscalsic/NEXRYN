@@ -121,3 +121,58 @@ def test_compact_performance_report_surfaces_metric_reconciliation():
     assert compact["canonical_metrics"]["reasoning_depth"] == 4
     assert compact["METRIC_RECONCILIATION_REPORT"]["metrics_repaired"] == 1
     assert compact["METRIC_RECONCILIATION_WARNING"] is True
+
+
+def test_runtime_observability_report_attributes_executed_subsystems():
+    observability = _observability()
+    performance = {
+        "system": "runtime_reasoning_budget",
+        "total_runtime_seconds": 1.0,
+        "dependency_reasoning_time_seconds": 0.10,
+        "reasoning_time_seconds": 0.11,
+        "truth_time_seconds": 0.12,
+        "reuse_time_seconds": 0.13,
+        "cache_time_seconds": 0.14,
+        "process_generation_time": 0.15,
+        "causal_generation_time": 0.16,
+        "module_timings": [
+            {"module": "dependency_reasoning", "seconds": 0.10},
+            {"module": "reasoning_orchestrator", "seconds": 0.11},
+            {"module": "truth_commit_engine", "seconds": 0.12},
+            {"module": "adaptive_reuse_layer", "seconds": 0.13},
+            {"module": "cache_manager", "seconds": 0.14},
+            {"module": "process_context_runtime", "seconds": 0.15},
+            {"module": "causal_context_runtime", "seconds": 0.16},
+        ],
+    }
+    attribution = {
+        "total_runtime": 1.0,
+        "unattributed_runtime": 0.0,
+        "hidden_runtime": 0.0,
+        "background_runtime": 0.0,
+        "runtime_breakdown": {
+            "dependency_time": 0.10,
+            "reasoning_time": 0.11,
+            "truth_time": 0.12,
+            "reuse_time": 0.13,
+            "cache_time": 0.14,
+            "process_time": 0.15,
+            "causal_time": 0.16,
+        },
+    }
+
+    report = observability.build_runtime_observability_report(
+        performance_report=performance,
+        runtime_attribution_report=attribution,
+    )
+
+    assert report["RUNTIME_OBSERVABILITY_REPORT"] is True
+    assert report["unattributed_runtime"] == 0.0
+    assert report["hidden_runtime"] == 0.0
+    assert report["background_runtime"] == 0.0
+    assert report["subsystem_coverage"]["Dependency"] == 1.0
+    assert report["subsystem_coverage"]["Process"] == 1.0
+    assert report["subsystem_coverage"]["Causal"] == 1.0
+    assert report["coverage_percentage"] > 0.0
+    assert report["observability_score"] > 0.0
+    assert all(item["owner"] for item in report["metrics_collected"])

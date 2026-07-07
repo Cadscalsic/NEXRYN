@@ -85,6 +85,11 @@ from runtime.dynamic_concepts.dynamic_concept_runtime import (
     dynamic_concept_runtime
 )
 
+from runtime.capabilities import (
+
+    cognitive_capability_orchestrator
+)
+
 
 # ============================================
 # REASONING ORCHESTRATOR
@@ -1077,6 +1082,35 @@ class ReasoningOrchestrator:
             )
 
         # ========================================
+        # COGNITIVE CAPABILITY COMPOSITION
+        # ========================================
+
+        cognitive_capability_report = (
+            cognitive_capability_orchestrator
+            .build_report(
+                runtime_context=runtime_context,
+                reports={
+                    "spatial_reasoning_report": spatial_reasoning_report,
+                    "symbolic_report": symbolic_report,
+                    "causal_report": causal_report,
+                    "generalization_report": generalization_report,
+                    "dependency_activation_report": dependency_activation_report,
+                    "process_context_runtime_report": process_context_runtime_report,
+                    "color_mapping_report": color_mapping_report,
+                    "transformation_synthesis_report": transformation_synthesis_report,
+                    "causal_context_runtime_report": causal_context_runtime_report,
+                    "dynamic_concept_runtime_report": dynamic_concept_runtime_report,
+                    "recursive_report": recursive_report,
+                    "arbitration_report": arbitration_report,
+                    "adaptive_reuse_report": runtime_context.get(
+                        "adaptive_reuse_report",
+                        {},
+                    ),
+                },
+            )
+        )
+
+        # ========================================
         # BUILD SUMMARY
         # ========================================
 
@@ -1578,6 +1612,46 @@ class ReasoningOrchestrator:
 
             "arbitration_report":
             arbitration_report,
+
+            # ====================================
+            # COGNITIVE CAPABILITY COMPOSITION
+            # ====================================
+
+            "cognitive_capability_report":
+            cognitive_capability_report,
+
+            "COGNITIVE_CAPABILITY_REPORT":
+            cognitive_capability_report,
+
+            "capabilities_executed":
+            cognitive_capability_report.get(
+                "capabilities_executed",
+                [],
+            ),
+
+            "capability_success_rate":
+            cognitive_capability_report.get(
+                "capability_success_rate",
+                0.0,
+            ),
+
+            "generated_hypotheses":
+            cognitive_capability_report.get(
+                "generated_hypotheses",
+                [],
+            ),
+
+            "validated_hypotheses":
+            cognitive_capability_report.get(
+                "validated_hypotheses",
+                [],
+            ),
+
+            "rejected_hypotheses":
+            cognitive_capability_report.get(
+                "rejected_hypotheses",
+                [],
+            ),
 
             "orchestration_summary":
             orchestration_summary,

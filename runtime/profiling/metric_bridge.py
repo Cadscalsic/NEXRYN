@@ -13,7 +13,17 @@ TIMING_FIELDS = (
     "task_execution_time_seconds",
     "governance_time_seconds",
     "dependency_reasoning_time_seconds",
+    "reasoning_time_seconds",
+    "truth_time_seconds",
     "cache_time_seconds",
+    "reuse_time_seconds",
+    "context_time_seconds",
+    "memory_time_seconds",
+    "localization_time_seconds",
+    "evaluation_time_seconds",
+    "report_time_seconds",
+    "process_generation_time",
+    "causal_generation_time",
     "finalization_time_seconds",
 )
 
@@ -72,19 +82,93 @@ class RuntimeMetricBridge:
         )
         dependency = self._first_positive(
             performance_report.get("dependency_reasoning_time_seconds"),
+            performance_report.get("dependency_time"),
             runtime_metrics.get("dependency_reasoning_time_seconds"),
+            runtime_metrics.get("dependency_time"),
             self._module_time_contains(module_timings, ("dependency",)),
+        )
+        reasoning = self._first_positive(
+            performance_report.get("reasoning_time_seconds"),
+            performance_report.get("reasoning_time"),
+            runtime_metrics.get("reasoning_time_seconds"),
+            runtime_metrics.get("reasoning_time"),
+            self._module_time_contains(
+                module_timings,
+                ("reason", "orchestrat"),
+                exclude=("dependency_reasoning",),
+            ),
+        )
+        truth = self._first_positive(
+            performance_report.get("truth_time_seconds"),
+            performance_report.get("truth_time"),
+            runtime_metrics.get("truth_time_seconds"),
+            runtime_metrics.get("truth_time"),
+            self._module_time_contains(module_timings, ("truth",)),
         )
         cache_time = self._first_positive(
             performance_report.get("cache_time_seconds"),
+            performance_report.get("cache_time"),
             runtime_metrics.get("cache_time_seconds"),
-            self._module_time_contains(module_timings, ("cache", "reuse")),
+            runtime_metrics.get("cache_time"),
+            self._module_time_contains(module_timings, ("cache",)),
+        )
+        reuse = self._first_positive(
+            performance_report.get("reuse_time_seconds"),
+            performance_report.get("reuse_time"),
+            runtime_metrics.get("reuse_time_seconds"),
+            runtime_metrics.get("reuse_time"),
+            self._module_time_contains(module_timings, ("reuse",)),
+        )
+        context = self._first_positive(
+            performance_report.get("context_time_seconds"),
+            performance_report.get("context_time"),
+            runtime_metrics.get("context_time_seconds"),
+            runtime_metrics.get("context_time"),
+            self._module_time_contains(module_timings, ("context", "semantic")),
+        )
+        memory = self._first_positive(
+            performance_report.get("memory_time_seconds"),
+            performance_report.get("memory_time"),
+            runtime_metrics.get("memory_time_seconds"),
+            runtime_metrics.get("memory_time"),
+            self._module_time_contains(module_timings, ("memory",)),
+        )
+        localization = self._first_positive(
+            performance_report.get("localization_time_seconds"),
+            performance_report.get("localization_time"),
+            runtime_metrics.get("localization_time_seconds"),
+            runtime_metrics.get("localization_time"),
+            self._module_time_contains(module_timings, ("localization", "localisation")),
+        )
+        evaluation = self._first_positive(
+            performance_report.get("evaluation_time_seconds"),
+            performance_report.get("evaluation_time"),
+            runtime_metrics.get("evaluation_time_seconds"),
+            runtime_metrics.get("evaluation_time"),
+            self._module_time_contains(module_timings, ("evaluation", "eval")),
+        )
+        report_time = self._first_positive(
+            performance_report.get("report_time_seconds"),
+            performance_report.get("report_time"),
+            runtime_metrics.get("report_time_seconds"),
+            runtime_metrics.get("report_time"),
+            self._module_time_contains(module_timings, ("report",)),
+        )
+        process_generation = self._first_positive(
+            performance_report.get("process_generation_time"),
+            runtime_metrics.get("process_generation_time"),
+            self._module_time_contains(module_timings, ("process",)),
+        )
+        causal_generation = self._first_positive(
+            performance_report.get("causal_generation_time"),
+            runtime_metrics.get("causal_generation_time"),
+            self._module_time_contains(module_timings, ("causal",)),
         )
         finalization = self._first_positive(
             performance_report.get("finalization_time_seconds"),
             runtime_metrics.get("finalization_time_seconds"),
             runtime_metrics.get("finalization_duration"),
-            self._module_time_contains(module_timings, ("finalize",)),
+            self._module_time_contains(module_timings, ("finalize", "final_context")),
         )
         idle = self._number(performance_report.get("idle_time_seconds"), None)
         if idle is None or active_compute + idle > total_runtime:
@@ -98,7 +182,17 @@ class RuntimeMetricBridge:
             "task_execution_time_seconds": round(task_execution, 4),
             "governance_time_seconds": round(governance, 4),
             "dependency_reasoning_time_seconds": round(dependency, 4),
+            "reasoning_time_seconds": round(reasoning, 4),
+            "truth_time_seconds": round(truth, 4),
             "cache_time_seconds": round(cache_time, 4),
+            "reuse_time_seconds": round(reuse, 4),
+            "context_time_seconds": round(context, 4),
+            "memory_time_seconds": round(memory, 4),
+            "localization_time_seconds": round(localization, 4),
+            "evaluation_time_seconds": round(evaluation, 4),
+            "report_time_seconds": round(report_time, 4),
+            "process_generation_time": round(process_generation, 4),
+            "causal_generation_time": round(causal_generation, 4),
             "finalization_time_seconds": round(finalization, 4),
         }
 
@@ -129,11 +223,12 @@ class RuntimeMetricBridge:
             if item.get("module") == module_name
         )
 
-    def _module_time_contains(self, module_timings, names):
+    def _module_time_contains(self, module_timings, names, exclude=()):
         return sum(
             self._number(item.get("seconds"), 0.0)
             for item in module_timings
             if any(name in str(item.get("module", "")) for name in names)
+            and not any(name in str(item.get("module", "")) for name in exclude)
         )
 
     def _sum_modules(self, module_timings):

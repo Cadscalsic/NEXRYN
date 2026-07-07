@@ -188,7 +188,21 @@ def test_causal_runtime_generates_from_dependency_and_registered_process_context
     assert causal["causal_context_count"] > 0
     assert causal["causal_graph_count"] > 0
     assert causal["cause_effect_pairs"]
+    assert causal["cause_effect_pairs"][0]["cause_id"]
+    assert causal["cause_effect_pairs"][0]["effect_id"]
+    assert causal["cause_effect_pairs"][0]["relation_type"]
+    assert causal["cause_effect_pairs"][0]["validation_status"]
+    assert causal["causal_relation_count"] == len(causal["cause_effect_pairs"])
+    assert causal["average_chain_depth"] > 0
+    assert causal["average_confidence"] > 0
+    assert causal["highest_confidence_relation"]
+    assert causal["lowest_confidence_relation"]
+    assert causal["causal_graph_statistics"]["relation_count"] > 0
+    assert causal["confidence_distribution"]["by_relation"]
+    assert causal["generated_contexts"][0]["reasoning_summary"]
+    assert causal["generated_contexts"][0]["propagation_chain"]
     assert causal["propagation_paths"]
+    assert causal["propagation_paths"][0]["chain_depth"] > 0
     assert causal["block_reasons"] == []
 
 

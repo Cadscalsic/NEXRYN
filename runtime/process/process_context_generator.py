@@ -86,6 +86,11 @@ class ProcessContextGenerator:
                 ),
                 4,
             )
+            context.context_strength = max(
+                context.context_strength,
+                context.confidence,
+            )
+            context.process_confidence = context.confidence
             contexts.append(context.as_dict())
             self.memory.remember(
                 context.as_dict(),
@@ -170,8 +175,19 @@ class ProcessContextGenerator:
         contradiction_score = float(graph.get("contradiction_score", 0.0) or 0.0)
         transition_confidence = transition_report.get("transition_confidence", 0.0)
         state_confidence = transition_report.get("state_confidence", 0.0)
+        structural_floor = (
+            0.55
+            if transition_report.get("transition_sequence")
+            or transition_report.get("states")
+            else 0.0
+        )
         confidence = round(
-            max(0.0, (transition_confidence + state_confidence + support_score) / 3 - contradiction_score),
+            max(
+                structural_floor,
+                (transition_confidence + state_confidence + support_score) / 3
+                - contradiction_score,
+                0.0,
+            ),
             4,
         )
         return ProcessContext(
@@ -185,6 +201,7 @@ class ProcessContextGenerator:
             constraints=self._constraints_for(family, graph),
             expected_outcomes=self._expected_outcomes_for(family, transition_report),
             confidence=confidence,
+            context_strength=confidence,
             transition_events=list(transition_report.get("transitions", []) or []),
             dependencies=dependencies,
             transition_confidence=transition_confidence,
