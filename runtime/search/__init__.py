@@ -5,6 +5,14 @@
 from runtime.search.cognitive_search import (
     CognitiveSearchEngine
 )
+from runtime.search.cognitive_search_manager import (
+    CognitiveSearchManager,
+    SearchMemory,
+    SearchRoute,
+    SearchRouteState,
+    SearchScoringEngine,
+    build_cognitive_search_report,
+)
 
 # ============================================
 # EXPORTED SEARCH ENGINES
@@ -12,5 +20,11 @@ from runtime.search.cognitive_search import (
 
 __all__ = [
 
-    "CognitiveSearchEngine"
+    "CognitiveSearchEngine",
+    "CognitiveSearchManager",
+    "SearchMemory",
+    "SearchRoute",
+    "SearchRouteState",
+    "SearchScoringEngine",
+    "build_cognitive_search_report",
 ]

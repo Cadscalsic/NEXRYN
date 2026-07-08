@@ -3176,6 +3176,8 @@ try:
         "performance_report",
         "runtime_attribution_report",
         "performance_intelligence_report",
+        "cognitive_analytics_report",
+        "reasoning_intelligence_report",
     ]
     reports_skipped = []
     if args.mode == "deep" and not deep_concept_audit_requested:
@@ -3215,6 +3217,131 @@ try:
     performance_report["DEEP_MODE_OPTIMIZATION_REPORT"] = (
         deep_mode_optimization_report
     )
+    from runtime.analytics import (
+        cognitive_analytics_builder,
+        reasoning_intelligence_builder,
+    )
+
+    cognitive_analytics_report = cognitive_analytics_builder.build_report(
+        task_count=len(all_results),
+        successful_tasks=successful_tasks,
+        failed_tasks=failed_tasks,
+        all_results=all_results,
+        training_report=training_report,
+        concept_lifecycle_report=concept_lifecycle_report,
+        performance_report=performance_report,
+        cognitive_capability_report=cognitive_capability_report,
+        causal_context_report=causal_context_report,
+        adaptive_reuse_report=adaptive_reuse_report,
+        context_validation_report=context_validation_report,
+    )
+    performance_report["COGNITIVE_ANALYTICS_REPORT"] = (
+        cognitive_analytics_report
+    )
+    reasoning_intelligence_report = (
+        reasoning_intelligence_builder.build_report(
+            cognitive_analytics_report=cognitive_analytics_report,
+            all_results=all_results,
+            performance_report=performance_report,
+            cognitive_capability_report=cognitive_capability_report,
+            causal_context_report=causal_context_report,
+            adaptive_reuse_report=adaptive_reuse_report,
+            context_validation_report=context_validation_report,
+        )
+    )
+    performance_report["REASONING_INTELLIGENCE_REPORT"] = (
+        reasoning_intelligence_report
+    )
+    from runtime.reasoning import reasoning_graph_report_builder
+
+    reasoning_graph_report = reasoning_graph_report_builder.build_report(
+        cognitive_analytics_report=cognitive_analytics_report,
+        reasoning_intelligence_report=reasoning_intelligence_report,
+        all_results=all_results,
+        training_report=training_report,
+        performance_report=performance_report,
+        cognitive_capability_report=cognitive_capability_report,
+        causal_context_report=causal_context_report,
+        adaptive_reuse_report=adaptive_reuse_report,
+        context_validation_report=context_validation_report,
+        dependency_audit_report=dependency_audit_report,
+    )
+    performance_report["REASONING_GRAPH_REPORT"] = reasoning_graph_report
+    from runtime.analytics import reasoning_quality_analytics_builder
+
+    reasoning_analytics_report = (
+        reasoning_quality_analytics_builder.build_report(
+            reasoning_graph_report=reasoning_graph_report,
+            reasoning_intelligence_report=reasoning_intelligence_report,
+            cognitive_analytics_report=cognitive_analytics_report,
+            performance_report=performance_report,
+            cognitive_capability_report=cognitive_capability_report,
+            causal_context_report=causal_context_report,
+            adaptive_reuse_report=adaptive_reuse_report,
+            dependency_audit_report=dependency_audit_report,
+            context_validation_report=context_validation_report,
+            all_results=all_results,
+        )
+    )
+    performance_report["REASONING_ANALYTICS_REPORT"] = (
+        reasoning_analytics_report
+    )
+    from runtime.analytics import meta_cognitive_optimizer
+
+    meta_cognitive_report = meta_cognitive_optimizer.build_report(
+        reasoning_graph_report=reasoning_graph_report,
+        reasoning_analytics_report=reasoning_analytics_report,
+        reasoning_intelligence_report=reasoning_intelligence_report,
+        cognitive_analytics_report=cognitive_analytics_report,
+        performance_report=performance_report,
+        cognitive_capability_report=cognitive_capability_report,
+        causal_context_report=causal_context_report,
+        dependency_audit_report=dependency_audit_report,
+        adaptive_reuse_report=adaptive_reuse_report,
+        all_results=all_results,
+    )
+    performance_report["META_COGNITIVE_REPORT"] = meta_cognitive_report
+    from runtime import solver_intelligence_report, solver_reasoning_report
+    from runtime.cognitive_pipeline import build_cognitive_pipeline_report
+    from runtime.search import build_cognitive_search_report
+
+    solver_intelligence_report_payload = (
+        solver_intelligence_report.build_report(
+            all_results=all_results,
+            performance_report=performance_report,
+            cognitive_capability_report=cognitive_capability_report,
+        )
+    )
+    performance_report["SOLVER_INTELLIGENCE_REPORT"] = (
+        solver_intelligence_report_payload
+    )
+    solver_reasoning_report_payload = solver_reasoning_report.build_report(
+        all_results=all_results,
+        solver_intelligence_report=solver_intelligence_report_payload,
+        performance_report=performance_report,
+        cognitive_capability_report=cognitive_capability_report,
+        causal_context_report=causal_context_report,
+        dependency_audit_report=dependency_audit_report,
+        adaptive_reuse_report=adaptive_reuse_report,
+    )
+    performance_report["SOLVER_REASONING_REPORT"] = (
+        solver_reasoning_report_payload
+    )
+    cognitive_pipeline_report = build_cognitive_pipeline_report(
+        all_results=all_results,
+        performance_report=performance_report,
+    )
+    performance_report["COGNITIVE_PIPELINE_REPORT"] = cognitive_pipeline_report
+    cognitive_search_report = build_cognitive_search_report(
+        all_results=all_results,
+        cognitive_pipeline_report=cognitive_pipeline_report,
+        solver_reasoning_report=solver_reasoning_report_payload,
+        performance_report=performance_report,
+        adaptive_reuse_report=adaptive_reuse_report,
+        dependency_report=dependency_audit_report,
+        causal_context_report=causal_context_report,
+    )
+    performance_report["COGNITIVE_SEARCH_REPORT"] = cognitive_search_report
 
     results = {
         "multi_task_results": all_results,
@@ -3255,6 +3382,24 @@ try:
         "ADAPTIVE_REUSE_REPORT": adaptive_reuse_report,
         "cognitive_capability_report": cognitive_capability_report,
         "COGNITIVE_CAPABILITY_REPORT": cognitive_capability_report,
+        "cognitive_analytics_report": cognitive_analytics_report,
+        "COGNITIVE_ANALYTICS_REPORT": cognitive_analytics_report,
+        "reasoning_intelligence_report": reasoning_intelligence_report,
+        "REASONING_INTELLIGENCE_REPORT": reasoning_intelligence_report,
+        "reasoning_graph_report": reasoning_graph_report,
+        "REASONING_GRAPH_REPORT": reasoning_graph_report,
+        "reasoning_analytics_report": reasoning_analytics_report,
+        "REASONING_ANALYTICS_REPORT": reasoning_analytics_report,
+        "meta_cognitive_report": meta_cognitive_report,
+        "META_COGNITIVE_REPORT": meta_cognitive_report,
+        "solver_intelligence_report": solver_intelligence_report_payload,
+        "SOLVER_INTELLIGENCE_REPORT": solver_intelligence_report_payload,
+        "solver_reasoning_report": solver_reasoning_report_payload,
+        "SOLVER_REASONING_REPORT": solver_reasoning_report_payload,
+        "cognitive_pipeline_report": cognitive_pipeline_report,
+        "COGNITIVE_PIPELINE_REPORT": cognitive_pipeline_report,
+        "cognitive_search_report": cognitive_search_report,
+        "COGNITIVE_SEARCH_REPORT": cognitive_search_report,
         "truth_reuse_report": lifecycle_truth_reuse_report,
         "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
         "hypothesis_generation_report":
@@ -3722,6 +3867,177 @@ if (
     print(
         compact_report_builder.compact_context(
             results["CAUSAL_CONTEXT_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_ANALYTICS_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_ANALYTICS_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["COGNITIVE_ANALYTICS_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("REASONING_INTELLIGENCE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: REASONING_INTELLIGENCE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["REASONING_INTELLIGENCE_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("REASONING_GRAPH_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: REASONING_GRAPH_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["REASONING_GRAPH_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("REASONING_ANALYTICS_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: REASONING_ANALYTICS_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["REASONING_ANALYTICS_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("META_COGNITIVE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: META_COGNITIVE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["META_COGNITIVE_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("SOLVER_INTELLIGENCE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: SOLVER_INTELLIGENCE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["SOLVER_INTELLIGENCE_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("SOLVER_REASONING_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: SOLVER_REASONING_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["SOLVER_REASONING_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_PIPELINE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_PIPELINE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["COGNITIVE_PIPELINE_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_SEARCH_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_SEARCH_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["COGNITIVE_SEARCH_REPORT"],
             level=final_report_level,
         )
     )

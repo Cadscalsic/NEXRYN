@@ -188,6 +188,13 @@ from runtime.reasoning.counterfactual_repair_engine import (
     counterfactual_repair_engine
 )
 
+from runtime.reasoning.reasoning_graph_report import (
+
+    ReasoningGraphReportBuilder,
+
+    reasoning_graph_report_builder
+)
+
 # ============================================
 # EXPORTS
 # ============================================
@@ -331,4 +338,8 @@ __all__ = [
     "CounterfactualRepairEngine",
 
     "counterfactual_repair_engine",
+
+    "ReasoningGraphReportBuilder",
+
+    "reasoning_graph_report_builder",
 ]

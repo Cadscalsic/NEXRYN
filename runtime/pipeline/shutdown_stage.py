@@ -40,6 +40,10 @@ class ShutdownStage(BaseStage):
             "SHUTDOWN_REPORT",
             {},
         )
+        context.execution_metadata["shutdown"].setdefault(
+            "runtime_terminated",
+            True,
+        )
         return StageResult(True, self.name, 0.0, context, should_continue=False)
 
 
