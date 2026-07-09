@@ -9,13 +9,27 @@ import math
 from pathlib import Path
 from typing import Any
 
+from runtime.search.cognitive_search_runtime import build_cognitive_search_runtime_report
+from runtime.search.adaptive_search_policy import (
+    AdaptiveSearchPolicyEngine,
+    adaptive_search_policy_engine,
+)
+from runtime.search.cognitive_route_intelligence import (
+    CognitiveRouteIntelligenceEngine,
+    cognitive_route_intelligence_engine,
+)
+
 
 class SearchRouteState(str, Enum):
+    DISCOVERED = "DISCOVERED"
     CREATED = "CREATED"
     EXPLORING = "EXPLORING"
     SUPPORTED = "SUPPORTED"
     PROMISING = "PROMISING"
     STABLE = "STABLE"
+    DOMINANT = "DOMINANT"
+    COOLING_READY = "COOLING_READY"
+    COOLING = "COOLING"
     SUSPENDED = "SUSPENDED"
     REACTIVATED = "REACTIVATED"
     MERGED = "MERGED"
@@ -139,10 +153,19 @@ class CognitiveSearchManager:
         self,
         memory: SearchMemory | None = None,
         scoring_engine: SearchScoringEngine | None = None,
+        policy_engine: AdaptiveSearchPolicyEngine | None = None,
+        route_intelligence_engine: CognitiveRouteIntelligenceEngine | None = None,
         persist_memory: bool = True,
     ) -> None:
         self.memory = memory or SearchMemory()
         self.scoring_engine = scoring_engine or SearchScoringEngine()
+        self.policy_engine = policy_engine or AdaptiveSearchPolicyEngine(
+            persist_memory=persist_memory
+        )
+        self.route_intelligence_engine = (
+            route_intelligence_engine
+            or CognitiveRouteIntelligenceEngine(persist_memory=persist_memory)
+        )
         self.persist_memory = persist_memory
 
     def build_report(
@@ -213,12 +236,78 @@ class CognitiveSearchManager:
                 "adaptive_reuse_report": bool(adaptive_reuse_report),
             },
         }
+        policy_report = self.policy_engine.plan(
+            task_analysis=self._policy_task_analysis(all_results or []),
+            routes=routes,
+            performance_report=performance_report or {},
+            search_report=report,
+        )
+        report["adaptive_search_policy"] = policy_report
+        report["ADAPTIVE_SEARCH_POLICY_REPORT"] = policy_report
+        route_intelligence_report = self.route_intelligence_engine.build_report(
+            routes=routes,
+            search_policy_report=policy_report,
+            search_report=report,
+            performance_report=performance_report or {},
+        )
+        report["cognitive_route_intelligence"] = route_intelligence_report
+        report["COGNITIVE_ROUTE_INTELLIGENCE_REPORT"] = (
+            route_intelligence_report
+        )
         report["search_memory"] = (
             self.memory.remember(report)
             if self.persist_memory
             else {"persistent_search_memory": False, "reason": "disabled"}
         )
+        search_runtime_report = build_cognitive_search_runtime_report(
+            routes=routes,
+            search_report=report,
+            performance_report=performance_report or {},
+        )
+        report["COGNITIVE_SEARCH_RUNTIME_REPORT"] = True
+        report["search_runtime"] = search_runtime_report
         return report
+
+    def _policy_task_analysis(self, all_results: list[dict[str, Any]]) -> dict[str, Any]:
+        reports = []
+        for item in all_results:
+            result = item.get("result", item) if isinstance(item, dict) else {}
+            if not isinstance(result, dict):
+                continue
+            candidates = [
+                result.get("task_complexity_report"),
+                result.get("task_profile"),
+                (result.get("performance_report") or {}).get("task_complexity_report")
+                if isinstance(result.get("performance_report"), dict) else None,
+            ]
+            report = next((value for value in candidates if isinstance(value, dict)), None)
+            if report:
+                reports.append(report)
+        if not reports:
+            return {}
+        numeric_keys = {
+            "grid_size", "total_cells", "object_count", "object_diversity",
+            "color_diversity", "spatial_complexity", "topological_complexity",
+            "transformation_count", "transformation_complexity",
+            "context_complexity", "uncertainty", "historical_similarity",
+            "estimated_cost", "process_complexity",
+        }
+        combined: dict[str, Any] = {}
+        for key in numeric_keys:
+            values = [_number(report.get(key), 0.0) for report in reports if key in report]
+            if values:
+                combined[key] = round(sum(values) / len(values), 4)
+        combined["target_concepts"] = sorted({
+            str(concept)
+            for report in reports
+            for concept in (report.get("target_concepts") or report.get("concepts") or [])
+        })
+        combined["required_capabilities"] = sorted({
+            str(capability)
+            for report in reports
+            for capability in (report.get("required_capabilities") or [])
+        })
+        return combined
 
     def _routes_from_results(self, all_results: list[dict[str, Any]]) -> list[SearchRoute]:
         routes: list[SearchRoute] = []

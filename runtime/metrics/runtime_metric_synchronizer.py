@@ -21,6 +21,7 @@ TIMING_BINDINGS = {
     "evaluation": "evaluation_time_seconds",
     "reasoning": "reasoning_time_seconds",
     "orchestrator": "reasoning_time_seconds",
+    "search": "search_time_seconds",
     "execution": "task_execution_time_seconds",
     "governance": "governance_time_seconds",
     "reporting": "report_time_seconds",
@@ -40,6 +41,7 @@ class RuntimeMetricSynchronizer:
         self,
         performance_report: Mapping[str, Any] | None = None,
         lifecycle_report: Mapping[str, Any] | None = None,
+        runtime_registry: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         performance = dict(performance_report or {})
         lifecycle = lifecycle_report if isinstance(lifecycle_report, Mapping) else {}
@@ -48,12 +50,47 @@ class RuntimeMetricSynchronizer:
         bound_records = []
         rejected = []
         owner_resolution = {}
+        registry = runtime_registry if isinstance(runtime_registry, Mapping) else {}
+
+        for runtime_id, entry in registry.items():
+            if not isinstance(entry, Mapping):
+                continue
+            metric_name = str(entry.get("timing_metric") or "")
+            duration = _number(entry.get("duration_seconds"))
+            execution_id = entry.get("execution_id")
+            if not metric_name or duration <= 0.0 or not execution_id:
+                continue
+            owner = str(entry.get("owner") or self.registry.owner_for(metric_name))
+            owner_resolution[metric_name] = owner
+            bound_records.append({
+                "metric_name": metric_name,
+                "metric_value": round(duration, 6),
+                "owner": owner,
+                "runtime": runtime_id,
+                "execution_id": execution_id,
+                "module_name": runtime_id,
+                "collection_timestamp": (
+                    entry.get("execution_end")
+                    or entry.get("last_binding_timestamp")
+                    or str(datetime.utcnow())
+                ),
+                "measurement_source": "execution_binding_layer",
+                "confidence": _number(
+                    (entry.get("telemetry") or {}).get("binding_confidence")
+                ) or 1.0,
+                "validation_status": "validated",
+            })
 
         for execution in lifecycle.get("executions", []) or []:
             if not isinstance(execution, Mapping):
                 continue
             metric_name = self._metric_for_execution(execution)
             duration = self._duration(execution)
+            if any(
+                item.get("execution_id") == execution.get("execution_id")
+                for item in bound_records
+            ):
+                continue
             if not metric_name or duration <= 0.0:
                 rejected.append({
                     "execution_id": execution.get("execution_id"),
@@ -168,7 +205,7 @@ class RuntimeMetricSynchronizer:
             "remaining_placeholder_metrics": placeholders,
             "missing_runtime_metrics": [
                 name for name in self._required_runtime_metrics()
-                if name not in after_metrics or _number(after_metrics.get(name)) <= 0.0
+                if name in after_metrics and _number(after_metrics.get(name)) <= 0.0
             ],
             "synchronized_metrics": after_metrics,
             "timestamp": str(datetime.utcnow()),
@@ -228,12 +265,15 @@ class RuntimeMetricSynchronizer:
         return metrics
 
     def _coverage(self, metrics):
-        required = self._required_runtime_metrics()
+        required = [
+            metric_name for metric_name in self._required_runtime_metrics()
+            if metric_name in metrics
+        ]
         present = [
             metric_name for metric_name in required
             if _number(metrics.get(metric_name)) > 0.0
         ]
-        return round(len(present) / max(len(required), 1), 4)
+        return round(len(present) / max(len(required), 1), 4) if required else 0.0
 
     def _required_runtime_metrics(self):
         return [
@@ -245,6 +285,7 @@ class RuntimeMetricSynchronizer:
             "memory_time_seconds",
             "reasoning_time_seconds",
             "evaluation_time_seconds",
+            "search_time_seconds",
         ]
 
 

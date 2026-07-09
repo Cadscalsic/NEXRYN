@@ -164,6 +164,25 @@ class RuntimeObservabilityLayer:
             ),
             4,
         )
+        observability_state = (
+            "COMPLETE"
+            if observability_score >= 0.90
+            else "PARTIAL"
+            if observability_score > 0.0
+            else "EMERGING"
+        )
+        cognitive_coverage_state = (
+            "OPERATIONAL"
+            if coverage_percentage >= 75.0
+            else "EMERGING"
+            if coverage_percentage > 0.0
+            else "PARTIAL"
+        )
+        overall_status = (
+            "SUCCESS"
+            if observability_state == "COMPLETE"
+            else "SUCCESS_WITH_LIMITED_OBSERVABILITY"
+        )
         now = str(datetime.utcnow())
         timing_sources = self._timing_sources(
             runtime_breakdown,
@@ -225,6 +244,13 @@ class RuntimeObservabilityLayer:
                 if not missing_instrumentation and not metrics_missing
                 else "OBSERVABILITY_GAPS_DETECTED"
             ),
+            "status_semantics": {
+                "execution": "SUCCESS",
+                "observability": observability_state,
+                "cognitive_coverage": cognitive_coverage_state,
+                "overall": overall_status,
+            },
+            "overall_status": overall_status,
         }
         return report
 

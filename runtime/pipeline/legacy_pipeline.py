@@ -4902,6 +4902,30 @@ class AdaptiveCognitivePipeline:
             )
         )
 
+        from runtime.search.adaptive_search_policy import (
+            adaptive_search_policy_engine,
+        )
+
+        adaptive_search_policy_report = (
+            adaptive_search_policy_engine.plan(
+                task_analysis=task_profile,
+                performance_report=runtime_context.get(
+                    "performance_report",
+                    {},
+                ),
+            )
+        )
+        adaptive_search_policy_engine.apply_budget(
+            reasoning_budget,
+            adaptive_search_policy_report,
+        )
+        runtime_context["adaptive_search_policy_report"] = (
+            adaptive_search_policy_report
+        )
+        runtime_context["ADAPTIVE_SEARCH_POLICY_REPORT"] = (
+            adaptive_search_policy_report
+        )
+
         tool_selection = (
             self.tool_selection_engine
             .select(
@@ -5027,6 +5051,8 @@ class AdaptiveCognitivePipeline:
             "cognitive_budget_report": cognitive_budget_report,
             "tool_selection_report": tool_selection_report,
             "meta_decision_report": meta_decision_report,
+            "adaptive_search_policy_report":
+            adaptive_search_policy_report,
         }
 
     def run_task_complexity_analysis(

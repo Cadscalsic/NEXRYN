@@ -15,10 +15,16 @@ ORDER = {
     "QUEUED": 2,
     "STARTED": 3,
     "RUNNING": 4,
+    "CHECKPOINT": 4,
+    "PAUSED": 4,
+    "RESUMED": 4,
     "COMPLETED": 5,
     "FAILED": 5,
     "BLOCKED": 5,
-    "REPORTED": 6,
+    "VALIDATED": 6,
+    "BOUND": 7,
+    "REPORTED": 8,
+    "ARCHIVED": 9,
 }
 
 
@@ -29,7 +35,13 @@ EVENT_BY_STATUS = {
     "COMPLETED": "ExecutionCompleted",
     "FAILED": "ExecutionFailed",
     "BLOCKED": "ExecutionBlocked",
+    "CHECKPOINT": "ExecutionCheckpoint",
+    "PAUSED": "ExecutionPaused",
+    "RESUMED": "ExecutionResumed",
+    "VALIDATED": "ExecutionValidated",
+    "BOUND": "ExecutionBound",
     "REPORTED": "ExecutionReported",
+    "ARCHIVED": "ExecutionArchived",
 }
 
 
@@ -156,6 +168,15 @@ class RuntimeLifecycle:
     def running(self, execution, metadata=None):
         return self.transition(execution, "RUNNING", metadata=metadata)
 
+    def checkpoint(self, execution, metadata=None):
+        return self.transition(execution, "CHECKPOINT", metadata=metadata)
+
+    def paused(self, execution, metadata=None):
+        return self.transition(execution, "PAUSED", metadata=metadata)
+
+    def resumed(self, execution, metadata=None):
+        return self.transition(execution, "RESUMED", metadata=metadata)
+
     def completed(
         self,
         execution,
@@ -207,6 +228,15 @@ class RuntimeLifecycle:
 
     def reported(self, execution, metadata=None):
         return self.transition(execution, "REPORTED", metadata=metadata)
+
+    def validated(self, execution, metadata=None):
+        return self.transition(execution, "VALIDATED", metadata=metadata)
+
+    def bound(self, execution, metadata=None):
+        return self.transition(execution, "BOUND", metadata=metadata)
+
+    def archived(self, execution, metadata=None):
+        return self.transition(execution, "ARCHIVED", metadata=metadata)
 
     def transition(self, execution, status: str, timestamp=None, metadata=None):
         execution = self._resolve(execution)
@@ -352,7 +382,7 @@ class RuntimeLifecycle:
                 negative_durations.append(execution.execution_id)
             seen = set()
             for transition in transitions:
-                if transition in seen and transition not in {"RUNNING"}:
+                if transition in seen and transition not in {"RUNNING", "CHECKPOINT"}:
                     duplicated_transitions.append({
                         "execution_id": execution.execution_id,
                         "transition": transition,

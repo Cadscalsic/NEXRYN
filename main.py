@@ -3303,27 +3303,48 @@ try:
     performance_report["META_COGNITIVE_REPORT"] = meta_cognitive_report
     from runtime import solver_intelligence_report, solver_reasoning_report
     from runtime.cognitive_pipeline import build_cognitive_pipeline_report
-    from runtime.search import build_cognitive_search_report
+    from runtime.concepts import concept_formation_engine
+    from runtime.search import (
+        adaptive_search_intelligence_engine,
+        adaptive_cognitive_super_cooling_engine,
+        build_cognitive_search_report,
+        cognitive_route_intelligence_engine,
+    )
+    from runtime.synthesis import program_synthesis_intelligence_engine
+    from runtime.cognitive_runtime import cognitive_runtime_execution_engine
 
-    solver_intelligence_report_payload = (
-        solver_intelligence_report.build_report(
+    cognitive_runtime_execution_engine.clear()
+    cognitive_runtime_execution_engine.start_cycle(
+        mode=args.mode,
+        context={"report_level": args.report_level or "normal"},
+    )
+
+    with cognitive_runtime_execution_engine.execution(
+        "reasoning_runtime",
+        mode=args.mode,
+        trigger="reasoning_report_generation",
+        reason="materialize reasoning runtime execution",
+    ) as reasoning_execution:
+        solver_intelligence_report_payload = (
+            solver_intelligence_report.build_report(
+                all_results=all_results,
+                performance_report=performance_report,
+                cognitive_capability_report=cognitive_capability_report,
+            )
+        )
+        performance_report["SOLVER_INTELLIGENCE_REPORT"] = (
+            solver_intelligence_report_payload
+        )
+        solver_reasoning_report_payload = solver_reasoning_report.build_report(
             all_results=all_results,
+            solver_intelligence_report=solver_intelligence_report_payload,
             performance_report=performance_report,
             cognitive_capability_report=cognitive_capability_report,
+            causal_context_report=causal_context_report,
+            dependency_audit_report=dependency_audit_report,
+            adaptive_reuse_report=adaptive_reuse_report,
         )
-    )
-    performance_report["SOLVER_INTELLIGENCE_REPORT"] = (
-        solver_intelligence_report_payload
-    )
-    solver_reasoning_report_payload = solver_reasoning_report.build_report(
-        all_results=all_results,
-        solver_intelligence_report=solver_intelligence_report_payload,
-        performance_report=performance_report,
-        cognitive_capability_report=cognitive_capability_report,
-        causal_context_report=causal_context_report,
-        dependency_audit_report=dependency_audit_report,
-        adaptive_reuse_report=adaptive_reuse_report,
-    )
+        reasoning_execution.capture(solver_reasoning_report_payload)
     performance_report["SOLVER_REASONING_REPORT"] = (
         solver_reasoning_report_payload
     )
@@ -3332,16 +3353,211 @@ try:
         performance_report=performance_report,
     )
     performance_report["COGNITIVE_PIPELINE_REPORT"] = cognitive_pipeline_report
-    cognitive_search_report = build_cognitive_search_report(
-        all_results=all_results,
-        cognitive_pipeline_report=cognitive_pipeline_report,
-        solver_reasoning_report=solver_reasoning_report_payload,
-        performance_report=performance_report,
-        adaptive_reuse_report=adaptive_reuse_report,
-        dependency_report=dependency_audit_report,
-        causal_context_report=causal_context_report,
-    )
+    with cognitive_runtime_execution_engine.execution(
+        "search_runtime",
+        mode=args.mode,
+        trigger="cognitive_search_report_generation",
+        reason="materialize adaptive search runtime execution",
+    ) as search_execution:
+        performance_report["search_execution_id"] = (
+            search_execution.execution_id
+        )
+        cognitive_search_report = build_cognitive_search_report(
+            all_results=all_results,
+            cognitive_pipeline_report=cognitive_pipeline_report,
+            solver_reasoning_report=solver_reasoning_report_payload,
+            performance_report=performance_report,
+            adaptive_reuse_report=adaptive_reuse_report,
+            dependency_report=dependency_audit_report,
+            causal_context_report=causal_context_report,
+        )
+        search_execution.capture(cognitive_search_report)
     performance_report["COGNITIVE_SEARCH_REPORT"] = cognitive_search_report
+    adaptive_search_policy_report = cognitive_search_report.get(
+        "ADAPTIVE_SEARCH_POLICY_REPORT",
+        {},
+    )
+    performance_report["adaptive_search_policy_report"] = (
+        adaptive_search_policy_report
+    )
+    performance_report["ADAPTIVE_SEARCH_POLICY_REPORT"] = (
+        adaptive_search_policy_report
+    )
+    cognitive_route_intelligence_report = cognitive_search_report.get(
+        "COGNITIVE_ROUTE_INTELLIGENCE_REPORT",
+        {},
+    )
+    performance_report["cognitive_route_intelligence_report"] = (
+        cognitive_route_intelligence_report
+    )
+    performance_report["COGNITIVE_ROUTE_INTELLIGENCE_REPORT"] = (
+        cognitive_route_intelligence_report
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "concept_formation_runtime",
+        mode=args.mode,
+        trigger="cognitive_concept_formation",
+        reason="materialize canonical cognitive concept formation",
+    ) as concept_execution:
+        concept_formation_report = concept_formation_engine.build_report(
+            all_results=all_results,
+            performance_report=performance_report,
+            cognitive_pipeline_report=cognitive_pipeline_report,
+            cognitive_search_report=cognitive_search_report,
+            solver_reasoning_report=solver_reasoning_report_payload,
+            truth_report=truth_candidate_report,
+            memory_report=adaptive_reuse_report,
+            dependency_report=dependency_audit_report,
+            causal_report=causal_context_report,
+            lifecycle_report=concept_lifecycle_report,
+            report_level=args.report_level or "normal",
+        )
+        concept_execution.capture(concept_formation_report)
+    performance_report["CONCEPT_FORMATION_REPORT"] = concept_formation_report
+    performance_report["concept_formation_report"] = concept_formation_report
+    performance_report["generated_concepts"] = concept_formation_report.get(
+        "generated_concepts",
+        0,
+    )
+    performance_report["concept_count"] = concept_formation_report.get(
+        "concept_count",
+        0,
+    )
+    performance_report["concept_cost"] = concept_formation_report.get(
+        "concept_cost",
+        0,
+    )
+    performance_report["confidence"] = max(
+        float(performance_report.get("confidence", 0) or 0),
+        float(concept_formation_report.get("confidence", 0) or 0),
+    )
+    performance_report["concept_graph"] = concept_formation_report.get(
+        "concept_graph",
+        {},
+    )
+    training_report["CONCEPT_FORMATION_REPORT"] = concept_formation_report
+    training_report["generated_concepts"] = concept_formation_report.get(
+        "generated_concepts",
+        0,
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "program_synthesis_runtime",
+        mode=args.mode,
+        trigger="program_synthesis_intelligence",
+        reason="materialize concept-derived program synthesis",
+    ) as program_execution:
+        program_synthesis_report = (
+            program_synthesis_intelligence_engine.build_report(
+                concept_formation_report=concept_formation_report,
+                cognitive_search_report=cognitive_search_report,
+                solver_reasoning_report=solver_reasoning_report_payload,
+                dependency_report=dependency_audit_report,
+                causal_report=causal_context_report,
+                memory_report=adaptive_reuse_report,
+                all_results=all_results,
+                report_level=args.report_level or "normal",
+            )
+        )
+        program_execution.capture(program_synthesis_report)
+    performance_report["PROGRAM_SYNTHESIS_REPORT"] = (
+        program_synthesis_report
+    )
+    performance_report["program_synthesis_report"] = (
+        program_synthesis_report
+    )
+    performance_report["generated_programs"] = (
+        program_synthesis_report.get("generated_programs", 0)
+    )
+    performance_report["program_candidates"] = (
+        program_synthesis_report.get("program_candidates", 0)
+    )
+    training_report["PROGRAM_SYNTHESIS_REPORT"] = (
+        program_synthesis_report
+    )
+    training_report["generated_programs"] = (
+        program_synthesis_report.get("generated_programs", 0)
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "adaptive_search_intelligence_runtime",
+        mode=args.mode,
+        trigger="adaptive_search_intelligence",
+        reason="optimize search strategy from concept and program evidence",
+    ) as search_intelligence_execution:
+        adaptive_search_intelligence_report = (
+            adaptive_search_intelligence_engine.build_report(
+                cognitive_search_report=cognitive_search_report,
+                adaptive_search_policy_report=adaptive_search_policy_report,
+                cognitive_route_intelligence_report=(
+                    cognitive_route_intelligence_report
+                ),
+                concept_formation_report=concept_formation_report,
+                program_synthesis_report=program_synthesis_report,
+                truth_report=truth_candidate_report,
+                memory_report=adaptive_reuse_report,
+                dependency_report=dependency_audit_report,
+                causal_report=causal_context_report,
+                all_results=all_results,
+                report_level=args.report_level or "normal",
+            )
+        )
+        search_intelligence_execution.capture(
+            adaptive_search_intelligence_report,
+        )
+    performance_report["ADAPTIVE_SEARCH_INTELLIGENCE_REPORT"] = (
+        adaptive_search_intelligence_report
+    )
+    performance_report["adaptive_search_intelligence_report"] = (
+        adaptive_search_intelligence_report
+    )
+    training_report["ADAPTIVE_SEARCH_INTELLIGENCE_REPORT"] = (
+        adaptive_search_intelligence_report
+    )
+    cognitive_route_intelligence_report = (
+        cognitive_route_intelligence_engine.build_report(
+            routes=cognitive_search_report.get("route_ranking", []),
+            search_policy_report=adaptive_search_policy_report,
+            adaptive_search_intelligence_report=(
+                adaptive_search_intelligence_report
+            ),
+            concept_formation_report=concept_formation_report,
+            program_synthesis_report=program_synthesis_report,
+            truth_report=truth_candidate_report,
+            memory_report=adaptive_reuse_report,
+            search_report=cognitive_search_report,
+            performance_report=performance_report,
+        )
+    )
+    performance_report["COGNITIVE_ROUTE_INTELLIGENCE_REPORT"] = (
+        cognitive_route_intelligence_report
+    )
+    performance_report["cognitive_route_intelligence_report"] = (
+        cognitive_route_intelligence_report
+    )
+    training_report["COGNITIVE_ROUTE_INTELLIGENCE_REPORT"] = (
+        cognitive_route_intelligence_report
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "acsc_runtime",
+        mode=args.mode,
+        trigger="adaptive_cognitive_super_cooling",
+        reason="allocate cognitive resources from route intelligence",
+    ) as acsc_execution:
+        acsc_report = adaptive_cognitive_super_cooling_engine.build_report(
+            cognitive_route_intelligence_report=(
+                cognitive_route_intelligence_report
+            ),
+            adaptive_search_intelligence_report=(
+                adaptive_search_intelligence_report
+            ),
+            concept_formation_report=concept_formation_report,
+            program_synthesis_report=program_synthesis_report,
+            performance_report=performance_report,
+            report_level=args.report_level or "normal",
+        )
+        acsc_execution.capture(acsc_report)
+    performance_report["ACSC_REPORT"] = acsc_report
+    performance_report["acsc_report"] = acsc_report
+    training_report["ACSC_REPORT"] = acsc_report
 
     results = {
         "multi_task_results": all_results,
@@ -3400,6 +3616,22 @@ try:
         "COGNITIVE_PIPELINE_REPORT": cognitive_pipeline_report,
         "cognitive_search_report": cognitive_search_report,
         "COGNITIVE_SEARCH_REPORT": cognitive_search_report,
+        "adaptive_search_policy_report": adaptive_search_policy_report,
+        "ADAPTIVE_SEARCH_POLICY_REPORT": adaptive_search_policy_report,
+        "cognitive_route_intelligence_report":
+        cognitive_route_intelligence_report,
+        "COGNITIVE_ROUTE_INTELLIGENCE_REPORT":
+        cognitive_route_intelligence_report,
+        "concept_formation_report": concept_formation_report,
+        "CONCEPT_FORMATION_REPORT": concept_formation_report,
+        "program_synthesis_report": program_synthesis_report,
+        "PROGRAM_SYNTHESIS_REPORT": program_synthesis_report,
+        "adaptive_search_intelligence_report":
+        adaptive_search_intelligence_report,
+        "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT":
+        adaptive_search_intelligence_report,
+        "acsc_report": acsc_report,
+        "ACSC_REPORT": acsc_report,
         "truth_reuse_report": lifecycle_truth_reuse_report,
         "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
         "hypothesis_generation_report":
@@ -3565,6 +3797,34 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
             },
         )
     )
+    from runtime.cognitive_runtime import cognitive_runtime_execution_engine
+
+    completed_task_results = [
+        item.get("result", {})
+        for item in results.get("multi_task_results", [])
+        if isinstance(item, dict) and isinstance(item.get("result"), dict)
+    ]
+    evaluation_evidence = {
+        "evaluations": [
+            item.get("evaluation_result")
+            for item in completed_task_results
+            if isinstance(item.get("evaluation_result"), dict)
+        ],
+    }
+    cognitive_runtime_execution_engine.ensure_required_instances(
+        evidence={
+            "reasoning_runtime": results.get("SOLVER_REASONING_REPORT", {}),
+            "search_runtime": results.get("COGNITIVE_SEARCH_REPORT", {}),
+            "memory_runtime": results.get("ADAPTIVE_REUSE_REPORT", {}),
+            "truth_runtime": {
+                "truth_candidates": results.get("truth_candidates", []),
+                "truth_commits": results.get("truth_commits", []),
+            },
+            "evaluation_runtime": evaluation_evidence,
+        },
+        mode=args.mode,
+    )
+    cognitive_runtime_execution_engine.complete_cycle()
     final_runtime_lifecycle_report = runtime_lifecycle.build_report()
     final_performance_report["runtime_lifecycle_report"] = (
         final_runtime_lifecycle_report
@@ -3631,6 +3891,10 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
     from runtime.observability.runtime_observability_layer import (
         RuntimeObservabilityLayer,
     )
+    from runtime.cognitive_runtime import (
+        build_cognitive_runtime_report,
+        execution_binding_layer,
+    )
 
     observability_registry = CanonicalMetricRegistry()
     observability_store = UnifiedMetricStore(registry=observability_registry)
@@ -3652,12 +3916,79 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
     final_performance_report["runtime_observability_report"] = (
         final_observability_report
     )
+    cognitive_runtime_report = build_cognitive_runtime_report(
+        performance_report=final_performance_report,
+        runtime_lifecycle_report=final_runtime_lifecycle_report,
+        runtime_observability_report=final_observability_report,
+        cognitive_pipeline_report=results.get("COGNITIVE_PIPELINE_REPORT", {}),
+        cognitive_search_report=results.get("COGNITIVE_SEARCH_REPORT", {}),
+        solver_reasoning_report=results.get("SOLVER_REASONING_REPORT", {}),
+        truth_report=results.get("truth_candidate_report", {}),
+        memory_report=results.get("ADAPTIVE_REUSE_REPORT", {}),
+        evaluation_report=results.get("evaluation_result", {}),
+    )
+    execution_binding_report = execution_binding_layer.bind(
+        cognitive_runtime_report["runtime_registry"],
+        final_runtime_lifecycle_report,
+    )
+    cognitive_runtime_execution_engine.bind_and_archive()
+    cognitive_execution_engine_report = (
+        cognitive_runtime_execution_engine.build_report(
+            total_runtime_seconds=execution_time,
+        )
+    )
+    final_runtime_lifecycle_report = runtime_lifecycle.build_report()
+    final_performance_report["runtime_lifecycle_report"] = (
+        final_runtime_lifecycle_report
+    )
+    metric_sync_result = runtime_metric_synchronizer.synchronize(
+        performance_report=final_performance_report,
+        lifecycle_report=final_runtime_lifecycle_report,
+        runtime_registry=cognitive_runtime_report["runtime_registry"],
+    )
+    final_performance_report = metric_sync_result["performance_report"]
+    final_metric_synchronization_report = (
+        metric_sync_result["RUNTIME_METRIC_SYNCHRONIZATION_REPORT"]
+    )
+    cognitive_runtime_report["execution_binding_report"] = (
+        execution_binding_report
+    )
+    cognitive_runtime_report["EXECUTION_BINDING_REPORT"] = (
+        execution_binding_report
+    )
+    final_performance_report["execution_binding_report"] = (
+        execution_binding_report
+    )
+    final_performance_report["EXECUTION_BINDING_REPORT"] = (
+        execution_binding_report
+    )
+    final_performance_report["cognitive_execution_engine_report"] = (
+        cognitive_execution_engine_report
+    )
+    final_performance_report["COGNITIVE_EXECUTION_ENGINE_REPORT"] = (
+        cognitive_execution_engine_report
+    )
+    final_performance_report["cognitive_runtime_report"] = (
+        cognitive_runtime_report
+    )
+    final_performance_report["COGNITIVE_RUNTIME_REPORT"] = (
+        cognitive_runtime_report
+    )
     results["RUNTIME ATTRIBUTION REPORT"] = final_runtime_attribution_report
     results["RUNTIME_LIFECYCLE_REPORT"] = final_runtime_lifecycle_report
     results["RUNTIME_METRIC_SYNCHRONIZATION_REPORT"] = (
         final_metric_synchronization_report
     )
     results["RUNTIME_OBSERVABILITY_REPORT"] = final_observability_report
+    results["EXECUTION_BINDING_REPORT"] = execution_binding_report
+    results["cognitive_execution_engine_report"] = (
+        cognitive_execution_engine_report
+    )
+    results["COGNITIVE_EXECUTION_ENGINE_REPORT"] = (
+        cognitive_execution_engine_report
+    )
+    results["cognitive_runtime_report"] = cognitive_runtime_report
+    results["COGNITIVE_RUNTIME_REPORT"] = cognitive_runtime_report
     if isinstance(results.get("PERFORMANCE_REPORT"), dict):
         performance_intelligence = results["PERFORMANCE_REPORT"]
         performance_intelligence["runtime_attribution_report"] = (
@@ -3671,6 +4002,15 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
         )
         performance_intelligence["runtime_observability_report"] = (
             final_observability_report
+        )
+        performance_intelligence["cognitive_runtime_report"] = (
+            cognitive_runtime_report
+        )
+        performance_intelligence["execution_binding_report"] = (
+            execution_binding_report
+        )
+        performance_intelligence["cognitive_execution_engine_report"] = (
+            cognitive_execution_engine_report
         )
         runtime_breakdown = final_runtime_attribution_report.get(
             "runtime_breakdown",
@@ -4038,6 +4378,172 @@ if (
     print(
         compact_report_builder.compact_context(
             results["COGNITIVE_SEARCH_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("CONCEPT_FORMATION_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: CONCEPT_FORMATION_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_concept_formation_report(
+            results["CONCEPT_FORMATION_REPORT"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("PROGRAM_SYNTHESIS_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: PROGRAM_SYNTHESIS_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_program_synthesis_report(
+            results["PROGRAM_SYNTHESIS_REPORT"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("ADAPTIVE_SEARCH_INTELLIGENCE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: ADAPTIVE_SEARCH_INTELLIGENCE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_adaptive_search_intelligence_report(
+            results["ADAPTIVE_SEARCH_INTELLIGENCE_REPORT"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("ADAPTIVE_SEARCH_POLICY_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: ADAPTIVE_SEARCH_POLICY_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["ADAPTIVE_SEARCH_POLICY_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_ROUTE_INTELLIGENCE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_ROUTE_INTELLIGENCE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_cognitive_route_intelligence_report(
+            results["COGNITIVE_ROUTE_INTELLIGENCE_REPORT"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("ACSC_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: ACSC_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_acsc_report(
+            results["ACSC_REPORT"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_RUNTIME_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_RUNTIME_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["COGNITIVE_RUNTIME_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_EXECUTION_ENGINE_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_EXECUTION_ENGINE_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["COGNITIVE_EXECUTION_ENGINE_REPORT"],
+            level=final_report_level,
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("EXECUTION_BINDING_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: EXECUTION_BINDING_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_context(
+            results["EXECUTION_BINDING_REPORT"],
             level=final_report_level,
         )
     )

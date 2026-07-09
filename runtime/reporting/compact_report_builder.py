@@ -208,6 +208,12 @@ class CompactReportBuilder:
             "semantic_concept_count": report.get(
                 "semantic_concept_count",
             ),
+            "generated_concepts": report.get("generated_concepts"),
+            "concept_count": report.get("concept_count"),
+            "concept_cost": report.get("concept_cost"),
+            "generated_programs": report.get("generated_programs"),
+            "program_candidates": report.get("program_candidates"),
+            "confidence": report.get("confidence"),
             "context_count": report.get("context_count"),
             "cache_hits": report.get("cache_hits"),
             "cache_misses": report.get("cache_misses"),
@@ -350,6 +356,413 @@ class CompactReportBuilder:
                 depth=0,
                 seen_reports=set(),
             ),
+            "CONCEPT_FORMATION_REPORT": self.compact_concept_formation_report(
+                report.get("CONCEPT_FORMATION_REPORT", {}),
+            ),
+            "PROGRAM_SYNTHESIS_REPORT": self.compact_program_synthesis_report(
+                report.get("PROGRAM_SYNTHESIS_REPORT", {}),
+            ),
+            "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT": (
+                self.compact_adaptive_search_intelligence_report(
+                    report.get("ADAPTIVE_SEARCH_INTELLIGENCE_REPORT", {}),
+                )
+            ),
+            "COGNITIVE_ROUTE_INTELLIGENCE_REPORT": (
+                self.compact_cognitive_route_intelligence_report(
+                    report.get("COGNITIVE_ROUTE_INTELLIGENCE_REPORT", {}),
+                )
+            ),
+            "ACSC_REPORT": self.compact_acsc_report(
+                report.get("ACSC_REPORT", {}),
+            ),
+        }
+
+    def compact_program_synthesis_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+
+        def compact_program(program):
+            if not isinstance(program, dict):
+                return {}
+            return {
+                "program_id": program.get("program_id"),
+                "program_name": program.get("program_name"),
+                "program_type": program.get("program_type"),
+                "goal": program.get("goal"),
+                "required_concepts": self._limit_list(
+                    program.get("required_concepts", []),
+                    8,
+                ),
+                "required_transformations": self._limit_list(
+                    program.get("required_transformations", []),
+                    8,
+                ),
+                "required_constraints": self._limit_list(
+                    program.get("required_constraints", []),
+                    8,
+                ),
+                "execution_strategy": self._compact_value(
+                    program.get("execution_strategy", {}),
+                    level="minimal",
+                    depth=0,
+                    seen_reports=set(),
+                ),
+                "confidence": program.get("confidence"),
+                "generalization_score": program.get(
+                    "generalization_score",
+                ),
+                "utility": program.get("utility"),
+                "expected_cost": program.get("expected_cost"),
+                "lifecycle": program.get("lifecycle"),
+                "validation_results": self._compact_value(
+                    program.get("validation_results", {}),
+                    level="minimal",
+                    depth=0,
+                    seen_reports=set(),
+                ),
+            }
+
+        graph = report.get("program_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        return {
+            "system": report.get(
+                "system",
+                "program_synthesis_intelligence_engine",
+            ),
+            "PROGRAM_SYNTHESIS_REPORT": report.get(
+                "PROGRAM_SYNTHESIS_REPORT",
+                False,
+            ),
+            "status": report.get("status"),
+            "generated_programs": report.get("generated_programs", 0),
+            "program_candidates": report.get("program_candidates", 0),
+            "programs_validated": report.get("programs_validated", 0),
+            "programs_rejected": report.get("programs_rejected", 0),
+            "winning_programs": [
+                compact_program(program)
+                for program in self._limit_list(
+                    report.get("winning_programs", []),
+                    10,
+                )
+                if isinstance(program, dict)
+            ],
+            "generated_programs_summary": [
+                compact_program(program)
+                for program in self._limit_list(
+                    report.get("generated_program_objects", []),
+                    10,
+                )
+                if isinstance(program, dict)
+            ],
+            "program_graph": {
+                "node_count": self._count_items(graph.get("nodes", [])),
+                "edge_count": self._count_items(graph.get("edges", [])),
+                "relationship_types": graph.get("relationship_types", []),
+            },
+            "program_statistics": self._compact_value(
+                report.get("program_statistics", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "program_reuse": self._compact_value(
+                report.get("program_reuse", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "program_generalization_count": self._count_items(
+                report.get("program_generalization", []),
+            ),
+            "program_families": report.get("program_families", {}),
+            "single_program_authority": report.get(
+                "single_program_authority",
+                False,
+            ),
+        }
+
+    def compact_adaptive_search_intelligence_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+        graph = report.get("search_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        strategy = report.get("chosen_strategy", {})
+        strategy = strategy if isinstance(strategy, dict) else {}
+        return {
+            "system": report.get(
+                "system",
+                "adaptive_search_intelligence_engine",
+            ),
+            "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT": report.get(
+                "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT",
+                False,
+            ),
+            "status": report.get("status"),
+            "task_complexity": self._compact_value(
+                report.get("task_complexity", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "chosen_strategy": {
+                "strategy": strategy.get("strategy"),
+                "why_chosen": strategy.get("why_chosen"),
+                "evidence": strategy.get("evidence"),
+            },
+            "search_budget": self._compact_value(
+                report.get("search_budget", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "route_statistics": report.get("route_statistics", {}),
+            "program_statistics": report.get("program_statistics", {}),
+            "concept_statistics": report.get("concept_statistics", {}),
+            "route_decisions": self._limit_list(
+                report.get("route_decisions", []),
+                8,
+            ),
+            "multi_hypothesis_management": self._limit_list(
+                report.get("multi_hypothesis_management", []),
+                8,
+            ),
+            "policy_decisions": self._limit_list(
+                report.get("policy_decisions", []),
+                8,
+            ),
+            "search_graph": {
+                "node_count": graph.get("node_count"),
+                "edge_count": graph.get("edge_count"),
+                "edge_types": graph.get("edge_types", []),
+            },
+            "strategy_evolution": self._limit_list(
+                report.get("strategy_evolution", []),
+                5,
+            ),
+            "learning_outcomes": self._compact_value(
+                report.get("learning_outcomes", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "optimization_candidates": self._limit_list(
+                report.get("optimization_candidates", []),
+                8,
+            ),
+            "runtime_alignment": report.get("runtime_alignment", {}),
+        }
+
+    def compact_cognitive_route_intelligence_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+        graph = report.get("route_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        return {
+            "system": report.get(
+                "system",
+                "cognitive_route_intelligence_engine",
+            ),
+            "COGNITIVE_ROUTE_INTELLIGENCE_REPORT": report.get(
+                "COGNITIVE_ROUTE_INTELLIGENCE_REPORT",
+                False,
+            ),
+            "route_graph": {
+                "node_count": graph.get("node_count"),
+                "edge_count": graph.get("edge_count"),
+                "relationship_types": graph.get("relationship_types", []),
+            },
+            "route_statistics": report.get("route_statistics", {}),
+            "route_ranking": self._limit_list(
+                report.get("route_ranking", []),
+                8,
+            ),
+            "route_decisions": self._limit_list(
+                report.get("route_decisions", []),
+                8,
+            ),
+            "dominant_routes": self._limit_list(
+                report.get("dominant_routes", []),
+                5,
+            ),
+            "emerging_routes": self._limit_list(
+                report.get("emerging_routes", []),
+                5,
+            ),
+            "cooling_candidates": self._limit_list(
+                report.get("cooling_candidates", []),
+                8,
+            ),
+            "reactivation_candidates": self._limit_list(
+                report.get("reactivation_candidates", []),
+                8,
+            ),
+            "merge_candidates": self._limit_list(
+                report.get("merge_candidates", []),
+                8,
+            ),
+            "split_candidates": self._limit_list(
+                report.get("split_candidates", []),
+                8,
+            ),
+            "optimization_opportunities": self._limit_list(
+                report.get("optimization_opportunities", []),
+                8,
+            ),
+            "runtime_alignment": report.get("runtime_alignment", {}),
+        }
+
+    def compact_acsc_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+        graph = report.get("thermal_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        states = report.get("route_thermal_states", {})
+        states = states if isinstance(states, dict) else {}
+        return {
+            "system": report.get(
+                "system",
+                "adaptive_cognitive_super_cooling",
+            ),
+            "ACSC_REPORT": report.get("ACSC_REPORT", False),
+            "status": report.get("status"),
+            "thermal_graph": {
+                "node_count": graph.get("node_count"),
+                "edge_count": graph.get("edge_count"),
+                "relationship_types": graph.get("relationship_types", []),
+            },
+            "route_count": len(states),
+            "route_thermal_states": self._limit_list(
+                list(states.values()),
+                8,
+            ),
+            "resource_allocation_timeline": self._limit_list(
+                report.get("resource_allocation_timeline", []),
+                10,
+            ),
+            "cooling_decisions": self._limit_list(
+                report.get("cooling_decisions", []),
+                8,
+            ),
+            "reactivation_decisions": self._limit_list(
+                report.get("reactivation_decisions", []),
+                8,
+            ),
+            "resource_redistribution": report.get(
+                "resource_redistribution",
+                {},
+            ),
+            "resource_savings": report.get("resource_savings"),
+            "dominant_routes": self._limit_list(
+                report.get("dominant_routes", []),
+                5,
+            ),
+            "recovered_routes": self._limit_list(
+                report.get("recovered_routes", []),
+                5,
+            ),
+            "optimization_opportunities": self._limit_list(
+                report.get("optimization_opportunities", []),
+                8,
+            ),
+            "acsc_analytics": report.get("acsc_analytics", {}),
+            "runtime_alignment": report.get("runtime_alignment", {}),
+        }
+
+    def compact_concept_formation_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+
+        def compact_concept(concept):
+            if not isinstance(concept, dict):
+                return {}
+            evidence = concept.get("supporting_evidence", [])
+            return {
+                "concept_id": concept.get("concept_id"),
+                "concept_name": concept.get("concept_name"),
+                "concept_type": concept.get("concept_type"),
+                "concept_category": concept.get("concept_category"),
+                "confidence": concept.get("confidence"),
+                "utility": concept.get("utility"),
+                "generalization_score": concept.get(
+                    "generalization_score",
+                ),
+                "lifecycle": concept.get("lifecycle"),
+                "evidence_count": self._count_items(evidence),
+                "origin_runtime": concept.get("origin_runtime"),
+                "relationships": {
+                    "parents": self._count_items(
+                        concept.get("parent_concepts", []),
+                    ),
+                    "children": self._count_items(
+                        concept.get("child_concepts", []),
+                    ),
+                    "related": self._count_items(
+                        concept.get("related_concepts", []),
+                    ),
+                },
+                "explanation": self._compact_value(
+                    concept.get("explanation", {}),
+                    level="minimal",
+                    depth=0,
+                    seen_reports=set(),
+                ),
+            }
+
+        graph = report.get("concept_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        return {
+            "system": report.get(
+                "system",
+                "cognitive_concept_formation_engine",
+            ),
+            "CONCEPT_FORMATION_REPORT": report.get(
+                "CONCEPT_FORMATION_REPORT",
+                False,
+            ),
+            "status": report.get("status"),
+            "generated_concepts": report.get("generated_concepts", 0),
+            "concept_count": report.get("concept_count", 0),
+            "concept_cost": report.get("concept_cost", 0),
+            "confidence": report.get("confidence", 0),
+            "validated_count": self._count_items(
+                report.get("validated_concepts", []),
+            ),
+            "rejected_count": self._count_items(
+                report.get("rejected_concepts", []),
+            ),
+            "generalized_count": self._count_items(
+                report.get("generalized_concepts", []),
+            ),
+            "top_concepts": [
+                compact_concept(concept)
+                for concept in self._limit_list(
+                    report.get("top_concepts", []),
+                    10,
+                )
+                if isinstance(concept, dict)
+            ],
+            "emerging_concepts": [
+                compact_concept(concept)
+                for concept in self._limit_list(
+                    report.get("emerging_concepts", []),
+                    10,
+                )
+                if isinstance(concept, dict)
+            ],
+            "concept_graph": {
+                "node_count": self._count_items(graph.get("nodes", [])),
+                "edge_count": self._count_items(graph.get("edges", [])),
+                "relationship_types": graph.get("relationship_types", []),
+            },
+            "concept_statistics": self._compact_value(
+                report.get("concept_statistics", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "concept_memory": self._compact_value(
+                report.get("concept_memory", {}),
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "single_authority": report.get("single_authority", False),
+            "authority_scope": report.get("authority_scope", []),
         }
 
     def compact_concept_lifecycle_report(
