@@ -28,9 +28,17 @@ RUNTIME_TYPES = {
         "AdaptiveSearchIntelligenceExecution",
         "Adaptive Search Intelligence Runtime",
     ),
+    "evidence_builder_runtime": (
+        "EvidenceBuilderExecution",
+        "Evidence Builder Runtime",
+    ),
     "acsc_runtime": (
         "AdaptiveCognitiveSuperCoolingExecution",
         "Adaptive Cognitive Super Cooling Runtime",
+    ),
+    "knowledge_integration_runtime": (
+        "CognitiveKnowledgeIntegrationExecution",
+        "Cognitive Knowledge Integration Runtime",
     ),
     "memory_runtime": ("MemoryExecution", "Memory Runtime"),
     "truth_runtime": ("TruthExecution", "Truth Runtime"),
@@ -110,10 +118,17 @@ class CognitiveExecutionInstance:
             _count(data.get("generated_program_objects")),
             int(bool(data.get("synthesized_program"))),
         )
+        evaluation_truths = (
+            _count(data.get("evaluations"))
+            if self.runtime_id == "truth_runtime"
+            else 0
+        )
         self.generated_truth_candidates = max(
             self.generated_truth_candidates,
             _count(data.get("truth_candidates")),
-            _count(data.get("evaluations")),
+            int(_number(data.get("truth_candidate_count"))),
+            int(_number(data.get("generated_truth_candidates"))),
+            evaluation_truths,
         )
         self.generated_memory_entries = max(
             self.generated_memory_entries,
@@ -456,6 +471,7 @@ class CognitiveRuntimeExecutionEngine:
         for runtime_id in (
             "reasoning_runtime",
             "search_runtime",
+            "evidence_builder_runtime",
             "memory_runtime",
             "truth_runtime",
             "evaluation_runtime",
@@ -478,6 +494,7 @@ class CognitiveRuntimeExecutionEngine:
         required = {
             "reasoning_runtime",
             "search_runtime",
+            "evidence_builder_runtime",
             "memory_runtime",
             "truth_runtime",
             "evaluation_runtime",

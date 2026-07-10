@@ -6,6 +6,7 @@ from runtime.planning.budget_policy import (
     BudgetPolicy,
     ReasoningBudget,
 )
+from runtime.planning.execution_profile import build_execution_profile
 from runtime.meta.supervisor import meta_supervisor
 
 
@@ -36,15 +37,17 @@ class CognitiveBudgetEngine:
             cognitive_cost,
             requested_mode,
         )
+        execution_profile = build_execution_profile(mode)
 
         if mode == "fast":
             budget = self.policy.fast()
-        elif mode == "deep":
-            budget = self.policy.deep()
+        elif mode in {"deep", "full"}:
+            budget = self.policy.from_execution_profile(execution_profile)
         else:
             budget = self._adaptive_budget(
                 task_profile,
                 cognitive_cost,
+                execution_profile=execution_profile,
             )
 
         budget.notes.append(
@@ -60,6 +63,8 @@ class CognitiveBudgetEngine:
 
         return {
             "selected_mode": budget.mode,
+            "execution_profile": budget.execution_profile,
+            "cognitive_pipeline": budget.cognitive_pipeline,
             "max_hypotheses": budget.max_hypotheses,
             "max_reasoning_depth": budget.max_reasoning_depth,
             "max_dependency_depth": budget.max_dependency_depth,
@@ -118,6 +123,9 @@ class CognitiveBudgetEngine:
 
         return {
             "mode": budget.mode,
+            "execution_profile": budget.execution_profile,
+            "cognitive_pipeline": budget.cognitive_pipeline,
+            "pipeline_name": budget.cognitive_pipeline,
             "max_chain_depth": budget.max_dependency_depth,
             "max_concepts": budget.max_hypotheses,
             "telemetry_enabled": budget.telemetry_enabled,
@@ -144,7 +152,7 @@ class CognitiveBudgetEngine:
     ):
 
         requested_mode = str(requested_mode or "").lower()
-        if requested_mode in {"fast", "adaptive", "deep"}:
+        if requested_mode in {"fast", "adaptive", "deep", "full"}:
             return requested_mode
 
         if task_profile.complexity == "low":
@@ -162,6 +170,7 @@ class CognitiveBudgetEngine:
         self,
         task_profile,
         cognitive_cost,
+        execution_profile=None,
     ):
 
         cost = self._clamp(cognitive_cost.total_cost)
@@ -181,8 +190,14 @@ class CognitiveBudgetEngine:
         )
         max_active_routes = self._range_value(3, 6, cost)
 
+        execution_profile = execution_profile or build_execution_profile(
+            "adaptive"
+        )
+
         return ReasoningBudget(
-            mode="adaptive",
+            mode=execution_profile.name,
+            execution_profile=execution_profile.name,
+            cognitive_pipeline=execution_profile.pipeline_name,
             max_hypotheses=max_hypotheses,
             max_reasoning_depth=max_reasoning_depth,
             max_dependency_depth=max_dependency_depth,
@@ -200,9 +215,10 @@ class CognitiveBudgetEngine:
             ),
             temporal_reasoning_enabled=False,
             full_governance_enabled=False,
-            report_level="normal",
+            report_level=execution_profile.report_level,
             notes=[
                 "adaptive_policy_derived_from_task_profile",
+                "unified_adaptive_pipeline",
                 "minimum_safety_governance_preserved",
             ],
         )

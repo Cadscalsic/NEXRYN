@@ -10,6 +10,7 @@ def _exercise_required(engine):
     for runtime_id in (
         "reasoning_runtime",
         "search_runtime",
+        "evidence_builder_runtime",
         "memory_runtime",
         "truth_runtime",
         "evaluation_runtime",
@@ -38,11 +39,12 @@ def test_factory_creates_real_hierarchical_execution_instances():
     assert report["execution_coverage"] == 1.0
     assert report["lifecycle_coverage"] == 1.0
     assert len(report["execution_tree"]) == 1
-    assert len(report["execution_tree"][0]["children"]) == 5
+    assert len(report["execution_tree"][0]["children"]) == 6
     types = {item["execution_type"] for item in report["execution_instances"]}
     assert {
         "ReasoningExecution",
         "SearchExecution",
+        "EvidenceBuilderExecution",
         "MemoryExecution",
         "TruthExecution",
         "EvaluationExecution",
@@ -51,6 +53,27 @@ def test_factory_creates_real_hierarchical_execution_instances():
         "synthetic_execution" not in item["execution_id"]
         for item in report["execution_instances"]
     )
+
+
+def test_evaluation_evidence_does_not_publish_truth_candidates():
+    runtime_lifecycle.clear()
+    engine = CognitiveRuntimeExecutionEngine()
+    engine.start_cycle(mode="deep")
+
+    with engine.execution("evaluation_runtime") as execution:
+        execution.capture({"evaluations": [{"id": "eval:a", "score": 0.9}]})
+    with engine.execution("truth_runtime") as execution:
+        execution.capture({"evaluations": [{"id": "truth:a", "confidence": 0.9}]})
+
+    report = engine.build_report()
+    by_runtime = {
+        item["runtime_id"]: item
+        for item in report["execution_instances"]
+        if item["runtime_id"] in {"evaluation_runtime", "truth_runtime"}
+    }
+
+    assert by_runtime["evaluation_runtime"]["generated_truth_candidates"] == 0
+    assert by_runtime["truth_runtime"]["generated_truth_candidates"] == 1
 
 
 def test_execution_lifecycle_binding_populates_runtime_metrics():

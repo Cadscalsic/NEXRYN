@@ -85,7 +85,7 @@ class DeepModeBudgetManager:
     ) -> str:
         mode = str(mode or "adaptive").lower()
         report_level = str(report_level or "normal").lower()
-        if mode != "deep":
+        if mode not in {"deep", "full"}:
             return report_level
         if report_level not in {"full", "debug", "audit"}:
             return report_level
@@ -205,7 +205,7 @@ class DeepModeBudgetManager:
             "system": self.system_name,
             "DEEP_MODE_OPTIMIZATION_REPORT": True,
             "mode": mode,
-            "bounded_deep_mode": str(mode).lower() == "deep",
+            "bounded_deep_mode": str(mode).lower() in {"deep", "full"},
             "selective_execution_enabled": True,
             "deep_budget": budget,
             "deep_budget_used": used,

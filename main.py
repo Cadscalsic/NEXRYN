@@ -14,6 +14,11 @@ import traceback
 from datetime import datetime
 
 from runtime.diagnostics import RuntimeWatchdog
+from runtime.planning.execution_profile import build_execution_profile
+from runtime.state.shared_cognitive_state import (
+    CognitiveKnowledgeBus,
+    SharedCognitiveState,
+)
 
 
 # ============================================
@@ -43,6 +48,9 @@ def build_runtime_metadata(
     return {
         "tasks_directory": args.tasks_dir,
         "mode": args.mode,
+        "execution_profile": runtime_metrics.get("execution_profile"),
+        "cognitive_pipeline": runtime_metrics.get("cognitive_pipeline"),
+        "pipeline_contract": runtime_metrics.get("pipeline_contract"),
         "runtime_status": runtime_status,
         "execution_time": execution_time,
         "context_count": context_count,
@@ -97,6 +105,9 @@ def build_runtime_metadata(
             "startup_hang_prevented",
         ),
         "post_success_mode": args.post_success_mode,
+        "performance_profile_enabled": args.profile,
+        "performance_profile_output": args.profile_output,
+        "performance_profile_level": args.profile_level,
         "profile_enabled": args.profile,
         "profile_output": args.profile_output,
         "profile_level": args.profile_level,
@@ -1069,7 +1080,7 @@ parser.add_argument(
     "--mode",
     type=str,
     default="adaptive",
-    choices=["fast", "adaptive", "deep"],
+    choices=["fast", "adaptive", "deep", "full"],
     help="Runtime mode",
 )
 
@@ -1313,20 +1324,24 @@ deep_budget = deep_mode_budget_manager.build_budget(
     max_report_time_seconds=args.deep_max_report_time,
     max_concept_lifecycle_seconds=args.deep_max_concept_lifecycle_time,
 )
-effective_report_level = args.report_level or {
-    "fast": "minimal",
-    "adaptive": "normal",
-    "deep": "full",
-}.get(args.mode, "normal")
+execution_profile = build_execution_profile(
+    args.mode,
+    report_level=args.report_level,
+    audit_sections_requested=deep_audit_sections,
+)
+effective_report_level = args.report_level or execution_profile.report_level
 args.report_level = effective_report_level
 training_batch_size, training_batch_size_source = (
     resolve_training_batch_size(args, parser)
 )
-governance_budget_seconds = governance_budget_for_mode(args.mode)
+governance_budget_seconds = execution_profile.governance_budget_seconds
 runtime_watchdog = RuntimeWatchdog()
 runtime_watchdog.start("boot_total")
 runtime_watchdog.checkpoint("boot_start")
 runtime_metrics = {
+    "execution_profile": execution_profile.as_runtime_metadata(),
+    "cognitive_pipeline": execution_profile.pipeline_name,
+    "pipeline_contract": "unified_execution_architecture",
     "training_batch_size": training_batch_size,
     "training_batch_size_source": training_batch_size_source,
     "governance_budget_seconds": governance_budget_seconds,
@@ -1352,6 +1367,8 @@ runtime_start = time.time()
 runtime_status = "booting"
 results = {}
 shutdown_controller = None
+shared_cognitive_state = None
+knowledge_bus = None
 
 
 # ============================================
@@ -1646,7 +1663,7 @@ try:
             "seconds": task_execution_elapsed,
         })
         if (
-            args.mode == "deep"
+            args.mode in {"deep", "full"}
             and deep_mode_budget_manager.task_budget_exceeded(
                 task_execution_elapsed,
                 deep_budget,
@@ -1701,7 +1718,7 @@ try:
         .knowledge_maturity_report
     )
     deep_concept_audit_requested = (
-        args.mode == "deep"
+        args.mode in {"deep", "full"}
         and deep_mode_budget_manager.should_expand(
             "concepts",
             deep_audit_flags,
@@ -1709,7 +1726,10 @@ try:
     )
     if (
         not concept_lifecycle_report.get("concepts")
-        and not (args.mode == "deep" and not deep_concept_audit_requested)
+        and not (
+            args.mode in {"deep", "full"}
+            and not deep_concept_audit_requested
+        )
     ):
         concept_lifecycle_report = (
             pipeline
@@ -1732,7 +1752,7 @@ try:
         concepts_recomputed = len(
             concept_lifecycle_report.get("concepts", []) or []
         )
-    elif args.mode == "deep" and not deep_concept_audit_requested:
+    elif args.mode in {"deep", "full"} and not deep_concept_audit_requested:
         concept_lifecycle_report = {
             "system": "concept_maturity_tracker",
             "report_state": "summary",
@@ -1757,7 +1777,10 @@ try:
     if (
         (
             args.report_level not in {"full", "debug", "audit"}
-            or (args.mode == "deep" and not deep_concept_audit_requested)
+            or (
+                args.mode in {"deep", "full"}
+                and not deep_concept_audit_requested
+            )
         )
         and not concept_lifecycle_report.get("concept_lifecycle_compressed")
     ):
@@ -1809,7 +1832,7 @@ try:
         ledger_report=ledger_report,
         concept_lifecycle_report=concept_lifecycle_report,
         include_truth_evaluations=(
-            args.mode != "deep"
+            args.mode not in {"deep", "full"}
             or deep_mode_budget_manager.should_expand(
                 "truth",
                 deep_audit_flags,
@@ -2548,7 +2571,7 @@ try:
         total_runtime_seconds,
         performance_report,
     )
-    if args.mode == "deep":
+    if args.mode in {"deep", "full"}:
         report_budget_report["report_budget_seconds"] = (
             deep_budget.max_report_time_seconds
         )
@@ -3180,9 +3203,9 @@ try:
         "reasoning_intelligence_report",
     ]
     reports_skipped = []
-    if args.mode == "deep" and not deep_concept_audit_requested:
+    if args.mode in {"deep", "full"} and not deep_concept_audit_requested:
         reports_skipped.append("expanded_concept_lifecycle_report")
-    if args.mode == "deep" and not deep_mode_budget_manager.should_expand(
+    if args.mode in {"deep", "full"} and not deep_mode_budget_manager.should_expand(
         "truth",
         deep_audit_flags,
     ):
@@ -3310,10 +3333,68 @@ try:
         build_cognitive_search_report,
         cognitive_route_intelligence_engine,
     )
+    from runtime.knowledge import cognitive_knowledge_integration_layer
+    from runtime.evidence import evidence_builder_runtime
     from runtime.synthesis import program_synthesis_intelligence_engine
     from runtime.cognitive_runtime import cognitive_runtime_execution_engine
 
     cognitive_runtime_execution_engine.clear()
+    shared_cognitive_state = SharedCognitiveState.create(
+        execution_profile=execution_profile.as_runtime_metadata(),
+        mode=args.mode,
+        inherit_latest=args.mode in {"deep", "full"},
+    )
+    knowledge_bus = CognitiveKnowledgeBus(shared_cognitive_state)
+    performance_report["shared_cognitive_state_inherited_counts"] = (
+        shared_cognitive_state.counts()
+    )
+    shared_cognitive_state.snapshot("runtime_initialization")
+
+    def consume_shared_state(runtime_id, artifact_types, required=()):
+        consumption = knowledge_bus.consume(
+            runtime_id,
+            artifact_types,
+            required=required,
+        )
+        performance_report.setdefault(
+            "knowledge_bus_consumption",
+            [],
+        ).append(consumption["event"])
+        performance_report.setdefault(
+            "shared_cognitive_state_inputs",
+            {},
+        )[runtime_id] = {
+            key: {"count": len(value)}
+            for key, value in consumption["artifacts"].items()
+        }
+        return consumption["artifacts"]
+
+    def publish_shared_state(runtime_id, payload, owner, stage_name, required=()):
+        validation = shared_cognitive_state.validate_before(
+            runtime_id,
+            required=required,
+        )
+        performance_report.setdefault(
+            "shared_cognitive_state_validation",
+            [],
+        ).append(validation)
+        event = knowledge_bus.publish(
+            runtime_id,
+            payload,
+            owner=owner,
+            context=performance_report,
+        )
+        snapshot = shared_cognitive_state.snapshot(stage_name)
+        performance_report.setdefault(
+            "shared_cognitive_state_propagation",
+            [],
+        ).append(event)
+        performance_report.setdefault(
+            "shared_cognitive_state_snapshots",
+            [],
+        ).append(snapshot)
+        return event
+
     cognitive_runtime_execution_engine.start_cycle(
         mode=args.mode,
         context={"report_level": args.report_level or "normal"},
@@ -3345,6 +3426,12 @@ try:
             adaptive_reuse_report=adaptive_reuse_report,
         )
         reasoning_execution.capture(solver_reasoning_report_payload)
+        publish_shared_state(
+            "reasoning_runtime",
+            solver_reasoning_report_payload,
+            owner="reasoning_runtime",
+            stage_name="reasoning_runtime",
+        )
     performance_report["SOLVER_REASONING_REPORT"] = (
         solver_reasoning_report_payload
     )
@@ -3372,6 +3459,13 @@ try:
             causal_context_report=causal_context_report,
         )
         search_execution.capture(cognitive_search_report)
+        publish_shared_state(
+            "search_runtime",
+            cognitive_search_report,
+            owner="search_runtime",
+            stage_name="adaptive_search",
+            required=("reasoning_context",),
+        )
     performance_report["COGNITIVE_SEARCH_REPORT"] = cognitive_search_report
     adaptive_search_policy_report = cognitive_search_report.get(
         "ADAPTIVE_SEARCH_POLICY_REPORT",
@@ -3413,6 +3507,13 @@ try:
             report_level=args.report_level or "normal",
         )
         concept_execution.capture(concept_formation_report)
+        publish_shared_state(
+            "concept_formation_runtime",
+            concept_formation_report,
+            owner="concept_formation_runtime",
+            stage_name="concept_formation",
+            required=("reasoning_context", "search_routes"),
+        )
     performance_report["CONCEPT_FORMATION_REPORT"] = concept_formation_report
     performance_report["concept_formation_report"] = concept_formation_report
     performance_report["generated_concepts"] = concept_formation_report.get(
@@ -3440,6 +3541,11 @@ try:
         "generated_concepts",
         0,
     )
+    program_shared_inputs = consume_shared_state(
+        "program_synthesis_runtime",
+        ("concept_store", "context_store", "evidence_store"),
+        required=("concept_store",),
+    )
     with cognitive_runtime_execution_engine.execution(
         "program_synthesis_runtime",
         mode=args.mode,
@@ -3459,6 +3565,13 @@ try:
             )
         )
         program_execution.capture(program_synthesis_report)
+        publish_shared_state(
+            "program_synthesis_runtime",
+            program_synthesis_report,
+            owner="program_synthesis_runtime",
+            stage_name="program_synthesis",
+            required=("concept_store",),
+        )
     performance_report["PROGRAM_SYNTHESIS_REPORT"] = (
         program_synthesis_report
     )
@@ -3476,6 +3589,11 @@ try:
     )
     training_report["generated_programs"] = (
         program_synthesis_report.get("generated_programs", 0)
+    )
+    adaptive_search_shared_inputs = consume_shared_state(
+        "adaptive_search_intelligence_runtime",
+        ("concept_store", "program_store", "evidence_store", "context_store"),
+        required=("concept_store", "program_store"),
     )
     with cognitive_runtime_execution_engine.execution(
         "adaptive_search_intelligence_runtime",
@@ -3502,6 +3620,13 @@ try:
         )
         search_intelligence_execution.capture(
             adaptive_search_intelligence_report,
+        )
+        publish_shared_state(
+            "adaptive_search_intelligence_runtime",
+            adaptive_search_intelligence_report,
+            owner="adaptive_search_intelligence_runtime",
+            stage_name="adaptive_search_intelligence",
+            required=("concept_store", "program_store"),
         )
     performance_report["ADAPTIVE_SEARCH_INTELLIGENCE_REPORT"] = (
         adaptive_search_intelligence_report
@@ -3555,9 +3680,210 @@ try:
             report_level=args.report_level or "normal",
         )
         acsc_execution.capture(acsc_report)
+        publish_shared_state(
+            "acsc_runtime",
+            acsc_report,
+            owner="acsc_runtime",
+            stage_name="adaptive_cognitive_super_cooling",
+            required=("search_routes",),
+        )
     performance_report["ACSC_REPORT"] = acsc_report
     performance_report["acsc_report"] = acsc_report
     training_report["ACSC_REPORT"] = acsc_report
+    evidence_builder_shared_inputs = consume_shared_state(
+        "evidence_builder_runtime",
+        (
+            "concept_store",
+            "program_store",
+            "search_routes",
+            "context_store",
+            "dependency_graph",
+        ),
+        required=("concept_store", "program_store", "search_routes"),
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "evidence_builder_runtime",
+        mode=args.mode,
+        trigger="evidence_builder_runtime",
+        reason="normalize cognitive observations into canonical evidence",
+    ) as evidence_builder_execution:
+        evidence_architecture_report = evidence_builder_runtime.build_report(
+            concept_formation_report=concept_formation_report,
+            program_synthesis_report=program_synthesis_report,
+            adaptive_search_intelligence_report=(
+                adaptive_search_intelligence_report
+            ),
+            cognitive_route_intelligence_report=(
+                cognitive_route_intelligence_report
+            ),
+            dependency_report=dependency_audit_report,
+            context_report={
+                "causal_context_report": causal_context_report,
+                "shared_state_inputs": evidence_builder_shared_inputs,
+            },
+            shared_state=shared_cognitive_state.to_dict(),
+            execution_id=evidence_builder_execution.execution_id,
+        )
+        evidence_builder_execution.capture(evidence_architecture_report)
+        publish_shared_state(
+            "evidence_builder_runtime",
+            evidence_architecture_report,
+            owner="evidence_builder_runtime",
+            stage_name="evidence_builder",
+            required=("concept_store", "program_store", "search_routes"),
+        )
+    performance_report["EVIDENCE_ARCHITECTURE_REPORT"] = (
+        evidence_architecture_report
+    )
+    performance_report["evidence_architecture_report"] = (
+        evidence_architecture_report
+    )
+    training_report["EVIDENCE_ARCHITECTURE_REPORT"] = (
+        evidence_architecture_report
+    )
+    knowledge_shared_inputs = consume_shared_state(
+        "knowledge_integration_runtime",
+        (
+            "concept_store",
+            "program_store",
+            "search_routes",
+            "evidence_store",
+            "context_store",
+            "dependency_graph",
+        ),
+        required=("concept_store", "program_store", "search_routes", "evidence_store"),
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "knowledge_integration_runtime",
+        mode=args.mode,
+        trigger="cognitive_knowledge_integration",
+        reason="circulate cognitive artifacts through the unified knowledge bus",
+    ) as knowledge_integration_execution:
+        cognitive_knowledge_integration_report = (
+            cognitive_knowledge_integration_layer.build_report(
+                concept_formation_report=concept_formation_report,
+                program_synthesis_report=program_synthesis_report,
+                adaptive_search_intelligence_report=(
+                    adaptive_search_intelligence_report
+                ),
+                cognitive_route_intelligence_report=(
+                    cognitive_route_intelligence_report
+                ),
+                evidence_architecture_report=evidence_architecture_report,
+                truth_report=truth_candidate_report,
+                memory_report=adaptive_reuse_report,
+                reasoning_report=solver_reasoning_report_payload,
+                acsc_report=acsc_report,
+                all_results=all_results,
+                performance_report=performance_report,
+                report_level=args.report_level or "normal",
+            )
+        )
+        knowledge_integration_execution.capture(
+            cognitive_knowledge_integration_report,
+        )
+        publish_shared_state(
+            "knowledge_integration_runtime",
+            cognitive_knowledge_integration_report,
+            owner="knowledge_integration_runtime",
+            stage_name="knowledge_integration",
+            required=("concept_store", "program_store", "search_routes"),
+        )
+    performance_report["COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT"] = (
+        cognitive_knowledge_integration_report
+    )
+    performance_report["cognitive_knowledge_integration_report"] = (
+        cognitive_knowledge_integration_report
+    )
+    training_report["COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT"] = (
+        cognitive_knowledge_integration_report
+    )
+    truth_shared_inputs = consume_shared_state(
+        "truth_runtime",
+        (
+            "knowledge_objects",
+            "evidence_store",
+            "context_store",
+            "dependency_graph",
+        ),
+        required=("knowledge_objects", "evidence_store", "context_store"),
+    )
+    publish_shared_state(
+        "truth_runtime",
+        {
+            "truth_candidates": truth_candidates,
+            "truth_commits": truth_commits,
+            "shared_state_inputs": truth_shared_inputs,
+            **(
+                truth_candidate_report
+                if isinstance(truth_candidate_report, dict)
+                else {}
+            ),
+        },
+        owner="truth_runtime",
+        stage_name="truth_runtime",
+        required=("knowledge_objects", "evidence_store", "context_store"),
+    )
+    memory_shared_inputs = consume_shared_state(
+        "memory_runtime",
+        (
+            "validated_truths",
+            "truth_candidates",
+            "knowledge_objects",
+            "evidence_store",
+            "context_store",
+        ),
+        required=("truth_candidates", "knowledge_objects", "evidence_store"),
+    )
+    publish_shared_state(
+        "memory_runtime",
+        {
+            **(
+                adaptive_reuse_report
+                if isinstance(adaptive_reuse_report, dict)
+                else {}
+            ),
+            "shared_state_inputs": memory_shared_inputs,
+        },
+        owner="memory_runtime",
+        stage_name="memory_runtime",
+        required=("truth_candidates", "knowledge_objects", "evidence_store"),
+    )
+    artifact_governance_report = shared_cognitive_state.run_artifact_governance()
+    performance_report["ARTIFACT_GOVERNANCE_REPORT"] = artifact_governance_report
+    performance_report["ARTIFACT_FLOW_REPORT"] = artifact_governance_report.get(
+        "flow",
+        {},
+    )
+    training_report["ARTIFACT_GOVERNANCE_REPORT"] = artifact_governance_report
+    training_report["ARTIFACT_FLOW_REPORT"] = artifact_governance_report.get(
+        "flow",
+        {},
+    )
+    shared_state_save_report = shared_cognitive_state.save()
+    shared_cognitive_state_report = shared_cognitive_state.build_report()
+    knowledge_propagation_report = knowledge_bus.report()
+    performance_report["SHARED_COGNITIVE_STATE_REPORT"] = (
+        shared_cognitive_state_report
+    )
+    performance_report["KNOWLEDGE_PROPAGATION_REPORT"] = (
+        knowledge_propagation_report
+    )
+    performance_report["shared_cognitive_state_report"] = (
+        shared_cognitive_state_report
+    )
+    performance_report["knowledge_propagation_report"] = (
+        knowledge_propagation_report
+    )
+    performance_report["shared_cognitive_state_save_report"] = (
+        shared_state_save_report
+    )
+    training_report["SHARED_COGNITIVE_STATE_REPORT"] = (
+        shared_cognitive_state_report
+    )
+    training_report["KNOWLEDGE_PROPAGATION_REPORT"] = (
+        knowledge_propagation_report
+    )
 
     results = {
         "multi_task_results": all_results,
@@ -3632,6 +3958,15 @@ try:
         adaptive_search_intelligence_report,
         "acsc_report": acsc_report,
         "ACSC_REPORT": acsc_report,
+        "cognitive_knowledge_integration_report":
+        cognitive_knowledge_integration_report,
+        "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT":
+        cognitive_knowledge_integration_report,
+        "shared_cognitive_state_report": shared_cognitive_state_report,
+        "SHARED_COGNITIVE_STATE_REPORT": shared_cognitive_state_report,
+        "knowledge_propagation_report": knowledge_propagation_report,
+        "KNOWLEDGE_PROPAGATION_REPORT": knowledge_propagation_report,
+        "shared_cognitive_state_save_report": shared_state_save_report,
         "truth_reuse_report": lifecycle_truth_reuse_report,
         "TRUTH REUSE REPORT": lifecycle_truth_reuse_report,
         "hypothesis_generation_report":
@@ -3824,6 +4159,36 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
         },
         mode=args.mode,
     )
+    if shared_cognitive_state is not None:
+        evaluation_shared_inputs = consume_shared_state(
+            "evaluation_runtime",
+            (
+                "concept_store",
+                "program_store",
+                "search_routes",
+                "knowledge_objects",
+                "evidence_store",
+                "context_store",
+                "truth_candidates",
+                "validated_truths",
+                "memory_entries",
+            ),
+            required=("truth_candidates", "knowledge_objects", "evidence_store"),
+        )
+        shared_cognitive_state.validate_before(
+            "evaluation_runtime",
+            required=("memory_entries", "truth_candidates"),
+        )
+        shared_cognitive_state.publish(
+            "evaluation_runtime",
+            {
+                **evaluation_evidence,
+                "shared_state_inputs": evaluation_shared_inputs,
+            },
+            owner="evaluation_runtime",
+            context=final_performance_report,
+        )
+        shared_cognitive_state.snapshot("final_evaluation")
     cognitive_runtime_execution_engine.complete_cycle()
     final_runtime_lifecycle_report = runtime_lifecycle.build_report()
     final_performance_report["runtime_lifecycle_report"] = (
@@ -3937,6 +4302,44 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
             total_runtime_seconds=execution_time,
         )
     )
+    if shared_cognitive_state is not None:
+        shared_cognitive_state.publish(
+            "execution_registry",
+            cognitive_execution_engine_report,
+            owner="execution_runtime",
+            context=final_performance_report,
+        )
+        shared_cognitive_state.snapshot("execution_finalization")
+        shared_state_save_report = shared_cognitive_state.save()
+        shared_cognitive_state_report = shared_cognitive_state.build_report()
+        knowledge_propagation_report = knowledge_bus.report()
+        final_performance_report["SHARED_COGNITIVE_STATE_REPORT"] = (
+            shared_cognitive_state_report
+        )
+        final_performance_report["KNOWLEDGE_PROPAGATION_REPORT"] = (
+            knowledge_propagation_report
+        )
+        final_performance_report["shared_cognitive_state_report"] = (
+            shared_cognitive_state_report
+        )
+        final_performance_report["knowledge_propagation_report"] = (
+            knowledge_propagation_report
+        )
+        final_performance_report["shared_cognitive_state_save_report"] = (
+            shared_state_save_report
+        )
+        results["SHARED_COGNITIVE_STATE_REPORT"] = (
+            shared_cognitive_state_report
+        )
+        results["shared_cognitive_state_report"] = (
+            shared_cognitive_state_report
+        )
+        results["KNOWLEDGE_PROPAGATION_REPORT"] = (
+            knowledge_propagation_report
+        )
+        results["knowledge_propagation_report"] = (
+            knowledge_propagation_report
+        )
     final_runtime_lifecycle_report = runtime_lifecycle.build_report()
     final_performance_report["runtime_lifecycle_report"] = (
         final_runtime_lifecycle_report
@@ -4152,7 +4555,7 @@ print("NEXRYN :: FINAL CONTEXT")
 print("==================================================\n")
 
 final_report_level = effective_report_level
-if args.mode == "deep":
+if args.mode in {"deep", "full"}:
     final_report_level = deep_mode_budget_manager.bounded_report_level(
         args.mode,
         effective_report_level,
@@ -4488,6 +4891,24 @@ if (
     print(
         compact_report_builder.compact_acsc_report(
             results["ACSC_REPORT"],
+        )
+    )
+
+if (
+    effective_report_level != "minimal"
+    and isinstance(results, dict)
+    and results.get("COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT")
+):
+    from runtime.reporting.compact_report_builder import (
+        compact_report_builder,
+    )
+
+    print("\n==================================================")
+    print("NEXRYN :: COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT")
+    print("==================================================\n")
+    print(
+        compact_report_builder.compact_cognitive_knowledge_integration_report(
+            results["COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT"],
         )
     )
 

@@ -37,8 +37,17 @@ class RuntimeFinalizationOptimizer:
             > 0.95
         )
 
+        finalization_mode = runtime_context.get("finalization_mode")
+        execution_profile = runtime_context.get("execution_profile", {})
+        if isinstance(execution_profile, dict):
+            finalization_mode = (
+                finalization_mode
+                or execution_profile.get("finalization_mode")
+            )
+
         if (
-            mode in {"adaptive", "fast"}
+            mode == "fast"
+            or finalization_mode == "fast"
             or reuse_ready
         ) and not invalidated_concepts:
             return "fast"

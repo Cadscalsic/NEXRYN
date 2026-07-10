@@ -375,6 +375,11 @@ class CompactReportBuilder:
             "ACSC_REPORT": self.compact_acsc_report(
                 report.get("ACSC_REPORT", {}),
             ),
+            "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT": (
+                self.compact_cognitive_knowledge_integration_report(
+                    report.get("COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT", {}),
+                )
+            ),
         }
 
     def compact_program_synthesis_report(self, report: dict) -> dict:
@@ -661,6 +666,64 @@ class CompactReportBuilder:
                 8,
             ),
             "acsc_analytics": report.get("acsc_analytics", {}),
+            "runtime_alignment": report.get("runtime_alignment", {}),
+        }
+
+    def compact_cognitive_knowledge_integration_report(
+        self,
+        report: dict,
+    ) -> dict:
+        report = report if isinstance(report, dict) else {}
+        graph = report.get("knowledge_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        return {
+            "system": report.get(
+                "system",
+                "cognitive_knowledge_integration_layer",
+            ),
+            "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT": report.get(
+                "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT",
+                False,
+            ),
+            "status": report.get("status"),
+            "knowledge_object_count": report.get("knowledge_object_count", 0),
+            "knowledge_flow": report.get("knowledge_flow", {}),
+            "knowledge_graph": {
+                "node_count": graph.get("node_count"),
+                "edge_count": graph.get("edge_count"),
+                "relationship_types": graph.get("relationship_types", []),
+            },
+            "knowledge_bus_events": self._limit_list(
+                report.get("knowledge_bus", []),
+                10,
+            ),
+            "knowledge_reuse": self._compact_value(
+                report.get("knowledge_reuse", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "knowledge_feedback": self._compact_value(
+                report.get("knowledge_feedback", {}),
+                level="normal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "knowledge_consolidation": report.get(
+                "knowledge_consolidation",
+                {},
+            ),
+            "cross_runtime_communication": report.get(
+                "cross_runtime_communication",
+                {},
+            ),
+            "memory_growth": report.get("memory_growth", {}),
+            "integration_coverage": report.get("integration_coverage", {}),
+            "knowledge_bottlenecks": report.get(
+                "knowledge_bottlenecks",
+                [],
+            ),
+            "influence_summary": report.get("influence_summary", {}),
             "runtime_alignment": report.get("runtime_alignment", {}),
         }
 

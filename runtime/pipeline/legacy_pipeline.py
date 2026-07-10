@@ -49,6 +49,7 @@ from runtime.learning.saturation_controller import (
 )
 from runtime.reporting import CompactReportBuilder
 from runtime.cache import CacheManager, concept_lifecycle_cache
+from runtime.planning.execution_profile import build_execution_profile
 from runtime.truth import (
     truth_lifecycle_synchronizer,
     promotion_engine,
@@ -592,6 +593,7 @@ class AdaptiveCognitivePipeline:
         self.profiling_enabled = False
         self.profile_level = "minimal"
         self.requested_budget_mode = None
+        self.execution_profile = build_execution_profile("adaptive")
         self.post_success_mode = "fast"
         self.cached_pipeline_result = None
         self.reasoning_budget = self._default_reasoning_budget()
@@ -1340,6 +1342,9 @@ class AdaptiveCognitivePipeline:
 
         return {
             "mode": "adaptive",
+            "execution_profile": "adaptive",
+            "cognitive_pipeline": "adaptive",
+            "pipeline_name": "adaptive",
             "max_chain_depth": 8,
             "max_dependency_depth": 8,
             "max_reasoning_depth": 6,
@@ -1465,8 +1470,12 @@ class AdaptiveCognitivePipeline:
 
         mode = (mode or self.reasoning_budget.get("mode") or "adaptive")
         mode = str(mode).lower()
-        if mode not in {"fast", "adaptive", "deep"}:
+        if mode not in {"fast", "adaptive", "deep", "full"}:
             mode = "adaptive"
+        self.execution_profile = build_execution_profile(
+            mode,
+            report_level=report_level,
+        )
 
         mode_defaults = {
             "fast": {
@@ -1497,7 +1506,18 @@ class AdaptiveCognitivePipeline:
                 "governance_budget_seconds": 20,
                 "full_governance": False,
             },
+            "full": {
+                "telemetry_enabled": True,
+                "cache_dependencies": True,
+                "report_level": "full",
+                "max_chain_depth": 6,
+                "max_dependency_depth": 6,
+                "max_concepts": 12,
+                "governance_budget_seconds": 20,
+                "full_governance": False,
+            },
         }[mode]
+        mode_defaults.update(self.execution_profile.as_budget_defaults())
 
         budget = {
             **self._default_reasoning_budget(),
@@ -1515,9 +1535,9 @@ class AdaptiveCognitivePipeline:
             budget["cache_dependencies"] = bool(cache_dependencies)
         if report_level is not None:
             report_level = str(report_level).lower()
-            if report_level in {"minimal", "normal", "full"}:
+            if report_level in {"minimal", "normal", "full", "debug", "audit"}:
                 budget["report_level"] = report_level
-        if mode == "deep":
+        if mode in {"deep", "full"}:
             budget = deep_mode_budget_manager.constrain_reasoning_budget(
                 budget,
             )
@@ -13083,7 +13103,7 @@ class AdaptiveCognitivePipeline:
             cache_dependencies=cache_dependencies,
             report_level=report_level,
         )
-        if self.reasoning_budget.get("mode") == "deep":
+        if self.execution_profile.name in {"deep", "full"}:
             deep_budget = deep_mode_budget_manager.build_budget(
                 **(deep_budget_overrides or {})
             )
@@ -13106,8 +13126,15 @@ class AdaptiveCognitivePipeline:
                     },
                 )
             )
-
         self.prepare_task_run()
+        self.runtime.update_context(
+            "execution_profile",
+            self.execution_profile.as_runtime_metadata(),
+        )
+        self.runtime.update_context(
+            "shared_cognitive_pipeline",
+            self.execution_profile.pipeline_name,
+        )
 
         if task_path is not None:
 

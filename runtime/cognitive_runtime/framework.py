@@ -160,6 +160,42 @@ class CognitiveRuntimeFramework:
                 "thermal_memory",
             ],
         },
+        "evidence_builder_runtime": {
+            "runtime_name": "Evidence Builder Runtime",
+            "owner": "evidence_builder_runtime",
+            "timing_metric": "evidence_builder_time_seconds",
+            "lifecycle": [
+                "observation_collection",
+                "observation_normalization",
+                "evidence_correlation",
+                "reference_resolution",
+                "evidence_publication",
+            ],
+            "children": [
+                "observation_normalizer",
+                "evidence_store",
+                "evidence_correlation_engine",
+            ],
+        },
+        "knowledge_integration_runtime": {
+            "runtime_name": "Cognitive Knowledge Integration Runtime",
+            "owner": "knowledge_integration_runtime",
+            "timing_metric": "knowledge_integration_time_seconds",
+            "lifecycle": [
+                "knowledge_bus_publish",
+                "knowledge_bus_subscribe",
+                "knowledge_graph_generation",
+                "knowledge_feedback",
+                "knowledge_consolidation",
+                "cognitive_memory_persistence",
+            ],
+            "children": [
+                "cognitive_knowledge_integration_layer",
+                "knowledge_bus",
+                "knowledge_graph",
+                "cognitive_knowledge_memory",
+            ],
+        },
         "truth_runtime": {
             "runtime_name": "Truth Runtime",
             "owner": "truth_runtime",
@@ -255,6 +291,7 @@ class CognitiveRuntimeFramework:
         core_runtime_ids = {
             "reasoning_runtime",
             "search_runtime",
+            "evidence_builder_runtime",
             "truth_runtime",
             "memory_runtime",
             "evaluation_runtime",
@@ -455,6 +492,13 @@ class CognitiveRuntimeFramework:
             return dict(runtime_payload or search or {})
         if runtime_id == "truth_runtime":
             return sources.get("truth_report") or {}
+        if runtime_id == "evidence_builder_runtime":
+            pipeline = sources.get("cognitive_pipeline_report", {})
+            return (
+                pipeline.get("EVIDENCE_ARCHITECTURE_REPORT", {})
+                if isinstance(pipeline, Mapping)
+                else {}
+            )
         if runtime_id == "memory_runtime":
             return (
                 sources.get("memory_report")
