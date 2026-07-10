@@ -16,6 +16,10 @@ from runtime.artifacts import (
     ArtifactPromotionEngine,
     CognitiveArtifact,
 )
+from runtime.observability import (
+    CognitiveRuntimeObservabilityEngine,
+    cognitive_runtime_observability_engine,
+)
 
 __all__ = [
     "ArtifactLifecycleEngine",
@@ -24,6 +28,8 @@ __all__ = [
     "ArtifactPromotionEngine",
     "CognitiveKnowledgeBus",
     "CognitiveArtifact",
+    "CognitiveRuntimeObservabilityEngine",
     "CognitiveStateManager",
     "SharedCognitiveState",
+    "cognitive_runtime_observability_engine",
 ]

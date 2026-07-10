@@ -16,6 +16,7 @@ from runtime.artifacts import (
     ArtifactPersistenceLayer,
     ArtifactPromotionEngine,
 )
+from runtime.observability import cognitive_runtime_observability_engine
 
 
 STATE_PATH = Path("runtime_data/shared_cognitive_state/latest.json")
@@ -52,6 +53,8 @@ class SharedCognitiveState:
     artifact_economy_events: list[dict[str, Any]] = field(default_factory=list)
     artifact_reuse_events: list[dict[str, Any]] = field(default_factory=list)
     artifact_relationships: list[dict[str, Any]] = field(default_factory=list)
+    runtime_observability_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    runtime_observability_diagnostics: list[dict[str, Any]] = field(default_factory=list)
     propagation_events: list[dict[str, Any]] = field(default_factory=list)
     consumption_events: list[dict[str, Any]] = field(default_factory=list)
     artifact_audit: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -138,6 +141,12 @@ class SharedCognitiveState:
             artifact_economy_events=list(payload.get("artifact_economy_events", [])),
             artifact_reuse_events=list(payload.get("artifact_reuse_events", [])),
             artifact_relationships=list(payload.get("artifact_relationships", [])),
+            runtime_observability_snapshots=list(
+                payload.get("runtime_observability_snapshots", [])
+            ),
+            runtime_observability_diagnostics=list(
+                payload.get("runtime_observability_diagnostics", [])
+            ),
             propagation_events=list(payload.get("propagation_events", [])),
             consumption_events=list(payload.get("consumption_events", [])),
             artifact_audit=dict(payload.get("artifact_audit", {})),
@@ -254,6 +263,38 @@ class SharedCognitiveState:
             "propagation_latency_seconds": round(perf_counter() - started, 9),
         }
         self.propagation_events.append(event)
+        artifact_refs = self._artifact_ids_for_runtime(runtime_id, owner, published_artifacts)
+        self.runtime_observability_snapshots.append(
+            cognitive_runtime_observability_engine.build_snapshot(
+                runtime_id=runtime_id,
+                purpose="runtime_publication",
+                execution_id=str(
+                    data.get("execution_id")
+                    or self.execution_metadata.get("execution_id")
+                    or f"{runtime_id}:shared_state_publication"
+                ),
+                artifact_references=artifact_refs,
+                produced_artifacts=artifact_refs,
+                published_artifacts=published_artifacts,
+                confidence=_average([
+                    _number(self.artifact_registry.get(artifact_id, {}).get("confidence"))
+                    for artifact_id in artifact_refs
+                ]) if artifact_refs else 0.9,
+                duration_seconds=event["propagation_latency_seconds"],
+                input_count=len(data),
+                output_count=sum(published_artifacts.values()),
+                failures=[],
+                warnings=[],
+                lifecycle_stage="PUBLISHED",
+                summary=f"{runtime_id} published {sum(published_artifacts.values())} cognitive artifacts",
+                metrics={
+                    "input_fields": len(data),
+                    "published_artifacts": sum(published_artifacts.values()),
+                    "artifact_type_count": len([value for value in published_artifacts.values() if value]),
+                },
+                telemetry=event,
+            )
+        )
         return event
 
     def consume(
@@ -328,6 +369,37 @@ class SharedCognitiveState:
                 "warning": f"{artifact_type}_missing_on_consume",
                 "severity": "critical" if runtime_id == "truth_runtime" else "diagnostic",
             })
+        self.runtime_observability_snapshots.append(
+            cognitive_runtime_observability_engine.build_snapshot(
+                runtime_id=runtime_id,
+                purpose="runtime_consumption",
+                execution_id=str(
+                    self.execution_metadata.get("execution_id")
+                    or f"{runtime_id}:shared_state_consumption"
+                ),
+                artifact_references=consumed_ids[:200],
+                consumed_artifacts=consumed_ids[:200],
+                confidence=0.9 if not missing_required else 0.6,
+                duration_seconds=event["consumption_latency_seconds"],
+                input_count=len(consumed_ids),
+                output_count=0,
+                failures=[
+                    {"missing_required": missing_required}
+                ] if missing_required else [],
+                warnings=[
+                    f"{artifact_type}_missing_on_consume"
+                    for artifact_type in missing_required
+                ],
+                lifecycle_stage="CONSUMED",
+                summary=f"{runtime_id} consumed {len(consumed_ids)} cognitive artifacts",
+                metrics={
+                    "consumed_artifact_count": len(consumed_ids),
+                    "required_artifact_type_count": len(required),
+                    "missing_required_count": len(missing_required),
+                },
+                telemetry=event,
+            )
+        )
         return {"artifacts": artifacts, "event": event}
 
     def query(self, artifact_type: str, limit: int | None = None) -> dict[str, Any]:
@@ -395,6 +467,7 @@ class SharedCognitiveState:
             "knowledge_object_count": len(self.knowledge_objects),
             "artifact_count": len(self.artifact_registry),
             "snapshot_count": len(self.snapshots),
+            "runtime_observability_snapshot_count": len(self.runtime_observability_snapshots),
         }
 
     def build_report(self) -> dict[str, Any]:
@@ -453,6 +526,7 @@ class SharedCognitiveState:
             "artifact_lifecycle": self.build_artifact_lifecycle_report(),
             "artifact_flow": self.build_artifact_flow_report(),
             "artifact_economy": self.build_artifact_economy_report(),
+            "cognitive_observability": self.build_cognitive_observability_report(),
             "propagation_latency": {
                 "events": [
                     {
@@ -567,6 +641,8 @@ class SharedCognitiveState:
             "artifact_economy_events": self.artifact_economy_events[-500:],
             "artifact_reuse_events": self.artifact_reuse_events[-500:],
             "artifact_relationships": self.artifact_relationships[-1000:],
+            "runtime_observability_snapshots": self.runtime_observability_snapshots[-1000:],
+            "runtime_observability_diagnostics": self.runtime_observability_diagnostics[-500:],
             "propagation_events": self.propagation_events[-200:],
             "consumption_events": self.consumption_events[-200:],
             "artifact_audit": dict(list(self.artifact_audit.items())[-1000:]),
@@ -644,6 +720,21 @@ class SharedCognitiveState:
 
     def build_artifact_lifecycle_report(self) -> dict[str, Any]:
         return self._artifact_engine().build_report()
+
+    def build_cognitive_observability_report(self) -> dict[str, Any]:
+        report = cognitive_runtime_observability_engine.build_report(self)
+        self.runtime_observability_diagnostics.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "system": "cognitive_runtime_observability",
+            "level_5_coverage": report.get("coverage", {}).get("level_5_coverage", 0.0),
+            "gap_count": sum(
+                len(value)
+                for value in report.get("observability_gap_detection", {}).values()
+                if isinstance(value, list)
+            ),
+        })
+        self._sync_observable_cognition(report)
+        return report
 
     def promote_artifacts(self, runtime_id: str = "artifact_governance") -> dict[str, Any]:
         report = ArtifactPromotionEngine(
@@ -864,6 +955,40 @@ class SharedCognitiveState:
                 if record:
                     item.update(_artifact_overlay(record))
 
+    def _artifact_ids_for_runtime(
+        self,
+        runtime_id: str,
+        owner: str,
+        published_artifacts: Mapping[str, int],
+    ) -> list[str]:
+        store_by_count_key = {
+            "concept_count": self.concept_store,
+            "program_count": self.program_store,
+            "search_route_count": self.search_routes,
+            "evidence_count": self.evidence_store,
+            "context_store_count": self.context_store,
+            "dependency_count": self.dependency_graph,
+            "truth_candidate_count": self.truth_candidates,
+            "validated_truth_count": self.validated_truths,
+            "memory_entry_count": self.memory_entries,
+            "knowledge_object_count": self.knowledge_objects,
+        }
+        artifact_ids: list[str] = []
+        for count_key, delta in published_artifacts.items():
+            if int(delta or 0) <= 0:
+                continue
+            store = store_by_count_key.get(count_key)
+            if not store:
+                continue
+            artifact_ids.extend(
+                artifact_id
+                for artifact_id, item in store.items()
+                if item.get("owner") == owner
+                or item.get("owner_runtime") == owner
+                or item.get("origin_runtime") == runtime_id
+            )
+        return sorted(set(artifact_ids))
+
     def _sync_stable_artifacts(self) -> None:
         committed = [
             _small_mapping(record, limit=40)
@@ -882,6 +1007,32 @@ class SharedCognitiveState:
         self.dna_state["stable_artifacts"] = persistent
         self.dna_state["temporary_hypotheses_excluded"] = True
         self.dna_state["artifact_statistics"] = self._artifact_economy_metrics()
+
+    def _sync_observable_cognition(self, observability_report: Mapping[str, Any]) -> None:
+        runtime_reports = observability_report.get("runtime_reports", {})
+        if not isinstance(runtime_reports, Mapping):
+            runtime_reports = {}
+        level_5_runtimes = [
+            runtime_id
+            for runtime_id, report in runtime_reports.items()
+            if isinstance(report, Mapping)
+            and int(report.get("observability_level", 0) or 0) >= 5
+        ]
+        self.world_model["fully_observable_cognition"] = {
+            "runtime_ids": level_5_runtimes,
+            "runtime_count": len(level_5_runtimes),
+            "knowledge_without_explainability_excluded": True,
+        }
+        self.world_model["opaque_cognition_excluded"] = True
+        self.dna_state["observable_behavior_statistics"] = {
+            "runtime_count": len(level_5_runtimes),
+            "level_5_coverage": observability_report.get("coverage", {}).get(
+                "level_5_coverage",
+                0.0,
+            ),
+            "learns_only_from_explainable_behavior": True,
+        }
+        self.dna_state["opaque_execution_excluded"] = True
 
     def _artifact_failure_detection(self) -> dict[str, Any]:
         registry = self.artifact_registry

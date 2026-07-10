@@ -3862,6 +3862,10 @@ try:
     )
     shared_state_save_report = shared_cognitive_state.save()
     shared_cognitive_state_report = shared_cognitive_state.build_report()
+    cognitive_observability_report = shared_cognitive_state_report.get(
+        "cognitive_observability",
+        {},
+    )
     knowledge_propagation_report = knowledge_bus.report()
     performance_report["SHARED_COGNITIVE_STATE_REPORT"] = (
         shared_cognitive_state_report
@@ -3878,11 +3882,20 @@ try:
     performance_report["shared_cognitive_state_save_report"] = (
         shared_state_save_report
     )
+    performance_report["COGNITIVE_OBSERVABILITY_REPORT"] = (
+        cognitive_observability_report
+    )
+    performance_report["cognitive_observability_report"] = (
+        cognitive_observability_report
+    )
     training_report["SHARED_COGNITIVE_STATE_REPORT"] = (
         shared_cognitive_state_report
     )
     training_report["KNOWLEDGE_PROPAGATION_REPORT"] = (
         knowledge_propagation_report
+    )
+    training_report["COGNITIVE_OBSERVABILITY_REPORT"] = (
+        cognitive_observability_report
     )
 
     results = {
@@ -3964,6 +3977,8 @@ try:
         cognitive_knowledge_integration_report,
         "shared_cognitive_state_report": shared_cognitive_state_report,
         "SHARED_COGNITIVE_STATE_REPORT": shared_cognitive_state_report,
+        "cognitive_observability_report": cognitive_observability_report,
+        "COGNITIVE_OBSERVABILITY_REPORT": cognitive_observability_report,
         "knowledge_propagation_report": knowledge_propagation_report,
         "KNOWLEDGE_PROPAGATION_REPORT": knowledge_propagation_report,
         "shared_cognitive_state_save_report": shared_state_save_report,
@@ -4312,6 +4327,10 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
         shared_cognitive_state.snapshot("execution_finalization")
         shared_state_save_report = shared_cognitive_state.save()
         shared_cognitive_state_report = shared_cognitive_state.build_report()
+        cognitive_observability_report = shared_cognitive_state_report.get(
+            "cognitive_observability",
+            {},
+        )
         knowledge_propagation_report = knowledge_bus.report()
         final_performance_report["SHARED_COGNITIVE_STATE_REPORT"] = (
             shared_cognitive_state_report
@@ -4328,6 +4347,12 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
         final_performance_report["shared_cognitive_state_save_report"] = (
             shared_state_save_report
         )
+        final_performance_report["COGNITIVE_OBSERVABILITY_REPORT"] = (
+            cognitive_observability_report
+        )
+        final_performance_report["cognitive_observability_report"] = (
+            cognitive_observability_report
+        )
         results["SHARED_COGNITIVE_STATE_REPORT"] = (
             shared_cognitive_state_report
         )
@@ -4339,6 +4364,12 @@ if isinstance(results, dict) and isinstance(results.get("performance_report"), d
         )
         results["knowledge_propagation_report"] = (
             knowledge_propagation_report
+        )
+        results["COGNITIVE_OBSERVABILITY_REPORT"] = (
+            cognitive_observability_report
+        )
+        results["cognitive_observability_report"] = (
+            cognitive_observability_report
         )
     final_runtime_lifecycle_report = runtime_lifecycle.build_report()
     final_performance_report["runtime_lifecycle_report"] = (
