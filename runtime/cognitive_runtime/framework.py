@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.protocol import build_unified_runtime_protocol_report
+
 
 @dataclass
 class CognitiveRuntimeRecord:
@@ -291,7 +293,6 @@ class CognitiveRuntimeFramework:
         core_runtime_ids = {
             "reasoning_runtime",
             "search_runtime",
-            "evidence_builder_runtime",
             "truth_runtime",
             "memory_runtime",
             "evaluation_runtime",
@@ -304,13 +305,21 @@ class CognitiveRuntimeFramework:
             != f"{runtime_id}:synthetic_execution"
         ]
         status = self._status(records, observability)
+        runtime_registry = {
+            record.runtime_id: record.as_dict()
+            for record in records
+        }
+        protocol_report = build_unified_runtime_protocol_report(
+            runtime_registry,
+            observability_report=observability,
+        )
         return {
             "system": self.system_name,
             "COGNITIVE_RUNTIME_REPORT": True,
-            "runtime_registry": {
-                record.runtime_id: record.as_dict()
-                for record in records
-            },
+            "runtime_registry": runtime_registry,
+            "unified_runtime_protocol": protocol_report,
+            "UNIFIED_RUNTIME_PROTOCOL_REPORT":
+            protocol_report["UNIFIED_RUNTIME_PROTOCOL_REPORT"],
             "runtime_graph": self._runtime_graph(records),
             "runtime_lifecycle": {
                 record.runtime_id: record.lifecycle

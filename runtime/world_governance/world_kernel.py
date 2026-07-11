@@ -9,6 +9,16 @@ from runtime.world_governance.constitutional_identity import (
     LOCKED_CORE_PRINCIPLE_NAMES,
 )
 from runtime.world_governance.evolution_policy import evolution_policy
+from runtime.world_governance.executive_cognitive_governor import (
+    ExecutiveCognitiveGovernor,
+    executive_cognitive_governor,
+)
+from runtime.world_governance.cognitive_intelligence_analytics import (
+    cognitive_intelligence_analytics,
+)
+from runtime.world_governance.cognitive_situation_awareness import (
+    cognitive_situation_awareness_engine,
+)
 from runtime.world_governance.governance_decision import (
     WorldGovernanceDecision,
 )
@@ -19,8 +29,13 @@ from runtime.world_governance.world_state import WorldState
 
 
 class WorldKernel:
-    def __init__(self, world_state: WorldState | None = None):
+    def __init__(
+        self,
+        world_state: WorldState | None = None,
+        executive_governor: ExecutiveCognitiveGovernor | None = None,
+    ):
         self.world_state = world_state or WorldState()
+        self.executive_governor = executive_governor or ExecutiveCognitiveGovernor()
 
     def evaluate_world_change(self, change_request):
         return self._evaluate(change_request, "change")
@@ -37,8 +52,197 @@ class WorldKernel:
     def evaluate_evolution_permission(self, candidate):
         return self._evaluate(candidate, "evolution")
 
+    def build_execution_intent(
+        self,
+        task: Mapping[str, Any] | Any,
+        context: Mapping[str, Any] | None = None,
+    ):
+        return self.executive_governor.build_execution_intent(task, context)
+
+    def evaluate_cognitive_policy(
+        self,
+        task: Mapping[str, Any] | Any,
+        context: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        report = self.executive_governor.policy_engine.select_policy(
+            task,
+            context,
+        )
+        world_governance_reporter.record_policy_report(report)
+        return report
+
+    def evaluate_cognitive_decision(
+        self,
+        task: Mapping[str, Any] | Any,
+        context: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        task_profile = self.executive_governor.policy_engine.classify_task(
+            task,
+            context,
+        )
+        evaluations = self.executive_governor.policy_engine.evaluate_policies(
+            task_profile,
+        )
+        report = (
+            self.executive_governor.policy_engine
+            .decision_intelligence_engine
+            .reason_over_policy_evaluations(
+                task_profile,
+                evaluations,
+                self.executive_governor.policy_engine.policy_statistics,
+            )
+        )
+        world_governance_reporter.record_decision_intelligence_report(report)
+        return report
+
+    def record_policy_outcome(
+        self,
+        policy_id: str,
+        outcome: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return self.executive_governor.policy_engine.record_policy_outcome(
+            policy_id,
+            outcome,
+        )
+
+    def record_decision_outcome(
+        self,
+        decision_report: Mapping[str, Any],
+        actual_outcome: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return (
+            self.executive_governor.policy_engine
+            .decision_intelligence_engine
+            .record_decision_outcome(
+                decision_report,
+                actual_outcome,
+            )
+        )
+
+    def analyze_cognitive_intelligence(
+        self,
+        telemetry: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        report = cognitive_intelligence_analytics.analyze(telemetry or {})
+        world_governance_reporter.record_intelligence_analytics_report(report)
+        return report
+
+    def construct_cognitive_situation(
+        self,
+        artifacts: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        report = cognitive_situation_awareness_engine.construct_situation(
+            artifacts or {}
+        )
+        world_governance_reporter.record_situation_report(report)
+        return report
+
+    def construct_execution_graph(self, execution_intent):
+        return self.executive_governor.construct_execution_graph(execution_intent)
+
+    def allocate_runtime_budgets(self, execution_intent, execution_graph):
+        return self.executive_governor.allocate_runtime_budgets(
+            execution_intent,
+            execution_graph,
+        )
+
+    def authorize_runtime_activation(
+        self,
+        execution_graph: Mapping[str, Any],
+        runtime_budgets: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return self.executive_governor.decide_runtime_activation(
+            execution_graph,
+            runtime_budgets,
+        )
+
+    def govern_artifact_transition(
+        self,
+        artifact: Mapping[str, Any],
+        target_state: str,
+    ) -> dict[str, Any]:
+        return self.executive_governor.supervise_artifact_transition(
+            artifact,
+            target_state,
+        )
+
+    def govern_truth_promotion(
+        self,
+        truth_candidate: Mapping[str, Any],
+        target_state: str = "validated_truth",
+    ) -> dict[str, Any]:
+        return self.executive_governor.validate_truth_promotion(
+            truth_candidate,
+            target_state,
+        )
+
+    def govern_world_model_update(
+        self,
+        knowledge: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return self.executive_governor.govern_world_model_update(knowledge)
+
+    def govern_dna_evolution(
+        self,
+        signal: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return self.executive_governor.govern_dna_evolution(signal)
+
+    def govern_cognitive_cycle(
+        self,
+        task: Mapping[str, Any] | Any,
+        context: Mapping[str, Any] | None = None,
+        runtime_events: list[Mapping[str, Any]] | None = None,
+        execution_result: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        report = self.executive_governor.govern_cognitive_cycle(
+            task,
+            context=context,
+            runtime_events=runtime_events,
+            execution_result=execution_result,
+        )
+        analytics_report = cognitive_intelligence_analytics.analyze(report)
+        report["COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"] = analytics_report[
+            "COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"
+        ]
+        situation_report = (
+            cognitive_situation_awareness_engine.construct_situation(report)
+        )
+        report["COGNITIVE_SITUATION_REPORT"] = situation_report[
+            "COGNITIVE_SITUATION_REPORT"
+        ]
+        world_governance_reporter.record_executive_report(report)
+        world_governance_reporter.record_intelligence_analytics_report(
+            analytics_report
+        )
+        world_governance_reporter.record_situation_report(situation_report)
+        return report
+
     def build_report(self) -> dict[str, Any]:
         report = world_governance_reporter.build_report()
+        executive_report = self.executive_governor.build_report()
+        if executive_report["WORLD_GOVERNANCE_EXECUTIVE_REPORT"]:
+            report["WORLD_GOVERNANCE_EXECUTIVE_REPORT"] = executive_report[
+                "WORLD_GOVERNANCE_EXECUTIVE_REPORT"
+            ]
+        if executive_report["COGNITIVE_POLICY_REPORT"]:
+            report["COGNITIVE_POLICY_REPORT"] = executive_report[
+                "COGNITIVE_POLICY_REPORT"
+            ]
+        if executive_report["COGNITIVE_DECISION_INTELLIGENCE_REPORT"]:
+            report["COGNITIVE_DECISION_INTELLIGENCE_REPORT"] = executive_report[
+                "COGNITIVE_DECISION_INTELLIGENCE_REPORT"
+            ]
+        analytics_report = cognitive_intelligence_analytics.build_report()
+        if analytics_report["COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"]:
+            report["COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"] = analytics_report[
+                "COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"
+            ]
+        situation_report = cognitive_situation_awareness_engine.build_report()
+        if situation_report["COGNITIVE_SITUATION_REPORT"]:
+            report["COGNITIVE_SITUATION_REPORT"] = situation_report[
+                "COGNITIVE_SITUATION_REPORT"
+            ]
         report["world_state"] = self.world_state.as_report()
         report["locked_core_principles"] = list(LOCKED_CORE_PRINCIPLE_NAMES)
         return report
@@ -182,6 +386,7 @@ class WorldKernel:
 
 
 world_governance_kernel = WorldKernel()
+world_governance_kernel.executive_governor = executive_cognitive_governor
 
 
 __all__ = [
