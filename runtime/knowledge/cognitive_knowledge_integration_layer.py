@@ -16,6 +16,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Mapping
 
+from runtime.knowledge.unified_cognitive_bus import UnifiedCognitiveBus
+
 
 @dataclass
 class KnowledgeObject:
@@ -221,6 +223,72 @@ class CognitiveKnowledgeIntegrationLayer:
 
     def __init__(self, memory: CognitiveKnowledgeMemory | None = None) -> None:
         self.memory = memory or CognitiveKnowledgeMemory()
+        self.cognitive_bus = UnifiedCognitiveBus()
+
+    def build_unified_cognitive_bus_report(
+        self,
+        *,
+        execution_id: str = "execution:unknown",
+        runtime_reports: Mapping[str, Any] | None = None,
+        concept_formation_report: Mapping[str, Any] | None = None,
+        program_synthesis_report: Mapping[str, Any] | None = None,
+        adaptive_search_intelligence_report: Mapping[str, Any] | None = None,
+        cognitive_route_intelligence_report: Mapping[str, Any] | None = None,
+        evidence_architecture_report: Mapping[str, Any] | None = None,
+        truth_report: Mapping[str, Any] | None = None,
+        memory_report: Mapping[str, Any] | None = None,
+        reasoning_report: Mapping[str, Any] | None = None,
+        evaluation_report: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        reports = dict(runtime_reports or {})
+        if concept_formation_report:
+            reports["concept_formation_runtime"] = dict(concept_formation_report)
+        if program_synthesis_report:
+            reports["program_synthesis_runtime"] = dict(program_synthesis_report)
+        if adaptive_search_intelligence_report:
+            reports["adaptive_search_runtime"] = dict(adaptive_search_intelligence_report)
+        if cognitive_route_intelligence_report:
+            reports["search_runtime"] = dict(cognitive_route_intelligence_report)
+        if evidence_architecture_report:
+            reports["evidence_builder_runtime"] = dict(evidence_architecture_report)
+        if truth_report:
+            reports["truth_runtime"] = dict(truth_report)
+        if memory_report:
+            reports["memory_runtime"] = dict(memory_report)
+        if reasoning_report:
+            reports["reasoning_runtime"] = dict(reasoning_report)
+        if evaluation_report:
+            reports["evaluation_runtime"] = dict(evaluation_report)
+
+        publication = self.cognitive_bus.publish_many_from_runtime_reports(
+            reports,
+            execution_id=execution_id,
+        )
+        bus_report = self.cognitive_bus.report()
+        snapshot = publication["snapshot"]
+        return {
+            **bus_report,
+            "cognitive_snapshot": snapshot,
+            "parent_execution_aggregation": snapshot["execution_summary"],
+            "canonical_exchange_contract": {
+                "publish": True,
+                "subscribe": True,
+                "acknowledge": True,
+                "update": True,
+                "retire": True,
+                "replay": True,
+            },
+            "future_subsystem_integration": {
+                "process_semantic_context_consumes_cognitive_objects": True,
+                "cognitive_coverage_analyzer_consumes_object_stream": True,
+                "experience_engine_builds_from_snapshots": True,
+                "mental_models_emerge_from_object_patterns": True,
+                "world_model_stores_cognitive_objects": True,
+                "dna_evolves_from_aggregated_cognitive_objects": True,
+                "executive_world_governance_supervises_object_flow": True,
+                "meta_cognition_evaluates_bus_quality": True,
+            },
+        }
 
     def build_report(
         self,

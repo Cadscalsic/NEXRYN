@@ -629,8 +629,19 @@ def _dedupe_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _dedupe_objects(objects: list[CognitiveObject]) -> list[CognitiveObject]:
     deduped = {}
     for item in objects:
-        deduped[item.object_id] = item
+        previous = deduped.get(item.object_id)
+        if previous is None or _object_quality(item) >= _object_quality(previous):
+            deduped[item.object_id] = item
     return list(deduped.values())
+
+
+def _object_quality(item: CognitiveObject) -> float:
+    score = 0.0
+    score += 1.0 if item.lifecycle_state and item.lifecycle_state != "BIRTH" else 0.0
+    score += 0.5 if item.source_payload else 0.0
+    score += min(len(item.historical_evolution) * 0.1, 0.5)
+    score += item.confidence * 0.25
+    return score
 
 
 def _dedupe_history(history: list[dict[str, Any]]) -> list[dict[str, Any]]:

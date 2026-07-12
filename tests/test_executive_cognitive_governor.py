@@ -115,3 +115,57 @@ def test_kernel_build_report_exposes_latest_executive_report():
     assert report["WORLD_GOVERNANCE_EXECUTIVE_REPORT"]["Execution Intent"][
         "goal"
     ] == "reportable_cycle"
+
+
+def test_executive_brain_actively_steers_cognition():
+    kernel = WorldKernel()
+
+    report = kernel.govern_cognitive_cycle(
+        {
+            "goal": "solve_geometry_dependency_task",
+            "task": "geometry object transformation with dependency reasoning",
+            "difficulty": 0.7,
+            "novelty": 0.8,
+            "risk_level": 0.45,
+            "similarity_to_previous_tasks": 0.72,
+        },
+        runtime_events=[
+            {
+                "runtime_id": "adaptive_search",
+                "confidence": 0.34,
+                "progress": 0.35,
+                "importance": 0.9,
+                "novelty": 0.8,
+                "pressure": 0.4,
+                "resource_consumption": 0.35,
+                "evidence_growth": 1,
+            },
+            {
+                "runtime_id": "truth_runtime",
+                "confidence": 0.48,
+                "progress": 0.2,
+                "importance": 0.7,
+                "pressure": 0.6,
+                "truth_growth": 0,
+            },
+        ],
+        execution_result={"success": True, "stable": True},
+    )
+
+    executive = report["EXECUTIVE_COGNITIVE_REPORT"]
+    world_executive = report["WORLD_GOVERNANCE_EXECUTIVE_REPORT"]
+
+    assert executive["governance_authority"] == "Executive World Governance"
+    assert executive["active_cognition"] is True
+    assert executive["Attention Allocation"]["attention_is_finite"] is True
+    assert executive["Goal Hierarchy"]["primary_goal"] == "solve_geometry_dependency_task"
+    assert executive["Runtime Priorities"]["priorities_evolve_continuously"] is True
+    assert executive["Interrupt Decisions"]["interrupts_enabled"] is True
+    assert executive["Experience Reuse"]["reuse_query_performed"] is True
+    assert executive["Mental Models Activated"]["selected_mental_model"]["name"] in {
+        "Spatial Mental Model",
+        "Causal Mental Model",
+    }
+    assert executive["Strategic Decisions"]["truth_promotion_requires_executive_approval"] is True
+    assert "Prediction Results" in executive
+    assert "EXECUTIVE_COGNITIVE_REPORT" in world_executive

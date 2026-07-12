@@ -34,6 +34,15 @@ from runtime.process.process_semantic_context_engine import (
     ProcessSemanticContext,
     ProcessSemanticContextEngine,
 )
+from runtime.process.process_semantic_context_foundation import (
+    CognitiveArtifactSemanticContextEngine,
+    ResidualCluster,
+    SemanticBoundary,
+    SemanticContext,
+    SemanticContextRegistry,
+    SemanticResidual,
+    UnknownRegion,
+)
 from runtime.process.process_semantic_engine import (
     ProcessSemanticEngine,
     ProcessSemanticModel,
@@ -94,6 +103,13 @@ __all__ = [
     "ProcessDependencyValidator",
     "ProcessSemanticContextEngine",
     "ProcessSemanticContext",
+    "CognitiveArtifactSemanticContextEngine",
+    "ResidualCluster",
+    "SemanticBoundary",
+    "SemanticContext",
+    "SemanticContextRegistry",
+    "SemanticResidual",
+    "UnknownRegion",
     "ProcessSemanticEngine",
     "ProcessSemanticModel",
     "ProcessInvariantEngine",

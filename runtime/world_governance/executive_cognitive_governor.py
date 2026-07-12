@@ -85,6 +85,7 @@ class ExecutiveCognitiveGovernor:
     ) -> None:
         self.executive_reports: list[dict[str, Any]] = []
         self.active_intents: dict[str, CognitiveExecutionIntent] = {}
+        self.executive_memory: list[dict[str, Any]] = []
         self.policy_engine = policy_engine or CognitivePolicyEngine()
 
     def build_execution_intent(
@@ -452,6 +453,355 @@ class ExecutiveCognitiveGovernor:
             "confidence_evolution": confidence_values,
         }
 
+    def allocate_executive_attention(
+        self,
+        intent: CognitiveExecutionIntent | Mapping[str, Any],
+        monitoring_report: Mapping[str, Any],
+        runtime_events: list[Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        intent_data = (
+            intent.as_dict()
+            if hasattr(intent, "as_dict")
+            else dict(intent)
+        )
+        analysis = dict(intent_data.get("task_analysis") or {})
+        events = [dict(event) for event in runtime_events or []]
+        latest_confidence = (
+            monitoring_report.get("confidence_evolution") or [0.0]
+        )[-1]
+        attention_targets: list[dict[str, Any]] = []
+        for event in events:
+            runtime_id = str(event.get("runtime_id", "unknown_runtime"))
+            importance = self._score(event.get("importance", event.get("progress", 0.0)))
+            novelty = self._score(event.get("novelty", analysis.get("novelty", 0.0)))
+            pressure = self._score(event.get("pressure", event.get("resource_consumption", 0.0)))
+            uncertainty = self._score(1.0 - float(event.get("confidence", latest_confidence)))
+            priority = self._score(
+                importance * 0.35
+                + novelty * 0.25
+                + uncertainty * 0.25
+                + pressure * 0.15
+            )
+            attention_targets.append({
+                "target": runtime_id,
+                "priority": round(priority, 3),
+                "decision": "deepen" if priority >= 0.62 else "monitor" if priority >= 0.35 else "postpone",
+                "reason": self._attention_reason(importance, novelty, uncertainty, pressure),
+            })
+        if not attention_targets:
+            attention_targets.append({
+                "target": intent_data.get("goal", "governed_cognitive_execution"),
+                "priority": round(max(analysis.get("priority", 0.5), analysis.get("novelty", 0.0)), 3),
+                "decision": "monitor",
+                "reason": "no_runtime_feedback_available",
+            })
+        focused = [item for item in attention_targets if item["decision"] == "deepen"]
+        return {
+            "attention_is_finite": True,
+            "attention_targets": attention_targets,
+            "focused_targets": focused,
+            "ignored_or_postponed_targets": [
+                item for item in attention_targets if item["decision"] == "postpone"
+            ],
+            "attention_efficiency": round(
+                len(focused) / max(1, len(attention_targets)),
+                3,
+            ),
+            "current_focus": (
+                max(attention_targets, key=lambda item: item["priority"])["target"]
+                if attention_targets
+                else None
+            ),
+        }
+
+    def manage_goal_hierarchy(
+        self,
+        intent: CognitiveExecutionIntent | Mapping[str, Any],
+        monitoring_report: Mapping[str, Any],
+        termination: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        intent_data = (
+            intent.as_dict()
+            if hasattr(intent, "as_dict")
+            else dict(intent)
+        )
+        analysis = dict(intent_data.get("task_analysis") or {})
+        primary = intent_data.get("goal", "governed_cognitive_execution")
+        subgoals = [
+            {"goal": "understand_situation", "state": "active"},
+            {"goal": "generate_or_select_concepts", "state": "pending"},
+            {"goal": "discover_or_reuse_strategy", "state": "pending"},
+            {"goal": "validate_truth", "state": "pending"},
+            {"goal": "store_experience", "state": "future"},
+        ]
+        progress = self._score(monitoring_report.get("execution_progress", 0.0))
+        if progress >= 0.25:
+            subgoals[0]["state"] = "completed"
+            subgoals[1]["state"] = "active"
+        if progress >= 0.55:
+            subgoals[1]["state"] = "completed"
+            subgoals[2]["state"] = "active"
+        if progress >= 0.75:
+            subgoals[2]["state"] = "completed"
+            subgoals[3]["state"] = "active"
+        if termination.get("terminate_execution"):
+            subgoals[3]["state"] = "completed"
+            subgoals[4]["state"] = "active"
+        if analysis.get("similarity_to_previous_tasks", 0.0) >= 0.7:
+            subgoals.insert(2, {"goal": "reuse_prior_experience", "state": "active"})
+        return {
+            "primary_goal": primary,
+            "current_goal": next(
+                (item["goal"] for item in subgoals if item["state"] == "active"),
+                primary,
+            ),
+            "secondary_goals": [item["goal"] for item in subgoals[1:]],
+            "goal_hierarchy": subgoals,
+            "completed_goals": [
+                item["goal"] for item in subgoals if item["state"] == "completed"
+            ],
+            "abandoned_goals": [],
+            "future_goals": [
+                item["goal"] for item in subgoals if item["state"] == "future"
+            ],
+            "goal_stability": round(1.0 - abs(analysis.get("novelty", 0.0) - progress) * 0.4, 3),
+        }
+
+    def select_mental_model(
+        self,
+        task: Mapping[str, Any] | Any,
+        context: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        data = self._data(task)
+        data.update(dict(context or {}))
+        text = " ".join(str(value).lower() for value in data.values())
+        candidates = [
+            ("spatial_mental_model", "Spatial Mental Model", ("geometry", "shape", "spatial", "object", "position")),
+            ("counting_mental_model", "Counting Mental Model", ("count", "number", "quantity", "cardinality")),
+            ("color_mental_model", "Color Transformation Mental Model", ("color", "palette", "replace")),
+            ("physics_mental_model", "Physics Mental Model", ("motion", "gravity", "force", "trajectory")),
+            ("causal_mental_model", "Causal Mental Model", ("cause", "dependency", "process", "chain")),
+        ]
+        scored = []
+        for model_id, name, keywords in candidates:
+            score = min(1.0, sum(1 for keyword in keywords if keyword in text) / 2.0)
+            scored.append({
+                "mental_model_id": model_id,
+                "name": name,
+                "selection_score": round(score, 3),
+                "activation_state": "candidate",
+            })
+        selected = max(scored, key=lambda item: item["selection_score"])
+        if selected["selection_score"] == 0.0:
+            selected = {
+                "mental_model_id": "adaptive_general_model",
+                "name": "Adaptive General Mental Model",
+                "selection_score": 0.5,
+                "activation_state": "selected",
+            }
+        else:
+            selected = {**selected, "activation_state": "selected"}
+        return {
+            "selection_automatic": True,
+            "selected_mental_model": selected,
+            "candidate_models": scored,
+        }
+
+    def plan_experience_reuse(
+        self,
+        intent: CognitiveExecutionIntent | Mapping[str, Any],
+        mental_model: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        intent_data = (
+            intent.as_dict()
+            if hasattr(intent, "as_dict")
+            else dict(intent)
+        )
+        similarity = self._score(
+            intent_data.get("task_analysis", {}).get("similarity_to_previous_tasks", 0.0)
+        )
+        reusable = [
+            memory for memory in self.executive_memory
+            if memory.get("success") and memory.get("mental_model")
+            == mental_model.get("selected_mental_model", {}).get("name")
+        ][-3:]
+        transfer_quality = self._score(max(similarity, 0.25 * len(reusable)))
+        return {
+            "reuse_query_performed": True,
+            "similar_experiences_found": len(reusable),
+            "transfer_quality": round(transfer_quality, 3),
+            "reuse_authorized": transfer_quality >= 0.55,
+            "reuse_strategy": (
+                "activate_successful_reasoning_trace"
+                if transfer_quality >= 0.55
+                else "explore_before_reuse"
+            ),
+            "experience_ids": [item.get("experience_id") for item in reusable],
+        }
+
+    def prioritize_runtimes(
+        self,
+        execution_graph: Mapping[str, Any],
+        attention: Mapping[str, Any],
+        goal_hierarchy: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        focus = attention.get("current_focus")
+        current_goal = str(goal_hierarchy.get("current_goal", ""))
+        priorities = []
+        for node in execution_graph.get("nodes") or []:
+            runtime_id = node["runtime_id"]
+            score = 0.45
+            if runtime_id == focus:
+                score += 0.3
+            if "truth" in current_goal and runtime_id == "truth_runtime":
+                score += 0.25
+            if "experience" in current_goal and runtime_id == "memory_runtime":
+                score += 0.25
+            if "concept" in current_goal and runtime_id == "concept_runtime":
+                score += 0.2
+            label = "High" if score >= 0.65 else "Medium" if score >= 0.4 else "Low"
+            priorities.append({
+                "runtime_id": runtime_id,
+                "priority": label,
+                "priority_score": round(self._score(score), 3),
+                "updated_by": "executive_cognitive_brain",
+            })
+        return {
+            "runtime_priorities": priorities,
+            "priorities_evolve_continuously": True,
+        }
+
+    def predict_execution_risks(
+        self,
+        monitoring_report: Mapping[str, Any],
+        runtime_priorities: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        latest_confidence = (
+            monitoring_report.get("confidence_evolution") or [0.0]
+        )[-1]
+        resource = self._score(monitoring_report.get("resource_consumption", 0.0))
+        progress = self._score(monitoring_report.get("execution_progress", 0.0))
+        predictions = {
+            "search_failure": latest_confidence < 0.45 and progress < 0.5,
+            "reasoning_failure": latest_confidence < 0.35,
+            "memory_conflict": monitoring_report.get("runtime_health") == "unstable",
+            "truth_instability": latest_confidence < 0.6,
+            "resource_exhaustion": resource >= 0.85,
+            "policy_conflict": any(
+                item.get("priority") == "High" and item.get("runtime_id") == "truth_runtime"
+                for item in runtime_priorities.get("runtime_priorities", [])
+            ) and latest_confidence < 0.5,
+        }
+        return {
+            **predictions,
+            "prediction_confidence": round(
+                self._score(max(resource, 1.0 - latest_confidence, 1.0 - progress)),
+                3,
+            ),
+        }
+
+    def decide_cognitive_interrupts(
+        self,
+        monitoring_report: Mapping[str, Any],
+        predictions: Mapping[str, Any],
+        reuse: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        latest_confidence = (
+            monitoring_report.get("confidence_evolution") or [0.0]
+        )[-1]
+        interrupts = []
+        if latest_confidence >= 0.9:
+            interrupts.append({"interrupt": "stop_search", "reason": "high_confidence_found"})
+        if reuse.get("reuse_authorized"):
+            interrupts.append({"interrupt": "activate_experience", "reason": "memory_match_found"})
+        if predictions.get("truth_instability"):
+            interrupts.append({"interrupt": "increase_evidence", "reason": "truth_instability_predicted"})
+        if predictions.get("resource_exhaustion"):
+            interrupts.append({"interrupt": "suspend_low_priority_runtime", "reason": "resource_exhaustion_predicted"})
+        return {
+            "interrupts_enabled": True,
+            "interrupt_decisions": interrupts,
+            "interrupt_count": len(interrupts),
+        }
+
+    def build_executive_plan(
+        self,
+        goal_hierarchy: Mapping[str, Any],
+        runtime_priorities: Mapping[str, Any],
+        interrupts: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        high_priority = [
+            item["runtime_id"]
+            for item in runtime_priorities.get("runtime_priorities", [])
+            if item.get("priority") == "High"
+        ]
+        return {
+            "current_plan": [
+                goal_hierarchy.get("current_goal"),
+                *high_priority,
+            ],
+            "alternative_plans": ["reuse_experience_path", "evidence_expansion_path"],
+            "future_plans": goal_hierarchy.get("future_goals", []),
+            "recovery_plans": [
+                item["interrupt"] for item in interrupts.get("interrupt_decisions", [])
+            ] or ["continue_monitored_execution"],
+            "optimization_plans": ["return_unused_budget", "deprioritize_low_value_runtime"],
+        }
+
+    def build_executive_cognitive_report(
+        self,
+        *,
+        intent: CognitiveExecutionIntent,
+        attention: Mapping[str, Any],
+        goal_hierarchy: Mapping[str, Any],
+        runtime_priorities: Mapping[str, Any],
+        interrupts: Mapping[str, Any],
+        mental_model: Mapping[str, Any],
+        reuse: Mapping[str, Any],
+        plan: Mapping[str, Any],
+        predictions: Mapping[str, Any],
+        budgets: Mapping[str, Any],
+        termination: Mapping[str, Any],
+        learning: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        analysis = dict(intent.task_analysis)
+        confidence = (
+            termination.get("latest_confidence")
+            or max(0.5, analysis.get("priority", 0.5))
+        )
+        return {
+            "system": "executive_cognitive_brain",
+            "governance_authority": "Executive World Governance",
+            "active_cognition": True,
+            "Current Goals": {
+                "primary_goal": goal_hierarchy.get("primary_goal"),
+                "current_goal": goal_hierarchy.get("current_goal"),
+                "secondary_goals": goal_hierarchy.get("secondary_goals", []),
+            },
+            "Goal Hierarchy": goal_hierarchy,
+            "Attention Allocation": attention,
+            "Runtime Priorities": runtime_priorities,
+            "Interrupt Decisions": interrupts,
+            "Mental Models Activated": mental_model,
+            "Experience Reuse": reuse,
+            "Planning Decisions": plan,
+            "Strategic Decisions": {
+                "truth_promotion_requires_executive_approval": True,
+                "memory_promotion_requires_executive_approval": True,
+                "dna_update_requires_executive_approval": True,
+                "world_model_update_requires_executive_approval": True,
+                "policy_update_requires_executive_approval": True,
+            },
+            "Prediction Results": predictions,
+            "Resource Allocation": budgets,
+            "Executive Confidence": round(self._score(confidence), 3),
+            "Executive Adaptation": {
+                "learning_enabled": True,
+                "executive_memory_size": len(self.executive_memory),
+                "latest_learning": learning,
+            },
+        }
+
     def adaptive_replan(
         self,
         intent: CognitiveExecutionIntent | Mapping[str, Any],
@@ -535,6 +885,51 @@ class ExecutiveCognitiveGovernor:
         replanning = self.adaptive_replan(intent, monitoring)
         termination = self.decide_termination(intent, monitoring)
         learning = self.govern_learning_cycle(execution_result)
+        attention = self.allocate_executive_attention(
+            intent,
+            monitoring,
+            runtime_events,
+        )
+        goal_hierarchy = self.manage_goal_hierarchy(
+            intent,
+            monitoring,
+            termination,
+        )
+        mental_model = self.select_mental_model(task, context)
+        reuse = self.plan_experience_reuse(intent, mental_model)
+        runtime_priorities = self.prioritize_runtimes(
+            graph,
+            attention,
+            goal_hierarchy,
+        )
+        predictions = self.predict_execution_risks(
+            monitoring,
+            runtime_priorities,
+        )
+        interrupts = self.decide_cognitive_interrupts(
+            monitoring,
+            predictions,
+            reuse,
+        )
+        executive_plan = self.build_executive_plan(
+            goal_hierarchy,
+            runtime_priorities,
+            interrupts,
+        )
+        executive_cognitive_report = self.build_executive_cognitive_report(
+            intent=intent,
+            attention=attention,
+            goal_hierarchy=goal_hierarchy,
+            runtime_priorities=runtime_priorities,
+            interrupts=interrupts,
+            mental_model=mental_model,
+            reuse=reuse,
+            plan=executive_plan,
+            predictions=predictions,
+            budgets=budgets,
+            termination=termination,
+            learning=learning,
+        )
         policy_report = intent.policy_evaluation
         decision_report = policy_report.get(
             "Cognitive Decision Intelligence Report",
@@ -592,12 +987,32 @@ class ExecutiveCognitiveGovernor:
                 "monitoring": monitoring,
                 "learning": learning,
             }
+        self._record_executive_experience(
+            intent,
+            mental_model,
+            learning,
+            execution_result,
+        )
         report = {
             "COGNITIVE_DECISION_INTELLIGENCE_REPORT": decision_report,
             "COGNITIVE_POLICY_REPORT": policy_report,
+            "EXECUTIVE_COGNITIVE_REPORT": executive_cognitive_report,
             "WORLD_GOVERNANCE_EXECUTIVE_REPORT": {
                 "Cognitive Decision Intelligence Report": decision_report,
                 "Cognitive Policy Report": policy_report,
+                "EXECUTIVE_COGNITIVE_REPORT": executive_cognitive_report,
+                "Current Goals": executive_cognitive_report["Current Goals"],
+                "Goal Hierarchy": executive_cognitive_report["Goal Hierarchy"],
+                "Attention Allocation": executive_cognitive_report["Attention Allocation"],
+                "Runtime Priorities": executive_cognitive_report["Runtime Priorities"],
+                "Interrupt Decisions": executive_cognitive_report["Interrupt Decisions"],
+                "Mental Models Activated": executive_cognitive_report["Mental Models Activated"],
+                "Experience Reuse": executive_cognitive_report["Experience Reuse"],
+                "Planning Decisions": executive_cognitive_report["Planning Decisions"],
+                "Strategic Decisions": executive_cognitive_report["Strategic Decisions"],
+                "Prediction Results": executive_cognitive_report["Prediction Results"],
+                "Executive Confidence": executive_cognitive_report["Executive Confidence"],
+                "Executive Adaptation": executive_cognitive_report["Executive Adaptation"],
                 "Execution Intent": intent.as_dict(),
                 "Execution Graph": graph,
                 "Activated Runtimes": activation["activated_runtimes"],
@@ -651,6 +1066,10 @@ class ExecutiveCognitiveGovernor:
         return {
             "COGNITIVE_DECISION_INTELLIGENCE_REPORT": latest_decision,
             "COGNITIVE_POLICY_REPORT": latest_policy,
+            "EXECUTIVE_COGNITIVE_REPORT": latest.get(
+                "EXECUTIVE_COGNITIVE_REPORT",
+                {},
+            ),
             "WORLD_GOVERNANCE_EXECUTIVE_REPORT": latest.get(
                 "WORLD_GOVERNANCE_EXECUTIVE_REPORT",
                 {},
@@ -663,6 +1082,7 @@ class ExecutiveCognitiveGovernor:
     def reset(self) -> None:
         self.executive_reports.clear()
         self.active_intents.clear()
+        self.executive_memory.clear()
         self.policy_engine.reset()
 
     def _analysis_from_policy_report(
@@ -780,6 +1200,42 @@ class ExecutiveCognitiveGovernor:
         if runtime_id in {"truth_runtime", "evidence_builder", "meta_review"}:
             base += 1
         return max(1, base)
+
+    def _attention_reason(
+        self,
+        importance: float,
+        novelty: float,
+        uncertainty: float,
+        pressure: float,
+    ) -> str:
+        drivers = {
+            "importance": importance,
+            "novelty": novelty,
+            "uncertainty": uncertainty,
+            "pressure": pressure,
+        }
+        return max(drivers, key=drivers.get)
+
+    def _record_executive_experience(
+        self,
+        intent: CognitiveExecutionIntent,
+        mental_model: Mapping[str, Any],
+        learning: Mapping[str, Any],
+        execution_result: Mapping[str, Any] | None,
+    ) -> None:
+        selected_model = dict(mental_model.get("selected_mental_model") or {})
+        result = dict(execution_result or {})
+        self.executive_memory.append({
+            "experience_id": f"executive_experience_{uuid4().hex}",
+            "goal": intent.goal,
+            "mental_model": selected_model.get("name"),
+            "success": bool(result.get("success", learning.get("memory_update_allowed"))),
+            "stable": bool(result.get("stable", result.get("success", False))),
+            "attention_pattern": intent.task_analysis.get("priority", 0.5),
+            "learning": dict(learning),
+        })
+        if len(self.executive_memory) > 100:
+            self.executive_memory[:] = self.executive_memory[-100:]
 
     def _parallel_groups(self, runtimes: list[str]) -> list[list[str]]:
         active = set(runtimes)

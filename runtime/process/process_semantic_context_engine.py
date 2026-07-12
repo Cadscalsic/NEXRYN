@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from core.epistemic_models import clamp
 from runtime.process.process_context_discovery import ProcessContextDiscovery
@@ -19,6 +19,9 @@ from runtime.process.process_dependency_reasoner import (
 )
 from runtime.process.process_dependency_validator import (
     ProcessDependencyValidator,
+)
+from runtime.process.process_semantic_context_foundation import (
+    CognitiveArtifactSemanticContextEngine,
 )
 from runtime.process.process_strength_estimator import ProcessStrengthEstimator
 from runtime.process.process_state_model import ProcessSemanticContext
@@ -40,6 +43,7 @@ class ProcessSemanticContextEngine:
         dependency_validator: ProcessDependencyValidator | None = None,
         dependency_reasoner: ProcessDependencyReasoner | None = None,
         transition_graph: ProcessTransitionGraph | None = None,
+        artifact_semantic_engine: CognitiveArtifactSemanticContextEngine | None = None,
     ):
         self.discovery = discovery or ProcessContextDiscovery()
         self.validator = validator or ProcessContextValidator()
@@ -53,6 +57,9 @@ class ProcessSemanticContextEngine:
         )
         self.dependency_reasoner = dependency_reasoner or ProcessDependencyReasoner()
         self.transition_graph = transition_graph or ProcessTransitionGraph()
+        self.artifact_semantic_engine = (
+            artifact_semantic_engine or CognitiveArtifactSemanticContextEngine()
+        )
 
     def synthesize(
         self,
@@ -324,6 +331,61 @@ class ProcessSemanticContextEngine:
 
     def registry_report(self) -> dict[str, Any]:
         return self.registry.report()
+
+    def contextualize_artifact(
+        self,
+        artifact: Mapping[str, Any],
+        runtime_context: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Assign mandatory semantic meaning to a runtime artifact."""
+
+        return self.artifact_semantic_engine.contextualize(
+            artifact,
+            runtime_context=runtime_context,
+        )
+
+    def semantic_registry_report(self) -> dict[str, Any]:
+        return self.artifact_semantic_engine.registry_report()
+
+    def process_semantic_context_report(self) -> dict[str, Any]:
+        return self.artifact_semantic_engine.process_semantic_context_report()
+
+    def runtime_integration_packet(self) -> dict[str, Any]:
+        return self.artifact_semantic_engine.runtime_integration_packet()
+
+    def evolve_semantic_context(
+        self,
+        context_id: str,
+        change_reason: str,
+        supporting_evidence: Iterable[Any] | None = None,
+        author_runtime: str = "process_semantic_context_engine",
+        target_stage: str | None = None,
+        confidence_updates: Mapping[str, float] | None = None,
+    ) -> dict[str, Any]:
+        return self.artifact_semantic_engine.evolve_context(
+            context_id,
+            change_reason=change_reason,
+            supporting_evidence=supporting_evidence,
+            author_runtime=author_runtime,
+            target_stage=target_stage,
+            confidence_updates=confidence_updates,
+        )
+
+    def record_prediction_error(
+        self,
+        context_id: str,
+        predicted: Any,
+        observed: Any,
+        error_score: float,
+        runtime_origin: str = "unknown_runtime",
+    ) -> dict[str, Any]:
+        return self.artifact_semantic_engine.record_prediction_error(
+            context_id,
+            predicted,
+            observed,
+            error_score,
+            runtime_origin=runtime_origin,
+        )
 
     def _typed_dependency_report(self, concept, discovery, runtime_context):
         existing = runtime_context.get("typed_dependency_report", {})

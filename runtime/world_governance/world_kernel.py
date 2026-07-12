@@ -233,6 +233,10 @@ class WorldKernel:
             report["COGNITIVE_DECISION_INTELLIGENCE_REPORT"] = executive_report[
                 "COGNITIVE_DECISION_INTELLIGENCE_REPORT"
             ]
+        if executive_report["EXECUTIVE_COGNITIVE_REPORT"]:
+            report["EXECUTIVE_COGNITIVE_REPORT"] = executive_report[
+                "EXECUTIVE_COGNITIVE_REPORT"
+            ]
         analytics_report = cognitive_intelligence_analytics.build_report()
         if analytics_report["COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"]:
             report["COGNITIVE_INTELLIGENCE_ANALYTICS_REPORT"] = analytics_report[
