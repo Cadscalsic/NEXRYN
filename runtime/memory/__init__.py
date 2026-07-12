@@ -52,6 +52,13 @@ from runtime.memory.semantic_memory import (
     SemanticMemory
 )
 
+from runtime.memory.semantic_memory_engine import (
+    SemanticMemoryEngine,
+    SemanticMemoryEntity,
+    SemanticMemoryRegistry,
+    semantic_memory_engine,
+)
+
 # ============================================
 # LONG TERM MEMORY
 # ============================================
@@ -209,6 +216,10 @@ __all__ = [
     "WorkingMemory",
     "EpisodicMemory",
     "SemanticMemory",
+    "SemanticMemoryEngine",
+    "SemanticMemoryEntity",
+    "SemanticMemoryRegistry",
+    "semantic_memory_engine",
     "LongTermMemory",
     "HierarchicalMemoryCompression",
     "hierarchical_memory_compression",

@@ -55,6 +55,85 @@ def test_factory_creates_real_hierarchical_execution_instances():
     )
 
 
+def test_parent_execution_becomes_official_cognitive_state_aggregate():
+    runtime_lifecycle.clear()
+    engine = CognitiveRuntimeExecutionEngine()
+    root = engine.start_cycle(mode="adaptive")
+
+    with engine.execution("concept_formation_runtime") as execution:
+        execution.capture({"generated_concepts": [{"id": "concept:a"}, {"id": "concept:b"}]})
+    with engine.execution("program_synthesis_runtime") as execution:
+        execution.capture({"generated_programs": 3})
+    with engine.execution("truth_runtime") as execution:
+        execution.capture({"truth_candidates": [{"id": "truth:a"}, {"id": "truth:b"}]})
+    with engine.execution("memory_runtime") as execution:
+        execution.capture({"memory_entries": [{"id": "memory:a"}]})
+
+    engine.complete_cycle()
+    report = engine.build_report()
+    parent = next(
+        item for item in report["execution_instances"]
+        if item["execution_id"] == root.execution_id
+    )
+    summary = report["parent_execution_aggregation"]
+    tree_root = report["execution_tree"][0]
+
+    assert parent["runtime_id"] == "execution_runtime"
+    assert parent["generated_concepts"] == 2
+    assert parent["generated_programs"] == 3
+    assert parent["generated_truth_candidates"] == 2
+    assert parent["generated_memory_entries"] == 1
+    assert summary["parent_is_cognitive_state_source"] is True
+    assert summary["aggregates_child_runtime_outputs"] is True
+    assert summary["generated_concepts"] == 2
+    assert tree_root["generated_programs"] == 3
+
+
+def test_post_execution_pipeline_turns_cognitive_outputs_into_semantic_memory_entries():
+    runtime_lifecycle.clear()
+    engine = CognitiveRuntimeExecutionEngine()
+    root = engine.start_cycle(mode="adaptive")
+
+    with engine.execution("concept_formation_runtime") as execution:
+        execution.capture({"generated_concepts": [{"id": f"concept:{index}"} for index in range(43)]})
+    with engine.execution("program_synthesis_runtime") as execution:
+        execution.capture({"generated_programs": 20})
+    with engine.execution("truth_runtime") as execution:
+        execution.capture({"truth_candidates": [{"id": f"truth:{index}"} for index in range(18)]})
+
+    engine.complete_cycle()
+    report = engine.build_report()
+    parent = next(
+        item for item in report["execution_instances"]
+        if item["execution_id"] == root.execution_id
+    )
+    pipeline = report["post_execution_cognitive_pipeline"]
+
+    assert report["parent_execution_aggregation"]["generated_concepts"] == 43
+    assert report["parent_execution_aggregation"]["generated_programs"] == 20
+    assert report["parent_execution_aggregation"]["generated_truth_candidates"] == 18
+    assert pipeline["pipeline_available"] is True
+    assert pipeline["reflection_to_experience_to_semantic_memory_productive"] is True
+    assert pipeline["reflection_status"] == "COMPLETED"
+    assert pipeline["experience_count"] == 1
+    assert pipeline["semantic_memory_entries_generated"] > 0
+    assert pipeline["semantic_memory_to_knowledge_fabric_productive"] is True
+    assert pipeline["fabric_links"] > 0
+    assert pipeline["knowledge_fabric_report"]["fabric_links"] == pipeline["fabric_links"]
+    assert pipeline["knowledge_fabric_report"]["fabric_bridges"] == pipeline["fabric_bridges"]
+    assert pipeline["knowledge_fabric_report"]["cross_domain_links"] == pipeline["cross_domain_links"]
+    assert pipeline["fabric_density"] >= 0.0
+    assert pipeline["fabric_connectivity"] > 0.0
+    assert isinstance(pipeline["orphan_concepts"], list)
+    assert isinstance(pipeline["isolated_domains"], list)
+    assert pipeline["knowledge_fabric_connects_semantic_memory"] is True
+    assert pipeline["knowledge_fabric_stores_relationships_only"] is True
+    assert pipeline["semantic_memory_is_canonical_destination"] is True
+    assert pipeline["memory_runtime_replaced"] is False
+    assert parent["generated_memory_entries"] == pipeline["semantic_memory_entries_generated"]
+    assert report["parent_execution_aggregation"]["generated_memory_entries"] > 0
+
+
 def test_evaluation_evidence_does_not_publish_truth_candidates():
     runtime_lifecycle.clear()
     engine = CognitiveRuntimeExecutionEngine()

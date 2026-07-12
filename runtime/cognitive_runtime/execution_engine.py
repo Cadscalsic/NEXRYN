@@ -232,6 +232,12 @@ class CognitiveExecutionRegistry:
                 "runtime_id": instance.runtime_id,
                 "status": instance.completion_status,
                 "duration_seconds": instance.duration_seconds,
+                "generated_programs": instance.generated_programs,
+                "generated_concepts": instance.generated_concepts,
+                "generated_truth_candidates": instance.generated_truth_candidates,
+                "generated_memory_entries": instance.generated_memory_entries,
+                "search_routes": instance.search_routes,
+                "concept_count": instance.concept_count,
                 "children": [],
             }
             for execution_id, instance in self.executions.items()
@@ -399,12 +405,16 @@ class CognitiveRuntimeExecutionEngine:
         self.factory = RuntimeExecutionFactory(self.registry)
         self.root_execution: CognitiveExecutionInstance | None = None
         self._started_at = 0.0
+        self._post_execution_pipeline_report: dict[str, Any] = {}
+        self._post_execution_pipeline_signature: tuple[Any, ...] | None = None
 
     def clear(self) -> None:
         self.registry.clear()
         self.factory.overhead_seconds = 0.0
         self.root_execution = None
         self._started_at = 0.0
+        self._post_execution_pipeline_report = {}
+        self._post_execution_pipeline_signature = None
 
     def start_cycle(self, mode: str = "adaptive", context=None) -> CognitiveExecutionInstance:
         if self.root_execution and not self.root_execution.archived:
@@ -488,6 +498,9 @@ class CognitiveRuntimeExecutionEngine:
             self.factory.bind_and_archive(instance)
 
     def build_report(self, total_runtime_seconds: float = 0.0) -> dict[str, Any]:
+        self._aggregate_parent_execution_state()
+        self._produce_post_execution_cognitive_memory()
+        self._aggregate_parent_execution_state()
         instances = [
             instance.as_dict() for instance in self.registry.executions.values()
         ]
@@ -531,6 +544,8 @@ class CognitiveRuntimeExecutionEngine:
                 "archived_executions": sorted(self.registry.archived_execution_ids),
                 "execution_history": [item["execution_id"] for item in instances],
             },
+            "parent_execution_aggregation": self._parent_execution_aggregation(instances),
+            "post_execution_cognitive_pipeline": dict(self._post_execution_pipeline_report),
             "execution_tree": self.registry.execution_tree(),
             "execution_timeline": sorted(
                 [
@@ -577,6 +592,227 @@ class CognitiveRuntimeExecutionEngine:
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    def _aggregate_parent_execution_state(self) -> None:
+        children_by_parent: dict[str, list[CognitiveExecutionInstance]] = {}
+        for instance in self.registry.executions.values():
+            if instance.execution_parent:
+                children_by_parent.setdefault(instance.execution_parent, []).append(instance)
+
+        def aggregate(instance: CognitiveExecutionInstance) -> dict[str, Any]:
+            children = children_by_parent.get(instance.execution_id, [])
+            child_totals = [aggregate(child) for child in children]
+            if not child_totals:
+                return _execution_metric_totals(instance)
+
+            totals = _execution_metric_totals(instance)
+            for key in (
+                "concept_count",
+                "search_routes",
+                "generated_programs",
+                "generated_concepts",
+                "generated_truth_candidates",
+                "generated_memory_entries",
+            ):
+                child_sum = sum(int(total.get(key, 0)) for total in child_totals)
+                totals[key] = max(int(totals.get(key, 0)), child_sum)
+                setattr(instance, key, totals[key])
+
+            instance.memory_usage = max(
+                instance.memory_usage,
+                sum(int(total.get("memory_usage", 0)) for total in child_totals),
+            )
+            instance.concept_cost = max(
+                instance.concept_cost,
+                sum(float(total.get("concept_cost", 0.0)) for total in child_totals),
+            )
+            instance.search_cost = max(
+                instance.search_cost,
+                sum(float(total.get("search_cost", 0.0)) for total in child_totals),
+            )
+            instance.confidence = max(
+                instance.confidence,
+                _average(total.get("confidence", 0.0) for total in child_totals),
+            )
+            self.factory._sync(instance)
+            totals.update(_execution_metric_totals(instance))
+            return totals
+
+        roots = [
+            instance for instance in self.registry.executions.values()
+            if not instance.execution_parent
+        ]
+        for root in roots:
+            aggregate(root)
+
+    def _produce_post_execution_cognitive_memory(self) -> None:
+        root = self.root_execution
+        if root is None:
+            return
+        signature = (
+            root.execution_id,
+            root.generated_concepts,
+            root.generated_programs,
+            root.generated_truth_candidates,
+            len(root.execution_children),
+        )
+        if self._post_execution_pipeline_signature == signature:
+            return
+        if (
+            root.generated_memory_entries > 0
+            or max(
+                root.generated_concepts,
+                root.generated_programs,
+                root.generated_truth_candidates,
+            ) <= 0
+        ):
+            self._post_execution_pipeline_report = {
+                "pipeline_available": False,
+                "reason": "no_unconverted_cognitive_outputs",
+                "reflection_to_experience_to_semantic_memory_productive": False,
+            }
+            self._post_execution_pipeline_signature = signature
+            return
+
+        try:
+            from runtime.experience import ExperienceEngine
+            from runtime.knowledge import KnowledgeFabricEngine
+            from runtime.knowledge.cognitive_episode_engine import CognitiveEpisodeEngine
+            from runtime.memory import SemanticMemoryEngine
+        except ImportError as error:
+            self._post_execution_pipeline_report = {
+                "pipeline_available": False,
+                "reason": f"pipeline_import_failed: {error}",
+                "reflection_to_experience_to_semantic_memory_productive": False,
+            }
+            self._post_execution_pipeline_signature = signature
+            return
+
+        objects = _post_execution_objects(self.registry.executions.values(), root)
+        episode = CognitiveEpisodeEngine().build_episode(
+            execution_id=root.execution_id,
+            objects=objects,
+        )
+        experience_report = ExperienceEngine().build_report(
+            execution_report={
+                "execution_id": root.execution_id,
+                "execution_summary": _execution_metric_totals(root),
+                "parent_execution_aggregation": _execution_metric_totals(root),
+            },
+            concept_report={
+                "discovered_concepts": [
+                    {
+                        "concept_id": obj["object_id"],
+                        "concept_name": obj["semantic_payload"]["name"],
+                        "confidence": obj["object_confidence"],
+                    }
+                    for obj in objects
+                    if obj["object_type"] == "CONCEPT"
+                ]
+            },
+            program_report={
+                "generated_program_objects": [
+                    {
+                        "program_id": obj["object_id"],
+                        "program_name": obj["semantic_payload"]["name"],
+                        "confidence": obj["object_confidence"],
+                    }
+                    for obj in objects
+                    if obj["object_type"] == "PROGRAM"
+                ]
+            },
+            truth_report={
+                "truth_candidates": [
+                    {
+                        "truth_id": obj["object_id"],
+                        "confidence": obj["object_confidence"],
+                    }
+                    for obj in objects
+                    if obj["object_type"] == "TRUTH_CANDIDATE"
+                ]
+            },
+            semantic_report={
+                "discovered_domains": ["Execution Cognition"],
+                "semantic_confidence": root.confidence,
+            },
+            task_identity=f"post execution cognition for {root.execution_id}",
+            execution_id=root.execution_id,
+            persist=False,
+        )
+        semantic_memory_report = SemanticMemoryEngine().integrate(
+            experience_report=experience_report,
+            reflection_report=episode.reflection.get("reflection_report", episode.reflection),
+        )
+        knowledge_fabric_report = KnowledgeFabricEngine().integrate(
+            semantic_memory_report=semantic_memory_report,
+        )
+        fabric_metrics = _fabric_metrics(
+            semantic_memory_report=semantic_memory_report,
+            knowledge_fabric_report=knowledge_fabric_report,
+        )
+        semantic_entities = semantic_memory_report.get("Semantic Entities", [])
+        produced_entries = int(semantic_memory_report.get("semantic_entity_count") or len(semantic_entities))
+        root.generated_memory_entries = max(root.generated_memory_entries, produced_entries)
+        root.memory_usage = max(
+            root.memory_usage,
+            _deep_size(semantic_memory_report) + _deep_size(knowledge_fabric_report),
+        )
+        self.factory._sync(root)
+        self._post_execution_pipeline_report = {
+            "pipeline_available": True,
+            "reflection_to_experience_to_semantic_memory_productive": produced_entries > 0,
+            "semantic_memory_to_knowledge_fabric_productive": fabric_metrics["fabric_links"] > 0,
+            "source_execution_id": root.execution_id,
+            "cognitive_objects_generated": len(objects),
+            "episode_id": episode.episode_id,
+            "reflection_id": episode.reflection_id,
+            "reflection_status": episode.reflection_status,
+            "experience_id": experience_report.get("experience", {}).get("experience_id", ""),
+            "experience_count": experience_report.get("experience_count", 0),
+            "semantic_memory_entries_generated": produced_entries,
+            "semantic_domains": semantic_memory_report.get("Domains", []),
+            "knowledge_fabric_report": {
+                "fabric_links": fabric_metrics["fabric_links"],
+                "fabric_bridges": fabric_metrics["fabric_bridges"],
+                "cross_domain_links": fabric_metrics["cross_domain_links"],
+                "fabric_density": fabric_metrics["fabric_density"],
+                "fabric_connectivity": fabric_metrics["fabric_connectivity"],
+                "orphan_concepts": fabric_metrics["orphan_concepts"],
+                "isolated_domains": fabric_metrics["isolated_domains"],
+            },
+            "fabric_links": fabric_metrics["fabric_links"],
+            "fabric_bridges": fabric_metrics["fabric_bridges"],
+            "cross_domain_links": fabric_metrics["cross_domain_links"],
+            "fabric_density": fabric_metrics["fabric_density"],
+            "fabric_connectivity": fabric_metrics["fabric_connectivity"],
+            "orphan_concepts": fabric_metrics["orphan_concepts"],
+            "isolated_domains": fabric_metrics["isolated_domains"],
+            "semantic_memory_is_canonical_destination": True,
+            "knowledge_fabric_connects_semantic_memory": True,
+            "knowledge_fabric_stores_relationships_only": True,
+            "memory_runtime_replaced": False,
+            "raw_execution_stored_as_memory": False,
+        }
+        self._post_execution_pipeline_signature = signature
+
+    def _parent_execution_aggregation(self, instances: list[dict[str, Any]]) -> dict[str, Any]:
+        root = self.root_execution.as_dict() if self.root_execution is not None else {}
+        return {
+            "parent_execution_id": root.get("execution_id"),
+            "parent_runtime_id": root.get("runtime_id"),
+            "parent_is_cognitive_state_source": bool(root),
+            "aggregates_child_runtime_outputs": bool(root),
+            "generated_concepts": root.get("generated_concepts", 0),
+            "generated_programs": root.get("generated_programs", 0),
+            "generated_truth_candidates": root.get("generated_truth_candidates", 0),
+            "generated_memory_entries": root.get("generated_memory_entries", 0),
+            "search_routes": root.get("search_routes", 0),
+            "concept_count": root.get("concept_count", 0),
+            "total_child_executions": sum(
+                1 for item in instances
+                if item.get("execution_parent") == root.get("execution_id")
+            ) if root else 0,
+        }
+
 
 def _number(value: Any) -> float:
     try:
@@ -587,6 +823,119 @@ def _number(value: Any) -> float:
 
 def _count(value: Any) -> int:
     return len(value) if isinstance(value, (list, tuple, set, dict)) else 0
+
+
+def _execution_metric_totals(instance: CognitiveExecutionInstance) -> dict[str, Any]:
+    return {
+        "concept_count": instance.concept_count,
+        "search_routes": instance.search_routes,
+        "generated_programs": instance.generated_programs,
+        "generated_concepts": instance.generated_concepts,
+        "generated_truth_candidates": instance.generated_truth_candidates,
+        "generated_memory_entries": instance.generated_memory_entries,
+        "memory_usage": instance.memory_usage,
+        "concept_cost": instance.concept_cost,
+        "search_cost": instance.search_cost,
+        "confidence": instance.confidence,
+    }
+
+
+def _average(values: Any) -> float:
+    items = [float(value or 0.0) for value in values]
+    return round(sum(items) / len(items), 4) if items else 0.0
+
+
+def _post_execution_objects(
+    instances: Any,
+    root: CognitiveExecutionInstance,
+) -> list[dict[str, Any]]:
+    objects: list[dict[str, Any]] = []
+    for instance in instances:
+        if instance.runtime_id == "execution_runtime":
+            continue
+        objects.extend(_metric_objects(instance, "CONCEPT", instance.generated_concepts))
+        objects.extend(_metric_objects(instance, "PROGRAM", instance.generated_programs))
+        objects.extend(_metric_objects(instance, "TRUTH_CANDIDATE", instance.generated_truth_candidates))
+    if not objects:
+        objects.extend(_metric_objects(root, "CONCEPT", root.generated_concepts))
+        objects.extend(_metric_objects(root, "PROGRAM", root.generated_programs))
+        objects.extend(_metric_objects(root, "TRUTH_CANDIDATE", root.generated_truth_candidates))
+    return objects
+
+
+def _metric_objects(
+    instance: CognitiveExecutionInstance,
+    object_type: str,
+    count: int,
+) -> list[dict[str, Any]]:
+    limit = max(int(count or 0), 0)
+    label = {
+        "CONCEPT": "generated concept",
+        "PROGRAM": "generated program",
+        "TRUTH_CANDIDATE": "generated truth candidate",
+    }[object_type]
+    return [
+        {
+            "object_id": f"{instance.execution_id}:{object_type.lower()}:{index + 1}",
+            "object_type": object_type,
+            "object_family": "POST_EXECUTION_COGNITIVE_OUTPUT",
+            "object_confidence": instance.confidence or 0.5,
+            "object_status": "VALIDATED" if object_type == "TRUTH_CANDIDATE" else "SUPPORTED",
+            "runtime_origin": instance.runtime_id,
+            "execution_cycle": f"{instance.execution_id}:cycle",
+            "creation_timestamp": instance.creation_timestamp,
+            "last_update_timestamp": instance.end_timestamp or instance.creation_timestamp,
+            "semantic_payload": {
+                "domain": "Execution Cognition",
+                "name": f"{label} {index + 1}",
+                "source_runtime": instance.runtime_id,
+            },
+            "lineage": {
+                "source_execution_id": [instance.execution_id],
+            },
+        }
+        for index in range(limit)
+    ]
+
+
+def _fabric_metrics(
+    *,
+    semantic_memory_report: Mapping[str, Any],
+    knowledge_fabric_report: Mapping[str, Any],
+) -> dict[str, Any]:
+    relationships = knowledge_fabric_report.get("Fabric Relationships", [])
+    cross_domain_links = knowledge_fabric_report.get("Cross-Domain Links", [])
+    bridges = knowledge_fabric_report.get("Emerging Bridges", [])
+    connectivity = knowledge_fabric_report.get("Connectivity Metrics", {})
+    semantic_entities = semantic_memory_report.get("Semantic Entities", [])
+    referenced = {
+        str(relation.get("source_entity_id"))
+        for relation in relationships
+        if isinstance(relation, Mapping)
+    } | {
+        str(relation.get("target_entity_id"))
+        for relation in relationships
+        if isinstance(relation, Mapping)
+    }
+    orphan_concepts = [
+        entity.get("semantic_memory_id")
+        for entity in semantic_entities
+        if isinstance(entity, Mapping)
+        and entity.get("semantic_category") == "Concept"
+        and entity.get("semantic_memory_id") not in referenced
+    ]
+    return {
+        "fabric_links": len(relationships),
+        "fabric_bridges": len(bridges),
+        "cross_domain_links": len(cross_domain_links),
+        "fabric_density": knowledge_fabric_report.get("Fabric Density", 0.0),
+        "fabric_connectivity": connectivity.get(
+            "knowledge_connectivity",
+            connectivity.get("global_connectivity", 0.0),
+        ),
+        "orphan_concepts": orphan_concepts,
+        "isolated_domains": knowledge_fabric_report.get("Disconnected Domains", []),
+    }
 
 
 def _deep_size(value: Any, seen: set[int] | None = None) -> int:

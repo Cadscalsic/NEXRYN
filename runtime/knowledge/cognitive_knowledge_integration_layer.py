@@ -269,6 +269,13 @@ class CognitiveKnowledgeIntegrationLayer:
         return {
             **bus_report,
             "cognitive_snapshot": snapshot,
+            "primary_cognitive_episode": snapshot["primary_episode"],
+            "primary_reflection": snapshot["primary_episode"].get("reflection", {}),
+            "cognitive_episode_report": bus_report["cognitive_episode_report"],
+            "reflection_engine_report": bus_report["cognitive_episode_report"].get(
+                "reflection_engine_report",
+                {},
+            ),
             "parent_execution_aggregation": snapshot["execution_summary"],
             "canonical_exchange_contract": {
                 "publish": True,
@@ -280,13 +287,22 @@ class CognitiveKnowledgeIntegrationLayer:
             },
             "future_subsystem_integration": {
                 "process_semantic_context_consumes_cognitive_objects": True,
+                "process_semantic_context_consumes_episodes": True,
                 "cognitive_coverage_analyzer_consumes_object_stream": True,
+                "cognitive_coverage_analyzer_evaluates_episodes": True,
                 "experience_engine_builds_from_snapshots": True,
+                "experience_engine_requires_reflected_episodes": True,
+                "experience_engine_transforms_successful_episodes": True,
                 "mental_models_emerge_from_object_patterns": True,
+                "mental_models_emerge_from_episode_graphs": True,
                 "world_model_stores_cognitive_objects": True,
+                "world_model_stores_episodes": True,
                 "dna_evolves_from_aggregated_cognitive_objects": True,
+                "dna_evolves_from_repeated_episodes": True,
                 "executive_world_governance_supervises_object_flow": True,
+                "executive_world_governance_supervises_episodes": True,
                 "meta_cognition_evaluates_bus_quality": True,
+                "meta_cognition_evaluates_episode_quality": True,
             },
         }
 

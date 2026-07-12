@@ -9,3 +9,21 @@ from runtime.reflection.introspection_engine import (
 from runtime.reflection.failure_analyzer import (
     FailureAnalyzer
 )
+
+from runtime.reflection.reflection_engine import (
+    REFLECTION_DIMENSIONS,
+    REFLECTION_QUESTIONS,
+    ReflectionEngine,
+    ReflectionObject,
+    ReflectionRegistry,
+)
+
+__all__ = [
+    "FailureAnalyzer",
+    "IntrospectionEngine",
+    "REFLECTION_DIMENSIONS",
+    "REFLECTION_QUESTIONS",
+    "ReflectionEngine",
+    "ReflectionObject",
+    "ReflectionRegistry",
+]
