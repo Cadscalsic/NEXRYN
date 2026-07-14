@@ -14827,7 +14827,7 @@
             "system": "causal_evidence_accumulator",
             "minimum_supporting_observations": 3,
             "persistent_storage_enabled": true,
-            "storage_path": "runtime_data\\causal_evidence_ledger.json",
+            "storage_path": "runtime\\artifacts\\runtime_data\\causal_evidence_ledger.json",
             "relationships": [
               {
                 "source": "density_preservation",
@@ -17906,7 +17906,7 @@
             "system": "causal_evidence_accumulator",
             "minimum_supporting_observations": 3,
             "persistent_storage_enabled": true,
-            "storage_path": "runtime_data\\causal_evidence_ledger.json",
+            "storage_path": "runtime\\artifacts\\runtime_data\\causal_evidence_ledger.json",
             "relationships": [
               {
                 "source": "density_preservation",
@@ -21654,7 +21654,7 @@
             "system": "causal_evidence_accumulator",
             "minimum_supporting_observations": 3,
             "persistent_storage_enabled": true,
-            "storage_path": "runtime_data\\causal_evidence_ledger.json",
+            "storage_path": "runtime\\artifacts\\runtime_data\\causal_evidence_ledger.json",
             "relationships": [
               {
                 "source": "density_preservation",

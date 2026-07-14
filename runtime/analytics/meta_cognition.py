@@ -14,7 +14,7 @@ class MetaCognitiveOptimizer:
     system_name = "meta_cognitive_optimizer"
 
     DEFAULT_POLICY_MEMORY_PATH = os.path.join(
-        "runtime_data",
+        "runtime/artifacts/runtime_data",
         "reasoning_policy_memory.json",
     )
 

@@ -19,7 +19,7 @@ ALLOWED_WRITE_KEYS = {
 class AsyncMetricsWriter:
     def __init__(
         self,
-        output_path: str | Path = "runtime_data/evaluation_summary.jsonl",
+        output_path: str | Path = "runtime/artifacts/runtime_data/evaluation_summary.jsonl",
         logger: logging.Logger | None = None,
     ) -> None:
         self.output_path = Path(output_path)

@@ -16,7 +16,7 @@ class TrainingAssistant:
 
     def __init__(
         self,
-        state_path="runtime_data/training_assistant_state.json",
+        state_path="runtime/artifacts/runtime_data/training_assistant_state.json",
         batch_size=3,
         curriculum_manager=None,
         selection_memory_path="runtime/cache/task_selection_memory.json",

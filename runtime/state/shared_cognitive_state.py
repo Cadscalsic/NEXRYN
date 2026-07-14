@@ -19,7 +19,7 @@ from runtime.artifacts import (
 from runtime.observability import cognitive_runtime_observability_engine
 
 
-STATE_PATH = Path("runtime_data/shared_cognitive_state/latest.json")
+STATE_PATH = Path("runtime/artifacts/runtime_data/shared_cognitive_state/latest.json")
 
 
 @dataclass

@@ -23,7 +23,7 @@ class AdaptiveSearchPolicyMemory:
     """Compact persistent outcomes used only as deterministic policy evidence."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or Path("runtime_data") / "adaptive_search_policy_memory.json"
+        self.path = path or Path("runtime/artifacts/runtime_data") / "adaptive_search_policy_memory.json"
 
     def load(self) -> dict[str, Any]:
         if not self.path.exists():

@@ -129,6 +129,81 @@ def test_purges_heavy_objects_after_exact_success():
     assert purged["LOCALIZATION_REPORT_summary"]["localization_ready"] is True
 
 
+def test_compact_performance_report_preserves_search_exploration_quality():
+    compact = CompactReportBuilder().compact_performance_report({
+        "COGNITIVE_SEARCH_REPORT": {
+            "COGNITIVE_SEARCH_REPORT": True,
+            "overall_search_quality": 0.73,
+            "search_efficiency": 0.81,
+            "search_coverage": 0.67,
+            "search_entropy": 0.88,
+            "overall_exploration_quality": 0.69,
+            "exploration_entropy": 0.84,
+            "exploration_diversity": 0.72,
+            "exploration_redundancy": 0.25,
+            "exploration_depth": 3.0,
+            "exploration_breadth": 4.0,
+            "exploration_efficiency": 0.58,
+            "exploration_novelty": 0.75,
+            "productive_routes": ["route:a"],
+            "dead_end_routes": ["route:b"],
+            "reused_routes": ["route:c"],
+            "unique_routes": ["route:a", "route:b"],
+            "preferred_search_strategy": "balanced_exploration",
+            "route_ranking": [{"route_id": "route:a"}],
+            "search_space_graph": {
+                "nodes": [{"id": "route:a"}],
+                "edges": [{"from": "route:a", "to": "concept:color"}],
+            },
+            "SEARCH_EXPLORATION_QUALITY_REPORT": {
+                "SEARCH_EXPLORATION_QUALITY_REPORT": True,
+                "quality_components": {"coverage": 0.67},
+            },
+        },
+    })
+
+    search = compact["COGNITIVE_SEARCH_REPORT"]
+    assert search["COGNITIVE_SEARCH_REPORT"] is True
+    assert search["overall_exploration_quality"] == 0.69
+    assert search["exploration_entropy"] == 0.84
+    assert search["productive_routes"] == ["route:a"]
+    assert search["preferred_search_strategy"] == "balanced_exploration"
+    assert search["search_graph"]["node_count"] == 1
+
+
+def test_compact_performance_report_preserves_causal_quality():
+    compact = CompactReportBuilder().compact_performance_report({
+        "CAUSAL_CONTEXT_REPORT": {
+            "CAUSAL_CONTEXT_REPORT": True,
+            "causal_context_count": 2,
+            "causal_relation_count": 2,
+            "average_confidence": 0.77,
+            "generated_causal_links": 2,
+            "validated_causal_links": 1,
+            "canonical_causal_links": 1,
+            "causal_quality": 0.74,
+            "average_causal_confidence": 0.76,
+            "mechanism_completeness": 0.8,
+            "generalization_quality": 0.7,
+            "prediction_accuracy": 0.82,
+            "contradicted_relationships": ["causal:x"],
+            "weak_relationships": ["causal:y"],
+            "CAUSAL_KNOWLEDGE_QUALITY_REPORT": {
+                "CAUSAL_KNOWLEDGE_QUALITY_REPORT": True,
+                "maturity_states": {"CANONICAL": 1},
+            },
+        },
+    })
+
+    causal = compact["CAUSAL_CONTEXT_REPORT"]
+    assert causal["CAUSAL_CONTEXT_REPORT"] is True
+    assert causal["generated_causal_links"] == 2
+    assert causal["canonical_causal_links"] == 1
+    assert causal["causal_quality"] == 0.74
+    assert causal["mechanism_completeness"] == 0.8
+    assert causal["contradicted_relationships"] == ["causal:x"]
+
+
 def test_compacts_concept_lifecycle_report_with_budget_marker():
     report = {
         "system": "concept_maturity_tracker",

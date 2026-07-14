@@ -8,7 +8,7 @@ Scope: static repository inspection, import/call graph sampling, existing audit 
 python main.py --mode fast --training-batch-size 1 --max-concepts 2 --report-level minimal --disable-telemetry --stats --contexts --truths --candidates
 ```
 
-Runtime sample log: `runtime_data/architecture_audit_sample.log`.
+Runtime sample log: `runtime/artifacts/runtime_data/architecture_audit_sample.log`.
 
 ## Executive Findings
 

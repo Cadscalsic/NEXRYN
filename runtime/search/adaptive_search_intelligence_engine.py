@@ -80,7 +80,7 @@ class AdaptiveSearchIntelligenceMemory:
 
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = Path(
-            path or "runtime_data/search/adaptive_search_intelligence_memory.json"
+            path or "runtime/artifacts/runtime_data/search/adaptive_search_intelligence_memory.json"
         )
 
     def load(self) -> dict[str, Any]:

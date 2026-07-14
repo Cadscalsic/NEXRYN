@@ -82,7 +82,7 @@ class ProgramSynthesisIntelligenceEngine:
 
     def __init__(self, memory_path: str | Path | None = None):
         self.memory_path = Path(
-            memory_path or "runtime_data/programs/program_memory.json"
+            memory_path or "runtime/artifacts/runtime_data/programs/program_memory.json"
         )
         self._memory = self._load_memory()
 

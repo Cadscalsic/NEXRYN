@@ -43,7 +43,7 @@ class ACSCMemory:
     """Persistent compact thermal resource history."""
 
     def __init__(self, path: str | Path | None = None) -> None:
-        self.path = Path(path or "runtime_data/search/acsc_memory.json")
+        self.path = Path(path or "runtime/artifacts/runtime_data/search/acsc_memory.json")
 
     def load(self) -> dict[str, Any]:
         if not self.path.exists():

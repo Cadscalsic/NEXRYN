@@ -77,7 +77,7 @@ class DifferentialExecutionHarness:
     def __init__(
         self,
         validator: CrossModeParityValidator | None = None,
-        output_dir: str | Path = "runtime_data/mode_parity",
+        output_dir: str | Path = "runtime/artifacts/runtime_data/mode_parity",
     ) -> None:
         self.validator = validator or CrossModeParityValidator()
         self.output_dir = Path(output_dir)
@@ -136,7 +136,7 @@ class DifferentialExecutionHarness:
                 timeout=timeout_seconds,
                 check=False,
             )
-        state_source = Path("runtime_data/shared_cognitive_state/latest.json")
+        state_source = Path("runtime/artifacts/runtime_data/shared_cognitive_state/latest.json")
         copied_state = None
         if state_source.exists():
             copied_state = self.output_dir / f"{mode}_shared_state.json"

@@ -402,16 +402,16 @@ epistemic_decision_engine = EpistemicDecisionEngine(
             "runtime/memory/storage/provisional_truth_registry.json"
         ),
         knowledge_replication_ledger_path=(
-            "runtime_data/knowledge_replication_ledger.json"
+            "runtime/artifacts/runtime_data/knowledge_replication_ledger.json"
         ),
         semantic_spine_recovery_path=(
-            "runtime_data/semantic_spine_recovery.json"
+            "runtime/artifacts/runtime_data/semantic_spine_recovery.json"
         ),
         reversible_rehearsal_state_path=(
-            "runtime_data/reversible_rehearsal_state.json"
+            "runtime/artifacts/runtime_data/reversible_rehearsal_state.json"
         ),
         causal_evidence_ledger_path=(
-            "runtime_data/causal_evidence_ledger.json"
+            "runtime/artifacts/runtime_data/causal_evidence_ledger.json"
         ),
     )
 )

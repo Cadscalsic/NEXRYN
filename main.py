@@ -3103,6 +3103,11 @@ try:
                 }
             ),
         }
+    from runtime.causal import causal_knowledge_quality_engine
+
+    causal_context_report = causal_knowledge_quality_engine.enrich_report(
+        causal_context_report,
+    )
     cognitive_capability_report = collect_governance_reports(
         all_results,
         [
@@ -3336,6 +3341,7 @@ try:
     from runtime.knowledge import cognitive_knowledge_integration_layer
     from runtime.evidence import evidence_builder_runtime
     from runtime.synthesis import program_synthesis_intelligence_engine
+    from runtime.validation import ProgramValidationLifecycleEngine
     from runtime.cognitive_runtime import cognitive_runtime_execution_engine
 
     cognitive_runtime_execution_engine.clear()
@@ -3562,6 +3568,15 @@ try:
                 memory_report=adaptive_reuse_report,
                 all_results=all_results,
                 report_level=args.report_level or "normal",
+            )
+        )
+        program_lifecycle_engine = ProgramValidationLifecycleEngine()
+        program_synthesis_report = (
+            program_lifecycle_engine.register_from_synthesis_report(
+                program_synthesis_report,
+                generation_episode=shared_cognitive_state.execution_metadata.get(
+                    "execution_id",
+                ),
             )
         )
         program_execution.capture(program_synthesis_report)

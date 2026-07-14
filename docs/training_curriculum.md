@@ -41,7 +41,7 @@ The generator deterministically rewrites only `task_007.json` through
 cycle. The persistent cursor is stored in:
 
 ```text
-runtime_data/training_assistant_state.json
+runtime/artifacts/runtime_data/training_assistant_state.json
 ```
 
 The assistant resumes an interrupted active batch and advances only after
@@ -67,7 +67,7 @@ and truth-registry gates.
 Cross-cycle replication evidence is persisted atomically in:
 
 ```text
-runtime_data/knowledge_replication_ledger.json
+runtime/artifacts/runtime_data/knowledge_replication_ledger.json
 ```
 
 This allows five-task runtime batches to accumulate concept maturity across
@@ -90,8 +90,8 @@ containment checks are unresolved.
 Identity-safe recovery progress is also persisted atomically:
 
 ```text
-runtime_data/semantic_spine_recovery.json
-runtime_data/reversible_rehearsal_state.json
+runtime/artifacts/runtime_data/semantic_spine_recovery.json
+runtime/artifacts/runtime_data/reversible_rehearsal_state.json
 ```
 
 Restarting Python no longer discards safe recovery streaks or reuses rehearsal

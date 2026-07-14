@@ -119,7 +119,7 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=180)
     parser.add_argument(
         "--output",
-        default="runtime_data/mode_parity/mode_comparison_report.json",
+        default="runtime/artifacts/runtime_data/mode_parity/mode_comparison_report.json",
     )
     args = parser.parse_args()
 

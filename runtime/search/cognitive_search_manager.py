@@ -11,6 +11,9 @@ from typing import Any
 
 from runtime.search.cognitive_search_runtime import build_cognitive_search_runtime_report
 from runtime.search.search_analytics_engine import search_analytics_engine
+from runtime.search.search_exploration_quality_engine import (
+    search_exploration_quality_engine,
+)
 from runtime.search.adaptive_search_policy import (
     AdaptiveSearchPolicyEngine,
     adaptive_search_policy_engine,
@@ -74,7 +77,7 @@ class SearchMemory:
     """
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or Path("runtime_data") / "search_memory.json"
+        self.path = path or Path("runtime/artifacts/runtime_data") / "search_memory.json"
 
     def load(self) -> dict[str, Any]:
         if not self.path.exists():
@@ -258,6 +261,31 @@ class CognitiveSearchManager:
                 "adaptive_reuse_report": bool(adaptive_reuse_report),
             },
         }
+        exploration_quality_report = (
+            search_exploration_quality_engine.build_report(
+                search_report=report,
+                routes=routes,
+            )
+        )
+        report["SEARCH_EXPLORATION_QUALITY_REPORT"] = (
+            exploration_quality_report
+        )
+        for key in (
+            "overall_exploration_quality",
+            "exploration_entropy",
+            "exploration_diversity",
+            "exploration_redundancy",
+            "exploration_depth",
+            "exploration_breadth",
+            "exploration_efficiency",
+            "exploration_novelty",
+            "productive_routes",
+            "dead_end_routes",
+            "reused_routes",
+            "unique_routes",
+            "preferred_search_strategy",
+        ):
+            report[key] = exploration_quality_report[key]
         policy_report = self.policy_engine.plan(
             task_analysis=self._policy_task_analysis(all_results or []),
             routes=routes,

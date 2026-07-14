@@ -13,7 +13,7 @@ from typing import Any, Iterable, Mapping
 
 
 TRAINING_DIRECTORY = Path("data/training")
-REPORT_PATH = Path("concept_coverage_report.json")
+REPORT_PATH = Path("docs/reports/concept_coverage_report.json")
 
 CONCEPT_FAMILIES: dict[str, set[str]] = {
     "foundational": {
@@ -228,6 +228,7 @@ def audit_training_tasks(
         "metadata_is_targeting_not_runtime_observation": True,
     }
     if report_path is not None:
+        Path(report_path).parent.mkdir(parents=True, exist_ok=True)
         Path(report_path).write_text(
             json.dumps(report, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

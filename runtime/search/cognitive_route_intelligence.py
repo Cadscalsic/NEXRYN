@@ -13,7 +13,7 @@ class RouteIntelligenceMemory:
     """Persistent compact route outcomes and lifecycle histories."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self.path = path or Path("runtime_data") / "route_intelligence_memory.json"
+        self.path = path or Path("runtime/artifacts/runtime_data") / "route_intelligence_memory.json"
 
     def load(self) -> dict[str, Any]:
         if not self.path.exists():

@@ -719,7 +719,7 @@ class ArtifactPersistenceLayer:
         self.registry = registry
         self.persistence_store = persistence_store if persistence_store is not None else {}
         self.persistence_events = persistence_events if persistence_events is not None else []
-        self.path = Path(path or "runtime_data/artifacts/committed_artifacts.json")
+        self.path = Path(path or "runtime/artifacts/runtime_data/artifacts/committed_artifacts.json")
 
     def persist_eligible(self, *, runtime_id: str = "artifact_persistence_layer") -> dict[str, Any]:
         persisted = []

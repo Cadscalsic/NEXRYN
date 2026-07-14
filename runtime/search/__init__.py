@@ -24,6 +24,11 @@ from runtime.search.search_analytics_engine import (
     SearchAnalyticsEngine,
     search_analytics_engine,
 )
+from runtime.search.search_exploration_quality_engine import (
+    ExplorationRouteQuality,
+    SearchExplorationQualityEngine,
+    search_exploration_quality_engine,
+)
 from runtime.search.adaptive_search_policy import (
     AdaptiveSearchPolicyEngine,
     AdaptiveSearchPolicyMemory,
@@ -65,6 +70,9 @@ __all__ = [
     "RouteAnalysis",
     "SearchAnalyticsEngine",
     "search_analytics_engine",
+    "ExplorationRouteQuality",
+    "SearchExplorationQualityEngine",
+    "search_exploration_quality_engine",
     "AdaptiveSearchPolicyEngine",
     "AdaptiveSearchPolicyMemory",
     "adaptive_search_policy_engine",

@@ -73,7 +73,16 @@ def test_cognitive_search_manager_builds_route_graph_and_policy_decisions(tmp_pa
     assert report["route_ranking"][0]["route_id"]
     assert report["winning_route"]["why_it_won"]
     assert report["SEARCH_ANALYTICS_REPORT"]["SEARCH_ANALYTICS_REPORT"] is True
+    assert (
+        report["SEARCH_EXPLORATION_QUALITY_REPORT"][
+            "SEARCH_EXPLORATION_QUALITY_REPORT"
+        ]
+        is True
+    )
     assert report["overall_search_quality"] > 0.0
+    assert report["overall_exploration_quality"] > 0.0
+    assert report["exploration_entropy"] > 0.0
+    assert report["preferred_search_strategy"]
     assert report["search_efficiency"] > 0.0
     assert report["search_coverage"] > 0.0
     assert report["search_entropy"] > 0.0
@@ -108,3 +117,6 @@ def test_cognitive_search_report_exposes_phase_9_metrics_without_solving():
     assert "knowledge_learned" in report
     assert report["runtime_alignment"]["does_not_solve_tasks"] is True
     assert report["runtime_alignment"]["solver_logic_modified"] is False
+    assert "SEARCH_EXPLORATION_QUALITY_REPORT" in report
+    assert report["productive_routes"]
+    assert "preferred_search_strategy" in report

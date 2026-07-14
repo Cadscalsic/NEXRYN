@@ -359,6 +359,12 @@ class CompactReportBuilder:
             "CONCEPT_FORMATION_REPORT": self.compact_concept_formation_report(
                 report.get("CONCEPT_FORMATION_REPORT", {}),
             ),
+            "COGNITIVE_SEARCH_REPORT": self.compact_cognitive_search_report(
+                report.get("COGNITIVE_SEARCH_REPORT", {}),
+            ),
+            "CAUSAL_CONTEXT_REPORT": self.compact_causal_context_report(
+                report.get("CAUSAL_CONTEXT_REPORT", {}),
+            ),
             "PROGRAM_SYNTHESIS_REPORT": self.compact_program_synthesis_report(
                 report.get("PROGRAM_SYNTHESIS_REPORT", {}),
             ),
@@ -379,6 +385,109 @@ class CompactReportBuilder:
                 self.compact_cognitive_knowledge_integration_report(
                     report.get("COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT", {}),
                 )
+            ),
+        }
+
+    def compact_causal_context_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+        quality = report.get("CAUSAL_KNOWLEDGE_QUALITY_REPORT", {})
+        quality = quality if isinstance(quality, dict) else {}
+        return {
+            "CAUSAL_CONTEXT_REPORT": report.get("CAUSAL_CONTEXT_REPORT", False),
+            "causal_context_count": report.get("causal_context_count", 0),
+            "causal_relation_count": report.get("causal_relation_count", 0),
+            "average_confidence": report.get("average_confidence", 0.0),
+            "causal_confidence": report.get("causal_confidence", 0.0),
+            "causal_validation_score": report.get("causal_validation_score", 0.0),
+            "causal_simulation_accuracy": report.get("causal_simulation_accuracy", 0.0),
+            "generated_causal_links": report.get("generated_causal_links", 0),
+            "validated_causal_links": report.get("validated_causal_links", 0),
+            "canonical_causal_links": report.get("canonical_causal_links", 0),
+            "causal_quality": report.get("causal_quality", 0.0),
+            "average_causal_confidence": report.get(
+                "average_causal_confidence",
+                0.0,
+            ),
+            "mechanism_completeness": report.get("mechanism_completeness", 0.0),
+            "generalization_quality": report.get("generalization_quality", 0.0),
+            "prediction_accuracy": report.get("prediction_accuracy", 0.0),
+            "contradicted_relationships": self._limit_list(
+                report.get("contradicted_relationships", []),
+                10,
+            ),
+            "weak_relationships": self._limit_list(
+                report.get("weak_relationships", []),
+                10,
+            ),
+            "highest_confidence_relation": self._compact_value(
+                report.get("highest_confidence_relation", {}),
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "lowest_confidence_relation": self._compact_value(
+                report.get("lowest_confidence_relation", {}),
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
+            ),
+            "causal_knowledge_quality": self._compact_value(
+                quality,
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
+            ),
+        }
+
+    def compact_cognitive_search_report(self, report: dict) -> dict:
+        report = report if isinstance(report, dict) else {}
+        graph = report.get("search_space_graph", {})
+        graph = graph if isinstance(graph, dict) else {}
+        quality = report.get("SEARCH_EXPLORATION_QUALITY_REPORT", {})
+        quality = quality if isinstance(quality, dict) else {}
+        return {
+            "COGNITIVE_SEARCH_REPORT": report.get(
+                "COGNITIVE_SEARCH_REPORT",
+                False,
+            ),
+            "overall_search_quality": report.get("overall_search_quality", 0.0),
+            "search_efficiency": report.get("search_efficiency", 0.0),
+            "search_coverage": report.get("search_coverage", 0.0),
+            "search_entropy": report.get("search_entropy", 0.0),
+            "overall_exploration_quality": report.get(
+                "overall_exploration_quality",
+                0.0,
+            ),
+            "exploration_entropy": report.get("exploration_entropy", 0.0),
+            "exploration_diversity": report.get("exploration_diversity", 0.0),
+            "exploration_redundancy": report.get("exploration_redundancy", 0.0),
+            "exploration_depth": report.get("exploration_depth", 0.0),
+            "exploration_breadth": report.get("exploration_breadth", 0.0),
+            "exploration_efficiency": report.get("exploration_efficiency", 0.0),
+            "exploration_novelty": report.get("exploration_novelty", 0.0),
+            "productive_routes": self._limit_list(
+                report.get("productive_routes", []),
+                10,
+            ),
+            "dead_end_routes": self._limit_list(
+                report.get("dead_end_routes", []),
+                10,
+            ),
+            "reused_routes": self._limit_list(report.get("reused_routes", []), 10),
+            "unique_routes": self._limit_list(report.get("unique_routes", []), 10),
+            "preferred_search_strategy": report.get("preferred_search_strategy"),
+            "search_graph": {
+                "node_count": self._count_items(graph.get("nodes", [])),
+                "edge_count": self._count_items(graph.get("edges", [])),
+                "node_types": graph.get("node_types", []),
+                "edge_types": graph.get("edge_types", []),
+            },
+            "route_count": self._count_items(report.get("route_ranking", [])),
+            "search_exploration_quality": self._compact_value(
+                quality,
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
             ),
         }
 
@@ -461,6 +570,28 @@ class CompactReportBuilder:
             "validated_program_count": report.get("validated_program_count", 0),
             "low_confidence_program_count": report.get("low_confidence_program_count", 0),
             "high_confidence_program_count": report.get("high_confidence_program_count", 0),
+            "approved_programs": report.get("approved_programs", 0),
+            "canonical_programs": report.get("canonical_programs", 0),
+            "pending_programs": report.get("pending_programs", 0),
+            "experimental_programs": report.get("experimental_programs", 0),
+            "rejected_programs": report.get("rejected_programs", 0),
+            "merged_programs": report.get("merged_programs", 0),
+            "duplicate_programs": report.get("duplicate_programs", 0),
+            "failed_programs": report.get("failed_programs", 0),
+            "obsolete_programs": report.get("obsolete_programs", 0),
+            "generalization_validated_programs": report.get(
+                "generalization_validated_programs",
+                0,
+            ),
+            "validation_success_rate": report.get("validation_success_rate", 0.0),
+            "validation_failure_rate": report.get("validation_failure_rate", 0.0),
+            "program_lifecycle_states": report.get("program_lifecycle_states", {}),
+            "program_validation_lifecycle": self._compact_value(
+                report.get("PROGRAM_VALIDATION_LIFECYCLE_REPORT", {}),
+                level="minimal",
+                depth=0,
+                seen_reports=set(),
+            ),
             "winning_programs": [
                 compact_program(program)
                 for program in self._limit_list(
