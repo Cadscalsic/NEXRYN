@@ -535,6 +535,9 @@ class ExperienceEngine:
                 "source_experience_id": experience.experience_id,
                 "confidence": experience.confidence,
                 "update_type": "strengthen" if experience.success_state == "success" else "calibrate",
+                "legacy_experience_signal": True,
+                "operational_model_requires_semantic_memory_and_fabric": True,
+                "not_a_canonical_mental_model": True,
             })
         return models
 

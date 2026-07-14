@@ -55,6 +55,12 @@ def test_cognitive_search_report_embeds_first_class_search_runtime():
     assert runtime["runtime_id"] == "search_runtime"
     assert runtime["metrics"]["search_routes"] == 2
     assert runtime["metrics"]["routes_created"] == 2
+    assert runtime["metrics"]["overall_search_quality"] > 0.0
+    assert runtime["metrics"]["search_efficiency"] > 0.0
+    assert runtime["metrics"]["search_coverage"] > 0.0
+    assert runtime["metrics"]["search_entropy"] > 0.0
+    assert runtime["metrics"]["average_route_quality"] > 0.0
+    assert runtime["metrics"]["analytics_generation_success"] is True
     assert "route_cooling" in runtime["lifecycle"]
     assert "route_reactivation" in runtime["lifecycle"]
     assert runtime["acsc_route_targets"]
@@ -75,5 +81,6 @@ def test_search_runtime_can_be_built_from_existing_search_report():
 
     assert runtime["lifecycle"] == SEARCH_RUNTIME_LIFECYCLE
     assert runtime["metrics"]["search_routes"] == 1
+    assert runtime["metrics"]["overall_search_quality"] > 0.0
     assert runtime["graph"]["nodes"][0]["id"] == "r1"
     assert runtime["status"] == "OPERATIONAL"

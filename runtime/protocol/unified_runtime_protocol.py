@@ -107,14 +107,25 @@ STANDARD_DIAGNOSTIC_FIELDS = (
 STANDARD_SNAPSHOT_FIELDS = (
     "snapshot_id",
     "runtime",
+    "runtime_id",
     "execution_id",
+    "snapshot_type",
     "lifecycle_stage",
+    "execution_stage",
+    "status",
     "input_summary",
     "processing_summary",
     "output_summary",
     "artifacts",
     "confidence",
     "timestamp",
+    "metrics",
+    "observations",
+    "warnings",
+    "errors",
+    "duration",
+    "parent_execution",
+    "episode_id",
     "summary",
 )
 
@@ -233,6 +244,10 @@ class UnifiedRuntimeDescriptor:
     protocol_version: str = PROTOCOL_VERSION
     capabilities: list[str] = field(default_factory=list)
     snapshots: list[dict[str, Any]] = field(default_factory=list)
+    supported_snapshot_types: list[str] = field(default_factory=list)
+    snapshot_schema_version: str = "1.0.0"
+    snapshot_producer: str = ""
+    snapshot_consumer: str = ""
     telemetry: dict[str, Any] = field(default_factory=dict)
     diagnostics: dict[str, Any] = field(default_factory=dict)
     evidence: list[str] = field(default_factory=list)
@@ -317,6 +332,10 @@ class UnifiedRuntimeProtocol:
             protocol_version=self.version.version,
             capabilities=self._capabilities(runtime_id, record),
             snapshots=self._snapshots(runtime_id, record),
+            supported_snapshot_types=list(record.get("supported_snapshot_types") or []),
+            snapshot_schema_version=str(record.get("snapshot_schema_version") or "1.0.0"),
+            snapshot_producer=str(record.get("snapshot_producer") or ""),
+            snapshot_consumer=str(record.get("snapshot_consumer") or ""),
             telemetry=dict(record.get("telemetry") or {}),
             diagnostics=diagnostics.as_dict(),
             evidence=list(record.get("evidence") or []),
@@ -583,7 +602,7 @@ class UnifiedRuntimeProtocol:
             return []
         snapshots = []
         for index, snapshot in enumerate(source[:20]):
-            if isinstance(snapshot, Mapping) and all(field in snapshot for field in STANDARD_SNAPSHOT_FIELDS):
+            if isinstance(snapshot, Mapping) and _is_runtime_snapshot(snapshot):
                 snapshots.append(dict(snapshot))
                 continue
             snapshots.append({
@@ -639,6 +658,12 @@ class RuntimeDiscoveryRegistry:
             "observability": {
                 "level": descriptor.get("observability_level"),
                 "snapshots": len(descriptor.get("snapshots") or []),
+                "supported_snapshot_types": list(
+                    descriptor.get("supported_snapshot_types") or []
+                ),
+                "snapshot_schema_version": descriptor.get("snapshot_schema_version"),
+                "snapshot_producer": descriptor.get("snapshot_producer"),
+                "snapshot_consumer": descriptor.get("snapshot_consumer"),
             },
             "registered_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -727,6 +752,23 @@ class ProtocolComplianceEngine:
                 "observability": {
                     "level": descriptor["observability_level"],
                     "snapshot_count": len(descriptor["snapshots"]),
+                    "latest_snapshot": (
+                        descriptor["snapshots"][-1]
+                        if descriptor["snapshots"] else None
+                    ),
+                    "snapshot_types": [
+                        snapshot.get("snapshot_type")
+                        for snapshot in descriptor["snapshots"]
+                    ],
+                    "snapshot_duration": round(
+                        sum(_number(snapshot.get("duration")) for snapshot in descriptor["snapshots"]),
+                        9,
+                    ),
+                    "snapshot_generation_success": bool(descriptor["snapshots"]),
+                    "snapshot_generation_failures": [
+                        snapshot for snapshot in descriptor["snapshots"]
+                        if snapshot.get("errors")
+                    ],
                     "telemetry_present": bool(descriptor["telemetry"]),
                 },
                 "lifecycle": validation["lifecycle"],
@@ -828,6 +870,42 @@ def _flatten_contract(contract: Any) -> set[str]:
     for items in contract.values():
         values.update(_string_list(items))
     return values
+
+
+def _is_runtime_snapshot(snapshot: Mapping[str, Any]) -> bool:
+    required = {
+        "snapshot_id",
+        "runtime_id",
+        "execution_id",
+        "snapshot_type",
+        "timestamp",
+        "execution_stage",
+        "status",
+        "input_summary",
+        "output_summary",
+        "metrics",
+        "observations",
+        "warnings",
+        "errors",
+        "duration",
+        "parent_execution",
+        "episode_id",
+    }
+    legacy = {
+        "snapshot_id",
+        "runtime",
+        "execution_id",
+        "lifecycle_stage",
+        "input_summary",
+        "processing_summary",
+        "output_summary",
+        "artifacts",
+        "confidence",
+        "timestamp",
+        "summary",
+    }
+    keys = set(snapshot.keys())
+    return required.issubset(keys) or legacy.issubset(keys)
 
 
 def _string_list(value: Any) -> list[str]:

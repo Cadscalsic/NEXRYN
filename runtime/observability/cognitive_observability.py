@@ -45,10 +45,22 @@ REQUIRED_COGNITIVE_RUNTIMES = [
 
 @dataclass
 class CognitiveRuntimeSnapshot:
+    snapshot_id: str
+    runtime_id: str
+    snapshot_type: str
+    execution_stage: str
+    status: str
     purpose: str
     owner_runtime: str
     timestamp: str
     execution_id: str
+    input_summary: dict[str, Any] = field(default_factory=dict)
+    output_summary: dict[str, Any] = field(default_factory=dict)
+    observations: list[Any] = field(default_factory=list)
+    errors: list[Any] = field(default_factory=list)
+    duration: float = 0.0
+    parent_execution: str | None = None
+    episode_id: str | None = None
     artifact_references: list[str] = field(default_factory=list)
     confidence: float = 0.0
     processing_duration_seconds: float = 0.0
@@ -98,14 +110,35 @@ class CognitiveRuntimeObservabilityEngine:
         consumed = list(dict.fromkeys(consumed_artifacts or []))
         produced = list(dict.fromkeys(produced_artifacts or []))
         published = dict(published_artifacts or {})
+        duration = round(_number(duration_seconds), 9)
+        status = "FAILED" if failures else lifecycle_stage
         return CognitiveRuntimeSnapshot(
+            snapshot_id=f"{runtime_id}:{execution_id or f'{runtime_id}:shared_state_execution'}:{purpose}",
+            runtime_id=runtime_id,
+            snapshot_type=purpose,
+            execution_stage=lifecycle_stage,
+            status=status,
+            input_summary={
+                "input_count": int(input_count if input_count is not None else len(consumed)),
+                "consumed_artifact_count": len(consumed),
+            },
+            output_summary={
+                "output_count": int(output_count if output_count is not None else sum(published.values())),
+                "produced_artifact_count": len(produced),
+                "published_artifacts": dict(published),
+            },
+            observations=[summary] if summary else [],
+            errors=list(failures or []),
+            duration=duration,
+            parent_execution=None,
+            episode_id=None,
             purpose=purpose,
             owner_runtime=runtime_id,
             timestamp=datetime.now(timezone.utc).isoformat(),
             execution_id=execution_id or f"{runtime_id}:shared_state_execution",
             artifact_references=references,
             confidence=round(_number(confidence, default=0.9), 4),
-            processing_duration_seconds=round(_number(duration_seconds), 9),
+            processing_duration_seconds=duration,
             input_count=int(input_count if input_count is not None else len(consumed)),
             output_count=int(output_count if output_count is not None else sum(published.values())),
             failures=list(failures or []),

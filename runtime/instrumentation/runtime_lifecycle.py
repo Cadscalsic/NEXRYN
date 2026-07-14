@@ -72,6 +72,7 @@ class RuntimeLifecycleExecution:
     failure_reason: Any = None
     completion_reason: str = ""
     events: list[dict[str, Any]] = field(default_factory=list)
+    snapshots: list[dict[str, Any]] = field(default_factory=list)
     transitions: list[str] = field(default_factory=lambda: ["CREATED"])
 
     def as_dict(self) -> dict[str, Any]:
@@ -104,6 +105,7 @@ class RuntimeLifecycleExecution:
             "execution_path": list(self.execution_path),
             "lifecycle_transitions": list(self.transitions),
             "lifecycle_events": [dict(event) for event in self.events],
+            "snapshots": [dict(snapshot) for snapshot in self.snapshots],
         }
 
 

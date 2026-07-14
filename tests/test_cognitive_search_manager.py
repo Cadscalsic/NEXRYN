@@ -72,6 +72,16 @@ def test_cognitive_search_manager_builds_route_graph_and_policy_decisions(tmp_pa
     assert report["search_space_graph"]["edges"]
     assert report["route_ranking"][0]["route_id"]
     assert report["winning_route"]["why_it_won"]
+    assert report["SEARCH_ANALYTICS_REPORT"]["SEARCH_ANALYTICS_REPORT"] is True
+    assert report["overall_search_quality"] > 0.0
+    assert report["search_efficiency"] > 0.0
+    assert report["search_coverage"] > 0.0
+    assert report["search_entropy"] > 0.0
+    assert report["average_route_quality"] > 0.0
+    assert report["best_route"]["route_id"]
+    assert report["worst_route"]["route_id"]
+    assert report["route_distribution"]
+    assert report["analytics_generation_success"] is True
     assert report["search_memory"]["persistent_search_memory"] is True
 
 
@@ -88,6 +98,9 @@ def test_cognitive_search_report_exposes_phase_9_metrics_without_solving():
     assert "search_space_size" in report["route_statistics"]
     assert "search_entropy" in report["route_statistics"]
     assert "search_efficiency" in report["route_statistics"]
+    assert report["route_statistics"]["overall_search_quality"] > 0.0
+    assert report["route_statistics"]["search_coverage"] > 0.0
+    assert report["route_statistics"]["search_cost"] > 0.0
     assert "pruning_decisions" in report
     assert "merge_history" in report
     assert "split_history" in report

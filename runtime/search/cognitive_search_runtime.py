@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping, Sequence
 
+from runtime.search.search_analytics_engine import search_analytics_engine
+
 
 SEARCH_RUNTIME_LIFECYCLE = [
     "route_creation",
@@ -126,6 +128,16 @@ class CognitiveSearchRuntime:
     ) -> dict[str, Any]:
         stats = search_report.get("route_statistics")
         stats = stats if isinstance(stats, Mapping) else {}
+        analytics = search_report.get("search_analytics")
+        analytics = (
+            analytics
+            if isinstance(analytics, Mapping)
+            else search_analytics_engine.build_report(
+                routes=routes,
+                search_report=search_report,
+                performance_report=performance_report,
+            )
+        )
         route_count = max(len(routes), _number(stats.get("routes_created")))
         states = stats.get("states") if isinstance(stats.get("states"), Mapping) else {}
         return {
@@ -140,13 +152,36 @@ class CognitiveSearchRuntime:
             "routes_pruned": max(_number(stats.get("routes_pruned")), _number(states.get("PRUNED"))),
             "routes_merged": max(_number(stats.get("routes_merged")), _number(states.get("MERGED"))),
             "routes_split": max(_number(stats.get("routes_split")), self._decision_count(routes, "Split")),
-            "average_route_depth": _number(stats.get("average_route_depth")) or self._average(routes, "depth"),
-            "average_branch_width": _number(stats.get("average_branch_width")) or self._average(routes, "branch_width"),
-            "search_entropy": _number(stats.get("search_entropy")),
-            "search_efficiency": _number(stats.get("search_efficiency")),
-            "search_cost": _number(stats.get("search_cost")),
-            "search_coverage": _number(stats.get("search_coverage")),
-            "search_stability": _number(stats.get("search_stability")),
+            "average_route_depth": (
+                _number(stats.get("average_route_depth"))
+                or _number(analytics.get("average_search_depth"))
+                or self._average(routes, "depth")
+            ),
+            "average_branch_width": (
+                _number(stats.get("average_branch_width"))
+                or _number(analytics.get("average_branching_factor"))
+                or self._average(routes, "branch_width")
+            ),
+            "overall_search_quality": _number(analytics.get("overall_search_quality")),
+            "search_entropy": _number(analytics.get("search_entropy"), _number(stats.get("search_entropy"))),
+            "search_efficiency": _number(analytics.get("search_efficiency"), _number(stats.get("search_efficiency"))),
+            "search_cost": _number(analytics.get("search_cost"), _number(stats.get("search_cost"))),
+            "search_coverage": _number(analytics.get("search_coverage"), _number(stats.get("search_coverage"))),
+            "search_stability": _number(analytics.get("search_stability"), _number(stats.get("search_stability"))),
+            "search_diversity": _number(analytics.get("search_diversity")),
+            "search_consistency": _number(analytics.get("search_consistency")),
+            "search_completion_ratio": _number(analytics.get("search_completion_ratio")),
+            "search_expansion_ratio": _number(analytics.get("search_expansion_ratio")),
+            "search_success_ratio": _number(analytics.get("search_success_ratio")),
+            "search_failure_ratio": _number(analytics.get("search_failure_ratio")),
+            "search_recovery_ratio": _number(analytics.get("search_recovery_ratio")),
+            "search_compression_ratio": _number(analytics.get("search_compression_ratio")),
+            "adaptive_strategy_utilization": _number(analytics.get("adaptive_strategy_utilization")),
+            "maximum_search_depth": _number(analytics.get("maximum_search_depth")),
+            "unique_search_states": _number(analytics.get("unique_search_states")),
+            "repeated_search_states": _number(analytics.get("repeated_search_states")),
+            "average_route_quality": _number(analytics.get("average_route_quality")),
+            "analytics_generation_success": bool(analytics.get("analytics_generation_success")),
             "cooling_candidates": len(self._acsc_targets(routes)),
         }
 
@@ -199,6 +234,8 @@ class CognitiveSearchRuntime:
             "owner": "search_runtime",
             "route_count": len(routes),
             "search_routes_materialized": metrics.get("search_routes", 0) > 0,
+            "overall_search_quality": metrics.get("overall_search_quality", 0.0),
+            "analytics_generation_success": metrics.get("analytics_generation_success", False),
             "instrumentation_overhead_budget": "below_3_percent_target",
             "deterministic_execution": True,
         }
@@ -275,13 +312,13 @@ def build_cognitive_search_runtime_report(
     )
 
 
-def _number(value: Any) -> float:
+def _number(value: Any, default: float = 0.0) -> float:
     if isinstance(value, bool):
         return float(value)
     try:
-        return float(value or 0.0)
+        return float(value if value is not None else default)
     except (TypeError, ValueError):
-        return 0.0
+        return default
 
 
 __all__ = [

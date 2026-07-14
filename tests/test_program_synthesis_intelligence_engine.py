@@ -93,9 +93,22 @@ def test_program_synthesis_intelligence_generates_validated_programs(tmp_path):
     assert report["program_graph"]["edges"]
     assert report["program_ranking"]
     assert report["program_validation"]
+    assert report["program_confidence"]["PROGRAM_CONFIDENCE_REPORT"] is True
+    assert report["average_program_confidence"] > 0.0
+    assert report["highest_program_confidence"] >= report["average_program_confidence"]
+    assert report["lowest_program_confidence"] <= report["average_program_confidence"]
+    assert sum(report["confidence_distribution"].values()) == report["generated_programs"]
 
     program = report["generated_program_objects"][0]
     assert program["required_concepts"]
+    assert program["confidence"] > 0.0
+    assert program["confidence_level"] != "UNKNOWN"
+    assert program["confidence_components"]
+    assert program["confidence_reason"]
+    assert program["validation_status"] in {"VALIDATED", "SUPPORTED"}
+    assert "stability_score" in program
+    assert "transfer_score" in program
+    assert "reuse_score" in program
     assert program["generalization_score"] > 0
     assert program["execution_strategy"]["steps"]
     assert program["validation_results"]

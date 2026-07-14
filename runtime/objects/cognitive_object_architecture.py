@@ -211,6 +211,8 @@ class UnifiedCognitiveObjectLayer:
             },
             "mental_model_integration": {
                 "mental_models_emerge_from_object_subgraphs": True,
+                "object_subgraphs_are_mental_model_signals_only": True,
+                "operational_models_require_semantic_memory_and_knowledge_fabric": True,
                 "references": sorted({item.mental_model_reference for item in objects if item.mental_model_reference}),
             },
             "dna_integration": {

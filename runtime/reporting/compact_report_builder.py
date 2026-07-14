@@ -412,9 +412,21 @@ class CompactReportBuilder:
                     seen_reports=set(),
                 ),
                 "confidence": program.get("confidence"),
+                "confidence_level": program.get("confidence_level"),
+                "confidence_components": self._compact_value(
+                    program.get("confidence_components", {}),
+                    level="minimal",
+                    depth=0,
+                    seen_reports=set(),
+                ),
+                "confidence_reason": program.get("confidence_reason"),
+                "validation_status": program.get("validation_status"),
+                "stability_score": program.get("stability_score"),
                 "generalization_score": program.get(
                     "generalization_score",
                 ),
+                "transfer_score": program.get("transfer_score"),
+                "reuse_score": program.get("reuse_score"),
                 "utility": program.get("utility"),
                 "expected_cost": program.get("expected_cost"),
                 "lifecycle": program.get("lifecycle"),
@@ -442,6 +454,13 @@ class CompactReportBuilder:
             "program_candidates": report.get("program_candidates", 0),
             "programs_validated": report.get("programs_validated", 0),
             "programs_rejected": report.get("programs_rejected", 0),
+            "average_program_confidence": report.get("average_program_confidence", 0.0),
+            "highest_program_confidence": report.get("highest_program_confidence", 0.0),
+            "lowest_program_confidence": report.get("lowest_program_confidence", 0.0),
+            "confidence_distribution": report.get("confidence_distribution", {}),
+            "validated_program_count": report.get("validated_program_count", 0),
+            "low_confidence_program_count": report.get("low_confidence_program_count", 0),
+            "high_confidence_program_count": report.get("high_confidence_program_count", 0),
             "winning_programs": [
                 compact_program(program)
                 for program in self._limit_list(

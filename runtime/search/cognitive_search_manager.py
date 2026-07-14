@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime.search.cognitive_search_runtime import build_cognitive_search_runtime_report
+from runtime.search.search_analytics_engine import search_analytics_engine
 from runtime.search.adaptive_search_policy import (
     AdaptiveSearchPolicyEngine,
     adaptive_search_policy_engine,
@@ -187,12 +188,32 @@ class CognitiveSearchManager:
             route.current_state = self._state_for(route)
             route.decision, route.decision_explanation = self._policy_decision(route)
         graph = self._search_space_graph(routes)
+        analytics_report = search_analytics_engine.build_report(
+            routes=routes,
+            performance_report=performance_report or {},
+        )
+        route_statistics = self._route_statistics(routes)
+        route_statistics.update(self._analytics_statistics(analytics_report))
         report = {
             "COGNITIVE_SEARCH_REPORT": True,
             "search_space_graph": graph,
-            "route_statistics": self._route_statistics(routes),
+            "route_statistics": route_statistics,
+            "search_analytics": analytics_report,
+            "SEARCH_ANALYTICS_REPORT": analytics_report,
+            "overall_search_quality": analytics_report["overall_search_quality"],
+            "search_efficiency": analytics_report["search_efficiency"],
+            "search_coverage": analytics_report["search_coverage"],
+            "search_entropy": analytics_report["search_entropy"],
+            "average_route_quality": analytics_report["average_route_quality"],
+            "best_route": analytics_report["best_route"],
+            "worst_route": analytics_report["worst_route"],
+            "route_distribution": analytics_report["route_distribution"],
+            "analytics_generation_success": analytics_report["analytics_generation_success"],
             "search_timeline": self._timeline(routes),
-            "search_cost": self._search_cost(routes),
+            "search_cost": {
+                **self._search_cost(routes),
+                "analytics_total_search_cost": analytics_report["search_cost"],
+            },
             "route_ranking": self._route_ranking(routes),
             "route_evolution": self._route_evolution(routes),
             "pruning_decisions": [
@@ -228,6 +249,7 @@ class CognitiveSearchManager:
                 "reuses_process_runtime": bool(process_report),
                 "reuses_causal_runtime": bool(causal_context_report),
                 "instrumentation_overhead_budget": "below_3_percent_target",
+                "search_analytics_authority": "search_analytics_engine",
             },
             "source_reports": {
                 "cognitive_pipeline_report": bool(cognitive_pipeline_report),
@@ -267,6 +289,30 @@ class CognitiveSearchManager:
         report["COGNITIVE_SEARCH_RUNTIME_REPORT"] = True
         report["search_runtime"] = search_runtime_report
         return report
+
+    def _analytics_statistics(self, analytics_report: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "overall_search_quality": analytics_report.get("overall_search_quality", 0.0),
+            "search_efficiency": analytics_report.get("search_efficiency", 0.0),
+            "search_coverage": analytics_report.get("search_coverage", 0.0),
+            "search_entropy": analytics_report.get("search_entropy", 0.0),
+            "search_cost": analytics_report.get("search_cost", 0.0),
+            "search_diversity": analytics_report.get("search_diversity", 0.0),
+            "search_stability": analytics_report.get("search_stability", 0.0),
+            "search_consistency": analytics_report.get("search_consistency", 0.0),
+            "search_completion_ratio": analytics_report.get("search_completion_ratio", 0.0),
+            "search_expansion_ratio": analytics_report.get("search_expansion_ratio", 0.0),
+            "search_success_ratio": analytics_report.get("search_success_ratio", 0.0),
+            "search_failure_ratio": analytics_report.get("search_failure_ratio", 0.0),
+            "search_recovery_ratio": analytics_report.get("search_recovery_ratio", 0.0),
+            "search_compression_ratio": analytics_report.get("search_compression_ratio", 0.0),
+            "adaptive_strategy_utilization": analytics_report.get("adaptive_strategy_utilization", 0.0),
+            "average_branching_factor": analytics_report.get("average_branching_factor", 0.0),
+            "average_search_depth": analytics_report.get("average_search_depth", 0.0),
+            "maximum_search_depth": analytics_report.get("maximum_search_depth", 0),
+            "unique_search_states": analytics_report.get("unique_search_states", 0),
+            "repeated_search_states": analytics_report.get("repeated_search_states", 0),
+        }
 
     def _policy_task_analysis(self, all_results: list[dict[str, Any]]) -> dict[str, Any]:
         reports = []

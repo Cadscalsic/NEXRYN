@@ -11,7 +11,15 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.cognitive_runtime.snapshots import (
+    runtime_snapshot_consumer,
+    snapshot_registry_metadata,
+)
 from runtime.protocol import build_unified_runtime_protocol_report
+from runtime.truth.truth_metric_synchronization_engine import (
+    truth_metric_synchronization_engine,
+)
+from runtime.timing import execution_timing_unification_engine
 
 
 @dataclass
@@ -36,6 +44,16 @@ class CognitiveRuntimeRecord:
     graph: dict[str, Any] = field(default_factory=dict)
     snapshots: list[dict[str, Any]] = field(default_factory=list)
     telemetry: dict[str, Any] = field(default_factory=dict)
+    supported_snapshot_types: list[str] = field(default_factory=list)
+    snapshot_schema_version: str = "1.0.0"
+    snapshot_producer: str = ""
+    snapshot_consumer: str = ""
+    snapshot_count: int = 0
+    latest_snapshot: dict[str, Any] | None = None
+    snapshot_types: list[str] = field(default_factory=list)
+    snapshot_duration: float = 0.0
+    snapshot_generation_success: bool = False
+    snapshot_generation_failures: list[dict[str, Any]] = field(default_factory=list)
     status: str = "PARTIAL"
     coverage: float = 0.0
 
@@ -305,6 +323,26 @@ class CognitiveRuntimeFramework:
             != f"{runtime_id}:synthetic_execution"
         ]
         status = self._status(records, observability)
+        truth_sync_report = truth_metric_synchronization_engine.synchronize(
+            execution_instances=[
+                self._truth_execution_instance(record)
+                for record in records
+                if record.runtime_id == "truth_runtime"
+            ],
+            truth_report=sources["truth_report"],
+        )
+        truth_report_fields = truth_metric_synchronization_engine.report_fields(
+            truth_sync_report
+        )
+        self._apply_truth_metric_state(records, truth_sync_report)
+        timing_report = execution_timing_unification_engine.build_report(
+            execution_instances=[
+                self._timing_execution_instance(record)
+                for record in records
+            ],
+            total_wall_time=_number(performance.get("total_wall_time")),
+            legacy_report=performance,
+        )
         runtime_registry = {
             record.runtime_id: record.as_dict()
             for record in records
@@ -329,6 +367,19 @@ class CognitiveRuntimeFramework:
                 record.runtime_id: record.metrics
                 for record in records
             },
+            "execution_timing": timing_report,
+            "EXECUTION_TIMING_UNIFICATION_REPORT": timing_report,
+            "timing_summary": timing_report["timing_summary"],
+            "timing_records": timing_report["timing_records"],
+            "parent_timing": timing_report["parent_timing"],
+            "timing_diagnostics": timing_report["timing_diagnostics"],
+            "legacy_timing_semantics": timing_report["legacy_timing_semantics"],
+            "timing_version": timing_report["timing_version"],
+            "timing_consistency": timing_report["timing_consistency"],
+            "timing_coverage": timing_report["timing_coverage"],
+            "truth_metric_synchronization": truth_sync_report,
+            "TRUTH_METRIC_SYNCHRONIZATION_REPORT": truth_sync_report,
+            **truth_report_fields,
             "runtime_snapshots": {
                 record.runtime_id: record.snapshots
                 for record in records
@@ -369,6 +420,63 @@ class CognitiveRuntimeFramework:
             "generated_at": str(datetime.utcnow()),
         }
 
+    def _timing_execution_instance(self, record: CognitiveRuntimeRecord) -> dict[str, Any]:
+        return {
+            "runtime_id": record.runtime_id,
+            "execution_id": record.execution_id,
+            "execution_parent": None if record.runtime_id == "execution_runtime" else "execution_runtime:framework_parent",
+            "execution_start": record.execution_start,
+            "execution_end": record.execution_end,
+            "duration_seconds": record.duration_seconds,
+            "elapsed_seconds": record.duration_seconds,
+            "cpu_time": record.cpu_time,
+            "status": record.status,
+        }
+
+    def _truth_execution_instance(self, record: CognitiveRuntimeRecord) -> dict[str, Any]:
+        return {
+            "runtime_id": record.runtime_id,
+            "execution_id": record.execution_id,
+            "execution_parent": None,
+            "execution_end": record.execution_end,
+            "duration_seconds": record.duration_seconds,
+            "completion_status": record.status,
+            "generated_truth_candidates": record.metrics.get("truth_candidates", 0),
+            "committed_truth": record.metrics.get("truth_commits", 0),
+            "truth_candidates": record.metrics.get("truth_candidates", 0),
+            "truth_lifecycle_statistics": {
+                "lifecycle_event_count": len(record.lifecycle_events),
+                "snapshot_count": record.snapshot_count,
+            },
+            "snapshots": record.snapshots,
+            "lifecycle_events": record.lifecycle_events,
+        }
+
+    def _apply_truth_metric_state(
+        self,
+        records: list[CognitiveRuntimeRecord],
+        synchronization_report: Mapping[str, Any],
+    ) -> None:
+        state = synchronization_report.get("canonical_truth_state")
+        if not isinstance(state, Mapping):
+            return
+        fields = truth_metric_synchronization_engine.report_fields(synchronization_report)
+        for record in records:
+            if record.runtime_id != "truth_runtime":
+                continue
+            record.metrics.update({
+                "truth_candidates": state.get("truth_candidates", 0),
+                "validated_truth": state.get("validated_truth", 0),
+                "promoted_truth": state.get("promoted_truth", 0),
+                "truth_commits": state.get("committed_truth", 0),
+                "committed_truth": state.get("committed_truth", 0),
+                "rejected_truth": state.get("rejected_truth", 0),
+                "truth_confidence": state.get("truth_confidence", 0.0),
+                "truth_validation_count": state.get("truth_validation_count", 0),
+            })
+            record.telemetry.update(fields)
+            record.telemetry["truth_metric_source"] = state.get("truth_metric_source")
+
     def _runtime_record(
         self,
         runtime_id: str,
@@ -380,15 +488,19 @@ class CognitiveRuntimeFramework:
         timing_metric = str(definition["timing_metric"])
         duration = self._duration_for(timing_metric, performance, lifecycle, runtime_id)
         source_payload = self._source_for_runtime(runtime_id, sources)
+        lifecycle_execution = self._lifecycle_execution(runtime_id, lifecycle)
         metrics = self._metrics_for(runtime_id, timing_metric, performance, source_payload)
         graph = self._graph_for(runtime_id, source_payload)
-        snapshots = self._snapshots_for(runtime_id, source_payload)
+        snapshots = self._snapshots_for(runtime_id, source_payload, lifecycle)
+        snapshot_summary = runtime_snapshot_consumer.summarize(snapshots)
+        snapshot_registry = snapshot_registry_metadata(runtime_id)
         telemetry = {
             "timing_source": "performance_report_or_lifecycle",
             "source_available": bool(source_payload),
             "duration_seconds": duration,
             "metric_owner": definition["owner"],
             "execution_id": self._execution_id(runtime_id, lifecycle),
+            **snapshot_summary,
         }
         coverage = self._record_coverage(duration, graph, snapshots, telemetry)
         status = "OPERATIONAL" if coverage >= 0.75 else "EMERGING" if coverage >= 0.35 else "PARTIAL"
@@ -400,15 +512,45 @@ class CognitiveRuntimeFramework:
             lifecycle=list(definition["lifecycle"]),
             timing_metric=timing_metric,
             duration_seconds=duration,
+            execution_start=(
+                str(lifecycle_execution.get("execution_start"))
+                if lifecycle_execution.get("execution_start") else None
+            ),
+            execution_end=(
+                str(lifecycle_execution.get("execution_end"))
+                if lifecycle_execution.get("execution_end") else None
+            ),
+            cpu_time=_number(lifecycle_execution.get("cpu_time")),
             telemetry_source="runtime_lifecycle",
             children=list(definition["children"]),
             metrics=metrics,
             graph=graph,
             snapshots=snapshots,
             telemetry=telemetry,
+            supported_snapshot_types=snapshot_registry["supported_snapshot_types"],
+            snapshot_schema_version=snapshot_registry["snapshot_schema_version"],
+            snapshot_producer=snapshot_registry["snapshot_producer"],
+            snapshot_consumer=snapshot_registry["snapshot_consumer"],
+            snapshot_count=snapshot_summary["snapshot_count"],
+            latest_snapshot=snapshot_summary["latest_snapshot"],
+            snapshot_types=snapshot_summary["snapshot_types"],
+            snapshot_duration=snapshot_summary["snapshot_duration"],
+            snapshot_generation_success=snapshot_summary["snapshot_generation_success"],
+            snapshot_generation_failures=snapshot_summary["snapshot_generation_failures"],
             status=status,
             coverage=coverage,
         )
+
+    def _lifecycle_execution(
+        self,
+        runtime_id: str,
+        lifecycle: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        execution_id = self._execution_id(runtime_id, lifecycle)
+        for execution in lifecycle.get("executions", []) or []:
+            if isinstance(execution, Mapping) and execution.get("execution_id") == execution_id:
+                return execution
+        return {}
 
     def _duration_for(
         self,
@@ -592,17 +734,35 @@ class CognitiveRuntimeFramework:
                     _number(payload_metrics.get("search_entropy")),
                     _number(route_stats.get("search_entropy")),
                 ),
+                "overall_search_quality": max(
+                    _number(payload_metrics.get("overall_search_quality")),
+                    _number(route_stats.get("overall_search_quality")),
+                    _number(source_payload.get("overall_search_quality")),
+                ),
                 "search_efficiency": max(
                     _number(payload_metrics.get("search_efficiency")),
                     _number(route_stats.get("search_efficiency")),
+                    _number(source_payload.get("search_efficiency")),
                 ),
                 "search_cost": max(
                     _number(payload_metrics.get("search_cost")),
                     _number(route_stats.get("search_cost")),
+                    _number(source_payload.get("search_cost")),
                 ),
                 "search_coverage": max(
                     _number(payload_metrics.get("search_coverage")),
                     _number(route_stats.get("search_coverage")),
+                    _number(source_payload.get("search_coverage")),
+                ),
+                "average_route_quality": max(
+                    _number(payload_metrics.get("average_route_quality")),
+                    _number(route_stats.get("average_route_quality")),
+                    _number(source_payload.get("average_route_quality")),
+                ),
+                "analytics_generation_success": bool(
+                    payload_metrics.get("analytics_generation_success")
+                    or route_stats.get("analytics_generation_success")
+                    or source_payload.get("analytics_generation_success")
                 ),
                 "cooling_candidates": _count(source_payload.get("acsc_route_targets")),
             })
@@ -644,7 +804,19 @@ class CognitiveRuntimeFramework:
         self,
         runtime_id: str,
         source_payload: Mapping[str, Any],
+        lifecycle: Mapping[str, Any],
     ) -> list[dict[str, Any]]:
+        lifecycle_snapshots = []
+        for execution in lifecycle.get("executions", []) or []:
+            if not isinstance(execution, Mapping):
+                continue
+            if self._runtime_id_from_execution(execution) != runtime_id:
+                continue
+            for snapshot in execution.get("snapshots", []) or []:
+                if isinstance(snapshot, Mapping):
+                    lifecycle_snapshots.append(dict(snapshot))
+        if lifecycle_snapshots:
+            return lifecycle_snapshots
         if runtime_id == "reasoning_runtime":
             if isinstance(source_payload.get("search_timeline"), list):
                 return [{"snapshot_type": "search_timeline", "items": len(source_payload["search_timeline"])}]
@@ -663,6 +835,23 @@ class CognitiveRuntimeFramework:
         if source_payload:
             return [{"snapshot_type": "source_payload", "keys": sorted(source_payload.keys())[:20]}]
         return []
+
+    def _runtime_id_from_execution(self, execution: Mapping[str, Any]) -> str:
+        runtime_id = execution.get("runtime_id")
+        if runtime_id:
+            return str(runtime_id)
+        text = " ".join([
+            str(execution.get("runtime_name", "")),
+            str(execution.get("module_name", "")),
+            str(execution.get("trigger", "")),
+        ]).lower()
+        for token in (
+            "dependency", "evaluation", "reasoning", "search", "memory",
+            "truth", "process", "causal", "reuse", "execution",
+        ):
+            if token in text:
+                return f"{token}_runtime"
+        return ""
 
     def _record_coverage(
         self,
@@ -750,13 +939,25 @@ class CognitiveRuntimeFramework:
             if coverage["coverage_score"] >= 0.35
             else "PARTIAL"
         )
+        full_snapshot_coverage = all(
+            record.snapshot_count > 0 and record.snapshot_generation_success
+            for record in records
+        )
+        full_observability = (
+            obs_state == "COMPLETE"
+            or (
+                cognitive_state == "OPERATIONAL"
+                and full_snapshot_coverage
+                and not self._gaps(records)
+            )
+        )
         return {
             "execution": "SUCCESS",
             "observability": obs_state,
             "cognitive_coverage": cognitive_state,
             "overall": (
-                "SUCCESS"
-                if obs_state == "COMPLETE" and cognitive_state == "OPERATIONAL"
+                "SUCCESS_WITH_FULL_OBSERVABILITY"
+                if full_observability
                 else "SUCCESS_WITH_LIMITED_OBSERVABILITY"
             ),
             "legacy_failure_reinterpretation": (

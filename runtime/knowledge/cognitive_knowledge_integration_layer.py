@@ -295,6 +295,8 @@ class CognitiveKnowledgeIntegrationLayer:
                 "experience_engine_transforms_successful_episodes": True,
                 "mental_models_emerge_from_object_patterns": True,
                 "mental_models_emerge_from_episode_graphs": True,
+                "object_patterns_are_mental_model_signals_only": True,
+                "operational_mental_models_emerge_from_semantic_memory_and_knowledge_fabric": True,
                 "world_model_stores_cognitive_objects": True,
                 "world_model_stores_episodes": True,
                 "dna_evolves_from_aggregated_cognitive_objects": True,

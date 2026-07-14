@@ -151,6 +151,16 @@ class KnowledgeFabricRegistry:
         relation_type = _fabric_relationship_type(relationship.get("relationship_type") or relationship.get("relation_type"))
         confidence = round(clamp(relationship.get("confidence", relationship.get("relation_confidence", 0.5))), 4)
         strength = round(clamp(relationship.get("strength", relationship.get("relation_strength", confidence))), 4)
+        provenance = dict(relationship.get("provenance") or relationship.get("lineage") or {})
+        validity_scope = {
+            "source_domain": str(relationship.get("source_domain") or ""),
+            "target_domain": str(relationship.get("target_domain") or ""),
+            "cross_domain": bool(relationship.get("cross_domain", False)),
+        }
+        lifecycle_state = str(
+            relationship.get("lifecycle_state")
+            or _lifecycle_state(confidence, provenance)
+        )
         item = {
             "relation_id": _relation_id(source_id, target_id, relation_type),
             "source_entity_id": source_id,
@@ -158,18 +168,23 @@ class KnowledgeFabricRegistry:
             "relation_type": relation_type,
             "relation_strength": strength,
             "relation_confidence": confidence,
+            "relation_direction": _relation_direction(relation_type),
+            "relation_stability": _relation_stability(confidence, strength, lifecycle_state),
+            "relation_origin": _relation_origin(provenance),
             "evidence_ids": [str(item) for item in _list(relationship.get("evidence_ids"))],
             "context_ids": [str(item) for item in _list(relationship.get("context_ids"))],
-            "provenance": dict(relationship.get("provenance") or relationship.get("lineage") or {}),
-            "validity_scope": {
-                "source_domain": str(relationship.get("source_domain") or ""),
-                "target_domain": str(relationship.get("target_domain") or ""),
-                "cross_domain": bool(relationship.get("cross_domain", False)),
+            "relation_evidence": {
+                "evidence_ids": [str(item) for item in _list(relationship.get("evidence_ids"))],
+                "context_ids": [str(item) for item in _list(relationship.get("context_ids"))],
+                "has_direct_evidence": bool(_list(relationship.get("evidence_ids"))),
+                "provenance_support": sorted(provenance),
             },
-            "lifecycle_state": str(
-                relationship.get("lifecycle_state")
-                or _lifecycle_state(confidence, relationship.get("provenance") or relationship.get("lineage"))
-            ),
+            "relation_scope": _relation_scope(validity_scope),
+            "relation_temporality": _relation_temporality(lifecycle_state, provenance),
+            "relation_causality": _relation_causality(relation_type),
+            "provenance": provenance,
+            "validity_scope": validity_scope,
+            "lifecycle_state": lifecycle_state,
             "version": int(relationship.get("version", 1)),
         }
         marker = (item["source_entity_id"], item["target_entity_id"], item["relation_type"])
@@ -253,6 +268,11 @@ class KnowledgeFabricEngine:
             "Fabric Stability": _average(entity.fabric_stability for entity in fabric_entities),
             "Emerging Bridges": bridges,
             "Weak Connections": weak_connections,
+            "Relation Intelligence": _relation_intelligence(relationships),
+            "Fabric Topology Intelligence": _fabric_topology_intelligence(
+                relationships=relationships,
+                domains=domain_list,
+            ),
             "Semantic Coverage": {
                 "referenced_semantic_entities": len(_referenced_entity_ids(fabric_entities, relationships)),
                 "semantic_entity_count": semantic_entity_count or 0,
@@ -655,6 +675,432 @@ def _lifecycle_state(confidence: float, provenance: Any) -> str:
     return "PROPOSED"
 
 
+def _relation_direction(relation_type: str) -> str:
+    if relation_type in {"Complements", "Bridges", "Conflicts With"}:
+        return "BIDIRECTIONAL"
+    if relation_type in {"Depends On", "Requires", "Emerges From"}:
+        return "REVERSE_DEPENDENCY"
+    return "DIRECTED"
+
+
+def _relation_stability(confidence: float, strength: float, lifecycle_state: str) -> float:
+    lifecycle_bonus = {
+        "STABLE": 0.2,
+        "VALIDATED": 0.12,
+        "EVIDENCE_SUPPORTED": 0.05,
+        "PROPOSED": -0.08,
+    }.get(lifecycle_state, 0.0)
+    return round(clamp(((confidence + strength) / 2) + lifecycle_bonus), 4)
+
+
+def _relation_origin(provenance: Mapping[str, Any]) -> str:
+    owner = str(provenance.get("owner") or "")
+    source = str(provenance.get("source") or "")
+    if owner == "Semantic Memory" or source.startswith("semantic_memory"):
+        return "SEMANTIC_MEMORY"
+    if source == "fabric_relation_hypothesis":
+        return "FABRIC_INFERENCE"
+    if source:
+        return source.upper()
+    return "UNKNOWN"
+
+
+def _relation_scope(validity_scope: Mapping[str, Any]) -> str:
+    if validity_scope.get("cross_domain"):
+        return "CROSS_DOMAIN"
+    if validity_scope.get("source_domain") and validity_scope.get("target_domain"):
+        return "INTRA_DOMAIN"
+    return "UNSCOPED"
+
+
+def _relation_temporality(lifecycle_state: str, provenance: Mapping[str, Any]) -> str:
+    source = str(provenance.get("source") or "")
+    if lifecycle_state in {"STABLE", "VALIDATED"} and source != "fabric_relation_hypothesis":
+        return "PERMANENT"
+    if lifecycle_state == "PROPOSED":
+        return "TEMPORARY"
+    return "CONDITIONAL"
+
+
+def _relation_causality(relation_type: str) -> str:
+    if relation_type in {"Predicts", "Influences", "Strengthens", "Weakens", "Constrains"}:
+        return "CAUSAL"
+    if relation_type in {"Supports", "Complements", "Conflicts With"}:
+        return "STATISTICAL"
+    if relation_type in {"Explains", "Generalizes", "Specializes", "Bridges"}:
+        return "SEMANTIC"
+    if relation_type in {"Requires", "Depends On", "Transfers", "Extends", "Emerges From"}:
+        return "PROCEDURAL"
+    return "SEMANTIC"
+
+
+def _relation_intelligence(relationships: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "relationship_count": len(relationships),
+        "strong_links": sum(1 for rel in relationships if rel.get("relation_strength", 0.0) >= 0.7),
+        "weak_links": sum(1 for rel in relationships if rel.get("relation_strength", 0.0) < 0.5),
+        "permanent_links": sum(1 for rel in relationships if rel.get("relation_temporality") == "PERMANENT"),
+        "temporary_links": sum(1 for rel in relationships if rel.get("relation_temporality") == "TEMPORARY"),
+        "conditional_links": sum(1 for rel in relationships if rel.get("relation_temporality") == "CONDITIONAL"),
+        "causal_links": sum(1 for rel in relationships if rel.get("relation_causality") == "CAUSAL"),
+        "statistical_links": sum(1 for rel in relationships if rel.get("relation_causality") == "STATISTICAL"),
+        "semantic_links": sum(1 for rel in relationships if rel.get("relation_causality") == "SEMANTIC"),
+        "procedural_links": sum(1 for rel in relationships if rel.get("relation_causality") == "PROCEDURAL"),
+        "direction_distribution": _distribution(rel.get("relation_direction") for rel in relationships),
+        "origin_distribution": _distribution(rel.get("relation_origin") for rel in relationships),
+        "scope_distribution": _distribution(rel.get("relation_scope") for rel in relationships),
+        "temporality_distribution": _distribution(rel.get("relation_temporality") for rel in relationships),
+        "causality_distribution": _distribution(rel.get("relation_causality") for rel in relationships),
+        "average_relation_stability": _average(rel.get("relation_stability", 0.0) for rel in relationships),
+        "relation_intelligence_enabled": True,
+    }
+
+
+def _fabric_topology_intelligence(
+    *,
+    relationships: list[dict[str, Any]],
+    domains: list[str],
+) -> dict[str, Any]:
+    adjacency = _fabric_adjacency(relationships)
+    node_scores = _node_scores(relationships)
+    domain_scores = _domain_scores(relationships)
+    communities = _knowledge_communities(adjacency)
+    weak_regions = _weak_regions(relationships, domains)
+    return {
+        "Central Concepts": _ranked_nodes(node_scores, "centrality_score"),
+        "Most Influential Domains": _ranked_domains(domain_scores),
+        "Bridge Concepts": _bridge_concepts(relationships, node_scores),
+        "Semantic Hubs": _semantic_hubs(node_scores),
+        "Critical Connections": _critical_connections(relationships),
+        "Weak Regions": weak_regions,
+        "Knowledge Bottlenecks": _knowledge_bottlenecks(relationships, node_scores),
+        "Transfer Paths": _transfer_paths(relationships),
+        "Reasoning Corridors": _reasoning_corridors(relationships, adjacency),
+        "Knowledge Communities": communities,
+        "topology_intelligence_enabled": True,
+        "world_model_preparation": {
+            "uses_ids_only": True,
+            "community_count": len(communities),
+            "critical_connection_count": len(_critical_connections(relationships)),
+            "weak_region_count": len(weak_regions),
+        },
+    }
+
+
+def _fabric_adjacency(relationships: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    adjacency: dict[str, list[dict[str, Any]]] = {}
+    for relation in relationships:
+        source = str(relation.get("source_entity_id") or "")
+        target = str(relation.get("target_entity_id") or "")
+        if not source or not target:
+            continue
+        adjacency.setdefault(source, []).append(relation)
+        adjacency.setdefault(target, []).append(relation)
+    return adjacency
+
+
+def _node_scores(relationships: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    scores: dict[str, dict[str, Any]] = {}
+    for relation in relationships:
+        source = str(relation.get("source_entity_id") or "")
+        target = str(relation.get("target_entity_id") or "")
+        strength = _number(relation.get("relation_strength"))
+        confidence = _number(relation.get("relation_confidence"))
+        stability = _number(relation.get("relation_stability"))
+        for node, role in ((source, "out"), (target, "in")):
+            if not node:
+                continue
+            entry = scores.setdefault(node, {
+                "entity_id": node,
+                "degree": 0,
+                "in_degree": 0,
+                "out_degree": 0,
+                "cross_domain_degree": 0,
+                "weighted_strength": 0.0,
+                "average_stability": [],
+                "relation_types": set(),
+            })
+            entry["degree"] += 1
+            entry["in_degree" if role == "in" else "out_degree"] += 1
+            entry["weighted_strength"] += (strength + confidence) / 2
+            entry["average_stability"].append(stability)
+            entry["relation_types"].add(str(relation.get("relation_type") or ""))
+            if relation.get("validity_scope", {}).get("cross_domain"):
+                entry["cross_domain_degree"] += 1
+    for entry in scores.values():
+        entry["average_stability"] = _average(entry["average_stability"])
+        entry["relation_type_count"] = len(entry["relation_types"])
+        entry["relation_types"] = sorted(entry["relation_types"])
+        entry["centrality_score"] = round(
+            entry["degree"]
+            + entry["cross_domain_degree"] * 0.75
+            + entry["weighted_strength"] * 0.5
+            + entry["relation_type_count"] * 0.25,
+            4,
+        )
+    return scores
+
+
+def _domain_scores(relationships: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    scores: dict[str, dict[str, Any]] = {}
+    for relation in relationships:
+        scope = relation.get("validity_scope", {})
+        domains = [scope.get("source_domain"), scope.get("target_domain")]
+        for domain in domains:
+            if not domain:
+                continue
+            entry = scores.setdefault(str(domain), {
+                "domain": str(domain),
+                "relation_count": 0,
+                "cross_domain_links": 0,
+                "weighted_influence": 0.0,
+            })
+            entry["relation_count"] += 1
+            entry["weighted_influence"] += _number(relation.get("relation_strength"))
+            if scope.get("cross_domain"):
+                entry["cross_domain_links"] += 1
+    for entry in scores.values():
+        entry["influence_score"] = round(
+            entry["weighted_influence"] + entry["cross_domain_links"] * 0.5,
+            4,
+        )
+    return scores
+
+
+def _ranked_nodes(
+    node_scores: dict[str, dict[str, Any]],
+    score_key: str,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    ranked = sorted(
+        node_scores.values(),
+        key=lambda item: (item.get(score_key, 0.0), item.get("degree", 0)),
+        reverse=True,
+    )
+    return [
+        {
+            "entity_id": item["entity_id"],
+            "degree": item["degree"],
+            "cross_domain_degree": item["cross_domain_degree"],
+            "centrality_score": item["centrality_score"],
+            "relation_types": item["relation_types"],
+        }
+        for item in ranked[:limit]
+    ]
+
+
+def _ranked_domains(domain_scores: dict[str, dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    ranked = sorted(
+        domain_scores.values(),
+        key=lambda item: (item.get("influence_score", 0.0), item.get("cross_domain_links", 0)),
+        reverse=True,
+    )
+    return [dict(item) for item in ranked[:limit]]
+
+
+def _bridge_concepts(
+    relationships: list[dict[str, Any]],
+    node_scores: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    bridge_ids = set()
+    for relation in relationships:
+        if relation.get("relation_type") == "Bridges" or relation.get("validity_scope", {}).get("cross_domain"):
+            bridge_ids.add(str(relation.get("source_entity_id")))
+            bridge_ids.add(str(relation.get("target_entity_id")))
+    return [
+        {
+            "entity_id": entity_id,
+            "cross_domain_degree": node_scores.get(entity_id, {}).get("cross_domain_degree", 0),
+            "bridge_score": node_scores.get(entity_id, {}).get("centrality_score", 0.0),
+        }
+        for entity_id in sorted(
+            bridge_ids,
+            key=lambda item: node_scores.get(item, {}).get("centrality_score", 0.0),
+            reverse=True,
+        )
+        if entity_id
+    ][:10]
+
+
+def _semantic_hubs(node_scores: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    hubs = [
+        item for item in node_scores.values()
+        if item.get("degree", 0) >= 3 or item.get("relation_type_count", 0) >= 3
+    ]
+    hubs.sort(key=lambda item: item.get("centrality_score", 0.0), reverse=True)
+    return [
+        {
+            "entity_id": item["entity_id"],
+            "degree": item["degree"],
+            "relation_type_count": item["relation_type_count"],
+            "hub_score": item["centrality_score"],
+        }
+        for item in hubs[:10]
+    ]
+
+
+def _critical_connections(relationships: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    ranked = sorted(
+        relationships,
+        key=lambda rel: (
+            _number(rel.get("relation_strength"))
+            + _number(rel.get("relation_confidence"))
+            + _number(rel.get("relation_stability"))
+            + (0.25 if rel.get("validity_scope", {}).get("cross_domain") else 0.0)
+        ),
+        reverse=True,
+    )
+    return [
+        {
+            "relation_id": rel.get("relation_id"),
+            "source_entity_id": rel.get("source_entity_id"),
+            "target_entity_id": rel.get("target_entity_id"),
+            "relation_type": rel.get("relation_type"),
+            "criticality_score": round(
+                _number(rel.get("relation_strength"))
+                + _number(rel.get("relation_confidence"))
+                + _number(rel.get("relation_stability")),
+                4,
+            ),
+            "cross_domain": rel.get("validity_scope", {}).get("cross_domain", False),
+        }
+        for rel in ranked[:limit]
+    ]
+
+
+def _weak_regions(relationships: list[dict[str, Any]], domains: list[str]) -> list[dict[str, Any]]:
+    domain_values: dict[str, list[float]] = {domain: [] for domain in domains}
+    for relation in relationships:
+        scope = relation.get("validity_scope", {})
+        value = (_number(relation.get("relation_strength")) + _number(relation.get("relation_confidence"))) / 2
+        for domain in (scope.get("source_domain"), scope.get("target_domain")):
+            if domain:
+                domain_values.setdefault(str(domain), []).append(value)
+    weak = []
+    for domain, values in domain_values.items():
+        if not values:
+            weak.append({"domain": domain, "reason": "isolated_domain", "average_link_quality": 0.0})
+            continue
+        average = _average(values)
+        if average < 0.55 or len(values) <= 1:
+            weak.append({
+                "domain": domain,
+                "reason": "low_connectivity" if len(values) <= 1 else "weak_link_quality",
+                "average_link_quality": average,
+                "link_count": len(values),
+            })
+    return weak
+
+
+def _knowledge_bottlenecks(
+    relationships: list[dict[str, Any]],
+    node_scores: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    bottlenecks = []
+    for entity_id, score in node_scores.items():
+        if score.get("cross_domain_degree", 0) >= 2 and score.get("degree", 0) <= 4:
+            bottlenecks.append({
+                "entity_id": entity_id,
+                "degree": score["degree"],
+                "cross_domain_degree": score["cross_domain_degree"],
+                "bottleneck_score": round(score["cross_domain_degree"] / max(score["degree"], 1), 4),
+            })
+    bottlenecks.sort(key=lambda item: item["bottleneck_score"], reverse=True)
+    if bottlenecks:
+        return bottlenecks[:10]
+    return [
+        {
+            "entity_id": item["entity_id"],
+            "degree": item["degree"],
+            "cross_domain_degree": item["cross_domain_degree"],
+            "bottleneck_score": round(item["cross_domain_degree"] / max(item["degree"], 1), 4),
+        }
+        for item in _ranked_nodes(node_scores, "centrality_score", limit=5)
+        if item["cross_domain_degree"] > 0
+    ]
+
+
+def _transfer_paths(relationships: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    candidates = [
+        rel for rel in relationships
+        if rel.get("relation_type") in {"Transfers", "Bridges", "Generalizes"}
+        or rel.get("validity_scope", {}).get("cross_domain")
+    ]
+    candidates.sort(key=lambda rel: (_number(rel.get("relation_strength")), _number(rel.get("relation_confidence"))), reverse=True)
+    return [
+        {
+            "relation_id": rel.get("relation_id"),
+            "entity_path": [rel.get("source_entity_id"), rel.get("target_entity_id")],
+            "relation_type": rel.get("relation_type"),
+            "transfer_score": round((_number(rel.get("relation_strength")) + _number(rel.get("relation_confidence"))) / 2, 4),
+        }
+        for rel in candidates[:limit]
+    ]
+
+
+def _reasoning_corridors(
+    relationships: list[dict[str, Any]],
+    adjacency: dict[str, list[dict[str, Any]]],
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    corridors = []
+    reasoning_types = {"Explains", "Predicts", "Depends On", "Supports", "Transfers", "Generalizes"}
+    for first in relationships:
+        if first.get("relation_type") not in reasoning_types:
+            continue
+        middle = str(first.get("target_entity_id") or "")
+        for second in adjacency.get(middle, []):
+            if second.get("relation_id") == first.get("relation_id"):
+                continue
+            if second.get("relation_type") not in reasoning_types:
+                continue
+            end = second.get("target_entity_id")
+            if end == first.get("source_entity_id"):
+                end = second.get("source_entity_id")
+            corridor = {
+                "entity_path": [first.get("source_entity_id"), middle, end],
+                "relation_path": [first.get("relation_id"), second.get("relation_id")],
+                "corridor_strength": _average([first.get("relation_strength"), second.get("relation_strength")]),
+                "corridor_confidence": _average([first.get("relation_confidence"), second.get("relation_confidence")]),
+            }
+            corridors.append(corridor)
+    corridors.sort(key=lambda item: (item["corridor_strength"], item["corridor_confidence"]), reverse=True)
+    return corridors[:limit]
+
+
+def _knowledge_communities(adjacency: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    visited = set()
+    communities = []
+    for node in sorted(adjacency):
+        if node in visited:
+            continue
+        stack = [node]
+        members = set()
+        relation_ids = set()
+        while stack:
+            current = stack.pop()
+            if current in members:
+                continue
+            members.add(current)
+            for relation in adjacency.get(current, []):
+                relation_ids.add(str(relation.get("relation_id")))
+                neighbor = relation.get("target_entity_id")
+                if neighbor == current:
+                    neighbor = relation.get("source_entity_id")
+                if neighbor and neighbor not in members:
+                    stack.append(str(neighbor))
+        visited.update(members)
+        communities.append({
+            "community_id": f"fabric_community:{len(communities) + 1}",
+            "entity_ids": sorted(members),
+            "relation_ids": sorted(relation_ids),
+            "entity_count": len(members),
+            "relation_count": len(relation_ids),
+        })
+    communities.sort(key=lambda item: (item["entity_count"], item["relation_count"]), reverse=True)
+    return communities
+
+
 def _fabric_id(fabric_type: str, identity: str, domains: list[str]) -> str:
     digest = hashlib.sha1(
         f"{fabric_type}:{identity}:{','.join(sorted(domains))}".encode("utf-8")
@@ -701,6 +1147,14 @@ def _number(value: Any) -> float:
 def _average(values: Iterable[Any]) -> float:
     items = [_number(value) for value in values]
     return round(sum(items) / len(items), 4) if items else 0.0
+
+
+def _distribution(values: Iterable[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        key = str(value or "UNKNOWN")
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _list(value: Any) -> list[Any]:

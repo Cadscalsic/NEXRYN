@@ -4,6 +4,11 @@ from runtime.truth.truth_lifecycle_synchronizer import (
     TruthLifecycleSynchronizer,
     truth_lifecycle_synchronizer,
 )
+from runtime.truth.truth_metric_synchronization_engine import (
+    CanonicalTruthMetricState,
+    TruthMetricSynchronizationEngine,
+    truth_metric_synchronization_engine,
+)
 from runtime.truth.promotion_engine import (
     PromotionEngine,
     promotion_engine,
@@ -39,6 +44,9 @@ from runtime.truth.truth_reuse_engine import (
 __all__ = [
     "TruthLifecycleSynchronizer",
     "truth_lifecycle_synchronizer",
+    "CanonicalTruthMetricState",
+    "TruthMetricSynchronizationEngine",
+    "truth_metric_synchronization_engine",
     "PromotionEngine",
     "promotion_engine",
     "TruthEligibilityEngine",

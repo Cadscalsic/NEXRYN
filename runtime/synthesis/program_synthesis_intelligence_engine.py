@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from runtime.synthesis.program_confidence_engine import program_confidence_engine
+
 
 PROGRAM_LIFECYCLE = (
     "DISCOVERED",
@@ -118,11 +120,27 @@ class ProgramSynthesisIntelligenceEngine:
         if persist:
             self._persist(programs, relationships)
         payload = [asdict(program) for program in programs]
+        confidence_report = program_confidence_engine.build_report(
+            payload,
+            reuse_history={
+                program_id: record.get("reuse_count", 0)
+                for program_id, record in self._memory.get("programs", {}).items()
+                if isinstance(record, Mapping)
+            },
+            episode_history=self._memory.get("history", []),
+        )
+        payload = confidence_report["program_confidence_assessments"]
+        confidence_by_id = {
+            item["program_id"]: item
+            for item in payload
+        }
         winners = [
             item for item in payload
             if item.get("lifecycle") in {"VALIDATED", "PROMOTED", "REUSED", "GENERALIZED", "STABLE"}
         ][:10]
+        graph = self._apply_confidence_to_graph(graph, confidence_by_id)
         stats = self._statistics(programs, candidates, relationships, concepts)
+        stats.update(self._confidence_statistics(confidence_report))
         return {
             "system": "program_synthesis_intelligence_engine",
             "PROGRAM_SYNTHESIS_REPORT": True,
@@ -138,6 +156,14 @@ class ProgramSynthesisIntelligenceEngine:
             "program_graph": graph,
             "program_evolution": memory["program_evolution"],
             "program_statistics": stats,
+            "program_confidence": confidence_report,
+            "average_program_confidence": confidence_report["average_program_confidence"],
+            "highest_program_confidence": confidence_report["highest_program_confidence"],
+            "lowest_program_confidence": confidence_report["lowest_program_confidence"],
+            "confidence_distribution": confidence_report["confidence_distribution"],
+            "validated_program_count": confidence_report["validated_program_count"],
+            "low_confidence_program_count": confidence_report["low_confidence_program_count"],
+            "high_confidence_program_count": confidence_report["high_confidence_program_count"],
             "program_reuse": memory["program_reuse"],
             "program_generalization": [asdict(program) for program in generalized],
             "program_competition": competition,
@@ -151,6 +177,7 @@ class ProgramSynthesisIntelligenceEngine:
                 program.validation_results for program in programs
             ],
             "single_program_authority": True,
+            "program_confidence_authority": "program_confidence_engine",
         }
 
     def _generate_candidates(
@@ -516,6 +543,26 @@ class ProgramSynthesisIntelligenceEngine:
             "relationship_types": sorted(PROGRAM_RELATIONSHIPS),
         }
 
+    def _apply_confidence_to_graph(
+        self,
+        graph: Mapping[str, Any],
+        confidence_by_id: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        updated = dict(graph)
+        nodes = []
+        for node in (graph.get("nodes", []) if isinstance(graph, Mapping) else []):
+            if not isinstance(node, Mapping):
+                continue
+            confidence = confidence_by_id.get(str(node.get("id")), {})
+            nodes.append({
+                **dict(node),
+                "confidence": confidence.get("confidence", node.get("confidence")),
+                "confidence_level": confidence.get("confidence_level"),
+                "validation_status": confidence.get("validation_status"),
+            })
+        updated["nodes"] = nodes
+        return updated
+
     def _score(self, candidate: Mapping[str, Any]) -> dict[str, float]:
         concepts = candidate.get("concepts", [])
         concept_count = len(concepts)
@@ -647,6 +694,20 @@ class ProgramSynthesisIntelligenceEngine:
             "relationship_count": len(relationships),
             "lifecycle_distribution": self._counts(program.lifecycle for program in programs),
             "family_distribution": self._counts(program.program_type for program in programs),
+        }
+
+    def _confidence_statistics(
+        self,
+        confidence_report: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "average_program_confidence": confidence_report.get("average_program_confidence", 0.0),
+            "highest_program_confidence": confidence_report.get("highest_program_confidence", 0.0),
+            "lowest_program_confidence": confidence_report.get("lowest_program_confidence", 0.0),
+            "confidence_distribution": dict(confidence_report.get("confidence_distribution", {})),
+            "validated_program_count": confidence_report.get("validated_program_count", 0),
+            "low_confidence_program_count": confidence_report.get("low_confidence_program_count", 0),
+            "high_confidence_program_count": confidence_report.get("high_confidence_program_count", 0),
         }
 
     def _memory_report(

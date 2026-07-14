@@ -36,6 +36,15 @@ from runtime.synthesis.program_synthesis_intelligence_engine import (
     program_synthesis_intelligence_engine
 )
 
+from runtime.synthesis.program_confidence_engine import (
+
+    ProgramConfidenceAssessment,
+
+    ProgramConfidenceEngine,
+
+    program_confidence_engine
+)
+
 # ============================================
 # SPATIAL OPERATOR ENGINE
 # ============================================
@@ -120,6 +129,12 @@ __all__ = [
     "ProgramSynthesisIntelligenceEngine",
 
     "program_synthesis_intelligence_engine",
+
+    "ProgramConfidenceAssessment",
+
+    "ProgramConfidenceEngine",
+
+    "program_confidence_engine",
 
     # ========================================
     # SPATIAL EXECUTION

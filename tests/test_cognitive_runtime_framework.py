@@ -41,6 +41,12 @@ def test_cognitive_runtime_report_registers_cognitive_owners():
     assert report["acsc_readiness"]["can_cool_search_runtime"] is True
     assert report["acsc_readiness"]["can_cool_search_routes"] is True
     assert report["acsc_readiness"]["cooling_target"] == "cognitive_runtime_and_search_routes"
+    assert report["truth_metric_status"] == "SYNCHRONIZED"
+    assert report["truth_metric_source"] == "canonical_truth_metric_state"
+    assert report["runtime_metrics"]["truth_runtime"]["truth_candidates"] == 1
+    assert report["TRUTH_METRIC_SYNCHRONIZATION_REPORT"]["canonical_truth_state"][
+        "truth_candidates"
+    ] == 1
 
 
 def test_observability_gaps_are_reinterpreted_as_limited_observability():

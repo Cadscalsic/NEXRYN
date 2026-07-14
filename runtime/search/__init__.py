@@ -19,6 +19,11 @@ from runtime.search.cognitive_search_runtime import (
     SEARCH_RUNTIME_LIFECYCLE,
     build_cognitive_search_runtime_report,
 )
+from runtime.search.search_analytics_engine import (
+    RouteAnalysis,
+    SearchAnalyticsEngine,
+    search_analytics_engine,
+)
 from runtime.search.adaptive_search_policy import (
     AdaptiveSearchPolicyEngine,
     AdaptiveSearchPolicyMemory,
@@ -57,6 +62,9 @@ __all__ = [
     "SEARCH_RUNTIME_LIFECYCLE",
     "build_cognitive_search_report",
     "build_cognitive_search_runtime_report",
+    "RouteAnalysis",
+    "SearchAnalyticsEngine",
+    "search_analytics_engine",
     "AdaptiveSearchPolicyEngine",
     "AdaptiveSearchPolicyMemory",
     "adaptive_search_policy_engine",
