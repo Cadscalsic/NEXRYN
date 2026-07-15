@@ -115,6 +115,37 @@ def test_tool_selection_enables_spatial_reasoning_for_topology_tasks():
     assert "spatial_reasoning" in selection.enabled_tools
 
 
+def test_process_semantics_budget_aligns_with_dependency_task_requirements():
+
+    profile, cost = _profile_and_cost({
+        "task_id": "arc_generated_relative_position_density_increase_01.json",
+        "target_concepts": [
+            "relative_position",
+            "density_increase",
+            "transformation_sequence",
+        ],
+        "required_capabilities": ["dependency_reasoning"],
+        "input_grid": [
+            [0, 1, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+        ],
+        "output_grid": [
+            [0, 0, 0],
+            [1, 1, 1],
+            [1, 1, 1],
+        ],
+    })
+
+    budget = CognitiveBudgetEngine().allocate(profile, cost)
+    selection = ToolSelectionEngine().select(profile, budget)
+
+    assert budget.process_semantics_enabled is True
+    assert "process_semantics_required_by_task_profile" in budget.notes
+    assert "dependency_reasoning" in selection.enabled_tools
+    assert "process_semantics" in selection.enabled_tools
+
+
 def test_task_identity_promotes_object_counting_concepts():
 
     profile, cost = _profile_and_cost({

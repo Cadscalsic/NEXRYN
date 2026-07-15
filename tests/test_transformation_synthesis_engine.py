@@ -95,6 +95,40 @@ def test_synthesizes_path_construction_from_route_completion():
     assert synthesis["candidate_count"] > 0
 
 
+def test_density_increase_resolves_to_executable_expansion_semantics():
+    report = TransformationSynthesisEngine(
+        memory=TransformationMemory(),
+        executor=PrimitiveExecutor(),
+    ).synthesize(
+        input_grid=[
+            [0, 0, 0],
+            [0, 1, 0],
+            [0, 0, 0],
+        ],
+        output_grid=[
+            [1, 1, 1],
+            [1, 1, 1],
+            [1, 1, 1],
+        ],
+        detected_concepts=[
+            "density_increase",
+            "transformation_sequence",
+        ],
+    )
+
+    synthesis = report["TRANSFORMATION_SYNTHESIS_REPORT"]
+    selected = synthesis["selected_program"]["steps"][0]
+    semantics = synthesis["transformation_semantics_report"]
+    density = semantics["semantic_interpretations"][0]
+
+    assert density["concept"] == "density_increase"
+    assert "object_expansion_around_centroid" in density["candidate_meanings"]
+    assert "object_centroid" in density["reference_frames"]
+    assert selected["operation"] == "expand"
+    assert selected["parameters"]["reference_frame"] == "object_centroid"
+    assert synthesis["transformation_accuracy"] == 1.0
+
+
 def test_transformation_memory_reuses_successful_programs():
     memory = TransformationMemory()
     memory.remember(

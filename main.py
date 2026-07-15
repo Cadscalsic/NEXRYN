@@ -4596,6 +4596,71 @@ if runtime_status == "completed" and isinstance(results, dict):
 # FINAL CONTEXT
 # ============================================
 
+if runtime_status == "completed":
+    from runtime.reporting.final_report_renderer import final_report_renderer
+
+    final_report_level = effective_report_level
+    if args.mode in {"deep", "full"}:
+        final_report_level = deep_mode_budget_manager.bounded_report_level(
+            args.mode,
+            effective_report_level,
+            deep_audit_flags,
+        )
+    if (
+        isinstance(results, dict)
+        and results.get("report_budget_report", {}).get(
+            "report_budget_exceeded",
+        )
+        and effective_report_level in {"full", "debug", "audit"}
+    ):
+        final_report_level = "normal"
+        results["report_budget_report"]["forced_report_level"] = (
+            final_report_level
+        )
+        results["report_budget_report"]["compression_action"] = (
+            "deep_report_forced_to_normal_summary"
+        )
+
+    runtime_metadata = build_runtime_metadata(
+        args,
+        execution_time,
+        runtime_status,
+        context_count=(
+            results.get("performance_report", {}).get(
+                "context_count",
+                len(normalize_context_diagnostics(
+                    results.get("training_report", {}),
+                )),
+            )
+            if isinstance(results, dict)
+            else 0
+        ),
+        runtime_metrics={
+            **runtime_metrics,
+            "watchdog": runtime_watchdog.report(),
+        },
+    )
+    rendered_final_report = final_report_renderer.render(
+        results,
+        runtime_metadata=runtime_metadata,
+        report_level=final_report_level,
+        artifact_directory="runtime/artifacts",
+        write_artifact=True,
+        write_diagnostic_artifact=(
+            effective_report_level in {"full", "debug", "audit"}
+            or bool(getattr(args, "audit", False))
+        ),
+    )
+    if isinstance(results, dict):
+        results["FINAL_REPORT_RENDERER_METRICS"] = (
+            final_report_renderer.report()
+        )
+    final_report_renderer.emit(rendered_final_report)
+    shutdown_controller.exit_enforcer.enforce_exit(
+        exit_process=True,
+        code=0,
+    )
+
 print("\n==================================================")
 print("NEXRYN :: FINAL CONTEXT")
 print("==================================================\n")

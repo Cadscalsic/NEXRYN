@@ -10,6 +10,10 @@ import numpy as np
 
 from runtime.memory.transformation_memory import transformation_memory
 from runtime.reasoning.color_mapping_engine import color_mapping_engine
+from runtime.reasoning.mechanistic_reasoning_engine import mechanistic_reasoning_engine
+from runtime.reasoning.transformation_explanation_engine import transformation_explanation_engine
+from runtime.reasoning.transformation_language_engine import transformation_language_engine
+from runtime.reasoning.transformation_theory_engine import transformation_theory_engine
 from runtime.transforms import primitive_executor
 
 
@@ -19,12 +23,32 @@ class TransformationSynthesisEngine:
     system_name = "transformation_synthesis_engine"
 
     CONCEPT_TO_OPERATIONS = {
+        "density_increase": ["expand", "grow", "fill_region", "duplicate"],
+        "object_creation": ["duplicate"],
+        "symmetry_creation": ["duplicate", "mirror_horizontal", "mirror_vertical"],
+        "object_counting": ["duplicate", "remove_object", "select_object"],
+        "cardinality": ["select_object"],
+        "quantity_preservation": ["select_object"],
+        "quantity_transformation": ["duplicate", "remove_object"],
+        "numerical_reasoning": ["select_object"],
+        "set_reasoning": ["select_object"],
+        "gravity": ["translate"],
+        "gravity_simulation": ["translate"],
+        "falling": ["translate"],
+        "support": ["translate"],
+        "collision": ["translate", "connect_components"],
+        "rest_state": ["translate"],
+        "downward_motion": ["translate"],
+        "rotation_reflection": ["rotate", "mirror_horizontal", "mirror_vertical"],
+        "orientation_change": ["rotate"],
         "relative_position": ["translate"],
         "spatial_relation": ["translate"],
         "object_translation": ["translate"],
         "directional_motion": ["translate"],
         "symbolic_remapping": ["recolor"],
         "color_mapping": ["recolor"],
+        "color_elimination": ["recolor"],
+        "pattern_completion": ["fill_region"],
         "path_finding": ["construct_path"],
         "route_completion": ["construct_path"],
         "bridge_creation": ["connect_components"],
@@ -41,9 +65,140 @@ class TransformationSynthesisEngine:
         "duplication": ["duplicate"],
         "replication": ["replicate"],
         "object_removal": ["remove_object"],
+        "object_identity_preservation": ["select_object"],
+        "shape_preservation": ["select_object"],
         "object_selection": ["select_object"],
         "region_filling": ["fill_region"],
         "scaling": ["scale_up", "scale_down"],
+    }
+
+    CONCEPT_SEMANTICS = {
+        "density_increase": {
+            "candidate_meanings": [
+                "object_expansion_around_centroid",
+                "axis_growth",
+                "region_fill",
+                "object_duplication",
+            ],
+            "reference_frames": [
+                "object_centroid",
+                "object_bounding_box",
+                "grid_axis",
+                "local_neighborhood",
+            ],
+        },
+        "relative_position": {
+            "candidate_meanings": [
+                "object_translation",
+                "anchor_relative_placement",
+                "centroid_shift",
+                "neighbor_relation_preservation",
+            ],
+            "reference_frames": [
+                "source_object",
+                "target_object",
+                "object_centroid",
+                "grid_origin",
+            ],
+        },
+        "spatial_relation": {
+            "candidate_meanings": [
+                "relation_preservation",
+                "anchor_relative_placement",
+                "component_connection",
+            ],
+            "reference_frames": [
+                "neighbor_object",
+                "object_bounding_box",
+                "grid_axis",
+            ],
+        },
+        "color_mapping": {
+            "candidate_meanings": [
+                "symbolic_color_substitution",
+                "palette_remapping",
+                "object_color_rebinding",
+            ],
+            "reference_frames": [
+                "color_class",
+                "object_identity",
+                "global_palette",
+            ],
+        },
+        "symbolic_remapping": {
+            "candidate_meanings": [
+                "symbolic_color_substitution",
+                "class_label_rebinding",
+            ],
+            "reference_frames": [
+                "symbol_class",
+                "color_class",
+            ],
+        },
+        "transformation_sequence": {
+            "candidate_meanings": [
+                "ordered_operation_composition",
+                "multi_step_state_transition",
+                "mechanism_graph_execution",
+            ],
+            "reference_frames": [
+                "previous_state",
+                "intermediate_state",
+                "program_order",
+            ],
+        },
+        "gravity": {
+            "candidate_meanings": [
+                "falling_simulation",
+                "support_detection",
+                "collision_resolution",
+                "rest_state_detection",
+            ],
+            "reference_frames": [
+                "grid_down_axis",
+                "support_surface",
+                "object_cells",
+            ],
+        },
+        "gravity_simulation": {
+            "candidate_meanings": [
+                "falling_simulation",
+                "support_detection",
+                "collision_resolution",
+                "rest_state_detection",
+            ],
+            "reference_frames": [
+                "grid_down_axis",
+                "support_surface",
+                "object_cells",
+            ],
+        },
+        "rotation_reflection": {
+            "candidate_meanings": [
+                "rotation_angle_inference",
+                "rotation_center_selection",
+                "orientation_update",
+                "reflection_axis_selection",
+            ],
+            "reference_frames": [
+                "grid_center",
+                "object_centroid",
+                "bounding_box_center",
+            ],
+        },
+        "object_counting": {
+            "candidate_meanings": [
+                "object_grouping",
+                "cardinality_extraction",
+                "quantity_rule_selection",
+                "quantity_transformation",
+            ],
+            "reference_frames": [
+                "object_components",
+                "color_groups",
+                "set_membership",
+            ],
+        },
     }
 
     SIMPLE_COST = {
@@ -93,6 +248,10 @@ class TransformationSynthesisEngine:
         self.memory = memory or transformation_memory
         self.executor = executor or primitive_executor
         self.color_mapping_engine = color_mapping_engine
+        self.transformation_language_engine = transformation_language_engine
+        self.transformation_explanation_engine = transformation_explanation_engine
+        self.mechanistic_reasoning_engine = mechanistic_reasoning_engine
+        self.transformation_theory_engine = transformation_theory_engine
         self.synthesis_history = []
 
     def synthesize(
@@ -121,9 +280,38 @@ class TransformationSynthesisEngine:
             reasoning_reports,
             runtime_context,
         )
+        semantics_report = self._build_semantics_report(
+            concepts,
+            input_grid,
+            output_grid,
+        )
+        language_report = self.transformation_language_engine.parse(
+            concepts,
+            runtime_context,
+        )
+        explanation_report = self.transformation_explanation_engine.explain(
+            concepts,
+            runtime_context,
+            transformation_language_report=language_report,
+        )
+        theory_report = self.transformation_theory_engine.build_theory(
+            concepts,
+            runtime_context,
+            transformation_explanation_report=explanation_report,
+        )
+        mechanistic_report = self.mechanistic_reasoning_engine.reason(
+            concepts=concepts,
+            input_grid=input_grid,
+            output_grid=output_grid,
+            runtime_context=runtime_context,
+            transformation_theory_report=theory_report,
+            transformation_explanation_report=explanation_report,
+        )
         candidates = []
         candidates.extend(self._memory_candidates(concepts))
-        candidates.extend(self._concept_candidates(concepts))
+        candidates.extend(self._explanation_candidates(explanation_report, input_grid, output_grid))
+        candidates.extend(self._mechanism_candidates(mechanistic_report))
+        candidates.extend(self._concept_candidates(concepts, semantics_report))
         candidates.extend(self._observation_candidates(input_grid, output_grid, concepts))
 
         candidates = self._dedupe_candidates(candidates)
@@ -156,9 +344,49 @@ class TransformationSynthesisEngine:
             candidates,
             selected,
             selected_program,
+            language_report,
+            explanation_report,
+            theory_report,
+            semantics_report,
+            mechanistic_report,
         )
         self.synthesis_history.append(report)
         return report
+
+    def _explanation_candidates(self, explanation_report, input_grid, output_grid):
+        selected = explanation_report.get("selected_explanation", {})
+        if not isinstance(selected, Mapping):
+            return []
+        explanation_id = selected.get("explanation_id")
+        candidates = []
+        if explanation_id == "symbolic_color_remapping":
+            candidates.extend(self._recolor_candidates(
+                self._array(input_grid),
+                self._array(output_grid),
+                ["symbolic_remapping", "color_mapping"],
+            ))
+            for candidate in candidates:
+                candidate["kind"] = "explanation:symbolic_color_remapping"
+                candidate.setdefault("evidence", {})["transformation_explanation"] = selected
+            return candidates
+        if explanation_id in {"symmetric_object_creation", "quantity_rule_transformation"}:
+            source = self._array(input_grid)
+            target = self._array(output_grid)
+            if source.size and target.size and int(np.sum(target != 0)) > int(np.sum(source != 0)):
+                return [self._single_step_candidate(
+                    "duplicate",
+                    {
+                        "macro_concept": selected.get("macro_concept"),
+                        "transformation_explanation": selected,
+                    },
+                    selected.get("explanation_confidence", 0.70),
+                    selected.get("explanation_confidence", 0.70),
+                    {
+                        "source": "transformation_explanation",
+                        "transformation_explanation": selected,
+                    },
+                )]
+        return []
 
     def synthesize_from_runtime_context(
         self,
@@ -239,18 +467,174 @@ class TransformationSynthesisEngine:
             ))
         return candidates
 
-    def _concept_candidates(self, concepts):
+    def _build_semantics_report(self, concepts, input_grid=None, output_grid=None):
+        interpretations = []
+        source = self._array(input_grid) if input_grid is not None else None
+        target = self._array(output_grid) if output_grid is not None else None
+        density_delta = None
+        if source is not None and target is not None and source.size and target.size:
+            source_density = float(np.sum(source != 0) / max(source.size, 1))
+            target_density = float(np.sum(target != 0) / max(target.size, 1))
+            density_delta = round(target_density - source_density, 4)
+
+        for concept in concepts:
+            spec = self.CONCEPT_SEMANTICS.get(concept, {})
+            operations = list(self.CONCEPT_TO_OPERATIONS.get(concept, []))
+            meanings = list(spec.get("candidate_meanings", []))
+            reference_frames = list(spec.get("reference_frames", []))
+            if not meanings and operations:
+                meanings = [f"{operation}_mechanism" for operation in operations]
+            if not reference_frames:
+                reference_frames = ["grid", "object"]
+            interpretation = {
+                "concept": concept,
+                "candidate_meanings": meanings,
+                "candidate_operations": operations,
+                "reference_frames": reference_frames,
+                "selected_meaning": meanings[0] if meanings else None,
+                "selected_reference_frame": reference_frames[0] if reference_frames else None,
+                "execution_ready": bool(operations),
+            }
+            if concept == "density_increase" and density_delta is not None:
+                interpretation["evidence"] = {
+                    "density_delta": density_delta,
+                    "density_increased": density_delta > 0.0,
+                }
+            interpretations.append(interpretation)
+
+        return {
+            "system": "transformation_semantics_engine",
+            "semantic_interpretations": interpretations,
+            "concept_count": len(concepts),
+            "transformation_sequence_state": (
+                "MECHANISM_GRAPH_REQUIRED"
+                if "transformation_sequence" in concepts
+                else "NOT_REQUIRED"
+            ),
+            "execution_ready_concepts": [
+                item["concept"]
+                for item in interpretations
+                if item.get("execution_ready")
+            ],
+        }
+
+    def _mechanism_candidates(self, mechanistic_report):
         candidates = []
+        for graph in mechanistic_report.get("executable_mechanism_graphs", []) or []:
+            if not isinstance(graph, Mapping):
+                continue
+            family = graph.get("family")
+            readiness = float(graph.get("execution_readiness", 0.0) or 0.0)
+            operations = graph.get("candidate_operations", []) or []
+            if family == "gravity" and "translate" in operations:
+                fall = self._mechanism_evidence_value(
+                    graph,
+                    "downward_trajectory_simulation",
+                    "fall_distance",
+                    0,
+                )
+                candidates.append(self._single_step_candidate(
+                    "translate",
+                    {
+                        "delta_row": int(fall),
+                        "delta_col": 0,
+                        "translation": [int(fall), 0],
+                        "mechanism_family": family,
+                        "mechanism_graph": graph,
+                    },
+                    max(0.74, readiness),
+                    readiness,
+                    {
+                        "source": "mechanistic_reasoning",
+                        "mechanism_family": family,
+                        "mechanism_graph": graph,
+                    },
+                ))
+            elif family == "rotation" and "rotate" in operations:
+                degrees = self._mechanism_evidence_value(
+                    graph,
+                    "rotation_angle_inference",
+                    "degrees",
+                    90,
+                )
+                candidates.append(self._single_step_candidate(
+                    "rotate",
+                    {
+                        "degrees": int(degrees or 90),
+                        "rotation_center": "grid_center",
+                        "mechanism_family": family,
+                        "mechanism_graph": graph,
+                    },
+                    max(0.76, readiness),
+                    readiness,
+                    {
+                        "source": "mechanistic_reasoning",
+                        "mechanism_family": family,
+                        "mechanism_graph": graph,
+                    },
+                ))
+            elif family == "object_counting":
+                delta = self._mechanism_evidence_value(
+                    graph,
+                    "quantity_transformation",
+                    "count_delta",
+                    0,
+                )
+                operation = "duplicate" if delta > 0 else "remove_object" if delta < 0 else "select_object"
+                candidates.append(self._single_step_candidate(
+                    operation,
+                    {
+                        "count_delta": int(delta),
+                        "mechanism_family": family,
+                        "mechanism_graph": graph,
+                    },
+                    max(0.68, readiness),
+                    readiness,
+                    {
+                        "source": "mechanistic_reasoning",
+                        "mechanism_family": family,
+                        "mechanism_graph": graph,
+                    },
+                ))
+        return candidates
+
+    def _mechanism_evidence_value(self, graph, mechanism, key, default):
+        for node in graph.get("nodes", []) or []:
+            if not isinstance(node, Mapping):
+                continue
+            if node.get("mechanism") == mechanism:
+                evidence = node.get("evidence", {})
+                if isinstance(evidence, Mapping):
+                    return evidence.get(key, default)
+        return default
+
+    def _concept_candidates(self, concepts, semantics_report=None):
+        candidates = []
+        semantics_by_concept = {
+            item.get("concept"): item
+            for item in (semantics_report or {}).get("semantic_interpretations", [])
+            if isinstance(item, Mapping)
+        }
         for concept in concepts:
             for operation in self.CONCEPT_TO_OPERATIONS.get(concept, []):
                 if operation == "compose":
                     continue
+                semantics = semantics_by_concept.get(concept, {})
                 candidates.append(self._single_step_candidate(
                     operation,
-                    {},
+                    {
+                        "semantic_concept": concept,
+                        "semantic_meaning": semantics.get("selected_meaning"),
+                        "reference_frame": semantics.get("selected_reference_frame"),
+                    },
                     0.58,
                     0.55,
-                    {"concept": concept, "source": "concept_mapping"},
+                    {
+                        "concept": concept,
+                        "source": "concept_mapping",
+                        "semantic_meaning": semantics.get("selected_meaning"),
+                        "reference_frame": semantics.get("selected_reference_frame"),
+                    },
                 ))
         return candidates
 
@@ -265,6 +649,7 @@ class TransformationSynthesisEngine:
         candidates.extend(self._rotation_candidates(source, target))
         candidates.extend(self._reflection_candidates(source, target))
         candidates.extend(self._object_count_candidates(source, target))
+        candidates.extend(self._density_candidates(source, target, concepts))
         candidates.extend(self._growth_candidates(source, target, concepts))
         candidates.extend(self._path_candidates(source, target, concepts))
         candidates.extend(self._fill_candidates(source, target, concepts))
@@ -457,7 +842,7 @@ class TransformationSynthesisEngine:
         return []
 
     def _growth_candidates(self, source, target, concepts):
-        if "growth" not in concepts and "topological_growth" not in concepts:
+        if not {"growth", "topological_growth", "object_expansion"}.intersection(concepts):
             return []
         if int(np.sum(target != 0)) <= int(np.sum(source != 0)):
             return []
@@ -468,6 +853,68 @@ class TransformationSynthesisEngine:
             0.68,
             {"observation": "area_increase"},
         )]
+
+    def _density_candidates(self, source, target, concepts):
+        if "density_increase" not in concepts:
+            return []
+        source_count = int(np.sum(source != 0))
+        target_count = int(np.sum(target != 0))
+        if target_count <= source_count:
+            return []
+        added = np.argwhere((target != 0) & (source == 0))
+        evidence = {
+            "observation": "density_increase",
+            "source_nonzero_count": source_count,
+            "target_nonzero_count": target_count,
+            "added_cell_count": int(len(added)),
+        }
+        candidates = [
+            self._single_step_candidate(
+                "expand",
+                {
+                    "growth_mode": "around_object",
+                    "reference_frame": "object_centroid",
+                    "semantic_concept": "density_increase",
+                },
+                0.83,
+                min(1.0, (target_count - source_count) / max(source_count, 1)),
+                {
+                    **evidence,
+                    "semantic_meaning": "object_expansion_around_centroid",
+                },
+            ),
+            self._single_step_candidate(
+                "grow",
+                {
+                    "growth_mode": "axis_growth",
+                    "reference_frame": "grid_axis",
+                    "semantic_concept": "density_increase",
+                },
+                0.79,
+                min(1.0, (target_count - source_count) / max(source_count, 1)),
+                {
+                    **evidence,
+                    "semantic_meaning": "axis_growth",
+                },
+            ),
+        ]
+        if len(added):
+            fill_color = int(Counter([int(target[tuple(point)]) for point in added]).most_common(1)[0][0])
+            candidates.append(self._single_step_candidate(
+                "fill_region",
+                {
+                    "fill_color": fill_color,
+                    "reference_frame": "object_bounding_box",
+                    "semantic_concept": "density_increase",
+                },
+                0.74,
+                0.62,
+                {
+                    **evidence,
+                    "semantic_meaning": "region_fill",
+                },
+            ))
+        return candidates
 
     def _path_candidates(self, source, target, concepts):
         if not {"path_finding", "route_completion", "bridge_creation", "component_connection"}.intersection(concepts):
@@ -682,7 +1129,18 @@ class TransformationSynthesisEngine:
             unique.append(candidate)
         return unique
 
-    def _build_report(self, concepts, candidates, selected, selected_program):
+    def _build_report(
+        self,
+        concepts,
+        candidates,
+        selected,
+        selected_program,
+        language_report,
+        explanation_report,
+        theory_report,
+        semantics_report,
+        mechanistic_report,
+    ):
         selected_steps = selected_program.get("steps", []) or []
         report = {
             "system": self.system_name,
@@ -692,6 +1150,11 @@ class TransformationSynthesisEngine:
                 for candidate in candidates
             ],
             "candidate_count": len(candidates),
+            "transformation_language_report": language_report,
+            "transformation_explanation_report": explanation_report,
+            "transformation_theory_report": theory_report,
+            "transformation_semantics_report": semantics_report,
+            "mechanistic_reasoning_report": mechanistic_report,
             "selected_program": selected_program,
             "program_depth": len(selected_steps),
             "transformation_confidence": round(
@@ -712,6 +1175,11 @@ class TransformationSynthesisEngine:
                 "detected_concepts",
                 "generated_transformations",
                 "candidate_count",
+                "transformation_language_report",
+                "transformation_explanation_report",
+                "transformation_theory_report",
+                "transformation_semantics_report",
+                "mechanistic_reasoning_report",
                 "selected_program",
                 "program_depth",
                 "transformation_confidence",

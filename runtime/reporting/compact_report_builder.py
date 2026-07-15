@@ -9,6 +9,9 @@ from runtime.reporting.output_governor import (
     HISTORICAL_ARCHIVE_KEYS,
     output_governor,
 )
+from runtime.reporting.compact_report_compression_engine import (
+    compact_report_compression_engine,
+)
 
 
 MAX_TASKS_DISPLAYED = 3
@@ -51,6 +54,20 @@ class CompactReportBuilder:
         "dependency_paths",
         "task_lists",
         "counterfactual_candidates",
+        "runtime_metric_confidence_by_id",
+        "execution_timeline",
+        "execution_telemetry",
+        "runtime_telemetry",
+        "execution_registry",
+        "successful_bindings",
+        "metric_ownership",
+        "execution_costs",
+        "snapshot_payloads",
+        "snapshot_reports",
+        "validation_history",
+        "latest_snapshot_payload",
+        "semantic_memory",
+        "knowledge_fabric",
     }
     HISTORICAL_LIST_KEYS = {
         *HISTORICAL_ARCHIVE_KEYS,
@@ -155,6 +172,7 @@ class CompactReportBuilder:
         self.repeated_reports_collapsed = 0
         self.final_context_size_estimate_before = 0
         self.final_context_size_estimate_after = 0
+        self.compression_statistics = {}
 
     def compact_context(
         self,
@@ -164,6 +182,13 @@ class CompactReportBuilder:
         level = self._level(level)
         context = context if isinstance(context, dict) else {}
         before = self._size_estimate(context)
+        compression_result = compact_report_compression_engine.compress(
+            context,
+            profile=self._compression_profile(level),
+        )
+        self.compression_statistics = (
+            compression_result.get("compression_statistics", {})
+        )
         if level == "minimal":
             compacted = self._minimal_context(context)
         else:
@@ -174,11 +199,51 @@ class CompactReportBuilder:
                 seen_reports=set(),
             )
         after = self._size_estimate(compacted)
+        self.heavy_keys_removed += int(
+            self.compression_statistics.get("heavy_keys_removed", 0) or 0,
+        )
+        self.arrays_summarized += int(
+            self.compression_statistics.get("arrays_summarized", 0) or 0,
+        )
+        self.repeated_reports_collapsed += int(
+            self.compression_statistics.get(
+                "repeated_reports_collapsed",
+                0,
+            ) or 0,
+        )
         self.compact_reports_generated += 1
         self.final_context_size_estimate_before = before
         self.final_context_size_estimate_after = after
+        compression_warnings = compression_result.get(
+            "compressed_report",
+            {},
+        ).get("compression_warnings")
+        if compression_warnings and "compression_warnings" not in compacted:
+            compacted["compression_warnings"] = compression_warnings
         compacted["compact_report"] = self.report()
         return compacted
+
+    def compress_report(
+        self,
+        canonical_report: dict,
+        level: str = "normal",
+        artifact_directory: str | None = None,
+        write_appendix: bool = False,
+    ) -> dict:
+        result = compact_report_compression_engine.compress(
+            canonical_report if isinstance(canonical_report, dict) else {},
+            profile=self._compression_profile(self._level(level)),
+            artifact_directory=artifact_directory,
+            write_appendix=write_appendix,
+        )
+        self.compression_statistics = result.get("compression_statistics", {})
+        stats = self.compression_statistics
+        self.heavy_keys_removed += int(stats.get("heavy_keys_removed", 0) or 0)
+        self.arrays_summarized += int(stats.get("arrays_summarized", 0) or 0)
+        self.repeated_reports_collapsed += int(
+            stats.get("repeated_reports_collapsed", 0) or 0,
+        )
+        return result
 
     def compact_stage_report(
         self,
@@ -1125,6 +1190,54 @@ class CompactReportBuilder:
             "heavy_keys_removed": self.heavy_keys_removed,
             "arrays_summarized": self.arrays_summarized,
             "repeated_reports_collapsed": self.repeated_reports_collapsed,
+            "heavy_keys_detected": self.compression_statistics.get(
+                "heavy_keys_detected",
+                self.heavy_keys_removed,
+            ),
+            "arrays_detected": self.compression_statistics.get(
+                "arrays_detected",
+                self.arrays_summarized,
+            ),
+            "repeated_reports_detected": self.compression_statistics.get(
+                "repeated_reports_detected",
+                self.repeated_reports_collapsed,
+            ),
+            "duplicate_fields_removed": self.compression_statistics.get(
+                "duplicate_fields_removed",
+                0,
+            ),
+            "canonical_fields_preserved": self.compression_statistics.get(
+                "canonical_fields_preserved",
+                0,
+            ),
+            "diagnostic_fields_externalized": self.compression_statistics.get(
+                "diagnostic_fields_externalized",
+                0,
+            ),
+            "actual_size_before": self.compression_statistics.get(
+                "actual_size_before",
+                self.final_context_size_estimate_before,
+            ),
+            "actual_size_after": self.compression_statistics.get(
+                "actual_size_after",
+                self.final_context_size_estimate_after,
+            ),
+            "report_compression_ratio": self.compression_statistics.get(
+                "report_compression_ratio",
+                0.0,
+            ),
+            "semantic_preservation_score": self.compression_statistics.get(
+                "semantic_preservation_score",
+                0.0,
+            ),
+            "critical_information_preserved": self.compression_statistics.get(
+                "critical_information_preserved",
+                False,
+            ),
+            "technical_appendix_available": self.compression_statistics.get(
+                "technical_appendix_available",
+                False,
+            ),
             "final_context_size_estimate_before":
             self.final_context_size_estimate_before,
             "final_context_size_estimate_after":
@@ -1236,12 +1349,25 @@ class CompactReportBuilder:
                     continue
                 if key in self.HEAVY_KEYS:
                     self.heavy_keys_removed += 1
-                    summary = self._extract_summary(item)
+                    summary = (
+                        self._extract_summary(item)
+                        or compact_report_compression_engine._heavy_summary(
+                            key,
+                            item,
+                        )
+                    )
                     compact[f"{key}_summary"] = (
                         summary or self._structure_summary(item)
                     )
                     continue
                 if key in self.REPEATED_REPORT_KEYS:
+                    signature = self._report_signature(item)
+                    if signature in seen_reports:
+                        self.repeated_reports_collapsed += 1
+                        compact[key] = {"collapsed_duplicate_report": True}
+                        continue
+                    seen_reports.add(signature)
+                elif isinstance(item, (dict, list)):
                     signature = self._report_signature(item)
                     if signature in seen_reports:
                         self.repeated_reports_collapsed += 1
@@ -1287,7 +1413,13 @@ class CompactReportBuilder:
                     continue
                 if key in self.HEAVY_KEYS:
                     self.heavy_keys_removed += 1
-                    summary = self._extract_summary(item)
+                    summary = (
+                        self._extract_summary(item)
+                        or compact_report_compression_engine._heavy_summary(
+                            key,
+                            item,
+                        )
+                    )
                     purged[f"{key}_summary"] = (
                         summary or self._structure_summary(item)
                     )
@@ -1593,6 +1725,15 @@ class CompactReportBuilder:
 
     def _level(self, level):
         return output_governor.normalize_level(level)
+
+    def _compression_profile(self, level):
+        return {
+            "minimal": "minimal",
+            "normal": "normal",
+            "full": "full_diagnostic",
+            "debug": "full_diagnostic",
+            "audit": "diagnostic_summary",
+        }.get(level, "normal")
 
 
 compact_report_builder = CompactReportBuilder()

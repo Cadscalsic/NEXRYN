@@ -119,6 +119,36 @@ from runtime.reasoning.transformation_synthesis_engine import (
     transformation_synthesis_engine
 )
 
+from runtime.reasoning.mechanistic_reasoning_engine import (
+
+    MechanisticReasoningEngine,
+
+    mechanistic_reasoning_engine
+)
+
+from runtime.reasoning.transformation_explanation_engine import (
+
+    TransformationExplanationEngine,
+
+    transformation_explanation_engine
+)
+
+from runtime.reasoning.transformation_language_engine import (
+
+    TransformationLanguageEngine,
+
+    transformation_language_engine
+)
+
+from runtime.reasoning.transformation_theory_engine import (
+
+    TransformationTheory,
+
+    TransformationTheoryEngine,
+
+    transformation_theory_engine
+)
+
 from runtime.reasoning.color_mapping_engine import (
 
     ColorMappingMatrix,
@@ -276,6 +306,24 @@ __all__ = [
     "TransformationSynthesisEngine",
 
     "transformation_synthesis_engine",
+
+    "MechanisticReasoningEngine",
+
+    "mechanistic_reasoning_engine",
+
+    "TransformationExplanationEngine",
+
+    "transformation_explanation_engine",
+
+    "TransformationLanguageEngine",
+
+    "transformation_language_engine",
+
+    "TransformationTheory",
+
+    "TransformationTheoryEngine",
+
+    "transformation_theory_engine",
 
     "ColorMappingMatrix",
 

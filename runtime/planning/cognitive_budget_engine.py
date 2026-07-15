@@ -57,6 +57,11 @@ class CognitiveBudgetEngine:
             f"estimated_cost={cognitive_cost.total_cost}"
         )
 
+        if self._requires_process_semantics(task_profile):
+            budget.process_semantics_enabled = True
+            if "process_semantics_required_by_task_profile" not in budget.notes:
+                budget.notes.append("process_semantics_required_by_task_profile")
+
         return self._apply_safety_floor(budget)
 
     def build_report(self, budget):
@@ -240,6 +245,51 @@ class CognitiveBudgetEngine:
         budget.temporal_reasoning_enabled = False
 
         return budget
+
+    def _requires_process_semantics(self, task_profile):
+
+        signals = []
+        for key in (
+            "target_concepts",
+            "suspected_concepts",
+            "required_capabilities",
+        ):
+            value = getattr(task_profile, key, [])
+            if isinstance(value, (list, tuple, set)):
+                signals.extend(value)
+            elif value:
+                signals.append(value)
+
+        signal_text = " ".join(str(signal).lower() for signal in signals)
+        if "dependency_reasoning" in signal_text:
+            return True
+
+        process_markers = (
+            "density_increase",
+            "object_counting",
+            "cardinality",
+            "quantity_transformation",
+            "numerical_reasoning",
+            "set_reasoning",
+            "rotation",
+            "reflection",
+            "rotation_reflection",
+            "orientation_change",
+            "relative_position",
+            "spatial_relation",
+            "transformation_sequence",
+            "state_transition",
+            "gravity",
+            "falling",
+            "support",
+            "physics",
+            "component_merging",
+            "component_splitting",
+            "topology_change",
+            "route_completion",
+            "path_finding",
+        )
+        return any(marker in signal_text for marker in process_markers)
 
     @staticmethod
     def _range_value(low, high, score):

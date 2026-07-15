@@ -372,13 +372,24 @@ class SearchExplorationQualityEngine:
             )
             for route, item in zip(routes, path_quality)
         ]
+        route_strategy_signatures = [
+            "|".join([
+                route.get("creation_trigger") or "unknown_trigger",
+                route.get("decision") or route.get("current_state") or "unknown_decision",
+                ",".join(route["visited_transformations"]) or "no_transformation",
+                ",".join(route["visited_programs"]) or "no_program",
+            ])
+            for route in routes
+        ]
         coverage = _clamp(len(unique_tokens) / max(len(all_tokens), route_count, 1))
         diversity = _clamp((
             _ratio(len(set(decisions)), route_count)
             + _ratio(len(set(route["creation_trigger"] for route in routes)), route_count)
             + _ratio(len(unique_tokens), max(len(all_tokens), 1))
         ) / 3)
-        entropy = _entropy(probabilities)
+        probability_entropy = _entropy(probabilities)
+        strategy_entropy = _categorical_entropy(route_strategy_signatures)
+        entropy = max(probability_entropy, strategy_entropy)
         redundancy_ratio = float(redundancy.get("redundancy_ratio", 0.0) or 0.0)
         cost = _average(item["route_cost"] for item in path_quality)
         productivity = _average(item["route_productivity"] for item in path_quality)
@@ -408,6 +419,8 @@ class SearchExplorationQualityEngine:
             "consistency": consistency,
             "adaptability": adaptability,
             "entropy": entropy,
+            "probability_entropy": probability_entropy,
+            "strategy_entropy": strategy_entropy,
         }
         overall = _clamp(
             components["coverage"] * 0.11
@@ -641,6 +654,16 @@ def _entropy(values: list[float]) -> float:
     if max_entropy <= 0.0:
         return 0.0
     return round(entropy / max_entropy, 4)
+
+
+def _categorical_entropy(values: list[str]) -> float:
+    items = [str(value) for value in values if value]
+    if not items:
+        return 0.0
+    counts = {}
+    for value in items:
+        counts[value] = counts.get(value, 0) + 1
+    return _entropy([float(count) for count in counts.values()])
 
 
 def _number(value: Any) -> float:

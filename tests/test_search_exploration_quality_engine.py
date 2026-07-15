@@ -88,6 +88,38 @@ def test_entropy_computation_reflects_route_distribution():
     assert report["exploration_entropy"] <= 1.0
 
 
+def test_entropy_reflects_strategy_diversity_when_route_scores_are_flat():
+    routes = [
+        {
+            "route_id": "route:translate",
+            "current_state": "CREATED",
+            "visited_transformations": ["translate"],
+            "decision": "expand_translate",
+            "creation_trigger": "spatial",
+        },
+        {
+            "route_id": "route:recolor",
+            "current_state": "CREATED",
+            "visited_transformations": ["recolor"],
+            "decision": "expand_recolor",
+            "creation_trigger": "symbolic",
+        },
+        {
+            "route_id": "route:growth",
+            "current_state": "CREATED",
+            "visited_transformations": ["expand"],
+            "decision": "expand_density",
+            "creation_trigger": "semantic",
+        },
+    ]
+
+    report = SearchExplorationQualityEngine().build_report(routes=routes)
+
+    assert report["quality_components"]["probability_entropy"] > 0.0
+    assert report["quality_components"]["strategy_entropy"] > 0.0
+    assert report["exploration_entropy"] > 0.0
+
+
 def test_coverage_computation_counts_unique_exploration_content():
     report = SearchExplorationQualityEngine().build_report(routes=_routes())
 
