@@ -393,6 +393,46 @@ class PrimitiveExecutor:
             copy=True
         )
 
+        parameters = parameters or {}
+
+        background_color = int(
+            parameters.get(
+                "background_color",
+                0
+            )
+        )
+
+        cells_to_clear = parameters.get(
+            "cells_to_clear",
+            []
+        ) or []
+
+        if cells_to_clear:
+
+            for row, col in cells_to_clear:
+
+                output[
+                    int(row),
+                    int(col)
+                ] = background_color
+
+            return output
+
+        remove_colors = parameters.get(
+            "remove_colors",
+            []
+        ) or []
+
+        if remove_colors:
+
+            for color in remove_colors:
+
+                output[
+                    output == int(color)
+                ] = background_color
+
+            return output
+
         non_zero = np.argwhere(
             output != 0
         )
@@ -432,6 +472,38 @@ class PrimitiveExecutor:
         width_growth = 1
 
         if parameters:
+
+            if parameters.get("scale_mode") == "cell_repeat":
+
+                row_scale = int(
+                    parameters.get(
+                        "row_scale",
+                        parameters.get(
+                            "scale_factor",
+                            1
+                        )
+                    )
+                )
+
+                col_scale = int(
+                    parameters.get(
+                        "col_scale",
+                        parameters.get(
+                            "scale_factor",
+                            1
+                        )
+                    )
+                )
+
+                return np.repeat(
+                    np.repeat(
+                        output,
+                        max(row_scale, 1),
+                        axis=0
+                    ),
+                    max(col_scale, 1),
+                    axis=1
+                )
 
             height_growth = parameters.get(
                 "height_growth",
@@ -1183,6 +1255,29 @@ class PrimitiveExecutor:
         )
 
         parameters = parameters or {}
+
+        path_cells = parameters.get(
+            "path_cells",
+            []
+        ) or []
+
+        if path_cells:
+
+            path_color = int(
+                parameters.get(
+                    "path_color",
+                    1
+                )
+            )
+
+            for row, col in path_cells:
+
+                output[
+                    int(row),
+                    int(col)
+                ] = path_color
+
+            return output
 
         non_zero = np.argwhere(
             output != 0

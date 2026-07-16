@@ -118,6 +118,56 @@ def test_field_binding_resolves_visible_values():
     assert result["field_values"]["execution_coverage"] == "100%"
 
 
+def test_generated_outputs_bind_from_semantic_synthesis_when_top_level_missing():
+    state = _state()
+    state.pop("generated_concepts")
+    state.pop("generated_programs")
+    state["semantic_concept_count"] = 8
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": [
+            "bridge_creation",
+            "component_connection",
+            "connectivity_change",
+            "topology_change",
+        ],
+        "candidate_count": 3,
+        "generated_transformations": [
+            {"steps": [{"operation": "connect_components"}]},
+            {"steps": [{"operation": "construct_path"}]},
+            {"steps": [{"operation": "repair_topology"}]},
+        ],
+        "semantic_to_transformation_compilation_report": {
+            "semantic_to_transformation_compilation_success": False,
+            "detected_intents": [
+                "bridge_creation",
+                "component_connection",
+                "connectivity_change",
+                "topology_change",
+            ],
+            "execution_intents": [
+                {
+                    "intent": "component_connection",
+                    "operation": "connect_components",
+                }
+            ],
+            "candidate_count": 0,
+        },
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    semantic_summary = result["field_bindings"]["semantic_compilation_summary"]["value"]
+
+    assert result["field_values"]["generated_concepts"] == "8"
+    assert result["field_values"]["generated_programs"] == "3"
+    assert semantic_summary["generated_concepts"] == 8
+    assert semantic_summary["generated_programs"] == 3
+    assert semantic_summary["execution_intent_count"] == 1
+
+
 def test_duplicate_owner_and_conflicting_binding_detection():
     bindings = [
         ReportFieldBinding(
@@ -259,6 +309,73 @@ def test_legacy_unknown_value_elimination_in_binding_and_final_report():
     assert "Generated Programs: Not Available" in report
 
 
+def test_prediction_provenance_binding_resolves_decision_summary():
+    state = _state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": ["rotation", "reflection"],
+        "candidate_count": 3,
+        "transformation_confidence": 0.91,
+        "transformation_accuracy": 1.0,
+        "selected_program": {
+            "step_count": 1,
+            "steps": [
+                {
+                    "operation": "mirror_vertical",
+                    "parameters": {"axis": "vertical"},
+                }
+            ],
+        },
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata={"execution_id": "exec-1"},
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["prediction_provenance_summary"]["value"]
+
+    assert summary["decision_owner"] == "Transformation Synthesis Engine"
+    assert summary["prediction_source"] == "transformation_synthesis"
+    assert summary["winning_candidate"] == "mirror_vertical"
+    assert summary["generated_concept_count"] == 2
+    assert summary["candidate_count"] == 3
+    assert summary["program_validation"] == "SUCCESS"
+
+
+def test_candidate_arena_binding_detects_single_source_dominance():
+    state = _state()
+    state["ADAPTIVE_REUSE_REPORT"] = {
+        "reuse_success_rate": 1.0,
+        "reused_programs": [
+            {
+                "steps": [
+                    {"operation": "reuse_transform", "parameters": {}}
+                ],
+                "step_count": 1,
+            }
+        ],
+    }
+    state["PREDICTION_PROVENANCE_REPORT"] = {
+        "prediction_source": "adaptive_reuse",
+        "decision_owner": "Adaptive Reuse Layer",
+        "winning_candidate": "reuse_transform",
+        "decision_confidence": 1.0,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata={"execution_id": "exec-1"},
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["arena_state"] == "SINGLE_SOURCE_DOMINANCE"
+    assert summary["candidate_count"] == 1
+    assert summary["competitor_sources"] == ["adaptive_reuse"]
+    assert summary["winner_takes_all_detected"] is True
+    assert summary["dominance_source"] == "adaptive_reuse"
+
+
 def test_canonical_timing_bindings_use_existing_timing_sources():
     result = CanonicalReportBindingEngine().bind(
         _state(),
@@ -274,14 +391,17 @@ def test_canonical_timing_bindings_use_existing_timing_sources():
     assert fields["untracked_time"]["value"] == 1.0
     assert fields["timing_coverage"]["display_value"] == "95%"
     stage_rows = fields["stage_timing_summary"]["value"]
-    assert [row["duration_seconds"] for row in stage_rows] == sorted(
-        [row["duration_seconds"] for row in stage_rows],
-        reverse=True,
-    )
     assert all(row["duration_seconds"] >= 0.0 for row in stage_rows)
     assert not any(row["stage_name"] == "Governance" for row in stage_rows)
     assert not any(row["duration_seconds"] == 99.0 for row in stage_rows)
     assert len({row["stage_name"] for row in stage_rows}) == len(stage_rows)
+    assert stage_rows[0]["relationship_type"] == "ROOT"
+    ranking = fields["resource_consumption_ranking"]["value"]
+    assert [row["exclusive_duration"] for row in ranking] == sorted(
+        [row["exclusive_duration"] for row in ranking],
+        reverse=True,
+    )
+    assert sum(row["percentage_of_active_compute"] for row in ranking) <= 100.0001
     assert fields["top_time_consumers"]["value"][0]["stage_name"] == "Program Synthesis"
 
 

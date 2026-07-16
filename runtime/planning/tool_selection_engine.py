@@ -30,6 +30,13 @@ class ToolSelectionEngine:
         "telemetry",
         "explanation_generation",
         "strategy_evolution",
+        "semantic_to_transformation_compiler",
+        "transformation_compilation",
+        "transformation_execution",
+        "rotation_execution",
+        "reflection_execution",
+        "scaling_execution",
+        "path_execution",
     ]
 
     SAFETY_TOOLS = [
@@ -57,7 +64,19 @@ class ToolSelectionEngine:
 
         if task_profile.transformation_count > 0:
             enabled.add("color_mapping")
+            enabled.add("semantic_to_transformation_compiler")
+            enabled.add("transformation_compilation")
+            enabled.add("transformation_execution")
             reasons["color_mapping"] = "task contains transformations"
+            reasons["semantic_to_transformation_compiler"] = (
+                "transformation task requires semantic-to-program compilation telemetry"
+            )
+            reasons["transformation_compilation"] = (
+                "transformation task requires compiler visibility"
+            )
+            reasons["transformation_execution"] = (
+                "transformation task requires executable primitive visibility"
+            )
 
         if task_profile.spatial_complexity >= 0.15:
             enabled.add("spatial_reasoning")
@@ -120,6 +139,38 @@ class ToolSelectionEngine:
             enabled.add("spatial_reasoning")
             reasons["spatial_reasoning"] = (
                 "task identity or target concepts indicate spatial reasoning"
+            )
+        if any(
+            marker in f"{task_identity} {concept_text}"
+            for marker in ("rotation", "orientation_change")
+        ):
+            enabled.add("rotation_execution")
+            reasons["rotation_execution"] = (
+                "task identity or target concepts indicate rotation execution"
+            )
+        if any(
+            marker in f"{task_identity} {concept_text}"
+            for marker in ("reflection", "mirror", "symmetry")
+        ):
+            enabled.add("reflection_execution")
+            reasons["reflection_execution"] = (
+                "task identity or target concepts indicate reflection execution"
+            )
+        if any(
+            marker in f"{task_identity} {concept_text}"
+            for marker in ("scaling", "scale_transformation", "size_transformation")
+        ):
+            enabled.add("scaling_execution")
+            reasons["scaling_execution"] = (
+                "task identity or target concepts indicate scaling execution"
+            )
+        if any(
+            marker in f"{task_identity} {concept_text}"
+            for marker in ("path_finding", "route_completion", "path_construction")
+        ):
+            enabled.add("path_execution")
+            reasons["path_execution"] = (
+                "task identity or target concepts indicate path execution"
             )
         if any(
             marker in f"{task_identity} {concept_text}"

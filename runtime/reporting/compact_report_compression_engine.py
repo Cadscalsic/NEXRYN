@@ -80,6 +80,9 @@ class CompactReportCompressionEngine:
         "untracked_time",
         "active_compute_time",
         "report_generation_time",
+        "reporting_timing_summary",
+        "report_lifecycle_total_time",
+        "final_report_rendering_time",
         "finalization_time",
     }
     TIMING_SUMMARY_KEYS = {
@@ -90,6 +93,9 @@ class CompactReportCompressionEngine:
         "untracked_time",
         "active_compute_time",
         "report_generation_time",
+        "reporting_timing_summary",
+        "report_lifecycle_total_time",
+        "final_report_rendering_time",
         "finalization_time",
     }
     KNOWLEDGE_KEYS = {

@@ -23,6 +23,9 @@ SECTION_ORDER = [
     "EXECUTION SUMMARY",
     "COGNITIVE OUTPUTS",
     "PROGRAM QUALITY",
+    "SEMANTIC COMPILATION",
+    "TRANSFORMATION DECISION",
+    "COGNITIVE CANDIDATE ARENA",
     "SEARCH QUALITY",
     "KNOWLEDGE PIPELINE",
     "SYSTEM HEALTH",
@@ -281,6 +284,9 @@ class DeterministicFinalReportRenderer:
             self._render_execution_summary(canonical),
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
+            self._render_semantic_compilation(canonical),
+            self._render_transformation_decision(canonical),
+            self._render_candidate_arena(canonical),
             self._render_search_quality(canonical),
             self._render_knowledge_pipeline(canonical),
             self._render_system_health(canonical),
@@ -312,6 +318,9 @@ class DeterministicFinalReportRenderer:
             self._render_execution_summary(canonical),
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
+            self._render_semantic_compilation(canonical),
+            self._render_transformation_decision(canonical),
+            self._render_candidate_arena(canonical),
             self._render_search_quality(canonical),
             self._render_knowledge_pipeline(canonical),
             self._render_system_health(canonical),
@@ -387,6 +396,147 @@ class DeterministicFinalReportRenderer:
             f"Validation Distribution: {self._field(canonical, 'validation_distribution')}",
         ])
 
+    def _render_semantic_compilation(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "semantic_compilation_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        diagnostics = self._binding_value(canonical, "semantic_compilation_diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        concepts = summary.get("detected_concepts") or []
+        if not isinstance(concepts, list):
+            concepts = [concepts]
+        parameters = summary.get("parameter_inference") or {}
+        parameter_bits = []
+        if isinstance(parameters, dict):
+            for key in sorted(parameters.keys(), key=str):
+                value = parameters.get(key)
+                if isinstance(value, (dict, list)):
+                    value = self._compact_value(value)
+                parameter_bits.append(f"{key}={self._value(value)}")
+        lines = [
+            f"Detected Concepts: {', '.join(str(item) for item in concepts[:12]) if concepts else 'Not Available'}",
+            f"Semantic Intent Router Success: {self._value(summary.get('semantic_intent_routing_success'))}",
+            f"Execution Intents: {self._value(summary.get('execution_intent_count'))}",
+            f"Compiler Triggered: {self._value(summary.get('compiler_triggered'))}",
+            f"Compiled Candidates: {self._value(summary.get('compiled_candidate_count'))}",
+            f"Selected Intent: {self._value(summary.get('selected_intent'))}",
+            f"Compiled Operation: {self._value(summary.get('compiled_operation'))}",
+            f"Selected Operation: {self._value(summary.get('selected_operation'))}",
+            f"Selected From Compiler: {self._value(summary.get('selected_from_compiler'))}",
+            f"Compilation Confidence: {self._value(summary.get('compilation_confidence'))}",
+            f"Prediction Accuracy: {self._value(summary.get('prediction_accuracy'))}",
+            f"Compilation Status: {self._value(summary.get('compilation_status'))}",
+            f"Primitive Executor Called: {self._value(summary.get('primitive_executor_called'))}",
+            f"Execution Status: {self._value(summary.get('execution_status'))}",
+            f"Failure Cause: {self._value(summary.get('failure_cause'))}",
+        ]
+        if parameter_bits:
+            lines.append(f"Parameter Inference: {'; '.join(parameter_bits[:8])}")
+        if canonical["report_level"] == "diagnostic":
+            compiler = diagnostics.get("compiler_report", {})
+            graph = compiler.get("transformation_graph", {}) if isinstance(compiler, dict) else {}
+            plan = compiler.get("transformation_plan", {}) if isinstance(compiler, dict) else {}
+            if isinstance(graph, dict):
+                lines.append(
+                    "Transformation Graph: "
+                    f"nodes={self._value(graph.get('node_count'))}, "
+                    f"edges={self._value(graph.get('edge_count'))}"
+                )
+            if isinstance(plan, dict):
+                lines.append(f"Transformation Plan Type: {self._value(plan.get('plan_type'))}")
+                lines.append(f"Transformation Plan Rationale: {self._value(plan.get('rationale'))}")
+        return self._section("SEMANTIC COMPILATION", lines)
+
+    def _render_transformation_decision(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "prediction_provenance_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        pipeline = summary.get("decision_pipeline") or []
+        if not isinstance(pipeline, list):
+            pipeline = [pipeline]
+        lines = [
+            f"Prediction Source: {self._value(summary.get('prediction_source'))}",
+            f"Decision Owner: {self._value(summary.get('decision_owner'))}",
+            f"Decision Confidence: {self._value(summary.get('decision_confidence'))}",
+            f"Winning Candidate: {self._value(summary.get('winning_candidate'))}",
+            f"Selected Operation: {self._value(summary.get('selected_operation'))}",
+            f"Compiler Participation: {self._value(summary.get('compiler_participation'))}",
+            f"Repair Participation: {self._value(summary.get('repair_participation'))}",
+            "Transfer Learning Participation: "
+            f"{self._value(summary.get('transfer_learning_participation'))}",
+            f"Counterfactual Search: {self._value(summary.get('counterfactual_search'))}",
+            f"Program Validation: {self._value(summary.get('program_validation'))}",
+            f"Prediction Accuracy: {self._value(summary.get('prediction_accuracy'))}",
+            f"Generated Concepts Observed: {self._value(summary.get('generated_concept_count'))}",
+            f"Generated Programs Observed: {self._value(summary.get('generated_program_count'))}",
+            f"Program Candidates: {self._value(summary.get('candidate_count'))}",
+            f"Programs Rejected: {self._value(summary.get('programs_rejected'))}",
+            f"Programs Executed: {self._value(summary.get('programs_executed'))}",
+            "Decision Pipeline: "
+            f"{' -> '.join(str(item) for item in pipeline) if pipeline else 'Not Available'}",
+        ]
+        if canonical["report_level"] == "diagnostic":
+            diagnostics = self._binding_value(canonical, "prediction_provenance_diagnostics")
+            diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+            for key in (
+                "transformation_synthesis_report",
+                "color_mapping_report",
+                "adaptive_reuse_report",
+                "search_report",
+                "repair_report",
+            ):
+                value = diagnostics.get(key)
+                if isinstance(value, dict):
+                    lines.append(f"{self._label(key)} Fields: {len(value)}")
+        return self._section("TRANSFORMATION DECISION", lines)
+
+    def _render_candidate_arena(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "candidate_arena_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        sources = summary.get("competitor_sources") or []
+        if not isinstance(sources, list):
+            sources = [sources]
+        rows = summary.get("candidate_rows") or []
+        rows = rows if isinstance(rows, list) else []
+        source_status = summary.get("source_status") or {}
+        source_status = source_status if isinstance(source_status, dict) else {}
+        lines = [
+            f"Arena State: {self._value(summary.get('arena_state'))}",
+            f"Candidate Count: {self._value(summary.get('candidate_count'))}",
+            f"Competitor Sources: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            f"Winner Source: {self._value(summary.get('winner_source'))}",
+            f"Arena Winner: {self._value(summary.get('arena_winner'))}",
+            f"Winner Takes All Detected: {self._value(summary.get('winner_takes_all_detected'))}",
+            f"Dominance Source: {self._value(summary.get('dominance_source'))}",
+            f"Selection Mode: {self._value(summary.get('selection_mode'))}",
+            f"Validation Coverage: {self._percent(summary.get('validation_coverage'))}",
+            f"Missing Competition Reason: {self._value(summary.get('missing_competition_reason'))}",
+        ]
+        if rows:
+            lines.append("Top Arena Candidates:")
+            for index, row in enumerate(rows[:6], start=1):
+                if not isinstance(row, dict):
+                    continue
+                marker = "selected" if row.get("selected") else "candidate"
+                lines.append(
+                    "  "
+                    f"{index}. {self._value(row.get('source'))}: "
+                    f"{self._value(row.get('candidate_id'))} "
+                    f"op={self._value(row.get('operation'))} "
+                    f"confidence={self._value(row.get('confidence'))} "
+                    f"status={self._value(row.get('validation_status'))} "
+                    f"{marker}"
+                )
+        if canonical["report_level"] == "diagnostic" and source_status:
+            lines.append("Arena Source Status:")
+            for source, status in sorted(source_status.items()):
+                lines.append(f"  {source}: {status}")
+        return self._section("COGNITIVE CANDIDATE ARENA", lines)
+
     def _render_search_quality(self, canonical: dict[str, Any]) -> str:
         search = canonical["search"]
         return self._section("SEARCH QUALITY", [
@@ -427,100 +577,166 @@ class DeterministicFinalReportRenderer:
             runtime_summary = {}
         top_consumers = self._binding_value(canonical, "top_time_consumers")
         top_consumers = top_consumers if isinstance(top_consumers, list) else []
+        reporting_timing = self._binding_value(canonical, "reporting_timing_summary")
+        reporting_timing = reporting_timing if isinstance(reporting_timing, dict) else {}
         lines = [
             f"Total Wall Time: {self._seconds(runtime_summary.get('total_wall_time') or self._field(canonical, 'total_wall_time'))}",
             f"Active Compute Time: {self._seconds(runtime_summary.get('active_compute_time') or self._field(canonical, 'active_compute_time'))}",
             f"Cognitive Runtime Time: {self._seconds(runtime_summary.get('cognitive_runtime_time'))}",
             f"Untracked Time: {self._seconds(runtime_summary.get('untracked_time') or self._field(canonical, 'untracked_time'))}",
             f"Timing Coverage: {self._percent(runtime_summary.get('timing_coverage') or self._field(canonical, 'timing_coverage'))}",
-            f"Report Generation Time: {self._seconds(runtime_summary.get('report_generation_time') or self._field(canonical, 'report_generation_time'))}",
+            f"Report Lifecycle Total Time: {self._seconds(reporting_timing.get('report_lifecycle_total_time') or self._field(canonical, 'report_lifecycle_total_time'))}",
+            f"Final Report Rendering Time: {self._seconds(reporting_timing.get('final_report_rendering_time') or self._field(canonical, 'final_report_rendering_time'))}",
+            f"Report Timing Status: {self._value(reporting_timing.get('report_timing_status'))}",
             f"Finalization Time: {self._seconds(runtime_summary.get('finalization_time') or self._field(canonical, 'finalization_time'))}",
         ]
+        if canonical["report_level"] != "minimal":
+            lines.extend([
+                "REPORTING TIMING SUMMARY",
+                f"Canonical Report Assembly Time: {self._seconds(reporting_timing.get('canonical_report_assembly_time'))}",
+                f"Cognitive Summary Aggregation Time: {self._seconds(reporting_timing.get('cognitive_summary_aggregation_time'))}",
+                f"Report Binding Time: {self._seconds(reporting_timing.get('report_binding_time'))}",
+                f"Report Visibility Filtering Time: {self._seconds(reporting_timing.get('report_visibility_filtering_time'))}",
+                f"Report Compression Time: {self._seconds(reporting_timing.get('report_compression_time'))}",
+                f"Representation Validation Time: {self._seconds(reporting_timing.get('representation_validation_time'))}",
+                f"Technical Appendix Serialization Time: {self._seconds(reporting_timing.get('technical_appendix_serialization_time'))}",
+                f"Report Artifact Writing Time: {self._seconds(reporting_timing.get('report_artifact_writing_time'))}",
+                f"Console Emission Time: {self._seconds(reporting_timing.get('console_emission_time'))}",
+                f"Report Overlap Duration: {self._seconds(reporting_timing.get('report_overlap_duration'))}",
+                f"Report Timing Semantics Valid: {self._value(reporting_timing.get('report_timing_semantics_valid'))}",
+            ])
         if top_consumers:
-            lines.append("Top Three Time Consumers:")
+            lines.append("Top Three Exclusive-Time Consumers:")
             lines.extend(
                 "  "
                 f"{item.get('rank', index + 1)}. "
                 f"{item.get('stage_name', 'Not Available')}: "
-                f"{self._seconds(item.get('duration_seconds'))} "
-                f"({self._percent(item.get('percentage_of_total_runtime'), already_percent=True)})"
+                f"{self._seconds(item.get('exclusive_duration') or item.get('duration_seconds'))} "
+                f"({self._percent(item.get('percentage_of_active_compute'), already_percent=True)} "
+                "of ACTIVE_COMPUTE_TIME)"
                 for index, item in enumerate(top_consumers[:3])
                 if isinstance(item, dict)
             )
+        reconciliation = self._binding_value(canonical, "timing_reconciliation_summary")
+        reconciliation = reconciliation if isinstance(reconciliation, dict) else {}
+        if canonical["report_level"] == "minimal":
+            lines.extend([
+                f"Overlap Detected: {self._value(reconciliation.get('overlap_detected'))}",
+                f"Timing Coverage: {self._percent(runtime_summary.get('timing_coverage') or self._field(canonical, 'timing_coverage'))} of TOTAL_WALL_TIME",
+                f"Resource Percentage Sum: {self._percent(reconciliation.get('resource_percentage_sum'), already_percent=True)} of ACTIVE_COMPUTE_TIME",
+            ])
         return self._section("TIMING SUMMARY", lines)
 
     def _render_stage_timing(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
             return ""
-        rows = self._binding_value(canonical, "stage_timing_summary")
+        rows = self._binding_value(canonical, "timing_hierarchy_summary")
         rows = rows if isinstance(rows, list) else []
         if not rows:
             return self._section("COGNITIVE STAGE TIMING", [
+                "TIMING HIERARCHY SUMMARY",
                 "Stage Timing: Not Available",
             ])
         lines = [
-            "stage_name                       duration_seconds  percentage_of_total_runtime  timing_scope         timing_status",
+            "TIMING HIERARCHY SUMMARY",
+            "stage_name                       inclusive_duration  exclusive_duration  relationship_type  timing_scope",
         ]
         for row in rows:
             if not isinstance(row, dict):
                 continue
+            indent = "  " * int(row.get("depth", 0) or 0)
+            label = indent + self._stage_display_label(row, max_width=max(30 - len(indent), 12))
             lines.append(
-                f"{str(row.get('stage_name', 'Not Available'))[:30]:30} "
-                f"{self._seconds(row.get('duration_seconds')):>16} "
-                f"{self._percent(row.get('percentage_of_total_runtime'), already_percent=True):>28} "
-                f"{str(row.get('timing_scope', 'Not Available'))[:20]:20} "
-                f"{self._value(row.get('timing_status'))}"
+                f"{label[:30]:30} "
+                f"{self._seconds(row.get('inclusive_duration')):>18} "
+                f"{self._seconds(row.get('exclusive_duration')):>18} "
+                f"{str(row.get('relationship_type', 'Not Available'))[:17]:17} "
+                f"{str(row.get('timing_scope', 'Not Available'))[:24]:24}"
             )
         return self._section("COGNITIVE STAGE TIMING", lines)
 
     def _render_resource_summary(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
             return ""
-        rows = self._binding_value(canonical, "stage_timing_summary")
+        hierarchy_rows = self._binding_value(canonical, "timing_hierarchy_summary")
+        hierarchy_rows = hierarchy_rows if isinstance(hierarchy_rows, list) else []
+        rows = self._binding_value(canonical, "resource_consumption_ranking")
         rows = rows if isinstance(rows, list) else []
         top = rows[0] if rows else {}
-        productive = [
-            row for row in rows
-            if isinstance(row, dict)
-            and row.get("stage_name") not in {
-                "Boot",
-                "Finalization",
-                "Report Generation",
-            }
+        reconciliation = self._binding_value(canonical, "timing_reconciliation_summary")
+        reconciliation = reconciliation if isinstance(reconciliation, dict) else {}
+        lines = [
+            "RESOURCE CONSUMPTION RANKING",
+            "stage_name                       exclusive_duration  percentage_of_active_compute  rank",
         ]
-        lowest = min(
-            productive,
-            key=lambda item: float(item.get("duration_seconds", 0.0) or 0.0),
-            default={},
-        )
-        return self._section("COGNITIVE RESOURCE SUMMARY", [
+        for row in rows[:10]:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"{str(row.get('stage_name', 'Not Available'))[:30]:30} "
+                f"{self._seconds(row.get('exclusive_duration')):>18} "
+                f"{self._percent(row.get('percentage_of_active_compute'), already_percent=True):>28} "
+                f"{self._value(row.get('rank')):>4}"
+            )
+        lines.extend([
             f"Highest Time Consumer: {self._value(top.get('stage_name'))}",
             "Highest Time Consumer Percentage: "
-            f"{self._percent(top.get('percentage_of_total_runtime'), already_percent=True)}",
-            f"Lowest Productive Stage: {self._value(lowest.get('stage_name'))}",
-            f"Timing Coverage: {self._field(canonical, 'timing_coverage')}",
+            f"{self._percent(top.get('percentage_of_active_compute'), already_percent=True)} of ACTIVE_COMPUTE_TIME",
+            "Resource Percentage Sum: "
+            f"{self._percent(reconciliation.get('resource_percentage_sum'), already_percent=True)} of ACTIVE_COMPUTE_TIME",
+            f"Overlap Accounted For: {self._value(reconciliation.get('overlap_accounted_for'))}",
+            f"Timing Hierarchy Valid: {self._value(reconciliation.get('timing_hierarchy_valid'))}",
+            f"Timing Coverage: {self._field(canonical, 'timing_coverage')} of TOTAL_WALL_TIME",
             f"Untracked Time: {self._seconds(self._field(canonical, 'untracked_time'))}",
-            f"Resource Distribution Status: {'AVAILABLE' if rows else 'Not Available'}",
+            f"Resource Distribution Status: {'AVAILABLE' if rows or hierarchy_rows else 'Not Available'}",
         ])
+        return self._section("COGNITIVE RESOURCE SUMMARY", lines)
 
     def _render_diagnostic_timing_detail(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] != "diagnostic":
             return ""
-        rows = self._binding_value(canonical, "stage_timing_summary")
+        rows = self._binding_value(canonical, "diagnostic_timing_nodes")
         rows = rows if isinstance(rows, list) else []
+        report_nodes = self._binding_value(canonical, "reporting_timing_nodes")
+        report_nodes = report_nodes if isinstance(report_nodes, list) else []
+        legacy_mappings = self._binding_value(canonical, "legacy_report_timing_mappings")
+        legacy_mappings = legacy_mappings if isinstance(legacy_mappings, list) else []
         lines = []
+        for row in report_nodes:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"Reporting {row.get('stage_name')}: "
+                f"scope={self._value(row.get('timing_scope'))}, "
+                f"inclusive={self._seconds(row.get('inclusive_duration_seconds'))}, "
+                f"exclusive={self._seconds(row.get('exclusive_duration_seconds'))}, "
+                f"parent={self._value(row.get('parent_timing_id'))}, "
+                f"source={self._value(row.get('measurement_source'))}, "
+                f"consistency={self._value(row.get('source_consistency'))}"
+            )
+        for mapping in legacy_mappings:
+            if not isinstance(mapping, dict):
+                continue
+            lines.append(
+                f"Legacy Reporting Field {self._value(mapping.get('legacy_field'))}: "
+                f"semantics={self._value(mapping.get('legacy_timing_semantics'))}, "
+                f"canonical_scope={self._value(mapping.get('canonical_timing_scope'))}, "
+                f"normal_allowed={self._value(mapping.get('normal_reporting_allowed'))}"
+            )
         for row in rows:
             if not isinstance(row, dict):
                 continue
             lines.append(
                 f"{row.get('stage_name')}: "
-                f"inclusive={self._seconds(row.get('inclusive_duration'))}, "
-                f"exclusive={self._seconds(row.get('exclusive_duration'))}, "
-                f"cpu={self._seconds(row.get('cpu_duration'))}, "
-                f"wall={self._seconds(row.get('wall_duration'))}, "
+                f"timing_id={self._value(row.get('timing_id'))}, "
+                f"inclusive={self._seconds(row.get('inclusive_duration_seconds'))}, "
+                f"exclusive={self._seconds(row.get('exclusive_duration_seconds'))}, "
+                f"child_union={self._seconds(row.get('child_interval_union_duration'))}, "
+                f"parallel_overlap={self._seconds(row.get('parallel_overlap_duration'))}, "
+                f"duplicate_overlap={self._seconds(row.get('duplicate_overlap_duration'))}, "
                 f"parent={self._value(row.get('parent_timing_id'))}, "
                 f"source={self._value(row.get('measurement_source'))}, "
-                f"method={self._value(row.get('measurement_method'))}"
+                f"relationship={self._value(row.get('relationship_type'))}"
             )
         return self._section("DIAGNOSTIC TIMING DETAIL", lines or [
             "Raw Timing Records: Not Available",
@@ -752,8 +968,32 @@ class DeterministicFinalReportRenderer:
             )
         return str(value)
 
+    def _compact_value(self, value: Any) -> str:
+        if isinstance(value, list):
+            if not value:
+                return "0"
+            return f"{len(value)} items"
+        if isinstance(value, dict):
+            if not value:
+                return "0"
+            return f"{len(value)} fields"
+        return self._value(value)
+
     def _label(self, key: str) -> str:
         return key.replace("_", " ").title()
+
+    def _stage_display_label(self, row: dict[str, Any], *, max_width: int) -> str:
+        label = str(row.get("stage_name") or "Not Available")
+        if len(label) <= max_width:
+            return label
+        suffix_source = str(
+            row.get("timing_id")
+            or row.get("execution_id")
+            or label,
+        )
+        suffix = re.sub(r"[^A-Za-z0-9]", "", suffix_source)[-6:] or "stage"
+        keep = max(max_width - len(suffix) - 2, 6)
+        return f"{label[:keep]}~{suffix}"
 
     def _number(self, value: Any) -> float | None:
         try:

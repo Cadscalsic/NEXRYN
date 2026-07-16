@@ -101,6 +101,30 @@ def test_tool_selection_enables_spatial_reasoning_from_task_identity():
     )
 
 
+def test_tool_selection_exposes_semantic_compilation_tools_for_transformations():
+
+    profile, cost = _profile_and_cost({
+        "task_id": "arc_concept_rotation_reflection_scaling_04.json",
+        "target_concepts": [
+            "rotation",
+            "reflection",
+            "scaling",
+            "orientation_change",
+        ],
+        "input_grid": [[1, 0], [0, 0]],
+        "output_grid": [[0, 1], [0, 0]],
+    })
+    budget = CognitiveBudgetEngine().allocate(profile, cost)
+    selection = ToolSelectionEngine().select(profile, budget)
+
+    assert "semantic_to_transformation_compiler" in selection.enabled_tools
+    assert "transformation_compilation" in selection.enabled_tools
+    assert "transformation_execution" in selection.enabled_tools
+    assert "rotation_execution" in selection.enabled_tools
+    assert "reflection_execution" in selection.enabled_tools
+    assert "scaling_execution" in selection.enabled_tools
+
+
 def test_tool_selection_enables_spatial_reasoning_for_topology_tasks():
 
     profile, cost = _profile_and_cost({

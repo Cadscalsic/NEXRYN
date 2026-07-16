@@ -14,6 +14,8 @@ from runtime.reasoning.mechanistic_reasoning_engine import mechanistic_reasoning
 from runtime.reasoning.transformation_explanation_engine import transformation_explanation_engine
 from runtime.reasoning.transformation_language_engine import transformation_language_engine
 from runtime.reasoning.transformation_theory_engine import transformation_theory_engine
+from runtime.semantic_routing import cognitive_context_router, semantic_intent_router
+from runtime.transformation_compilation import semantic_to_transformation_compiler
 from runtime.transforms import primitive_executor
 
 
@@ -252,6 +254,9 @@ class TransformationSynthesisEngine:
         self.transformation_explanation_engine = transformation_explanation_engine
         self.mechanistic_reasoning_engine = mechanistic_reasoning_engine
         self.transformation_theory_engine = transformation_theory_engine
+        self.cognitive_context_router = cognitive_context_router
+        self.semantic_intent_router = semantic_intent_router
+        self.semantic_to_transformation_compiler = semantic_to_transformation_compiler
         self.synthesis_history = []
 
     def synthesize(
@@ -307,12 +312,32 @@ class TransformationSynthesisEngine:
             transformation_theory_report=theory_report,
             transformation_explanation_report=explanation_report,
         )
+        context_routing_report = self.cognitive_context_router.route(
+            concepts,
+            runtime_context=runtime_context,
+            semantic_context_report=semantic_context_report,
+        )
+        routed_concepts = context_routing_report.get("routed_concepts") or concepts
+        semantic_intent_report = self.semantic_intent_router.route(
+            detected_concepts=routed_concepts,
+            runtime_context=runtime_context,
+            concept_report=concept_report,
+        )
         candidates = []
         candidates.extend(self._memory_candidates(concepts))
         candidates.extend(self._explanation_candidates(explanation_report, input_grid, output_grid))
         candidates.extend(self._mechanism_candidates(mechanistic_report))
         candidates.extend(self._concept_candidates(concepts, semantics_report))
         candidates.extend(self._observation_candidates(input_grid, output_grid, concepts))
+        compiler_report = self.semantic_to_transformation_compiler.compile(
+            input_grid=input_grid,
+            output_grid=output_grid,
+            detected_concepts=routed_concepts,
+            runtime_context=runtime_context,
+            execution_intents=semantic_intent_report.get("execution_intents", []),
+            semantic_intent_report=semantic_intent_report,
+        )
+        candidates.extend(self._semantic_compiler_candidates(compiler_report))
 
         candidates = self._dedupe_candidates(candidates)
         candidates = self._score_candidates(candidates, input_grid, output_grid, concepts)
@@ -349,6 +374,9 @@ class TransformationSynthesisEngine:
             theory_report,
             semantics_report,
             mechanistic_report,
+            context_routing_report,
+            compiler_report,
+            semantic_intent_report,
         )
         self.synthesis_history.append(report)
         return report
@@ -645,15 +673,16 @@ class TransformationSynthesisEngine:
         target = self._array(output_grid)
         candidates = []
         candidates.extend(self._translation_candidates(source, target))
-        candidates.extend(self._recolor_candidates(source, target, concepts))
         candidates.extend(self._rotation_candidates(source, target))
         candidates.extend(self._reflection_candidates(source, target))
-        candidates.extend(self._object_count_candidates(source, target))
-        candidates.extend(self._density_candidates(source, target, concepts))
-        candidates.extend(self._growth_candidates(source, target, concepts))
-        candidates.extend(self._path_candidates(source, target, concepts))
-        candidates.extend(self._fill_candidates(source, target, concepts))
-        candidates.extend(self._composition_candidates(candidates))
+        if source.shape == target.shape:
+            candidates.extend(self._recolor_candidates(source, target, concepts))
+            candidates.extend(self._object_count_candidates(source, target))
+            candidates.extend(self._density_candidates(source, target, concepts))
+            candidates.extend(self._growth_candidates(source, target, concepts))
+            candidates.extend(self._path_candidates(source, target, concepts))
+            candidates.extend(self._fill_candidates(source, target, concepts))
+            candidates.extend(self._composition_candidates(candidates))
         return candidates
 
     def _translation_candidates(self, source, target):
@@ -1030,6 +1059,30 @@ class TransformationSynthesisEngine:
             candidates.extend(self._score_candidates(variants, input_grid, output_grid, []))
         return sorted(candidates, key=lambda item: item.get("score", 0.0), reverse=True)
 
+    def _semantic_compiler_candidates(self, compiler_report):
+        if not isinstance(compiler_report, Mapping):
+            return []
+        if not compiler_report.get("semantic_to_transformation_compilation_success"):
+            return []
+        program = compiler_report.get("compiled_program", {})
+        validation = compiler_report.get("validation", {})
+        if not program.get("steps"):
+            return []
+        accuracy = float(validation.get("accuracy", 0.0))
+        return [self._candidate(
+            "semantic_to_transformation_compiler",
+            program,
+            max(0.86, accuracy),
+            max(0.80, accuracy),
+            {
+                "source": "semantic_to_transformation_compiler",
+                "selected_intent": compiler_report.get("selected_intent"),
+                "transformation_plan": compiler_report.get("transformation_plan", {}),
+                "transformation_graph": compiler_report.get("transformation_graph", {}),
+                "compiler_validation": validation,
+            },
+        )]
+
     def _prediction_accuracy(self, program, input_grid, output_grid):
         if input_grid is None or output_grid is None:
             return 0.0
@@ -1140,6 +1193,9 @@ class TransformationSynthesisEngine:
         theory_report,
         semantics_report,
         mechanistic_report,
+        context_routing_report,
+        compiler_report,
+        semantic_intent_report,
     ):
         selected_steps = selected_program.get("steps", []) or []
         report = {
@@ -1155,6 +1211,9 @@ class TransformationSynthesisEngine:
             "transformation_theory_report": theory_report,
             "transformation_semantics_report": semantics_report,
             "mechanistic_reasoning_report": mechanistic_report,
+            "context_routing_report": context_routing_report,
+            "semantic_intent_routing_report": semantic_intent_report,
+            "semantic_to_transformation_compilation_report": compiler_report,
             "selected_program": selected_program,
             "program_depth": len(selected_steps),
             "transformation_confidence": round(
@@ -1180,6 +1239,9 @@ class TransformationSynthesisEngine:
                 "transformation_theory_report",
                 "transformation_semantics_report",
                 "mechanistic_reasoning_report",
+                "context_routing_report",
+                "semantic_intent_routing_report",
+                "semantic_to_transformation_compilation_report",
                 "selected_program",
                 "program_depth",
                 "transformation_confidence",

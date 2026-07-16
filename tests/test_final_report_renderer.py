@@ -20,6 +20,65 @@ def _report_state():
             "lowest_confidence": 0.64,
             "validation_distribution": {"VALID": 2},
         },
+        "TRANSFORMATION_SYNTHESIS_REPORT": {
+            "detected_concepts": ["path_finding", "route_completion"],
+            "transformation_confidence": 1.0,
+            "transformation_accuracy": 1.0,
+            "selected_program": {
+                "steps": [
+                    {
+                        "operation": "construct_path",
+                        "parameters": {
+                            "path_color": 1,
+                            "path_cells": [[0, 1], [0, 2]],
+                        },
+                    }
+                ],
+                "step_count": 1,
+            },
+            "semantic_to_transformation_compilation_report": {
+                "semantic_to_transformation_compilation_success": True,
+                "detected_intents": ["path_finding", "route_completion"],
+                "execution_intents": [
+                    {
+                        "intent": "path_construction",
+                        "operation": "construct_path",
+                        "source": "semantic_intent_router",
+                    }
+                ],
+                "semantic_intent_routing_report": {
+                    "semantic_intent_routing_success": True,
+                    "execution_intent_count": 1,
+                },
+                "selected_intent": "path_construction",
+                "candidate_count": 1,
+                "compiled_program": {
+                    "steps": [
+                        {
+                            "operation": "construct_path",
+                            "parameters": {
+                                "path_color": 1,
+                                "path_cells": [[0, 1], [0, 2]],
+                            },
+                        }
+                    ],
+                    "step_count": 1,
+                },
+                "validation": {
+                    "accuracy": 1.0,
+                    "exact_match": True,
+                    "shape_match": True,
+                },
+                "transformation_plan": {
+                    "plan_type": "semantic_to_transformation",
+                    "rationale": "semantic_path_delta_to_explicit_path_cells",
+                },
+                "transformation_graph": {
+                    "node_count": 1,
+                    "edge_count": 0,
+                },
+            },
+        },
         "COGNITIVE_SEARCH_REPORT": {
             "overall_search_quality": 0.76,
             "search_efficiency": 0.81,
@@ -247,14 +306,182 @@ def test_normal_report_restores_per_stage_timing_visibility():
     )
 
     assert "COGNITIVE STAGE TIMING" in report
+    assert "TIMING HIERARCHY SUMMARY" in report
+    assert "RESOURCE CONSUMPTION RANKING" in report
     assert "stage_name" in report
     assert "Reasoning" in report
     assert "Search" in report
     assert "Grid Analysis" in report
-    assert "percentage_of_total_runtime" in report
-    assert "Top Three Time Consumers" in report
+    assert "percentage_of_active_compute" in report
+    assert "Top Three Exclusive-Time Consumers" in report
+    assert "ACTIVE_COMPUTE_TIME" in report
+    assert "REPORTING TIMING SUMMARY" in report
+    assert "Report Lifecycle Total Time:" in report
+
+
+def test_normal_report_exposes_semantic_compilation_observability():
+    report = DeterministicFinalReportRenderer().render(
+        _report_state(),
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "SEMANTIC COMPILATION" in report
+    assert "Semantic Intent Router Success: TRUE" in report
+    assert "Execution Intents: 1" in report
+    assert "Compiler Triggered: TRUE" in report
+    assert "Compiled Candidates: 1" in report
+    assert "Selected Intent: path_construction" in report
+    assert "Compiled Operation: construct_path" in report
+    assert "Selected From Compiler: TRUE" in report
+    assert "Compilation Status: SUCCESS" in report
+    assert "Execution Status: SUCCESS" in report
+
+
+def test_normal_report_exposes_prediction_provenance_decision_owner():
+    report = DeterministicFinalReportRenderer().render(
+        _report_state(),
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "TRANSFORMATION DECISION" in report
+    assert "Prediction Source: semantic_to_transformation_compiler" in report
+    assert "Decision Owner: Semantic-to-Transformation Compiler" in report
+    assert "Winning Candidate: construct_path" in report
+    assert "Selected Operation: construct_path" in report
+    assert "Compiler Participation: TRUE" in report
+    assert "Program Validation: SUCCESS" in report
+    assert "Generated Concepts Observed: 2.0" in report
+    assert "Program Candidates: 1.0" in report
+    assert "Decision Pipeline: Semantic Attribution -> Pattern Analysis -> Rule Analysis" in report
+
+
+def test_prediction_provenance_reports_unresolved_when_success_source_is_missing():
+    state = _report_state()
+    state.pop("TRANSFORMATION_SYNTHESIS_REPORT")
+    state["EVALUATION_REPORT"] = {
+        "accuracy": 1.0,
+        "success_state": "EXACT_SUCCESS",
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "TRANSFORMATION DECISION" in report
+    assert "Prediction Source: Not Available" in report
+    assert "Decision Owner: UNRESOLVED" in report
+    assert "Program Validation: EXACT_SUCCESS" in report
+    assert "Prediction Accuracy: 1" in report
+
+
+def test_prediction_provenance_identifies_noncompiler_winning_program():
+    state = _report_state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"][
+        "semantic_to_transformation_compilation_report"
+    ] = {
+        "semantic_to_transformation_compilation_success": False,
+        "detected_intents": ["inside_outside"],
+        "compiled_program": {"steps": [], "step_count": 0},
+        "candidate_count": 0,
+        "failure_reason": "no_supported_semantic_delta",
+        "validation": {"accuracy": 0.0, "exact_match": False},
+    }
+    state["TRANSFORMATION_SYNTHESIS_REPORT"]["transformation_accuracy"] = 1.0
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Compiler Participation: FALSE" in report
+    assert "Prediction Source: transformation_synthesis" in report
+    assert "Decision Owner: Transformation Synthesis Engine" in report
+    assert "Selected Operation: construct_path" in report
+    assert "Program Validation: SUCCESS" in report
+
+
+def test_candidate_arena_reports_adaptive_reuse_single_source_dominance():
+    state = _report_state()
+    state.pop("TRANSFORMATION_SYNTHESIS_REPORT")
+    state["ADAPTIVE_REUSE_REPORT"] = {
+        "reuse_success_rate": 1.0,
+        "reused_programs": [
+            {
+                "steps": [
+                    {
+                        "operation": "inside_outside_reuse",
+                        "parameters": {},
+                    }
+                ],
+                "step_count": 1,
+            }
+        ],
+    }
+    state["PREDICTION_PROVENANCE_REPORT"] = {
+        "prediction_source": "adaptive_reuse",
+        "decision_owner": "Adaptive Reuse Layer",
+        "winning_candidate": "adaptive_reuse_decision",
+        "decision_confidence": 1.0,
+        "program_validation": "SUCCESS",
+        "prediction_accuracy": 1.0,
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE CANDIDATE ARENA" in report
+    assert "Arena State: SINGLE_SOURCE_DOMINANCE" in report
+    assert "Competitor Sources: adaptive_reuse" in report
+    assert "Winner Takes All Detected: TRUE" in report
+    assert "Dominance Source: adaptive_reuse" in report
+    assert "Missing Competition Reason: Only one candidate source entered the arena." in report
+
+
+def test_candidate_arena_reports_competitive_sources_when_multiple_enter():
+    state = _report_state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"]["ranked_candidates"] = [
+        {
+            "program": state["TRANSFORMATION_SYNTHESIS_REPORT"]["selected_program"],
+            "score": 0.91,
+            "prediction_accuracy": 1.0,
+        },
+        {
+            "program": {
+                "steps": [
+                    {
+                        "operation": "fill_region",
+                        "parameters": {},
+                    }
+                ],
+                "step_count": 1,
+            },
+            "score": 0.72,
+            "prediction_accuracy": 0.75,
+        },
+    ]
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Arena State: COMPETITIVE" in report
+    assert "semantic_to_transformation_compiler" in report
+    assert "transformation_synthesis" in report
+    assert "Winner Takes All Detected: FALSE" in report
+    assert "Final Report Rendering Time: 0.2 s" in report
+    assert "Report Generation Time:" not in report
     assert "Total Wall Time: 10 s" in report
-    assert "Active Compute Time: 8 s" in report
+    assert "Active Compute Time: 7.1 s" in report
     assert "Untracked Time: 0.5 s" in report
 
 
@@ -267,8 +494,14 @@ def test_minimal_report_keeps_top_timing_summary_without_full_stage_table():
 
     assert "TIMING SUMMARY" in report
     assert "Total Wall Time: 10 s" in report
-    assert "Active Compute Time: 8 s" in report
-    assert "Top Three Time Consumers" in report
+    assert "Active Compute Time: 7.1 s" in report
+    assert "Top Three Exclusive-Time Consumers" in report
+    assert "Overlap Detected:" in report
+    assert "Report Lifecycle Total Time:" in report
+    assert "Final Report Rendering Time: 0.2 s" in report
+    assert "Report Timing Status:" in report
+    assert "REPORTING TIMING SUMMARY" not in report
+    assert "Report Generation Time:" not in report
     assert "COGNITIVE STAGE TIMING" not in report
 
 
@@ -283,3 +516,5 @@ def test_diagnostic_report_exposes_timing_detail_fields():
     assert "inclusive=" in report
     assert "exclusive=" in report
     assert "source=ExecutionTimingState" in report
+    assert "Reporting Final Report Rendering Time" in report
+    assert "Legacy Reporting Field report_generation_time" in report
