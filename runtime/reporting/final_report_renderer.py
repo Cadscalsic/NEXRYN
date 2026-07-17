@@ -23,6 +23,17 @@ SECTION_ORDER = [
     "EXECUTION SUMMARY",
     "COGNITIVE OUTPUTS",
     "PROGRAM QUALITY",
+    "UNIFIED CONCEPT LIFECYCLE REPORT",
+    "PROGRAM GENERATION REPORT",
+    "PROGRAM BLUEPRINT INTELLIGENCE REPORT",
+    "COGNITIVE PROGRAM LIFECYCLE REPORT",
+    "COGNITIVE KNOWLEDGE DOMAINS REPORT",
+    "COGNITIVE DOMAIN INTELLIGENCE REPORT",
+    "COGNITIVE DOMAIN LIFECYCLE REPORT",
+    "COGNITIVE DOMAIN INTERACTION REPORT",
+    "COGNITIVE DOMAIN GOVERNANCE REPORT",
+    "COGNITIVE DOMAIN ECOSYSTEM REPORT",
+    "COGNITIVE DOMAIN CONSTITUTION REPORT",
     "SEMANTIC COMPILATION",
     "EXECUTABLE SEMANTIC COVERAGE",
     "TRANSFORMATION DECISION",
@@ -52,8 +63,8 @@ RAW_STRUCTURE_PATTERN = re.compile(
 class DeterministicFinalReportRenderer:
     """Single owner for final human-readable NEXRYN reports."""
 
-    def __init__(self, console_budget_chars: int = 30000):
-        self.console_budget_chars = int(console_budget_chars or 30000)
+    def __init__(self, console_budget_chars: int = 34000):
+        self.console_budget_chars = int(console_budget_chars or 34000)
         self.metrics = self._empty_metrics()
 
     def render(
@@ -289,6 +300,17 @@ class DeterministicFinalReportRenderer:
             self._render_execution_summary(canonical),
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
+            self._render_unified_concept_lifecycle(canonical),
+            self._render_program_generation(canonical),
+            self._render_program_blueprint_intelligence(canonical),
+            self._render_cognitive_program_lifecycle(canonical),
+            self._render_cognitive_knowledge_domains(canonical),
+            self._render_cognitive_domain_intelligence(canonical),
+            self._render_cognitive_domain_lifecycle(canonical),
+            self._render_cognitive_domain_interaction(canonical),
+            self._render_cognitive_domain_governance(canonical),
+            self._render_cognitive_domain_ecosystem(canonical),
+            self._render_cognitive_domain_constitution(canonical),
             self._render_semantic_compilation(canonical),
             self._render_executable_semantic_coverage(canonical),
             self._render_transformation_decision(canonical),
@@ -328,6 +350,17 @@ class DeterministicFinalReportRenderer:
             self._render_execution_summary(canonical),
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
+            self._render_unified_concept_lifecycle(canonical),
+            self._render_program_generation(canonical),
+            self._render_program_blueprint_intelligence(canonical),
+            self._render_cognitive_program_lifecycle(canonical),
+            self._render_cognitive_knowledge_domains(canonical),
+            self._render_cognitive_domain_intelligence(canonical),
+            self._render_cognitive_domain_lifecycle(canonical),
+            self._render_cognitive_domain_interaction(canonical),
+            self._render_cognitive_domain_governance(canonical),
+            self._render_cognitive_domain_ecosystem(canonical),
+            self._render_cognitive_domain_constitution(canonical),
             self._render_semantic_compilation(canonical),
             self._render_executable_semantic_coverage(canonical),
             self._render_transformation_decision(canonical),
@@ -410,6 +443,669 @@ class DeterministicFinalReportRenderer:
             f"Lowest Confidence: {self._field(canonical, 'lowest_confidence')}",
             f"Validation Distribution: {self._field(canonical, 'validation_distribution')}",
         ])
+
+    def _render_unified_concept_lifecycle(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "unified_concept_lifecycle_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        rows = summary.get("concept_lifecycles") or []
+        rows = rows if isinstance(rows, list) else []
+        lines = [
+            f"Concept Count: {self._value(summary.get('concept_count'))}",
+            "Canonical Source: "
+            f"{self._value(summary.get('canonical_concept_lifecycle_source'))}",
+            "Traceable From Discovery: "
+            f"{self._value(summary.get('concepts_traceable_from_discovery'))}",
+        ]
+        status_counts = summary.get("lifecycle_status_counts") or {}
+        if isinstance(status_counts, dict) and status_counts:
+            lines.append(
+                "Lifecycle Status Counts: "
+                + "; ".join(
+                    f"{self._value(key)}={self._value(value)}"
+                    for key, value in sorted(status_counts.items())
+                )
+            )
+        for row in rows[:12]:
+            if not isinstance(row, dict):
+                continue
+            missing = row.get("missing_requirements") or []
+            if not isinstance(missing, list):
+                missing = [missing]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Concept: {self._value(row.get('concept_name'))}",
+                f"Semantic Cluster: {self._value(row.get('semantic_cluster'))}",
+                f"Mental Model: {self._value(row.get('mental_model'))}",
+                f"Truth Candidate: {self._value(row.get('truth_candidate_state'))}",
+                f"Compiler Support: {self._value(row.get('compiler_supported'))}",
+                f"Execution Package: {self._value(row.get('execution_package_available'))}",
+                f"Candidate Generation State: {self._value(row.get('candidate_generated'))}",
+                "Execution State: "
+                f"attempted={self._value(row.get('execution_attempted'))}, "
+                f"success={self._value(row.get('execution_success'))}",
+                f"Prediction Contribution: {self._value(row.get('prediction_contribution'))}",
+                f"Semantic Memory Integration: {self._value(row.get('semantic_memory_integrated'))}",
+                f"Missing Requirements: {', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                f"Lifecycle Status: {self._value(row.get('lifecycle_status'))}",
+            ])
+        if len(rows) > 12:
+            lines.append(f"Additional Concepts Omitted: {len(rows) - 12}")
+        return self._section("UNIFIED CONCEPT LIFECYCLE REPORT", lines)
+
+    def _render_program_generation(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "program_generation_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        blueprints = summary.get("program_blueprints") or []
+        blueprints = blueprints if isinstance(blueprints, list) else []
+        missing = summary.get("missing_requirements") or []
+        missing = missing if isinstance(missing, list) else [missing]
+        lines = [
+            f"Generated Programs: {self._value(summary.get('generated_programs'))}",
+            f"Eligible Concepts: {self._value(summary.get('eligible_concepts'))}",
+            f"Generated Blueprints: {self._value(summary.get('generated_blueprints'))}",
+            f"Blocked Programs: {self._value(summary.get('blocked_programs'))}",
+            f"Missing Requirements: {', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+            f"Generation Success Rate: {self._percent(summary.get('generation_success_rate'))}",
+            f"Execution Agnostic: {self._value(summary.get('execution_agnostic'))}",
+            f"Competition Agnostic: {self._value(summary.get('competition_agnostic'))}",
+        ]
+        for blueprint in blueprints[:12]:
+            if not isinstance(blueprint, dict):
+                continue
+            blueprint_missing = blueprint.get("missing_requirements") or []
+            if not isinstance(blueprint_missing, list):
+                blueprint_missing = [blueprint_missing]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Program: {self._label(str(blueprint.get('program_type') or 'program'))}",
+                f"Concept: {self._value(blueprint.get('concept_name'))}",
+                f"Semantic Cluster: {self._value(blueprint.get('semantic_cluster'))}",
+                f"Generation Status: {self._value(blueprint.get('generation_status'))}",
+                f"Compiler Support: {self._value(blueprint.get('compiler_supported'))}",
+                f"Execution Package: {self._value(blueprint.get('execution_package_available'))}",
+                f"Executable: {self._value(blueprint.get('executable'))}",
+                f"Candidate Ready: {self._value(blueprint.get('candidate_ready'))}",
+                f"Blocking Reason: {self._value(blueprint.get('blocking_reason'))}",
+                "Missing Requirements: "
+                f"{', '.join(str(item) for item in blueprint_missing) if blueprint_missing else 'Not Available'}",
+            ])
+        if len(blueprints) > 12:
+            lines.append(f"Additional Blueprints Omitted: {len(blueprints) - 12}")
+        return self._section("PROGRAM GENERATION REPORT", lines)
+
+    def _render_program_blueprint_intelligence(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "program_blueprint_intelligence_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        programs = summary.get("program_blueprint_intelligence") or []
+        programs = programs if isinstance(programs, list) else []
+        readiness_counts = summary.get("execution_readiness_counts") or {}
+        readiness_counts = readiness_counts if isinstance(readiness_counts, dict) else {}
+        failures = summary.get("validation_failures") or []
+        failures = failures if isinstance(failures, list) else [failures]
+        lines = [
+            f"Program Intelligence Count: {self._value(summary.get('program_intelligence_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            f"Silent Capability Failures: {self._value(summary.get('capability_failures_silent'))}",
+            "Validation Failures: "
+            f"{', '.join(str(item) for item in failures) if failures else 'Not Available'}",
+        ]
+        if readiness_counts:
+            lines.append(
+                "Execution Readiness Counts: "
+                + "; ".join(
+                    f"{self._value(key)}={self._value(value)}"
+                    for key, value in sorted(readiness_counts.items())
+                )
+            )
+        for program in programs[:12]:
+            if not isinstance(program, dict):
+                continue
+            supported = program.get("supported_concepts") or []
+            supported = supported if isinstance(supported, list) else [supported]
+            required = program.get("required_packages") or []
+            required = required if isinstance(required, list) else [required]
+            missing = program.get("missing_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            limitations = program.get("capability_limitations") or []
+            limitations = limitations if isinstance(limitations, list) else [limitations]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Program: {self._label(str(program.get('program_type') or 'program'))}",
+                f"Semantic Family: {self._value(program.get('semantic_family'))}",
+                f"Mental Model: {self._value(program.get('mental_model'))}",
+                "Supported Concepts: "
+                f"{', '.join(str(item) for item in supported) if supported else 'Not Available'}",
+                f"Execution Readiness: {self._value(program.get('execution_ready'))}",
+                f"Candidate Readiness: {self._value(program.get('candidate_ready'))}",
+                f"Compiler Support: {self._value(program.get('compiler_supported'))}",
+                f"Validation Ready: {self._value(program.get('validation_ready'))}",
+                f"Execution Package: {self._value(program.get('execution_package_available'))}",
+                "Required Packages: "
+                f"{', '.join(str(item) for item in required) if required else 'Not Available'}",
+                "Missing Requirements: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                "Capability Limitations: "
+                f"{', '.join(str(item) for item in limitations) if limitations else 'Not Available'}",
+                f"Capability Status: {self._value(program.get('lifecycle_status'))}",
+            ])
+        if len(programs) > 12:
+            lines.append(f"Additional Program Intelligence Rows Omitted: {len(programs) - 12}")
+        return self._section("PROGRAM BLUEPRINT INTELLIGENCE REPORT", lines)
+
+    def _render_cognitive_program_lifecycle(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_program_lifecycle_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        registry = summary.get("program_registry") or []
+        registry = registry if isinstance(registry, list) else []
+        lines = [
+            f"Total Program Blueprints: {self._value(summary.get('total_program_blueprints'))}",
+            f"Operational Program Count: {self._value(summary.get('operational_program_count'))}",
+            f"Blocked Program Count: {self._value(summary.get('blocked_program_count'))}",
+            "Partially Operational Program Count: "
+            f"{self._value(summary.get('partially_operational_program_count'))}",
+            f"Silent Lifecycle Failures: {self._value(summary.get('silent_lifecycle_failures'))}",
+            "Readiness Distribution: "
+            f"{self._inline_map(summary.get('readiness_distribution'))}",
+            "Maturity Distribution: "
+            f"{self._inline_map(summary.get('maturity_distribution'))}",
+            "Semantic Family Coverage: "
+            f"{self._inline_map(summary.get('semantic_family_coverage'))}",
+        ]
+        for row in registry[:12]:
+            if not isinstance(row, dict):
+                continue
+            required = row.get("required_packages") or []
+            required = required if isinstance(required, list) else [required]
+            missing = row.get("missing_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            supported = row.get("supported_concepts") or []
+            supported = supported if isinstance(supported, list) else [supported]
+            failures = row.get("lifecycle_failures") or []
+            failure_bits = []
+            if isinstance(failures, list):
+                for failure in failures[:4]:
+                    if isinstance(failure, dict):
+                        failure_bits.append(
+                            f"{failure.get('failed_stage')}:{failure.get('reason')}"
+                        )
+            lines.extend([
+                "--------------------------------------------------",
+                f"Program: {self._label(str(row.get('program_type') or 'program'))}",
+                f"Semantic Family: {self._value(row.get('semantic_family'))}",
+                f"Lifecycle Status: {self._value(row.get('lifecycle_status'))}",
+                f"Maturity Level: {self._value(row.get('maturity_level'))}",
+                f"Execution Readiness: {self._value(row.get('execution_readiness'))}",
+                f"Candidate Readiness: {self._value(row.get('candidate_readiness'))}",
+                f"Operational Readiness: {self._value(row.get('operational_readiness'))}",
+                "Required Packages: "
+                f"{', '.join(str(item) for item in required) if required else 'Not Available'}",
+                "Missing Requirements: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                "Supported Concepts: "
+                f"{', '.join(str(item) for item in supported) if supported else 'Not Available'}",
+                f"Capability Profile: {self._compact_value(row.get('capability_profile'))}",
+                "Lifecycle Failures: "
+                f"{', '.join(failure_bits) if failure_bits else 'Not Available'}",
+            ])
+        if len(registry) > 12:
+            lines.append(f"Additional Program Lifecycle Rows Omitted: {len(registry) - 12}")
+        return self._section("COGNITIVE PROGRAM LIFECYCLE REPORT", lines)
+
+    def _render_cognitive_knowledge_domains(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_knowledge_domains_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        domains = summary.get("domains") or []
+        domains = domains if isinstance(domains, list) else []
+        lines = [
+            f"Domain Count: {self._value(summary.get('domain_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Domain Assignment Failures: "
+            f"{self._value(summary.get('silent_domain_assignment_failures'))}",
+            "Orphan Concepts: "
+            f"{self._value(summary.get('orphan_concepts'))}",
+            "Missing Domain Ownership: "
+            f"{self._value(summary.get('missing_domain_ownership'))}",
+        ]
+        invalid_family = summary.get("invalid_family_assignments") or []
+        invalid_model = summary.get("invalid_mental_model_assignments") or []
+        invalid_program = summary.get("invalid_program_blueprint_assignments") or []
+        if invalid_family:
+            lines.append(f"Invalid Family Assignments: {self._value(invalid_family)}")
+        if invalid_model:
+            lines.append(f"Invalid Mental Model Assignments: {self._value(invalid_model)}")
+        if invalid_program:
+            lines.append(f"Invalid Program Blueprint Assignments: {self._value(invalid_program)}")
+        for domain in domains[:15]:
+            if not isinstance(domain, dict):
+                continue
+            families = domain.get("semantic_families") or []
+            families = families if isinstance(families, list) else [families]
+            mental_models = domain.get("mental_models") or []
+            mental_models = mental_models if isinstance(mental_models, list) else [mental_models]
+            programs = domain.get("program_blueprints") or []
+            programs = programs if isinstance(programs, list) else [programs]
+            missing = domain.get("missing_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            operational = domain.get("operational_capabilities") or []
+            operational = operational if isinstance(operational, list) else [operational]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain: {self._value(domain.get('domain_name'))}",
+                "Semantic Families: "
+                f"{', '.join(str(item) for item in families) if families else 'Not Available'}",
+                "Mental Models: "
+                f"{', '.join(str(item) for item in mental_models) if mental_models else 'Not Available'}",
+                "Program Blueprints: "
+                f"{', '.join(str(item) for item in programs) if programs else 'Not Available'}",
+                f"Concept Count: {self._value(domain.get('concept_count'))}",
+                "Execution Package Count: "
+                f"{self._value(domain.get('execution_package_count'))}",
+                f"Domain Maturity: {self._value(domain.get('maturity_level'))}",
+                f"Operational Status: {self._value(domain.get('lifecycle_status'))}",
+                "Operational Capabilities: "
+                f"{', '.join(str(item) for item in operational) if operational else 'Not Available'}",
+                "Missing Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+            ])
+        if len(domains) > 15:
+            lines.append(f"Additional Cognitive Domains Omitted: {len(domains) - 15}")
+        return self._section("COGNITIVE KNOWLEDGE DOMAINS REPORT", lines)
+
+    def _render_cognitive_domain_intelligence(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_intelligence_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        domains = summary.get("domain_intelligence") or []
+        domains = domains if isinstance(domains, list) else []
+        active_domains = [
+            domain
+            for domain in domains
+            if isinstance(domain, dict)
+            and (
+                domain.get("semantic_concept_count")
+                or domain.get("mental_model_count")
+                or domain.get("program_blueprint_count")
+                or domain.get("execution_package_count")
+                or domain.get("operational_capability_count")
+                or domain.get("missing_capabilities")
+            )
+        ]
+        failures = summary.get("validation_failures") or []
+        failures = failures if isinstance(failures, list) else [failures]
+        lines = [
+            f"Domain Intelligence Count: {self._value(summary.get('domain_intelligence_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Domain Intelligence Failures: "
+            f"{self._value(summary.get('silent_domain_intelligence_failures'))}",
+            "Readiness Distribution: "
+            f"{self._inline_map(summary.get('readiness_distribution'))}",
+            f"Validation Failures: {self._value(failures)}",
+        ]
+        for domain in active_domains[:12]:
+            if not isinstance(domain, dict):
+                continue
+            semantic_capabilities = domain.get("semantic_capabilities") or []
+            semantic_capabilities = semantic_capabilities if isinstance(semantic_capabilities, list) else [semantic_capabilities]
+            operational = domain.get("operational_capabilities") or []
+            operational = operational if isinstance(operational, list) else [operational]
+            required_domains = domain.get("required_domains") or []
+            required_domains = required_domains if isinstance(required_domains, list) else [required_domains]
+            optional_domains = domain.get("optional_domains") or []
+            optional_domains = optional_domains if isinstance(optional_domains, list) else [optional_domains]
+            families = domain.get("semantic_families") or []
+            families = families if isinstance(families, list) else [families]
+            mental_models = domain.get("mental_models") or []
+            mental_models = mental_models if isinstance(mental_models, list) else [mental_models]
+            programs = domain.get("program_blueprints") or []
+            programs = programs if isinstance(programs, list) else [programs]
+            packages = domain.get("execution_packages") or []
+            packages = packages if isinstance(packages, list) else [packages]
+            missing = domain.get("missing_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            supported_operations = domain.get("supported_operations") or []
+            supported_operations = supported_operations if isinstance(supported_operations, list) else [supported_operations]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(domain.get('domain_name'))}",
+                "Semantic Capabilities: "
+                f"{', '.join(str(item) for item in semantic_capabilities) if semantic_capabilities else 'Not Available'}",
+                "Operational Capabilities: "
+                f"{', '.join(str(item) for item in operational) if operational else 'Not Available'}",
+                "Domain Dependencies: "
+                f"{', '.join(str(item) for item in required_domains) if required_domains else 'Independent'}",
+                "Optional Domains: "
+                f"{', '.join(str(item) for item in optional_domains) if optional_domains else 'Not Available'}",
+                "Semantic Families: "
+                f"{', '.join(str(item) for item in families) if families else 'Not Available'}",
+                "Mental Models: "
+                f"{', '.join(str(item) for item in mental_models) if mental_models else 'Not Available'}",
+                "Program Blueprints: "
+                f"{', '.join(str(item) for item in programs) if programs else 'Not Available'}",
+                "Execution Packages: "
+                f"{', '.join(str(item) for item in packages) if packages else 'Not Available'}",
+                "Supported Operations: "
+                f"{', '.join(str(item) for item in supported_operations) if supported_operations else 'Not Available'}",
+                "Missing Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                f"Domain Readiness: {self._value(domain.get('readiness_state'))}",
+                f"Maturity Level: {self._value(domain.get('maturity_level'))}",
+                "Coverage Counts: "
+                f"concepts={self._value(domain.get('semantic_concept_count'))}, "
+                f"families={self._value(domain.get('semantic_family_count'))}, "
+                f"mental_models={self._value(domain.get('mental_model_count'))}, "
+                f"programs={self._value(domain.get('program_blueprint_count'))}, "
+                f"packages={self._value(domain.get('execution_package_count'))}, "
+                f"operational={self._value(domain.get('operational_capability_count'))}",
+            ])
+        if len(active_domains) > 12:
+            lines.append(f"Additional Active Domain Intelligence Rows Omitted: {len(active_domains) - 12}")
+        inactive_count = len(domains) - len(active_domains)
+        if inactive_count > 0:
+            lines.append(f"Inactive Domain Intelligence Rows Omitted: {inactive_count}")
+        return self._section("COGNITIVE DOMAIN INTELLIGENCE REPORT", lines)
+
+    def _render_cognitive_domain_lifecycle(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_lifecycle_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        registry = summary.get("domain_registry") or []
+        registry = registry if isinstance(registry, list) else []
+        active_rows = [
+            row for row in registry
+            if isinstance(row, dict)
+            and (
+                row.get("semantic_capability_evolution")
+                or row.get("mental_model_evolution")
+                or row.get("program_blueprint_evolution")
+                or row.get("execution_capability_evolution")
+                or row.get("operational_capability_evolution")
+                or row.get("missing_capabilities")
+            )
+        ]
+        lines = [
+            f"Total Domains: {self._value(summary.get('total_domains'))}",
+            f"Operational Domains: {self._value(summary.get('operational_domains'))}",
+            "Partially Operational Domains: "
+            f"{self._value(summary.get('partially_operational_domains'))}",
+            f"Foundational Domains: {self._value(summary.get('foundational_domains'))}",
+            f"Advanced Domains: {self._value(summary.get('advanced_domains'))}",
+            "Domain Readiness Distribution: "
+            f"{self._inline_map(summary.get('domain_readiness_distribution'))}",
+            "Lifecycle Distribution: "
+            f"{self._inline_map(summary.get('lifecycle_distribution'))}",
+            "Capability Distribution: "
+            f"{self._inline_map(summary.get('capability_distribution'))}",
+            "Silent Domain Lifecycle Failures: "
+            f"{self._value(summary.get('silent_domain_lifecycle_failures'))}",
+        ]
+        for row in active_rows[:12]:
+            required = row.get("required_domains") or []
+            required = required if isinstance(required, list) else [required]
+            optional = row.get("optional_domains") or []
+            optional = optional if isinstance(optional, list) else [optional]
+            missing = row.get("missing_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            failures = row.get("lifecycle_failures") or []
+            failure_bits = []
+            if isinstance(failures, list):
+                for failure in failures[:4]:
+                    if isinstance(failure, dict):
+                        failure_bits.append(
+                            f"{failure.get('failed_lifecycle_stage')}:{failure.get('reason')}"
+                        )
+            inherited = row.get("inherited_capabilities") or {}
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(row.get('domain_name'))}",
+                f"Lifecycle Stage: {self._value(row.get('lifecycle_stage'))}",
+                f"Maturity Level: {self._value(row.get('maturity_level'))}",
+                "Readiness States: "
+                f"Semantic={self._value(row.get('semantic_readiness'))}; "
+                f"Mental Models={self._value(row.get('mental_model_readiness'))}; "
+                f"Programs={self._value(row.get('program_readiness'))}; "
+                f"Execution={self._value(row.get('execution_readiness'))}; "
+                f"Candidate={self._value(row.get('candidate_readiness'))}; "
+                f"Operational={self._value(row.get('operational_readiness'))}",
+                "Dependencies: "
+                f"{', '.join(str(item) for item in required) if required else 'Independent'}",
+                "Optional Dependencies: "
+                f"{', '.join(str(item) for item in optional) if optional else 'Not Available'}",
+                "Inherited Capabilities: "
+                f"{self._inline_map(inherited)}",
+                "Missing Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                "Lifecycle Failures: "
+                f"{', '.join(failure_bits) if failure_bits else 'Not Available'}",
+                f"Operational Status: {self._value(row.get('operational_status'))}",
+            ])
+        if len(active_rows) > 12:
+            lines.append(f"Additional Active Domain Lifecycle Rows Omitted: {len(active_rows) - 12}")
+        inactive_count = len(registry) - len(active_rows)
+        if inactive_count > 0:
+            lines.append(f"Inactive Domain Lifecycle Rows Omitted: {inactive_count}")
+        return self._section("COGNITIVE DOMAIN LIFECYCLE REPORT", lines)
+
+    def _render_cognitive_domain_interaction(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_interaction_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        reports = summary.get("domain_interaction_reports") or []
+        reports = reports if isinstance(reports, list) else []
+        active_reports = [
+            row for row in reports
+            if isinstance(row, dict)
+            and (
+                row.get("collaborating_domains")
+                or row.get("shared_capabilities")
+                or row.get("private_capabilities")
+                or row.get("operational_capability_composition")
+                or row.get("missing_collaborative_capabilities")
+            )
+        ]
+        compositions = summary.get("operational_capability_compositions") or []
+        compositions = compositions if isinstance(compositions, list) else []
+        lines = [
+            f"Domain Interactions: {self._value(summary.get('domain_interaction_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Interaction Failures: "
+            f"{self._value(summary.get('silent_domain_interaction_failures'))}",
+            "Dependency Graph: "
+            f"{self._inline_map(summary.get('dependency_graph'))}",
+        ]
+        for composition in compositions[:3]:
+            if isinstance(composition, dict):
+                lines.append(
+                    "Operational Capability Composition: "
+                    f"{self._value(composition.get('composition_name'))} "
+                    f"[{self._value(composition.get('composition_status'))}]"
+                )
+        for row in active_reports[:6]:
+            collaborators = row.get("collaborating_domains") or []
+            collaborators = collaborators if isinstance(collaborators, list) else [collaborators]
+            shared = row.get("shared_capabilities") or []
+            shared = shared if isinstance(shared, list) else [shared]
+            private = row.get("private_capabilities") or []
+            private = private if isinstance(private, list) else [private]
+            dependencies = row.get("dependency_relationships") or []
+            dependencies = dependencies if isinstance(dependencies, list) else [dependencies]
+            compositions_for_domain = row.get("operational_capability_composition") or []
+            compositions_for_domain = compositions_for_domain if isinstance(compositions_for_domain, list) else [compositions_for_domain]
+            missing = row.get("missing_collaborative_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(row.get('domain_name'))}",
+                "Collaborating Domains: "
+                f"{', '.join(str(item) for item in collaborators) if collaborators else 'Not Available'}",
+                "Shared Capabilities: "
+                f"{', '.join(str(item) for item in shared) if shared else 'Not Available'}",
+                "Private Capabilities: "
+                f"{', '.join(str(item) for item in private) if private else 'Not Available'}",
+                "Dependency Relationships: "
+                f"{', '.join(str(item) for item in dependencies) if dependencies else 'Independent'}",
+                f"Capability Composition Status: {self._value(row.get('capability_composition_status'))}",
+                "Operational Capability Composition: "
+                f"{', '.join(str(item) for item in compositions_for_domain) if compositions_for_domain else 'Not Available'}",
+                "Missing Collaborative Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                f"Collaboration Maturity: {self._value(row.get('collaboration_maturity'))}",
+                f"Capability Sharing Maturity: {self._value(row.get('capability_sharing_maturity'))}",
+                f"Dependency Maturity: {self._value(row.get('dependency_maturity'))}",
+                f"Operational Composition Maturity: {self._value(row.get('operational_composition_maturity'))}",
+            ])
+        if len(active_reports) > 6:
+            lines.append(f"Additional Active Domain Interaction Rows Omitted: {len(active_reports) - 6}")
+        inactive = len(reports) - len(active_reports)
+        if inactive > 0:
+            lines.append(f"Inactive Domain Interaction Rows Omitted: {inactive}")
+        return self._section("COGNITIVE DOMAIN INTERACTION REPORT", lines)
+
+    def _render_cognitive_domain_governance(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_governance_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        rows = summary.get("domain_governance") or []
+        rows = rows if isinstance(rows, list) else []
+        active_rows = [
+            row for row in rows
+            if isinstance(row, dict)
+            and (
+                row.get("capability_conflicts")
+                or row.get("boundary_violations")
+            )
+        ]
+        if not active_rows:
+            active_rows = [row for row in rows if isinstance(row, dict)][:3]
+        lines = [
+            f"Domain Governance Count: {self._value(summary.get('domain_governance_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Governance Failures: "
+            f"{self._value(summary.get('silent_domain_governance_failures'))}",
+            f"Capability Conflicts: {self._value(summary.get('capability_conflicts'))}",
+            f"Boundary Violations: {self._value(summary.get('boundary_violations'))}",
+            f"Migration Events: {self._compact_value(summary.get('migration_history'))}",
+        ]
+        for row in active_rows[:4]:
+            conflicts = row.get("capability_conflicts") or []
+            conflicts = conflicts if isinstance(conflicts, list) else [conflicts]
+            migrations = row.get("migration_history") or []
+            migrations = migrations if isinstance(migrations, list) else [migrations]
+            violations = row.get("boundary_violations") or []
+            violations = violations if isinstance(violations, list) else [violations]
+            missing = row.get("missing_governance_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            migration_bits = []
+            for event in migrations[:3]:
+                if isinstance(event, dict):
+                    migration_bits.append(
+                        f"{event.get('capability')}:{event.get('previous_owner')}->{event.get('new_owner')}"
+                    )
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(row.get('domain_name'))}",
+                f"Governance Status: {self._value(row.get('governance_status'))}",
+                f"Semantic Integrity: {self._percent(row.get('semantic_coherence_score'))}",
+                f"Ownership Integrity: {self._percent(row.get('ownership_consistency_score'))}",
+                f"Dependency Integrity: {self._percent(row.get('dependency_consistency_score'))}",
+                f"Domain Health Score: {self._percent(row.get('governance_integrity_score'))}",
+                f"Capability Conflicts: {self._compact_value(conflicts) if conflicts else 'NONE'}",
+                f"Migration Events: {', '.join(migration_bits) if migration_bits else 'NONE'}",
+                f"Boundary Violations: {self._compact_value(violations) if violations else 'NONE'}",
+                "Missing Governance Requirements: "
+                f"{', '.join(str(item) for item in missing) if missing else 'NONE'}",
+            ])
+        if len(active_rows) > 4:
+            lines.append(f"Additional Active Domain Governance Rows Omitted: {len(active_rows) - 4}")
+        inactive = len(rows) - len(active_rows)
+        if inactive > 0:
+            lines.append(f"Inactive Domain Governance Rows Omitted: {inactive}")
+        return self._section("COGNITIVE DOMAIN GOVERNANCE REPORT", lines)
+
+    def _render_cognitive_domain_ecosystem(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+
+        summary = self._binding_value(canonical, "cognitive_domain_ecosystem_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        ecosystem = summary.get("ecosystem") or {}
+        ecosystem = ecosystem if isinstance(ecosystem, dict) else {}
+        coverage = summary.get("global_cognitive_coverage") or {}
+        coverage = coverage if isinstance(coverage, dict) else {}
+        health = summary.get("ecosystem_health_metrics") or {}
+        health = health if isinstance(health, dict) else {}
+        lines = [
+            f"Total Domains: {self._value(coverage.get('domains'))}",
+            f"Operational Domains: {self._value(coverage.get('operational_domains'))}",
+            f"Total Semantic Concepts: {self._value(coverage.get('semantic_concepts'))}",
+            f"Total Mental Models: {self._value(coverage.get('mental_models'))}",
+            f"Total Program Blueprints: {self._value(coverage.get('program_blueprints'))}",
+            f"Total Execution Packages: {self._value(coverage.get('execution_packages'))}",
+            f"Total Operational Capabilities: {self._value(coverage.get('operational_capabilities'))}",
+            f"Candidate Ready Programs: {self._value(coverage.get('candidate_ready_programs'))}",
+            f"Capability Coverage: {self._percent(health.get('capability_coverage_score'))}",
+            f"Ecosystem Health: {self._percent(health.get('architectural_coherence_score'))}",
+            f"Collaboration Score: {self._percent(health.get('collaboration_score'))}",
+            f"Operational Readiness: {self._percent(health.get('operational_readiness_score'))}",
+            f"Architectural Coherence: {self._percent(health.get('architectural_coherence_score'))}",
+            f"Ecosystem Maturity: {self._value(summary.get('ecosystem_maturity'))}",
+            f"Domain Distribution: {self._inline_map(summary.get('domain_distribution'))}",
+            f"Covered Domains: {self._value(ecosystem.get('covered_domains'))}",
+            f"Partially Covered Domains: {self._value(ecosystem.get('partially_covered_domains'))}",
+            f"Missing Domains: {self._value(ecosystem.get('missing_domains'))}",
+            f"Missing Capabilities: {self._value(summary.get('missing_ecosystem_capabilities'))}",
+            f"Cognitive Bottlenecks: {self._compact_value(summary.get('cognitive_bottlenecks'))}",
+            f"Cognitive Imbalances: {self._compact_value(summary.get('cognitive_imbalances'))}",
+            f"Dependency Graph Summary: {self._compact_value(summary.get('dependency_graph'))}",
+            f"Collaboration Summary: {self._compact_value(summary.get('collaboration_graph'))}",
+            f"Operational Capability Graph: {self._compact_value(summary.get('operational_capability_graph'))}",
+            f"Silent Ecosystem Failures: {self._value(summary.get('silent_ecosystem_failures'))}",
+        ]
+        return self._section("COGNITIVE DOMAIN ECOSYSTEM REPORT", lines)
+
+    def _render_cognitive_domain_constitution(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+
+        summary = self._binding_value(canonical, "cognitive_domain_constitution_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        metrics = summary.get("constitutional_health_metrics") or {}
+        metrics = metrics if isinstance(metrics, dict) else {}
+        violations = summary.get("constitutional_violations") or []
+        health = summary.get("domain_constitutional_health") or []
+        validations = summary.get("constitutional_validations") or {}
+        lines = [
+            f"Constitutional Status: {self._value(summary.get('constitutional_status'))}",
+            f"Constitutional Integrity: {self._percent(metrics.get('constitutional_integrity_score'))}",
+            f"Architectural Integrity: {self._percent(metrics.get('architectural_integrity_score'))}",
+            f"Semantic Integrity: {self._percent(metrics.get('semantic_integrity_score'))}",
+            f"Governance Integrity: {self._percent(metrics.get('governance_integrity_score'))}",
+            f"Collaboration Integrity: {self._percent(metrics.get('collaboration_integrity_score'))}",
+            f"Ecosystem Coherence: {self._percent(metrics.get('ecosystem_coherence_score'))}",
+            f"Constitutional Compliance: {self._percent(metrics.get('constitutional_compliance_score'))}",
+            f"Governance Compliance: {self._value(summary.get('governance_compliance'))}",
+            f"Ownership Compliance: {self._value(summary.get('ownership_compliance'))}",
+            f"Lifecycle Compliance: {self._value(summary.get('lifecycle_compliance'))}",
+            f"Constitutional Invariants: {self._value(summary.get('architectural_invariants'))}",
+            f"Constitutional Validations: {self._inline_map(validations)}",
+            f"Constitutional Violations: {self._compact_value(violations)}",
+            f"Domain Constitutional Health: {self._compact_value(health)}",
+            f"Silent Constitutional Failures: {self._value(summary.get('silent_constitutional_failures'))}",
+        ]
+        return self._section("COGNITIVE DOMAIN CONSTITUTION REPORT", lines)
 
     def _render_semantic_compilation(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
@@ -520,10 +1216,13 @@ class DeterministicFinalReportRenderer:
         missing_clusters = summary.get("missing_cluster_counts") or {}
         lines = [
             f"Generated Concepts: {self._value(summary.get('generated_concepts'))}",
+            f"Measured Concepts: {self._value(summary.get('measured_concepts'))}",
+            f"Coverage State: {self._value(summary.get('coverage_state'))}",
             f"Executable Concepts: {self._value(summary.get('executable_concepts'))}",
             f"Unsupported Concepts: {self._value(summary.get('unsupported_concepts'))}",
             f"Coverage: {self._percent(summary.get('executable_semantic_coverage'))}",
             f"Coverage Status: {self._value(summary.get('coverage_status'))}",
+            f"Measurement Blocker: {self._value(summary.get('measurement_blocker'))}",
             f"Highest Missing Semantic Cluster: {self._value(summary.get('highest_missing_semantic_cluster'))}",
             f"Supported Operations: {', '.join(str(item) for item in supported) if supported else 'Not Available'}",
             f"Unsupported Operations: {', '.join(str(item) for item in unsupported[:12]) if unsupported else 'Not Available'}",
@@ -1253,6 +1952,14 @@ class DeterministicFinalReportRenderer:
                 return "0"
             return f"{len(value)} fields"
         return self._value(value)
+
+    def _inline_map(self, value: Any) -> str:
+        if not isinstance(value, dict) or not value:
+            return "Not Available"
+        return "; ".join(
+            f"{self._value(key)}={self._value(item)}"
+            for key, item in sorted(value.items())
+        )
 
     def _label(self, key: str) -> str:
         return key.replace("_", " ").title()

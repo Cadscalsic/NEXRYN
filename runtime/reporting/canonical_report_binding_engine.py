@@ -6,6 +6,23 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Iterable
 
+from core.concept_lifecycle.unified_concept_lifecycle import (
+    unified_concept_lifecycle_builder,
+)
+from runtime.program_generation import (
+    cognitive_program_lifecycle_registry,
+    program_blueprint_intelligence_layer,
+    program_generation_layer,
+)
+from runtime.knowledge import (
+    cognitive_domain_constitution_registry,
+    cognitive_domain_ecosystem_registry,
+    cognitive_domain_governance_registry,
+    cognitive_domain_intelligence_layer,
+    cognitive_domain_interaction_registry,
+    cognitive_domain_lifecycle_registry,
+    cognitive_knowledge_domain_registry,
+)
 from runtime.timing import hierarchical_timing_reconciliation_engine
 from runtime.reporting.report_timing_semantics import report_timing_semantic_engine
 
@@ -124,6 +141,17 @@ class CanonicalReportBindingEngine:
         "representation_metrics",
         "semantic_compilation_report",
         "executable_semantic_coverage_report",
+        "unified_concept_lifecycle_report",
+        "program_generation_report",
+        "program_blueprint_intelligence_report",
+        "cognitive_program_lifecycle_report",
+        "cognitive_knowledge_domains_report",
+        "cognitive_domain_intelligence_report",
+        "cognitive_domain_lifecycle_report",
+        "cognitive_domain_interaction_report",
+        "cognitive_domain_governance_report",
+        "cognitive_domain_ecosystem_report",
+        "cognitive_domain_constitution_report",
     }
 
     def __init__(
@@ -294,6 +322,50 @@ class CanonicalReportBindingEngine:
             "executable_semantic_coverage_report": CanonicalSource(
                 "executable_semantic_coverage_report",
                 self._build_executable_semantic_coverage_visibility(report_state, performance),
+            ),
+            "unified_concept_lifecycle_report": CanonicalSource(
+                "unified_concept_lifecycle_report",
+                self._build_unified_concept_lifecycle_visibility(report_state, performance),
+            ),
+            "program_generation_report": CanonicalSource(
+                "program_generation_report",
+                self._build_program_generation_visibility(report_state, performance),
+            ),
+            "program_blueprint_intelligence_report": CanonicalSource(
+                "program_blueprint_intelligence_report",
+                self._build_program_blueprint_intelligence_visibility(report_state, performance),
+            ),
+            "cognitive_program_lifecycle_report": CanonicalSource(
+                "cognitive_program_lifecycle_report",
+                self._build_cognitive_program_lifecycle_visibility(report_state, performance),
+            ),
+            "cognitive_knowledge_domains_report": CanonicalSource(
+                "cognitive_knowledge_domains_report",
+                self._build_cognitive_knowledge_domains_visibility(report_state, performance),
+            ),
+            "cognitive_domain_intelligence_report": CanonicalSource(
+                "cognitive_domain_intelligence_report",
+                self._build_cognitive_domain_intelligence_visibility(report_state, performance),
+            ),
+            "cognitive_domain_lifecycle_report": CanonicalSource(
+                "cognitive_domain_lifecycle_report",
+                self._build_cognitive_domain_lifecycle_visibility(report_state, performance),
+            ),
+            "cognitive_domain_interaction_report": CanonicalSource(
+                "cognitive_domain_interaction_report",
+                self._build_cognitive_domain_interaction_visibility(report_state, performance),
+            ),
+            "cognitive_domain_governance_report": CanonicalSource(
+                "cognitive_domain_governance_report",
+                self._build_cognitive_domain_governance_visibility(report_state, performance),
+            ),
+            "cognitive_domain_ecosystem_report": CanonicalSource(
+                "cognitive_domain_ecosystem_report",
+                self._build_cognitive_domain_ecosystem_visibility(report_state, performance),
+            ),
+            "cognitive_domain_constitution_report": CanonicalSource(
+                "cognitive_domain_constitution_report",
+                self._build_cognitive_domain_constitution_visibility(report_state, performance),
             ),
             "prediction_provenance_report": CanonicalSource(
                 "prediction_provenance_report",
@@ -783,6 +855,28 @@ class CanonicalReportBindingEngine:
             bind("semantic_compilation_diagnostics", "Semantic Compilation", "semantic_compilation_report", ("semantic_compilation_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("executable_semantic_coverage_summary", "Executable Semantic Coverage", "executable_semantic_coverage_report", ("executable_semantic_coverage_summary",), "summary", visibility=normal),
             bind("executable_semantic_coverage_diagnostics", "Executable Semantic Coverage", "executable_semantic_coverage_report", ("executable_semantic_coverage_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("unified_concept_lifecycle_summary", "Unified Concept Lifecycle", "unified_concept_lifecycle_report", ("unified_concept_lifecycle_summary",), "summary", visibility=normal),
+            bind("unified_concept_lifecycle_diagnostics", "Unified Concept Lifecycle", "unified_concept_lifecycle_report", ("unified_concept_lifecycle_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("program_generation_summary", "Program Generation", "program_generation_report", ("program_generation_summary",), "summary", visibility=normal),
+            bind("program_generation_diagnostics", "Program Generation", "program_generation_report", ("program_generation_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("program_blueprint_intelligence_summary", "Program Blueprint Intelligence", "program_blueprint_intelligence_report", ("program_blueprint_intelligence_summary",), "summary", visibility=normal),
+            bind("program_blueprint_intelligence_diagnostics", "Program Blueprint Intelligence", "program_blueprint_intelligence_report", ("program_blueprint_intelligence_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_program_lifecycle_summary", "Cognitive Program Lifecycle", "cognitive_program_lifecycle_report", ("cognitive_program_lifecycle_summary",), "summary", visibility=normal),
+            bind("cognitive_program_lifecycle_diagnostics", "Cognitive Program Lifecycle", "cognitive_program_lifecycle_report", ("cognitive_program_lifecycle_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_knowledge_domains_summary", "Cognitive Knowledge Domains", "cognitive_knowledge_domains_report", ("cognitive_knowledge_domains_summary",), "summary", visibility=normal),
+            bind("cognitive_knowledge_domains_diagnostics", "Cognitive Knowledge Domains", "cognitive_knowledge_domains_report", ("cognitive_knowledge_domains_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_domain_intelligence_summary", "Cognitive Domain Intelligence", "cognitive_domain_intelligence_report", ("cognitive_domain_intelligence_summary",), "summary", visibility=normal),
+            bind("cognitive_domain_intelligence_diagnostics", "Cognitive Domain Intelligence", "cognitive_domain_intelligence_report", ("cognitive_domain_intelligence_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_domain_lifecycle_summary", "Cognitive Domain Lifecycle", "cognitive_domain_lifecycle_report", ("cognitive_domain_lifecycle_summary",), "summary", visibility=normal),
+            bind("cognitive_domain_lifecycle_diagnostics", "Cognitive Domain Lifecycle", "cognitive_domain_lifecycle_report", ("cognitive_domain_lifecycle_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_domain_interaction_summary", "Cognitive Domain Interaction", "cognitive_domain_interaction_report", ("cognitive_domain_interaction_summary",), "summary", visibility=normal),
+            bind("cognitive_domain_interaction_diagnostics", "Cognitive Domain Interaction", "cognitive_domain_interaction_report", ("cognitive_domain_interaction_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_domain_governance_summary", "Cognitive Domain Governance", "cognitive_domain_governance_report", ("cognitive_domain_governance_summary",), "summary", visibility=normal),
+            bind("cognitive_domain_governance_diagnostics", "Cognitive Domain Governance", "cognitive_domain_governance_report", ("cognitive_domain_governance_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_domain_ecosystem_summary", "Cognitive Domain Ecosystem", "cognitive_domain_ecosystem_report", ("cognitive_domain_ecosystem_summary",), "summary", visibility=normal),
+            bind("cognitive_domain_ecosystem_diagnostics", "Cognitive Domain Ecosystem", "cognitive_domain_ecosystem_report", ("cognitive_domain_ecosystem_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_domain_constitution_summary", "Cognitive Domain Constitution", "cognitive_domain_constitution_report", ("cognitive_domain_constitution_summary",), "summary", visibility=normal),
+            bind("cognitive_domain_constitution_diagnostics", "Cognitive Domain Constitution", "cognitive_domain_constitution_report", ("cognitive_domain_constitution_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("prediction_provenance_summary", "Transformation Decision Runtime", "prediction_provenance_report", ("prediction_provenance_summary",), "summary", visibility=normal),
             bind("prediction_provenance_diagnostics", "Transformation Decision Runtime", "prediction_provenance_report", ("prediction_provenance_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("candidate_proposal_summary", "Candidate Proposal Runtime", "candidate_proposal_report", ("candidate_proposal_summary",), "summary", visibility=normal),
@@ -955,6 +1049,493 @@ class CanonicalReportBindingEngine:
             **summary,
         }
 
+    def _build_unified_concept_lifecycle_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "UNIFIED_CONCEPT_LIFECYCLE_REPORT", "unified_concept_lifecycle_report"),
+            self._first_dict(performance, "UNIFIED_CONCEPT_LIFECYCLE_REPORT", "unified_concept_lifecycle_report"),
+        )
+        built = unified_concept_lifecycle_builder.build(
+            report_state,
+            performance,
+        )
+        explicit_program_generation = self._merge_dicts(
+            self._first_dict(report_state, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
+            self._first_dict(performance, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
+        )
+        if not explicit_program_generation:
+            explicit_program_generation = program_generation_layer.generate(built)
+        lifecycle_context = self._merge_dicts(
+            report_state,
+            {"program_generation_report": explicit_program_generation},
+        )
+        built = unified_concept_lifecycle_builder.build(
+            lifecycle_context,
+            performance,
+        )
+        lifecycle = self._merge_dicts(built, explicit)
+        rows = lifecycle.get("concept_lifecycles", [])
+        rows = rows if isinstance(rows, list) else []
+        status_counts = lifecycle.get("lifecycle_status_counts", {})
+        status_counts = status_counts if isinstance(status_counts, dict) else {}
+        summary = {
+            "concept_count": int(lifecycle.get("concept_count") or len(rows)),
+            "concept_lifecycles": rows,
+            "lifecycle_status_counts": status_counts,
+            "canonical_concept_lifecycle_source": bool(
+                lifecycle.get("canonical_concept_lifecycle_source", True)
+            ),
+            "concepts_traceable_from_discovery": bool(
+                lifecycle.get("concepts_traceable_from_discovery", True)
+            ),
+        }
+        return {
+            "unified_concept_lifecycle_summary": summary,
+            "unified_concept_lifecycle_diagnostics": lifecycle,
+            **summary,
+        }
+
+    def _build_program_generation_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
+            self._first_dict(performance, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            lifecycle = unified_concept_lifecycle_builder.build(
+                report_state,
+                performance,
+            )
+            report = program_generation_layer.generate(lifecycle)
+        blueprints = report.get("program_blueprints", [])
+        blueprints = blueprints if isinstance(blueprints, list) else []
+        summary = {
+            "generated_programs": int(report.get("generated_programs") or 0),
+            "eligible_concepts": int(report.get("eligible_concepts") or 0),
+            "generated_blueprints": int(report.get("generated_blueprints") or 0),
+            "blocked_programs": int(report.get("blocked_programs") or 0),
+            "missing_requirements": report.get("missing_requirements", []),
+            "generation_success_rate": report.get("generation_success_rate", 0.0),
+            "program_blueprints": blueprints,
+            "execution_agnostic": bool(report.get("execution_agnostic", True)),
+            "competition_agnostic": bool(report.get("competition_agnostic", True)),
+        }
+        return {
+            "program_generation_summary": summary,
+            "program_generation_diagnostics": report,
+            **summary,
+        }
+
+    def _build_program_blueprint_intelligence_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT", "program_blueprint_intelligence_report"),
+            self._first_dict(performance, "PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT", "program_blueprint_intelligence_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            program_generation = self._build_program_generation_visibility(
+                report_state,
+                performance,
+            )
+            report = program_blueprint_intelligence_layer.analyze(
+                program_generation,
+            )
+        intelligence = report.get("program_blueprint_intelligence", [])
+        intelligence = intelligence if isinstance(intelligence, list) else []
+        validation = report.get("validation", {})
+        validation = validation if isinstance(validation, dict) else {}
+        summary = {
+            "program_intelligence_count": int(report.get("program_intelligence_count") or len(intelligence)),
+            "program_blueprint_intelligence": intelligence,
+            "execution_readiness_counts": report.get("execution_readiness_counts", {}),
+            "validation_success": bool(validation.get("validation_success", True)),
+            "validation_failures": validation.get("validation_failures", []),
+            "capability_failures_silent": bool(report.get("capability_failures_silent", False)),
+        }
+        return {
+            "program_blueprint_intelligence_summary": summary,
+            "program_blueprint_intelligence_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_program_lifecycle_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_PROGRAM_LIFECYCLE_REPORT", "cognitive_program_lifecycle_report"),
+            self._first_dict(performance, "COGNITIVE_PROGRAM_LIFECYCLE_REPORT", "cognitive_program_lifecycle_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            intelligence = self._build_program_blueprint_intelligence_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_program_lifecycle_registry.build(
+                intelligence,
+            )
+        registry = report.get("program_registry", [])
+        registry = registry if isinstance(registry, list) else []
+        summary = {
+            "total_program_blueprints": int(report.get("total_program_blueprints") or len(registry)),
+            "program_registry": registry,
+            "readiness_distribution": report.get("readiness_distribution", {}),
+            "execution_readiness_distribution": report.get("execution_readiness_distribution", {}),
+            "candidate_readiness_distribution": report.get("candidate_readiness_distribution", {}),
+            "maturity_distribution": report.get("maturity_distribution", {}),
+            "semantic_family_coverage": report.get("semantic_family_coverage", {}),
+            "operational_program_count": int(report.get("operational_program_count") or 0),
+            "blocked_program_count": int(report.get("blocked_program_count") or 0),
+            "partially_operational_program_count": int(report.get("partially_operational_program_count") or 0),
+            "silent_lifecycle_failures": bool(report.get("silent_lifecycle_failures", False)),
+        }
+        return {
+            "cognitive_program_lifecycle_summary": summary,
+            "cognitive_program_lifecycle_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_knowledge_domains_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_KNOWLEDGE_DOMAINS_REPORT", "cognitive_knowledge_domains_report"),
+            self._first_dict(performance, "COGNITIVE_KNOWLEDGE_DOMAINS_REPORT", "cognitive_knowledge_domains_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            concept_lifecycle = self._build_unified_concept_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+            program_intelligence = self._build_program_blueprint_intelligence_visibility(
+                report_state,
+                performance,
+            )
+            program_lifecycle = self._build_cognitive_program_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_knowledge_domain_registry.build(
+                concept_lifecycle_report=concept_lifecycle,
+                program_blueprint_intelligence_report=program_intelligence,
+                cognitive_program_lifecycle_report=program_lifecycle,
+            )
+        domains = report.get("domains", [])
+        domains = domains if isinstance(domains, list) else []
+        summary = {
+            "domain_count": int(report.get("domain_count") or len(domains)),
+            "domains": domains,
+            "orphan_concepts": report.get("orphan_concepts", []),
+            "invalid_family_assignments": report.get("invalid_family_assignments", []),
+            "invalid_mental_model_assignments": report.get("invalid_mental_model_assignments", []),
+            "invalid_program_blueprint_assignments": report.get("invalid_program_blueprint_assignments", []),
+            "missing_domain_ownership": report.get("missing_domain_ownership", []),
+            "validation_success": bool(report.get("validation_success", True)),
+            "silent_domain_assignment_failures": bool(report.get("silent_domain_assignment_failures", False)),
+        }
+        return {
+            "cognitive_knowledge_domains_summary": summary,
+            "cognitive_knowledge_domains_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_domain_intelligence_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_INTELLIGENCE_REPORT", "cognitive_domain_intelligence_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_INTELLIGENCE_REPORT", "cognitive_domain_intelligence_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            domains = self._build_cognitive_knowledge_domains_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_domain_intelligence_layer.analyze(domains)
+        intelligence = report.get("domain_intelligence", [])
+        intelligence = intelligence if isinstance(intelligence, list) else []
+        validation = report.get("validation", {})
+        validation = validation if isinstance(validation, dict) else {}
+        summary = {
+            "domain_intelligence_count": int(report.get("domain_intelligence_count") or len(intelligence)),
+            "domain_intelligence": intelligence,
+            "readiness_distribution": report.get("readiness_distribution", {}),
+            "validation_success": bool(report.get("validation_success", validation.get("validation_success", True))),
+            "validation_failures": validation.get("validation_failures", []),
+            "invalid_concept_assignments": validation.get("invalid_concept_assignments", []),
+            "invalid_mental_model_assignments": validation.get("invalid_mental_model_assignments", []),
+            "invalid_program_assignments": validation.get("invalid_program_assignments", []),
+            "invalid_domain_dependencies": validation.get("invalid_domain_dependencies", []),
+            "semantic_family_inconsistencies": validation.get("semantic_family_inconsistencies", []),
+            "domain_pollution": validation.get("domain_pollution", []),
+            "silent_domain_intelligence_failures": bool(report.get("silent_domain_intelligence_failures", False)),
+        }
+        return {
+            "cognitive_domain_intelligence_summary": summary,
+            "cognitive_domain_intelligence_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_domain_lifecycle_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_LIFECYCLE_REPORT", "cognitive_domain_lifecycle_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_LIFECYCLE_REPORT", "cognitive_domain_lifecycle_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            intelligence = self._build_cognitive_domain_intelligence_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_domain_lifecycle_registry.build(intelligence)
+        registry = report.get("domain_registry", [])
+        registry = registry if isinstance(registry, list) else []
+        summary = {
+            "total_domains": int(report.get("total_domains") or len(registry)),
+            "domain_registry": registry,
+            "operational_domains": int(report.get("operational_domains") or 0),
+            "partially_operational_domains": int(report.get("partially_operational_domains") or 0),
+            "foundational_domains": int(report.get("foundational_domains") or 0),
+            "advanced_domains": int(report.get("advanced_domains") or 0),
+            "domain_readiness_distribution": report.get("domain_readiness_distribution", {}),
+            "lifecycle_distribution": report.get("lifecycle_distribution", {}),
+            "capability_distribution": report.get("capability_distribution", {}),
+            "silent_domain_lifecycle_failures": bool(report.get("silent_domain_lifecycle_failures", False)),
+        }
+        return {
+            "cognitive_domain_lifecycle_summary": summary,
+            "cognitive_domain_lifecycle_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_domain_interaction_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_INTERACTION_REPORT", "cognitive_domain_interaction_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_INTERACTION_REPORT", "cognitive_domain_interaction_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            lifecycle = self._build_cognitive_domain_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_domain_interaction_registry.build(lifecycle)
+        domain_reports = report.get("domain_interaction_reports", [])
+        domain_reports = domain_reports if isinstance(domain_reports, list) else []
+        interactions = report.get("domain_interactions", [])
+        interactions = interactions if isinstance(interactions, list) else []
+        compositions = report.get("operational_capability_compositions", [])
+        compositions = compositions if isinstance(compositions, list) else []
+        validation = report.get("validation", {})
+        validation = validation if isinstance(validation, dict) else {}
+        summary = {
+            "domain_interaction_count": int(report.get("domain_interaction_count") or len(interactions)),
+            "domain_interaction_reports": domain_reports,
+            "domain_interactions": interactions,
+            "dependency_graph": report.get("dependency_graph", {}),
+            "operational_capability_compositions": compositions,
+            "validation_success": bool(report.get("validation_success", validation.get("validation_success", True))),
+            "validation_failures": validation,
+            "silent_domain_interaction_failures": bool(report.get("silent_domain_interaction_failures", False)),
+        }
+        return {
+            "cognitive_domain_interaction_summary": summary,
+            "cognitive_domain_interaction_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_domain_governance_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_GOVERNANCE_REPORT", "cognitive_domain_governance_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_GOVERNANCE_REPORT", "cognitive_domain_governance_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            lifecycle = self._build_cognitive_domain_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+            interaction = self._build_cognitive_domain_interaction_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_domain_governance_registry.build(
+                cognitive_domain_lifecycle_report=lifecycle,
+                cognitive_domain_interaction_report=interaction,
+            )
+        governance = report.get("domain_governance", [])
+        governance = governance if isinstance(governance, list) else []
+        validation = report.get("validation", {})
+        validation = validation if isinstance(validation, dict) else {}
+        summary = {
+            "domain_governance_count": int(report.get("domain_governance_count") or len(governance)),
+            "domain_governance": governance,
+            "capability_ownership_map": report.get("capability_ownership_map", {}),
+            "capability_conflicts": report.get("capability_conflicts", validation.get("capability_conflicts", [])),
+            "migration_history": report.get("migration_history", validation.get("migration_events", [])),
+            "boundary_violations": validation.get("boundary_violations", []),
+            "missing_governance_requirements": validation.get("missing_governance_requirements", []),
+            "validation_success": bool(report.get("validation_success", validation.get("validation_success", True))),
+            "silent_domain_governance_failures": bool(report.get("silent_domain_governance_failures", False)),
+        }
+        return {
+            "cognitive_domain_governance_summary": summary,
+            "cognitive_domain_governance_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_domain_ecosystem_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_ECOSYSTEM_REPORT", "cognitive_domain_ecosystem_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_ECOSYSTEM_REPORT", "cognitive_domain_ecosystem_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            lifecycle = self._build_cognitive_domain_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+            interaction = self._build_cognitive_domain_interaction_visibility(
+                report_state,
+                performance,
+            )
+            governance = self._build_cognitive_domain_governance_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_domain_ecosystem_registry.build(
+                cognitive_domain_lifecycle_report=lifecycle,
+                cognitive_domain_interaction_report=interaction,
+                cognitive_domain_governance_report=governance,
+            )
+        ecosystem = report.get("ecosystem", {})
+        ecosystem = ecosystem if isinstance(ecosystem, dict) else {}
+        coverage = report.get("global_cognitive_coverage", {})
+        coverage = coverage if isinstance(coverage, dict) else {}
+        health = report.get("ecosystem_health_metrics", {})
+        health = health if isinstance(health, dict) else {}
+        summary = {
+            "ecosystem": ecosystem,
+            "global_cognitive_coverage": coverage,
+            "domain_distribution": report.get("domain_distribution", {}),
+            "ecosystem_health_metrics": health,
+            "dependency_graph": report.get("dependency_graph", {}),
+            "collaboration_graph": report.get("collaboration_graph", {}),
+            "operational_capability_graph": report.get("operational_capability_graph", {}),
+            "missing_ecosystem_capabilities": report.get("missing_ecosystem_capabilities", []),
+            "cognitive_imbalances": report.get("cognitive_imbalances", []),
+            "cognitive_bottlenecks": report.get("cognitive_bottlenecks", []),
+            "ecosystem_maturity": report.get("ecosystem_maturity", ecosystem.get("ecosystem_maturity", "FOUNDATIONAL")),
+            "silent_ecosystem_failures": bool(report.get("silent_ecosystem_failures", False)),
+        }
+        return {
+            "cognitive_domain_ecosystem_summary": summary,
+            "cognitive_domain_ecosystem_diagnostics": report,
+            **summary,
+        }
+
+    def _build_cognitive_domain_constitution_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_CONSTITUTION_REPORT", "cognitive_domain_constitution_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_CONSTITUTION_REPORT", "cognitive_domain_constitution_report"),
+        )
+        if explicit:
+            report = explicit
+        else:
+            lifecycle = self._build_cognitive_domain_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+            interaction = self._build_cognitive_domain_interaction_visibility(
+                report_state,
+                performance,
+            )
+            governance = self._build_cognitive_domain_governance_visibility(
+                report_state,
+                performance,
+            )
+            ecosystem = self._build_cognitive_domain_ecosystem_visibility(
+                report_state,
+                performance,
+            )
+            report = cognitive_domain_constitution_registry.build(
+                cognitive_domain_lifecycle_report=lifecycle,
+                cognitive_domain_interaction_report=interaction,
+                cognitive_domain_governance_report=governance,
+                cognitive_domain_ecosystem_report=ecosystem,
+            )
+        constitution = report.get("constitution", {})
+        constitution = constitution if isinstance(constitution, dict) else {}
+        metrics = report.get("constitutional_health_metrics", {})
+        metrics = metrics if isinstance(metrics, dict) else {}
+        summary = {
+            "constitution": constitution,
+            "constitutional_status": report.get("constitutional_status", constitution.get("constitutional_status", "FOUNDATIONAL")),
+            "constitutional_principles": report.get("constitutional_principles", constitution.get("constitutional_principles", [])),
+            "architectural_invariants": report.get("architectural_invariants", constitution.get("architectural_invariants", [])),
+            "constitutional_validations": report.get("constitutional_validations", constitution.get("constitutional_validations", {})),
+            "constitutional_violations": report.get("constitutional_violations", constitution.get("constitutional_violations", [])),
+            "constitutional_health_metrics": metrics,
+            "domain_constitutional_health": report.get("domain_constitutional_health", constitution.get("domain_constitutional_health", [])),
+            "governance_compliance": bool(report.get("governance_compliance", True)),
+            "ownership_compliance": bool(report.get("ownership_compliance", True)),
+            "lifecycle_compliance": bool(report.get("lifecycle_compliance", True)),
+            "silent_constitutional_failures": bool(report.get("silent_constitutional_failures", False)),
+        }
+        return {
+            "cognitive_domain_constitution_summary": summary,
+            "cognitive_domain_constitution_diagnostics": report,
+            **summary,
+        }
+
     def _build_executable_semantic_coverage_visibility(
         self,
         report_state: dict[str, Any],
@@ -970,6 +1551,8 @@ class CanonicalReportBindingEngine:
             self._first_dict(synthesis, "semantic_to_transformation_compilation_report"),
         )
         concepts = self._semantic_concepts_for_coverage(report_state, performance, synthesis, compiler)
+        lifecycle_concepts = self._cognitive_lifecycle_concepts(report_state, performance)
+        concepts = list(dict.fromkeys([*concepts, *lifecycle_concepts]))
         support_map = self._executable_semantic_support_map()
         rows = []
         for concept in concepts:
@@ -992,13 +1575,29 @@ class CanonicalReportBindingEngine:
                 cluster_counts.items(),
                 key=lambda item: (-item[1], item[0]),
             )[0][0]
-        coverage = round(len(executable) / max(len(rows), 1), 4) if rows else 0.0
+        coverage = round(len(executable) / max(len(rows), 1), 4) if rows else None
+        observed_generated = self._first_number(
+            len(rows) if rows else None,
+            report_state.get("generated_concepts"),
+            report_state.get("semantic_concept_count"),
+            performance.get("generated_concepts"),
+            performance.get("semantic_concept_count"),
+        )
+        coverage_status = (
+            self._coverage_status(coverage)
+            if coverage is not None
+            else "NOT_MEASURABLE"
+        )
         summary = {
-            "generated_concepts": len(rows),
+            "generated_concepts": int(observed_generated or 0),
+            "measured_concepts": len(rows),
+            "lifecycle_concepts": len(lifecycle_concepts),
             "executable_concepts": len(executable),
             "unsupported_concepts": len(unsupported),
             "executable_semantic_coverage": coverage,
-            "coverage_status": self._coverage_status(coverage),
+            "coverage_status": coverage_status,
+            "coverage_state": "MEASURED" if rows else "NOT_MEASURABLE",
+            "measurement_blocker": None if rows else "NO_UNIFIED_CONCEPT_INPUT",
             "supported_operations": sorted({
                 row["operation"]
                 for row in executable
@@ -1014,6 +1613,7 @@ class CanonicalReportBindingEngine:
             "executable_semantic_coverage_summary": summary,
             "executable_semantic_coverage_diagnostics": {
                 "semantic_concepts": concepts,
+                "lifecycle_concepts": lifecycle_concepts,
                 "coverage_rows": rows,
                 "support_map_size": len(support_map),
             },
@@ -1067,6 +1667,65 @@ class CanonicalReportBindingEngine:
             performance.get("attributed_concepts"),
         ):
             visit(source)
+        return list(dict.fromkeys(concepts))
+
+    def _cognitive_lifecycle_concepts(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> list[str]:
+        concepts: list[str] = []
+
+        def add(value: Any) -> None:
+            if not isinstance(value, str):
+                return
+            token = value.strip().lower().replace("-", "_").replace(" ", "_")
+            if token:
+                concepts.append(token)
+
+        def visit(value: Any) -> None:
+            if isinstance(value, str):
+                add(value)
+                return
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in {
+                        "concept",
+                        "concepts",
+                        "detected_concepts",
+                        "attributed_concepts",
+                        "semantic_concepts",
+                        "generated_concepts",
+                        "target_concepts",
+                        "matched_concepts",
+                        "routed_concepts",
+                    }:
+                        visit(item)
+                    elif key in {
+                        "concept_birth",
+                        "concept_validation",
+                        "concept_revival",
+                        "concept_reputation_engine",
+                        "registry",
+                        "promotion_report",
+                        "truth_candidate_promotion",
+                    }:
+                        visit(item)
+                return
+            if isinstance(value, (list, tuple, set)):
+                for item in value:
+                    visit(item)
+
+        for container in (
+            self._first_dict(report_state, "concept_lifecycle_report", "CONCEPT_LIFECYCLE_REPORT"),
+            self._first_dict(performance, "concept_lifecycle_report", "CONCEPT_LIFECYCLE_REPORT"),
+            self._first_dict(report_state, "semantic_attribution_report", "SEMANTIC_ATTRIBUTION_REPORT"),
+            self._first_dict(performance, "semantic_attribution_report", "SEMANTIC_ATTRIBUTION_REPORT"),
+            self._first_dict(report_state, "truth_candidate_report", "truth_candidate_engine_report"),
+            self._first_dict(performance, "truth_candidate_report", "truth_candidate_engine_report"),
+        ):
+            visit(container)
+
         return list(dict.fromkeys(concepts))
 
     def _executable_semantic_support_map(self) -> dict[str, str]:
@@ -1138,7 +1797,9 @@ class CanonicalReportBindingEngine:
             return "Preservation And Identity"
         return "Other"
 
-    def _coverage_status(self, coverage: float) -> str:
+    def _coverage_status(self, coverage: float | None) -> str:
+        if coverage is None:
+            return "NOT_MEASURABLE"
         if coverage >= 0.70:
             return "HIGH"
         if coverage >= 0.40:

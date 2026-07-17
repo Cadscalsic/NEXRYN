@@ -102,6 +102,17 @@ def test_canonical_source_discovery_registers_known_sources():
     assert "execution_registry" in sources
     assert "metric_attribution_state" in sources
     assert "runtime_snapshots" in sources
+    assert "unified_concept_lifecycle_report" in sources
+    assert "program_generation_report" in sources
+    assert "program_blueprint_intelligence_report" in sources
+    assert "cognitive_program_lifecycle_report" in sources
+    assert "cognitive_knowledge_domains_report" in sources
+    assert "cognitive_domain_intelligence_report" in sources
+    assert "cognitive_domain_lifecycle_report" in sources
+    assert "cognitive_domain_interaction_report" in sources
+    assert "cognitive_domain_governance_report" in sources
+    assert "cognitive_domain_ecosystem_report" in sources
+    assert "cognitive_domain_constitution_report" in sources
     assert sources["program_registry"].payload["average_program_confidence"] == 0.6148
 
 
@@ -166,6 +177,542 @@ def test_generated_outputs_bind_from_semantic_synthesis_when_top_level_missing()
     assert semantic_summary["generated_concepts"] == 8
     assert semantic_summary["generated_programs"] == 3
     assert semantic_summary["execution_intent_count"] == 1
+
+
+def test_unified_concept_lifecycle_binding_tracks_concepts():
+    state = _state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": ["gravity", "rotation"],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    lifecycle = result["field_bindings"]["unified_concept_lifecycle_summary"]["value"]
+    concepts = {
+        item["concept_name"]: item
+        for item in lifecycle["concept_lifecycles"]
+    }
+
+    assert lifecycle["canonical_concept_lifecycle_source"] is True
+    assert concepts["gravity"]["mental_model"] == "Gravity Simulation"
+    assert concepts["gravity"]["execution_package_available"] == "FALSE"
+    assert concepts["rotation"]["execution_package_available"] == "TRUE"
+
+
+def test_program_generation_binding_builds_blueprints_from_lifecycle():
+    state = _state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": ["rotation", "gravity"],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    generation = result["field_bindings"]["program_generation_summary"]["value"]
+    blueprints = {
+        item["concept_name"]: item
+        for item in generation["program_blueprints"]
+    }
+    lifecycle = result["field_bindings"]["unified_concept_lifecycle_summary"]["value"]
+    lifecycle_rows = {
+        item["concept_name"]: item
+        for item in lifecycle["concept_lifecycles"]
+    }
+
+    assert generation["generated_programs"] >= 1
+    assert blueprints["rotation"]["generation_status"] == "GENERATED"
+    assert blueprints["rotation"]["candidate_ready"] == "FALSE"
+    assert blueprints["gravity"]["generation_status"] == "NOT_ELIGIBLE"
+    assert lifecycle_rows["rotation"]["program_generation_attempted"] == "TRUE"
+    assert lifecycle_rows["rotation"]["program_generated"] == "TRUE"
+
+
+def test_program_blueprint_intelligence_binding_enriches_blueprints():
+    state = _state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": [
+            "topology_change",
+            "bridge_creation",
+        ],
+    }
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "program_blueprints": [
+            {
+                "program_id": "program_blueprint:topology_change",
+                "concept_name": "topology_change",
+                "semantic_cluster": "Topology",
+                "program_type": "topology_program",
+                "compiler_supported": "TRUE",
+                "generation_success": "TRUE",
+                "generation_status": "GENERATED",
+                "execution_package_available": "TRUE",
+                "candidate_ready": "FALSE",
+                "missing_requirements": ["candidate_proposal_support"],
+            },
+            {
+                "program_id": "program_blueprint:bridge_creation",
+                "concept_name": "bridge_creation",
+                "semantic_cluster": "Connectivity",
+                "program_type": "topology_program",
+                "compiler_supported": "TRUE",
+                "generation_success": "TRUE",
+                "generation_status": "GENERATED",
+                "execution_package_available": "TRUE",
+                "candidate_ready": "FALSE",
+                "missing_requirements": ["candidate_proposal_support"],
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    intelligence = result["field_bindings"][
+        "program_blueprint_intelligence_summary"
+    ]["value"]
+    topology = intelligence["program_blueprint_intelligence"][0]
+
+    assert intelligence["validation_success"] is True
+    assert topology["semantic_family"] == "Topology"
+    assert "component_connection" in topology["supported_concepts"]
+    assert topology["execution_ready"] == "EXECUTION_READY"
+    assert topology["candidate_ready"] == "WAITING_FOR_VALIDATION"
+
+
+def test_cognitive_program_lifecycle_binding_tracks_registry_metrics():
+    state = _state()
+    state["PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT"] = {
+        "program_blueprint_intelligence": [
+            {
+                "blueprint_id": "program_intelligence:gravity_program",
+                "program_type": "gravity_program",
+                "semantic_family": "Physics",
+                "mental_model": "Gravity Simulation",
+                "supported_concepts": ["gravity", "falling"],
+                "compiler_supported": "TRUE",
+                "execution_ready": "MISSING_PACKAGE",
+                "candidate_ready": "WAITING_FOR_EXECUTION_PACKAGE",
+                "validation_ready": "FALSE",
+                "required_packages": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                    "gravity_validation_support",
+                ],
+                "missing_requirements": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                    "gravity_validation_support",
+                ],
+                "capability_profile": {
+                    "semantic_capabilities": ["gravity", "falling"],
+                },
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    lifecycle = result["field_bindings"]["cognitive_program_lifecycle_summary"]["value"]
+    row = lifecycle["program_registry"][0]
+
+    assert lifecycle["total_program_blueprints"] == 1
+    assert lifecycle["blocked_program_count"] == 1
+    assert row["program_type"] == "gravity_program"
+    assert row["maturity_level"] == "FOUNDATIONAL"
+    assert row["candidate_readiness"] == "NOT_READY"
+
+
+def test_cognitive_knowledge_domains_binding_organizes_concepts():
+    state = _state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": [
+            "gravity",
+            "falling",
+        ],
+    }
+    state["PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT"] = {
+        "program_blueprint_intelligence": [
+            {
+                "blueprint_id": "program_intelligence:gravity_program",
+                "program_type": "gravity_program",
+                "semantic_family": "Physics",
+                "mental_model": "Gravity Simulation",
+                "supported_concepts": ["gravity", "falling", "support"],
+                "compiler_supported": "TRUE",
+                "execution_ready": "MISSING_PACKAGE",
+                "candidate_ready": "WAITING_FOR_EXECUTION_PACKAGE",
+                "validation_ready": "FALSE",
+                "required_packages": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                ],
+                "missing_requirements": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                ],
+                "capability_profile": {
+                    "semantic_capabilities": ["gravity", "falling"],
+                },
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    domains = result["field_bindings"]["cognitive_knowledge_domains_summary"]["value"]
+    physics = {
+        domain["domain_name"]: domain
+        for domain in domains["domains"]
+    }["Physics Domain"]
+
+    assert domains["validation_success"] is True
+    assert domains["silent_domain_assignment_failures"] is False
+    assert physics["semantic_families"] == ["Physics"]
+    assert "Gravity Simulation" in physics["mental_models"]
+    assert "gravity_program" in physics["program_blueprints"]
+    assert "gravity" in physics["semantic_concepts"]
+    assert "gravity_candidate_support" in physics["missing_capabilities"]
+
+
+def test_cognitive_domain_intelligence_binding_describes_domain_capabilities():
+    state = _state()
+    state["COGNITIVE_KNOWLEDGE_DOMAINS_REPORT"] = {
+        "domains": [
+            {
+                "domain_id": "domain:spatial",
+                "domain_name": "Spatial Domain",
+                "semantic_families": ["Spatial"],
+                "semantic_concepts": ["relative_position"],
+                "mental_models": ["Spatial Reasoning"],
+            },
+            {
+                "domain_id": "domain:identity",
+                "domain_name": "Identity Domain",
+                "semantic_families": ["Identity"],
+                "semantic_concepts": ["object_identity_preservation"],
+                "mental_models": ["Object Identity"],
+            },
+            {
+                "domain_id": "domain:topology",
+                "domain_name": "Topology Domain",
+                "semantic_families": ["Topology"],
+                "mental_models": ["Topology Reasoning"],
+                "program_blueprints": ["topology_program"],
+                "semantic_concepts": ["bridge_creation", "topology_change"],
+                "execution_packages": ["topology_execution_package"],
+                "operational_capabilities": ["topology_execution"],
+                "missing_capabilities": ["topology_candidate_support"],
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    intelligence = result["field_bindings"]["cognitive_domain_intelligence_summary"]["value"]
+    topology = {
+        domain["domain_name"]: domain
+        for domain in intelligence["domain_intelligence"]
+    }["Topology Domain"]
+
+    assert intelligence["validation_success"] is True
+    assert topology["semantic_capabilities"] == ["bridge_creation", "topology_change"]
+    assert topology["required_domains"] == ["Spatial Domain", "Identity Domain"]
+    assert topology["readiness_state"] == "PARTIALLY_OPERATIONAL"
+
+
+def test_cognitive_domain_lifecycle_binding_tracks_domain_evolution():
+    state = _state()
+    state["COGNITIVE_DOMAIN_INTELLIGENCE_REPORT"] = {
+        "domain_intelligence": [
+            {
+                "domain_id": "domain:spatial",
+                "domain_name": "Spatial Domain",
+                "semantic_capabilities": ["relative_position"],
+                "mental_models": ["Spatial Reasoning"],
+            },
+            {
+                "domain_id": "domain:geometry",
+                "domain_name": "Geometry Domain",
+                "semantic_capabilities": ["shape_geometry"],
+                "mental_models": ["Geometry Reasoning"],
+            },
+            {
+                "domain_id": "domain:physics",
+                "domain_name": "Physics Domain",
+                "semantic_capabilities": ["gravity", "falling"],
+                "mental_models": ["Gravity Simulation"],
+                "program_blueprints": ["physics_program"],
+                "missing_capabilities": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                ],
+                "required_domains": ["Spatial Domain", "Geometry Domain"],
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    lifecycle = result["field_bindings"]["cognitive_domain_lifecycle_summary"]["value"]
+    physics = {
+        row["domain_name"]: row
+        for row in lifecycle["domain_registry"]
+    }["Physics Domain"]
+
+    assert lifecycle["total_domains"] == 3
+    assert physics["lifecycle_stage"] == "PROGRAM_DEFINED"
+    assert physics["maturity_level"] == "DEVELOPING"
+    assert physics["execution_readiness"] == "NOT_READY"
+    assert physics["lifecycle_failures"][0]["reason"] == "physics_execution_package_missing"
+
+
+def test_cognitive_domain_interaction_binding_builds_collaboration_graph():
+    state = _state()
+    state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
+        "domain_registry": [
+            {
+                "domain_name": "Physics Domain",
+                "semantic_capability_evolution": ["gravity"],
+                "required_domains": ["Spatial Domain", "Geometry Domain"],
+                "operational_capability_evolution": ["object_motion_reasoning"],
+            },
+            {
+                "domain_name": "Spatial Domain",
+                "semantic_capability_evolution": ["relative_position"],
+            },
+            {
+                "domain_name": "Geometry Domain",
+                "semantic_capability_evolution": ["object_shape"],
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    interaction = result["field_bindings"]["cognitive_domain_interaction_summary"]["value"]
+    physics = {
+        row["domain_name"]: row
+        for row in interaction["domain_interaction_reports"]
+    }["Physics Domain"]
+
+    assert interaction["dependency_graph"]["Physics Domain"] == [
+        "Spatial Domain",
+        "Geometry Domain",
+    ]
+    assert "Spatial Domain" in physics["collaborating_domains"]
+    assert "object_motion_reasoning" in physics["shared_capabilities"]
+    assert interaction["operational_capability_compositions"][0]["composition_name"] == (
+        "Object Falling Simulation"
+    )
+
+
+def test_cognitive_domain_governance_binding_detects_invalid_ownership():
+    state = _state()
+    state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
+        "domain_registry": [
+            {
+                "domain_name": "Transformation Domain",
+                "lifecycle_stage": "PROGRAM_DEFINED",
+                "maturity_level": "DEVELOPING",
+                "semantic_capability_evolution": ["rotation", "gravity"],
+                "required_domains": ["Geometry Domain"],
+            },
+            {
+                "domain_name": "Geometry Domain",
+                "semantic_capability_evolution": ["object_shape"],
+            },
+        ],
+    }
+    state["COGNITIVE_DOMAIN_INTERACTION_REPORT"] = {
+        "domain_interaction_reports": [],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    governance = result["field_bindings"]["cognitive_domain_governance_summary"]["value"]
+    transformation = {
+        row["domain_name"]: row
+        for row in governance["domain_governance"]
+    }["Transformation Domain"]
+
+    assert governance["validation_success"] is False
+    assert transformation["governance_status"] == "BOUNDARY_VIOLATION"
+    assert transformation["capability_conflicts"][0]["expected_owner"] == "Physics Domain"
+
+
+def test_cognitive_domain_ecosystem_binding_summarizes_global_state():
+    state = _state()
+    state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
+        "domain_registry": [
+            {
+                "domain_name": "Physics Domain",
+                "maturity_level": "DEVELOPING",
+                "semantic_capability_evolution": ["gravity", "falling"],
+                "mental_model_evolution": ["Gravity Simulation"],
+                "program_blueprint_evolution": ["physics_program"],
+                "execution_capability_evolution": [],
+                "candidate_capability_evolution": [],
+                "operational_capability_evolution": [],
+                "program_readiness": "READY",
+                "execution_readiness": "NOT_READY",
+                "candidate_readiness": "NOT_READY",
+                "operational_readiness": "NOT_READY",
+                "required_domains": ["Spatial Domain", "Geometry Domain"],
+                "missing_capabilities": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                ],
+            },
+            {
+                "domain_name": "Spatial Domain",
+                "maturity_level": "OPERATIONAL",
+                "semantic_capability_evolution": ["relative_position"],
+                "mental_model_evolution": ["Spatial Reasoning"],
+                "program_blueprint_evolution": ["spatial_program"],
+                "execution_capability_evolution": ["spatial_execution_package"],
+                "candidate_capability_evolution": ["spatial_candidate_support"],
+                "operational_capability_evolution": ["relative_position_reasoning"],
+                "program_readiness": "READY",
+                "execution_readiness": "READY",
+                "candidate_readiness": "READY",
+                "operational_readiness": "READY",
+            },
+        ],
+    }
+    state["COGNITIVE_DOMAIN_INTERACTION_REPORT"] = {
+        "dependency_graph": {
+            "Physics Domain": ["Spatial Domain", "Geometry Domain"],
+        },
+        "domain_interaction_reports": [
+            {
+                "domain_name": "Physics Domain",
+                "collaborating_domains": ["Spatial Domain", "Geometry Domain"],
+            },
+        ],
+    }
+    state["COGNITIVE_DOMAIN_GOVERNANCE_REPORT"] = {
+        "domain_governance": [
+            {
+                "domain_name": "Physics Domain",
+                "semantic_coherence_score": 1.0,
+                "governance_integrity_score": 1.0,
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    ecosystem = result["field_bindings"]["cognitive_domain_ecosystem_summary"]["value"]
+
+    assert ecosystem["global_cognitive_coverage"]["domains"] == 2
+    assert ecosystem["dependency_graph"]["Physics Domain"] == [
+        "Spatial Domain",
+        "Geometry Domain",
+    ]
+    assert "gravity_execution_package" in ecosystem["missing_ecosystem_capabilities"]
+    assert ecosystem["cognitive_bottlenecks"][0]["bottleneck_type"] in {
+        "candidate_proposal_support",
+        "execution_package_coverage",
+        "program_to_execution_gap",
+    }
+
+
+def test_cognitive_domain_constitution_binding_audits_invariants():
+    state = _state()
+    state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
+        "domain_registry": [
+            {
+                "domain_name": "Transformation Domain",
+                "lifecycle_stage": "PROGRAM_DEFINED",
+                "maturity_level": "DEVELOPING",
+                "semantic_capability_evolution": ["rotation", "gravity"],
+                "mental_model_evolution": ["Transformation Reasoning"],
+                "program_blueprint_evolution": ["transformation_program"],
+            },
+            {
+                "domain_name": "Physics Domain",
+                "lifecycle_stage": "PROGRAM_DEFINED",
+                "maturity_level": "DEVELOPING",
+                "semantic_capability_evolution": ["gravity"],
+                "mental_model_evolution": ["Gravity Simulation"],
+                "program_blueprint_evolution": ["physics_program"],
+            },
+        ],
+    }
+    state["COGNITIVE_DOMAIN_INTERACTION_REPORT"] = {
+        "domain_interaction_reports": [],
+    }
+    state["COGNITIVE_DOMAIN_GOVERNANCE_REPORT"] = {
+        "domain_governance": [
+            {
+                "domain_name": "Transformation Domain",
+                "capability_conflicts": [
+                    {
+                        "capability": "gravity",
+                        "expected_owner": "Physics Domain",
+                        "actual_owner": "Transformation Domain",
+                    },
+                ],
+                "boundary_violations": [
+                    {
+                        "capability": "gravity",
+                        "reason": "FORBIDDEN_CAPABILITY_TOKEN",
+                    },
+                ],
+                "semantic_coherence_score": 0.5,
+                "governance_integrity_score": 0.5,
+            },
+            {
+                "domain_name": "Physics Domain",
+                "semantic_coherence_score": 1.0,
+                "governance_integrity_score": 1.0,
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    constitution = result["field_bindings"]["cognitive_domain_constitution_summary"]["value"]
+    violation_types = {
+        violation["violation_type"]
+        for violation in constitution["constitutional_violations"]
+    }
+
+    assert "SEMANTIC_BOUNDARY_BREACH" in violation_types
+    assert "OWNERSHIP_CONFLICT" in violation_types
+    assert constitution["ownership_compliance"] is False
+    assert constitution["constitutional_status"] != "FULLY_CONSTITUTIONAL"
 
 
 def test_duplicate_owner_and_conflicting_binding_detection():

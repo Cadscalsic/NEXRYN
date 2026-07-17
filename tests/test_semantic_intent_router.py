@@ -42,6 +42,26 @@ def test_executable_coverage_tracks_supported_and_unsupported_concepts():
     assert report["unsupported_concepts"] == ["context_support"]
 
 
+def test_executable_coverage_reports_not_measurable_when_concepts_are_only_contextual():
+    report = ExecutableCoverageTracker().evaluate(
+        [],
+        runtime_context={
+            "concept_lifecycle_report": {
+                "concepts": [
+                    {"concept": "gravity"},
+                    {"concept": "falling"},
+                    {"concept": "collision"},
+                ],
+            },
+        },
+    )
+
+    assert report["coverage_state"] == "NOT_MEASURABLE"
+    assert report["coverage_percentage"] is None
+    assert report["semantic_concepts_observed"] == 3
+    assert report["measurement_blocker"] == "NO_EXECUTABLE_CONCEPT_INPUT"
+
+
 def test_router_outputs_executable_semantic_proposals():
     report = SemanticIntentRouter().route(
         detected_concepts=["color_preservation", "replication", "context_support"],

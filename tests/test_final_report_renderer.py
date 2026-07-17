@@ -204,6 +204,42 @@ def test_render_has_boundaries_and_stable_section_order():
     assert renderer.report()["report_complete"] is True
 
 
+def test_render_includes_cognitive_domain_ecosystem_report():
+    report = DeterministicFinalReportRenderer().render(
+        _report_state(),
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    governance_pos = report.index("COGNITIVE DOMAIN GOVERNANCE REPORT")
+    ecosystem_pos = report.index("COGNITIVE DOMAIN ECOSYSTEM REPORT")
+    compilation_pos = report.index("SEMANTIC COMPILATION")
+
+    assert governance_pos < ecosystem_pos < compilation_pos
+    assert "Total Domains:" in report
+    assert "Capability Coverage:" in report
+    assert "Cognitive Bottlenecks:" in report
+    assert "Ecosystem Maturity:" in report
+
+
+def test_render_includes_cognitive_domain_constitution_report():
+    report = DeterministicFinalReportRenderer().render(
+        _report_state(),
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    ecosystem_pos = report.index("COGNITIVE DOMAIN ECOSYSTEM REPORT")
+    constitution_pos = report.index("COGNITIVE DOMAIN CONSTITUTION REPORT")
+    compilation_pos = report.index("SEMANTIC COMPILATION")
+
+    assert ecosystem_pos < constitution_pos < compilation_pos
+    assert "Constitutional Status:" in report
+    assert "Constitutional Integrity:" in report
+    assert "Constitutional Violations:" in report
+    assert "Domain Constitutional Health:" in report
+
+
 def test_render_has_single_final_status_and_no_raw_dict_repr():
     report = DeterministicFinalReportRenderer().render(
         _report_state(),
@@ -336,6 +372,393 @@ def test_normal_report_exposes_semantic_compilation_observability():
     assert "Selected From Compiler: TRUE" in report
     assert "Compilation Status: SUCCESS" in report
     assert "Execution Status: SUCCESS" in report
+
+
+def test_normal_report_exposes_unified_concept_lifecycle():
+    state = _report_state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": [
+            "gravity",
+            "falling",
+        ],
+    }
+    state["semantic_memory_report"] = {
+        "Semantic Entities": [
+            {
+                "concept": "gravity",
+                "semantic_memory_id": "sem:gravity",
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "UNIFIED CONCEPT LIFECYCLE REPORT" in report
+    assert report.index("UNIFIED CONCEPT LIFECYCLE REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Concept: gravity" in report
+    assert "Semantic Cluster: Physics" in report
+    assert "Mental Model: Gravity Simulation" in report
+    assert "Execution Package: FALSE" in report
+    assert "Semantic Memory Integration: TRUE" in report
+    assert "Lifecycle Status: DISCOVERED_BUT_NOT_EXECUTABLE" in report
+
+
+def test_normal_report_exposes_program_generation_blueprints():
+    state = _report_state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": [
+            "rotation",
+            "gravity",
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "PROGRAM GENERATION REPORT" in report
+    assert report.index("UNIFIED CONCEPT LIFECYCLE REPORT") < report.index("PROGRAM GENERATION REPORT")
+    assert report.index("PROGRAM GENERATION REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Generated Blueprints:" in report
+    assert "Program: Rotation Program" in report
+    assert "Concept: rotation" in report
+    assert "Generation Status: GENERATED" in report
+    assert "Candidate Ready: FALSE" in report
+    assert "Missing Requirements: candidate_proposal_support" in report
+
+
+def test_normal_report_exposes_program_blueprint_intelligence():
+    state = _report_state()
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "program_blueprints": [
+            {
+                "program_id": "program_blueprint:gravity",
+                "concept_name": "gravity",
+                "semantic_cluster": "Physics",
+                "program_type": "gravity_program",
+                "compiler_supported": "TRUE",
+                "generation_success": "FALSE",
+                "generation_status": "BLOCKED",
+                "execution_package_available": "FALSE",
+                "candidate_ready": "FALSE",
+                "missing_requirements": ["gravity_execution_package"],
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "PROGRAM BLUEPRINT INTELLIGENCE REPORT" in report
+    assert report.index("PROGRAM GENERATION REPORT") < report.index("PROGRAM BLUEPRINT INTELLIGENCE REPORT")
+    assert report.index("PROGRAM BLUEPRINT INTELLIGENCE REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Program: Gravity Program" in report
+    assert "Semantic Family: Physics" in report
+    assert "Mental Model: Gravity Simulation" in report
+    assert "Execution Readiness: MISSING_PACKAGE" in report
+    assert "Candidate Readiness: WAITING_FOR_EXECUTION_PACKAGE" in report
+    assert "Required Packages: gravity_execution_package" in report
+    assert "Capability Status: WAITING_FOR_EXECUTION_PACKAGE" in report
+
+
+def test_normal_report_exposes_cognitive_program_lifecycle():
+    state = _report_state()
+    state["PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT"] = {
+        "program_blueprint_intelligence": [
+            {
+                "blueprint_id": "program_intelligence:gravity_program",
+                "program_type": "gravity_program",
+                "semantic_family": "Physics",
+                "mental_model": "Gravity Simulation",
+                "supported_concepts": ["gravity", "falling"],
+                "compiler_supported": "TRUE",
+                "execution_ready": "MISSING_PACKAGE",
+                "candidate_ready": "WAITING_FOR_EXECUTION_PACKAGE",
+                "validation_ready": "FALSE",
+                "required_packages": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                    "gravity_validation_support",
+                ],
+                "missing_requirements": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                    "gravity_validation_support",
+                ],
+                "capability_profile": {
+                    "semantic_capabilities": ["gravity", "falling"],
+                },
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE PROGRAM LIFECYCLE REPORT" in report
+    assert report.index("PROGRAM BLUEPRINT INTELLIGENCE REPORT") < report.index("COGNITIVE PROGRAM LIFECYCLE REPORT")
+    assert report.index("COGNITIVE PROGRAM LIFECYCLE REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Program: Gravity Program" in report
+    assert "Lifecycle Status: PACKAGE_REQUIREMENTS_IDENTIFIED" in report
+    assert "Maturity Level: FOUNDATIONAL" in report
+    assert "Execution Readiness: NOT_READY" in report
+    assert "Candidate Readiness: NOT_READY" in report
+    assert "Operational Readiness: NOT_READY" in report
+    assert "Lifecycle Failures: EXECUTION_REQUIREMENTS_VALIDATED:NO_EXECUTION_PACKAGE" in report
+
+
+def test_normal_report_exposes_cognitive_knowledge_domains():
+    state = _report_state()
+    state["semantic_attribution_report"] = {
+        "attributed_concepts": [
+            "gravity",
+            "falling",
+        ],
+    }
+    state["PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT"] = {
+        "program_blueprint_intelligence": [
+            {
+                "blueprint_id": "program_intelligence:gravity_program",
+                "program_type": "gravity_program",
+                "semantic_family": "Physics",
+                "mental_model": "Gravity Simulation",
+                "supported_concepts": ["gravity", "falling", "support"],
+                "compiler_supported": "TRUE",
+                "execution_ready": "MISSING_PACKAGE",
+                "candidate_ready": "WAITING_FOR_EXECUTION_PACKAGE",
+                "validation_ready": "FALSE",
+                "required_packages": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                    "gravity_validation_support",
+                ],
+                "missing_requirements": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                    "gravity_validation_support",
+                ],
+                "capability_profile": {
+                    "semantic_capabilities": ["gravity", "falling"],
+                },
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE KNOWLEDGE DOMAINS REPORT" in report
+    assert report.index("COGNITIVE PROGRAM LIFECYCLE REPORT") < report.index("COGNITIVE KNOWLEDGE DOMAINS REPORT")
+    assert report.index("COGNITIVE KNOWLEDGE DOMAINS REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Domain: Physics Domain" in report
+    assert "Semantic Families: Physics" in report
+    assert "Mental Models: Gravity Simulation" in report
+    assert "Program Blueprints: gravity_program" in report
+    assert "Concept Count:" in report
+    assert "Missing Capabilities:" in report
+    assert "gravity_execution_package" in report
+    assert "gravity_candidate_support" in report
+    assert "gravity_validation_support" in report
+    assert "Silent Domain Assignment Failures: FALSE" in report
+
+
+def test_normal_report_exposes_cognitive_domain_intelligence():
+    state = _report_state()
+    state["COGNITIVE_KNOWLEDGE_DOMAINS_REPORT"] = {
+        "domains": [
+            {
+                "domain_id": "domain:spatial",
+                "domain_name": "Spatial Domain",
+                "semantic_families": ["Spatial"],
+                "semantic_concepts": ["relative_position"],
+                "mental_models": ["Spatial Reasoning"],
+            },
+            {
+                "domain_id": "domain:identity",
+                "domain_name": "Identity Domain",
+                "semantic_families": ["Identity"],
+                "semantic_concepts": ["object_identity_preservation"],
+                "mental_models": ["Object Identity"],
+            },
+            {
+                "domain_id": "domain:topology",
+                "domain_name": "Topology Domain",
+                "semantic_families": ["Topology"],
+                "mental_models": ["Topology Reasoning"],
+                "program_blueprints": ["topology_program"],
+                "semantic_concepts": ["bridge_creation", "topology_change"],
+                "execution_packages": ["topology_execution_package"],
+                "operational_capabilities": ["topology_execution"],
+                "missing_capabilities": ["topology_candidate_support"],
+                "maturity_level": "PARTIALLY_OPERATIONAL",
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE DOMAIN INTELLIGENCE REPORT" in report
+    assert report.index("COGNITIVE KNOWLEDGE DOMAINS REPORT") < report.index("COGNITIVE DOMAIN INTELLIGENCE REPORT")
+    assert report.index("COGNITIVE DOMAIN INTELLIGENCE REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Domain Name: Topology Domain" in report
+    assert "Semantic Capabilities: bridge_creation, topology_change" in report
+    assert "Operational Capabilities: topology_execution" in report
+    assert "Domain Dependencies: Spatial Domain, Identity Domain" in report
+    assert "Mental Models: Topology Reasoning" in report
+    assert "Program Blueprints: topology_program" in report
+    assert "Execution Packages: topology_execution_package" in report
+    assert "Missing Capabilities: topology_candidate_support" in report
+    assert "Domain Readiness: PARTIALLY_OPERATIONAL" in report
+
+
+def test_normal_report_exposes_cognitive_domain_lifecycle():
+    state = _report_state()
+    state["COGNITIVE_DOMAIN_INTELLIGENCE_REPORT"] = {
+        "domain_intelligence": [
+            {
+                "domain_id": "domain:spatial",
+                "domain_name": "Spatial Domain",
+                "semantic_capabilities": ["relative_position"],
+                "mental_models": ["Spatial Reasoning"],
+            },
+            {
+                "domain_id": "domain:geometry",
+                "domain_name": "Geometry Domain",
+                "semantic_capabilities": ["shape_geometry"],
+                "mental_models": ["Geometry Reasoning"],
+            },
+            {
+                "domain_id": "domain:physics",
+                "domain_name": "Physics Domain",
+                "semantic_capabilities": ["gravity", "falling", "collision"],
+                "mental_models": ["Gravity Simulation"],
+                "program_blueprints": ["physics_program"],
+                "missing_capabilities": [
+                    "gravity_execution_package",
+                    "gravity_candidate_support",
+                ],
+                "required_domains": ["Spatial Domain", "Geometry Domain"],
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE DOMAIN LIFECYCLE REPORT" in report
+    assert report.index("COGNITIVE DOMAIN INTELLIGENCE REPORT") < report.index("COGNITIVE DOMAIN LIFECYCLE REPORT")
+    assert report.index("COGNITIVE DOMAIN LIFECYCLE REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Domain Name: Physics Domain" in report
+    assert "Lifecycle Stage: PROGRAM_DEFINED" in report
+    assert "Maturity Level: DEVELOPING" in report
+    assert "Semantic=READY" in report
+    assert "Mental Models=READY" in report
+    assert "Programs=READY" in report
+    assert "Execution=NOT_READY" in report
+    assert "Candidate=NOT_READY" in report
+    assert "Dependencies: Spatial Domain, Geometry Domain" in report
+    assert "Missing Capabilities: gravity_execution_package, gravity_candidate_support" in report
+    assert "Lifecycle Failures: EXECUTION_DEFINED:physics_execution_package_missing" in report
+
+
+def test_normal_report_exposes_cognitive_domain_interaction():
+    state = _report_state()
+    state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
+        "domain_registry": [
+            {
+                "domain_name": "Physics Domain",
+                "semantic_capability_evolution": ["gravity"],
+                "required_domains": ["Spatial Domain", "Geometry Domain"],
+                "operational_capability_evolution": ["object_motion_reasoning"],
+            },
+            {
+                "domain_name": "Spatial Domain",
+                "semantic_capability_evolution": ["relative_position"],
+            },
+            {
+                "domain_name": "Geometry Domain",
+                "semantic_capability_evolution": ["object_shape"],
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE DOMAIN INTERACTION REPORT" in report
+    assert report.index("COGNITIVE DOMAIN LIFECYCLE REPORT") < report.index("COGNITIVE DOMAIN INTERACTION REPORT")
+    assert report.index("COGNITIVE DOMAIN INTERACTION REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Domain Name: Physics Domain" in report
+    assert "Collaborating Domains: Spatial Domain, Geometry Domain" in report
+    assert "Shared Capabilities: object_motion_reasoning" in report
+    assert "Private Capabilities: collision_simulation" in report
+    assert "Dependency Relationships: Spatial Domain, Geometry Domain" in report
+    assert "Operational Capability Composition: Object Falling Simulation" in report
+    assert "Missing Collaborative Capabilities: Not Available" in report
+
+
+def test_normal_report_exposes_cognitive_domain_governance():
+    state = _report_state()
+    state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
+        "domain_registry": [
+            {
+                "domain_name": "Transformation Domain",
+                "lifecycle_stage": "PROGRAM_DEFINED",
+                "maturity_level": "DEVELOPING",
+                "semantic_capability_evolution": ["rotation", "gravity"],
+                "required_domains": ["Geometry Domain"],
+            },
+            {
+                "domain_name": "Geometry Domain",
+                "semantic_capability_evolution": ["object_shape"],
+            },
+        ],
+    }
+    state["COGNITIVE_DOMAIN_INTERACTION_REPORT"] = {
+        "domain_interaction_reports": [],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE DOMAIN GOVERNANCE REPORT" in report
+    assert report.index("COGNITIVE DOMAIN INTERACTION REPORT") < report.index("COGNITIVE DOMAIN GOVERNANCE REPORT")
+    assert report.index("COGNITIVE DOMAIN GOVERNANCE REPORT") < report.index("SEMANTIC COMPILATION")
+    assert "Domain Name: Transformation Domain" in report
+    assert "Governance Status: BOUNDARY_VIOLATION" in report
+    assert "Semantic Integrity:" in report
+    assert "Ownership Integrity:" in report
+    assert "Dependency Integrity:" in report
+    assert "Domain Health Score:" in report
+    assert "Boundary Violations:" in report
 
 
 def test_normal_report_exposes_prediction_provenance_decision_owner():
@@ -548,6 +971,60 @@ def test_report_exposes_executable_semantic_coverage():
     assert "Coverage Status: LOW" in report
     assert "Unsupported Operations:" in report
     assert "density_modulation" in report
+
+
+def test_report_marks_executable_coverage_not_measurable_without_concept_inputs():
+    state = _report_state()
+    state["generated_concepts"] = 18
+    state["TRANSFORMATION_SYNTHESIS_REPORT"].pop(
+        "detected_concepts",
+        None,
+    )
+    state["TRANSFORMATION_SYNTHESIS_REPORT"].pop(
+        "semantic_to_transformation_compilation_report",
+    )
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Generated Concepts: 18" in report
+    assert "Measured Concepts: 0" in report
+    assert "Coverage State: NOT_MEASURABLE" in report
+    assert "Coverage: Not Available" in report
+    assert "Coverage Status: NOT_MEASURABLE" in report
+    assert "Measurement Blocker: NO_UNIFIED_CONCEPT_INPUT" in report
+
+
+def test_report_uses_lifecycle_concepts_for_executable_coverage():
+    state = _report_state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"].pop(
+        "detected_concepts",
+        None,
+    )
+    state["TRANSFORMATION_SYNTHESIS_REPORT"].pop(
+        "semantic_to_transformation_compilation_report",
+    )
+    state["concept_lifecycle_report"] = {
+        "concepts": [
+            {"concept": "component_splitting"},
+            {"concept": "connectivity_change"},
+            {"concept": "topology_change"},
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Measured Concepts: 3" in report
+    assert "Executable Concepts: 2" in report
+    assert "Unsupported Concepts: 1" in report
+    assert "component_splitting" in report
 
 
 def test_candidate_arena_reports_competitive_sources_when_multiple_enter():

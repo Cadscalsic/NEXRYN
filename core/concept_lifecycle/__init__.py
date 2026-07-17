@@ -51,6 +51,12 @@ from core.concept_lifecycle.concept_maturity import (
     ConceptMaturityTracker,
 )
 
+from core.concept_lifecycle.unified_concept_lifecycle import (
+    ConceptLifecycle,
+    UnifiedConceptLifecycleBuilder,
+    unified_concept_lifecycle_builder,
+)
+
 
 __all__ = [
     "ConceptBirth",
@@ -66,4 +72,7 @@ __all__ = [
     "ConceptLifecycleManager",
     "concept_lifecycle_manager",
     "ConceptMaturityTracker",
+    "ConceptLifecycle",
+    "UnifiedConceptLifecycleBuilder",
+    "unified_concept_lifecycle_builder",
 ]
