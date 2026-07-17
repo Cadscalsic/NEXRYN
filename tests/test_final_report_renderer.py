@@ -407,7 +407,21 @@ def test_prediction_provenance_identifies_noncompiler_winning_program():
 
 def test_candidate_arena_reports_adaptive_reuse_single_source_dominance():
     state = _report_state()
-    state.pop("TRANSFORMATION_SYNTHESIS_REPORT")
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": ["bridge_creation", "component_connection"],
+        "semantic_to_transformation_compilation_report": {
+            "semantic_to_transformation_compilation_success": False,
+            "detected_intents": ["bridge_creation", "component_connection"],
+            "execution_intents": [],
+            "semantic_intent_routing_report": {
+                "semantic_intent_routing_success": False,
+                "execution_intent_count": 0,
+            },
+            "candidate_count": 0,
+            "compiled_program": {"steps": [], "step_count": 0},
+            "failure_reason": "no_executable_semantic_intents",
+        },
+    }
     state["ADAPTIVE_REUSE_REPORT"] = {
         "reuse_success_rate": 1.0,
         "reused_programs": [
@@ -439,10 +453,101 @@ def test_candidate_arena_reports_adaptive_reuse_single_source_dominance():
 
     assert "COGNITIVE CANDIDATE ARENA" in report
     assert "Arena State: SINGLE_SOURCE_DOMINANCE" in report
+    assert "Attempted Candidates: 2" in report
+    assert "Explicit Rejections: 1" in report
     assert "Competitor Sources: adaptive_reuse" in report
     assert "Winner Takes All Detected: TRUE" in report
     assert "Dominance Source: adaptive_reuse" in report
+    assert "Compiler Attempted: TRUE" in report
+    assert "semantic_to_transformation_compiler: REJECTED reason=no_executable_semantic_intents" in report
     assert "Missing Competition Reason: Only one candidate source entered the arena." in report
+
+
+def test_report_marks_selected_compiler_without_report_as_attempted_rejection():
+    state = _report_state()
+    state.pop("TRANSFORMATION_SYNTHESIS_REPORT")
+    state["tool_selection_report"] = {
+        "enabled_tools": ["semantic_to_transformation_compiler"],
+    }
+    state["ADAPTIVE_REUSE_REPORT"] = {
+        "reuse_success_rate": 1.0,
+        "reused_programs": [
+            {
+                "steps": [
+                    {
+                        "operation": "adaptive_reuse_program",
+                        "parameters": {},
+                    }
+                ],
+                "step_count": 1,
+            }
+        ],
+    }
+    state["PREDICTION_PROVENANCE_REPORT"] = {
+        "prediction_source": "adaptive_reuse",
+        "decision_owner": "Adaptive Reuse Layer",
+        "winning_candidate": "adaptive_reuse_program",
+        "program_validation": "SUCCESS",
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Compiler Triggered: TRUE" in report
+    assert "Compilation Status: REQUIRED_REPORT_MISSING" in report
+    assert "Compiler Attempted: TRUE" in report
+    assert "CANDIDATE PROPOSAL PHASE" in report
+    assert report.index("CANDIDATE PROPOSAL PHASE") < report.index("COGNITIVE CANDIDATE ARENA")
+    assert "Proposal Phase Entered: TRUE" in report
+    assert "Sources Rejected: semantic_to_transformation_compiler" in report
+    assert "Attempted Candidates: 2" in report
+    assert "Explicit Rejections: 1" in report
+    assert "semantic_to_transformation_compiler: REJECTED reason=Semantic compiler selected but no compilation report was produced." in report
+
+
+def test_report_exposes_executable_semantic_coverage():
+    state = _report_state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"]["detected_concepts"] = [
+        "density_increase",
+        "symmetry_break",
+        "relative_position",
+        "spatial_relation",
+        "transformation_sequence",
+        "bridge_creation",
+        "component_connection",
+        "connectivity_change",
+        "topology_change",
+        "density_modulation",
+        "growth",
+        "propagation",
+        "directional_motion",
+        "position_preservation",
+        "object_identity_preservation",
+        "shape_preservation",
+        "rotation",
+        "reflection",
+    ]
+    state["TRANSFORMATION_SYNTHESIS_REPORT"].pop(
+        "semantic_to_transformation_compilation_report",
+    )
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "EXECUTABLE SEMANTIC COVERAGE" in report
+    assert report.index("EXECUTABLE SEMANTIC COVERAGE") < report.index("TRANSFORMATION DECISION")
+    assert "Generated Concepts: 18" in report
+    assert "Executable Concepts: 7" in report
+    assert "Unsupported Concepts: 11" in report
+    assert "Coverage Status: LOW" in report
+    assert "Unsupported Operations:" in report
+    assert "density_modulation" in report
 
 
 def test_candidate_arena_reports_competitive_sources_when_multiple_enter():

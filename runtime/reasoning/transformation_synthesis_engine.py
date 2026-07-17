@@ -9,6 +9,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from runtime.memory.transformation_memory import transformation_memory
+from runtime.reasoning.candidate_proposal_runtime import candidate_proposal_runtime
 from runtime.reasoning.color_mapping_engine import color_mapping_engine
 from runtime.reasoning.mechanistic_reasoning_engine import mechanistic_reasoning_engine
 from runtime.reasoning.transformation_explanation_engine import transformation_explanation_engine
@@ -249,6 +250,7 @@ class TransformationSynthesisEngine:
     def __init__(self, memory=None, executor=None):
         self.memory = memory or transformation_memory
         self.executor = executor or primitive_executor
+        self.candidate_proposal_runtime = candidate_proposal_runtime
         self.color_mapping_engine = color_mapping_engine
         self.transformation_language_engine = transformation_language_engine
         self.transformation_explanation_engine = transformation_explanation_engine
@@ -337,7 +339,18 @@ class TransformationSynthesisEngine:
             execution_intents=semantic_intent_report.get("execution_intents", []),
             semantic_intent_report=semantic_intent_report,
         )
-        candidates.extend(self._semantic_compiler_candidates(compiler_report))
+        compiler_candidates = self._semantic_compiler_candidates(compiler_report)
+        candidates.extend(compiler_candidates)
+        candidate_proposal_report = self.candidate_proposal_runtime.collect(
+            candidate_sources={
+                "semantic_to_transformation_compiler": compiler_report,
+                "transformation_synthesis": candidates,
+                "counterfactual_search": runtime_context.get("counterfactual_candidates"),
+                "adaptive_reuse": runtime_context.get("adaptive_reuse_report"),
+                "repair": runtime_context.get("repair_report"),
+                "rule_programs": runtime_context.get("rule_program_report"),
+            },
+        )
 
         candidates = self._dedupe_candidates(candidates)
         candidates = self._score_candidates(candidates, input_grid, output_grid, concepts)
@@ -375,6 +388,7 @@ class TransformationSynthesisEngine:
             semantics_report,
             mechanistic_report,
             context_routing_report,
+            candidate_proposal_report,
             compiler_report,
             semantic_intent_report,
         )
@@ -1194,6 +1208,7 @@ class TransformationSynthesisEngine:
         semantics_report,
         mechanistic_report,
         context_routing_report,
+        candidate_proposal_report,
         compiler_report,
         semantic_intent_report,
     ):
@@ -1212,6 +1227,7 @@ class TransformationSynthesisEngine:
             "transformation_semantics_report": semantics_report,
             "mechanistic_reasoning_report": mechanistic_report,
             "context_routing_report": context_routing_report,
+            "candidate_proposal_report": candidate_proposal_report,
             "semantic_intent_routing_report": semantic_intent_report,
             "semantic_to_transformation_compilation_report": compiler_report,
             "selected_program": selected_program,
@@ -1240,6 +1256,7 @@ class TransformationSynthesisEngine:
                 "transformation_semantics_report",
                 "mechanistic_reasoning_report",
                 "context_routing_report",
+                "candidate_proposal_report",
                 "semantic_intent_routing_report",
                 "semantic_to_transformation_compilation_report",
                 "selected_program",

@@ -361,6 +361,21 @@ def test_candidate_arena_binding_detects_single_source_dominance():
         "winning_candidate": "reuse_transform",
         "decision_confidence": 1.0,
     }
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": ["bridge_creation", "component_connection"],
+        "semantic_to_transformation_compilation_report": {
+            "semantic_to_transformation_compilation_success": False,
+            "detected_intents": ["bridge_creation", "component_connection"],
+            "execution_intents": [],
+            "semantic_intent_routing_report": {
+                "semantic_intent_routing_success": False,
+                "execution_intent_count": 0,
+            },
+            "candidate_count": 0,
+            "compiled_program": {"steps": [], "step_count": 0},
+            "failure_reason": "no_executable_semantic_intents",
+        },
+    }
 
     result = CanonicalReportBindingEngine().bind(
         state,
@@ -368,12 +383,113 @@ def test_candidate_arena_binding_detects_single_source_dominance():
         report_level="normal",
     )
     summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+    decision = result["field_bindings"]["prediction_provenance_summary"]["value"]
 
     assert summary["arena_state"] == "SINGLE_SOURCE_DOMINANCE"
     assert summary["candidate_count"] == 1
+    assert summary["attempted_candidate_count"] == 2
+    assert summary["explicit_rejection_count"] == 1
     assert summary["competitor_sources"] == ["adaptive_reuse"]
     assert summary["winner_takes_all_detected"] is True
     assert summary["dominance_source"] == "adaptive_reuse"
+    assert summary["source_status"]["semantic_to_transformation_compiler"] == "BLOCKED"
+    assert summary["source_outcomes"][0]["source"] == "semantic_to_transformation_compiler"
+    assert summary["source_outcomes"][0]["status"] == "REJECTED"
+    assert decision["compiler_attempted"] is True
+    assert "Semantic Compilation" in decision["decision_pipeline"]
+
+
+def test_selected_semantic_compiler_without_report_is_explicit_rejection():
+    state = _state()
+    state["tool_selection_report"] = {
+        "enabled_tools": ["semantic_to_transformation_compiler"],
+    }
+    state["ADAPTIVE_REUSE_REPORT"] = {
+        "reuse_success_rate": 1.0,
+        "reused_programs": [
+            {
+                "steps": [
+                    {"operation": "reuse_transform", "parameters": {}}
+                ],
+                "step_count": 1,
+            }
+        ],
+    }
+    state["PREDICTION_PROVENANCE_REPORT"] = {
+        "prediction_source": "adaptive_reuse",
+        "decision_owner": "Adaptive Reuse Layer",
+        "winning_candidate": "reuse_transform",
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata={"execution_id": "exec-1"},
+        report_level="normal",
+    )
+    semantic = result["field_bindings"]["semantic_compilation_summary"]["value"]
+    decision = result["field_bindings"]["prediction_provenance_summary"]["value"]
+    arena = result["field_bindings"]["candidate_arena_summary"]["value"]
+    proposal = result["field_bindings"]["candidate_proposal_summary"]["value"]
+
+    assert semantic["compiler_selected"] is True
+    assert semantic["compiler_triggered"] is True
+    assert semantic["compilation_status"] == "REQUIRED_REPORT_MISSING"
+    assert decision["compiler_attempted"] is True
+    assert "Semantic Compilation" in decision["decision_pipeline"]
+    assert arena["attempted_candidate_count"] == 2
+    assert arena["explicit_rejection_count"] == 1
+    assert arena["source_status"]["semantic_to_transformation_compiler"] == "BLOCKED"
+    assert proposal["proposal_phase_entered"] is True
+    assert proposal["explicit_rejection_count"] == 1
+    assert proposal["sources_rejected"] == ["semantic_to_transformation_compiler"]
+    assert any(
+        outcome["source"] == "semantic_to_transformation_compiler"
+        and outcome["status"] == "REJECTED"
+        for outcome in arena["source_outcomes"]
+    )
+
+
+def test_executable_semantic_coverage_identifies_unsupported_clusters():
+    state = _state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": [
+            "density_increase",
+            "symmetry_break",
+            "relative_position",
+            "spatial_relation",
+            "transformation_sequence",
+            "bridge_creation",
+            "component_connection",
+            "connectivity_change",
+            "topology_change",
+            "density_modulation",
+            "growth",
+            "propagation",
+            "directional_motion",
+            "position_preservation",
+            "object_identity_preservation",
+            "shape_preservation",
+            "rotation",
+            "reflection",
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "executable_semantic_coverage_summary"
+    ]["value"]
+
+    assert coverage["generated_concepts"] == 18
+    assert coverage["executable_concepts"] == 7
+    assert coverage["unsupported_concepts"] == 11
+    assert coverage["coverage_status"] == "LOW"
+    assert "Spatial And Motion" in coverage["missing_cluster_counts"]
+    assert "density_modulation" in coverage["unsupported_operations"]
+    assert "connect_components" in coverage["supported_operations"]
 
 
 def test_canonical_timing_bindings_use_existing_timing_sources():

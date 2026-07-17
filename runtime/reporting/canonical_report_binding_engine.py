@@ -115,6 +115,7 @@ class CanonicalReportBindingEngine:
         "runtime_snapshots",
         "program_registry",
         "prediction_provenance_report",
+        "candidate_proposal_report",
         "cognitive_candidate_arena_report",
         "truth_metrics",
         "memory_metrics",
@@ -122,6 +123,7 @@ class CanonicalReportBindingEngine:
         "knowledge_pipeline_metrics",
         "representation_metrics",
         "semantic_compilation_report",
+        "executable_semantic_coverage_report",
     }
 
     def __init__(
@@ -289,9 +291,17 @@ class CanonicalReportBindingEngine:
                 "semantic_compilation_report",
                 self._build_semantic_compilation_visibility(report_state, performance),
             ),
+            "executable_semantic_coverage_report": CanonicalSource(
+                "executable_semantic_coverage_report",
+                self._build_executable_semantic_coverage_visibility(report_state, performance),
+            ),
             "prediction_provenance_report": CanonicalSource(
                 "prediction_provenance_report",
                 self._build_prediction_provenance_visibility(report_state, performance),
+            ),
+            "candidate_proposal_report": CanonicalSource(
+                "candidate_proposal_report",
+                self._build_candidate_proposal_visibility(report_state, performance),
             ),
             "cognitive_candidate_arena_report": CanonicalSource(
                 "cognitive_candidate_arena_report",
@@ -771,8 +781,12 @@ class CanonicalReportBindingEngine:
             bind("validation_distribution", "Program Runtime", "program_registry", ("validation_distribution", "program_validation_distribution"), "summary", compression_policy="COMPRESSED"),
             bind("semantic_compilation_summary", "Semantic Compilation", "semantic_compilation_report", ("semantic_compilation_summary",), "summary", visibility=normal),
             bind("semantic_compilation_diagnostics", "Semantic Compilation", "semantic_compilation_report", ("semantic_compilation_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("executable_semantic_coverage_summary", "Executable Semantic Coverage", "executable_semantic_coverage_report", ("executable_semantic_coverage_summary",), "summary", visibility=normal),
+            bind("executable_semantic_coverage_diagnostics", "Executable Semantic Coverage", "executable_semantic_coverage_report", ("executable_semantic_coverage_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("prediction_provenance_summary", "Transformation Decision Runtime", "prediction_provenance_report", ("prediction_provenance_summary",), "summary", visibility=normal),
             bind("prediction_provenance_diagnostics", "Transformation Decision Runtime", "prediction_provenance_report", ("prediction_provenance_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("candidate_proposal_summary", "Candidate Proposal Runtime", "candidate_proposal_report", ("candidate_proposal_summary",), "summary", visibility=normal),
+            bind("candidate_proposal_diagnostics", "Candidate Proposal Runtime", "candidate_proposal_report", ("candidate_proposal_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("candidate_arena_summary", "Cognitive Candidate Arena", "cognitive_candidate_arena_report", ("candidate_arena_summary",), "summary", visibility=normal),
             bind("candidate_arena_diagnostics", "Cognitive Candidate Arena", "cognitive_candidate_arena_report", ("candidate_arena_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("overall_search_quality", "Search Runtime", "search_metrics", ("overall_search_quality",), "metric", visibility=all_levels, required=True),
@@ -833,13 +847,18 @@ class CanonicalReportBindingEngine:
             self._first_dict(performance, "SEMANTIC_COMPILATION_REPORT", "semantic_compilation_report"),
             self._first_dict(synthesis, "semantic_to_transformation_compilation_report"),
         )
+        compiler_selected = self._tool_selected(
+            report_state,
+            performance,
+            "semantic_to_transformation_compiler",
+        )
         selected_program = self._first_dict(synthesis, "selected_program")
         selected_steps = selected_program.get("steps", []) if isinstance(selected_program, dict) else []
         selected_step = selected_steps[0] if selected_steps and isinstance(selected_steps[0], dict) else {}
         compiler_program = self._first_dict(compiler, "compiled_program")
         compiler_steps = compiler_program.get("steps", []) if isinstance(compiler_program, dict) else []
         compiler_step = compiler_steps[0] if compiler_steps and isinstance(compiler_steps[0], dict) else {}
-        triggered = bool(compiler) or bool(synthesis)
+        triggered = bool(compiler) or bool(synthesis) or compiler_selected
         compilation_success = bool(
             compiler.get("semantic_to_transformation_compilation_success")
         )
@@ -852,7 +871,9 @@ class CanonicalReportBindingEngine:
             and compiler_program == selected_program
         )
         validation = self._first_dict(compiler, "validation")
-        if not compiler:
+        if not compiler and compiler_selected:
+            status = "REQUIRED_REPORT_MISSING"
+        elif not compiler:
             status = "NOT_TRIGGERED"
         elif compilation_success:
             status = "SUCCESS"
@@ -870,7 +891,9 @@ class CanonicalReportBindingEngine:
             execution_status = "NOT_TRIGGERED"
 
         failure_cause = compiler.get("failure_reason")
-        if not failure_cause and status == "NO_MATCHING_COMPILER_RULE":
+        if not failure_cause and status == "REQUIRED_REPORT_MISSING":
+            failure_cause = "Semantic compiler selected but no compilation report was produced."
+        elif not failure_cause and status == "NO_MATCHING_COMPILER_RULE":
             failure_cause = "No matching compiler rule."
         elif not failure_cause and execution_status == "NOT_SELECTED":
             failure_cause = "Compiled program was not selected by synthesis ranking."
@@ -879,6 +902,7 @@ class CanonicalReportBindingEngine:
 
         summary = {
             "compiler_triggered": triggered,
+            "compiler_selected": compiler_selected,
             "compilation_status": status,
             "execution_status": execution_status,
             "selected_from_compiler": selected_from_compiler,
@@ -930,6 +954,227 @@ class CanonicalReportBindingEngine:
             },
             **summary,
         }
+
+    def _build_executable_semantic_coverage_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        synthesis = self._merge_dicts(
+            self._first_dict(report_state, "TRANSFORMATION_SYNTHESIS_REPORT", "transformation_synthesis_report"),
+            self._first_dict(performance, "TRANSFORMATION_SYNTHESIS_REPORT", "transformation_synthesis_report"),
+        )
+        compiler = self._merge_dicts(
+            self._first_dict(report_state, "SEMANTIC_COMPILATION_REPORT", "semantic_compilation_report"),
+            self._first_dict(performance, "SEMANTIC_COMPILATION_REPORT", "semantic_compilation_report"),
+            self._first_dict(synthesis, "semantic_to_transformation_compilation_report"),
+        )
+        concepts = self._semantic_concepts_for_coverage(report_state, performance, synthesis, compiler)
+        support_map = self._executable_semantic_support_map()
+        rows = []
+        for concept in concepts:
+            operation = support_map.get(concept)
+            cluster = self._semantic_cluster(concept)
+            rows.append({
+                "concept": concept,
+                "cluster": cluster,
+                "executable": operation is not None,
+                "operation": operation,
+            })
+        executable = [row for row in rows if row["executable"]]
+        unsupported = [row for row in rows if not row["executable"]]
+        cluster_counts: dict[str, int] = {}
+        for row in unsupported:
+            cluster_counts[row["cluster"]] = cluster_counts.get(row["cluster"], 0) + 1
+        highest_missing = None
+        if cluster_counts:
+            highest_missing = sorted(
+                cluster_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[0][0]
+        coverage = round(len(executable) / max(len(rows), 1), 4) if rows else 0.0
+        summary = {
+            "generated_concepts": len(rows),
+            "executable_concepts": len(executable),
+            "unsupported_concepts": len(unsupported),
+            "executable_semantic_coverage": coverage,
+            "coverage_status": self._coverage_status(coverage),
+            "supported_operations": sorted({
+                row["operation"]
+                for row in executable
+                if row.get("operation")
+            }),
+            "supported_concept_rows": executable,
+            "unsupported_concept_rows": unsupported,
+            "unsupported_operations": [row["concept"] for row in unsupported],
+            "highest_missing_semantic_cluster": highest_missing,
+            "missing_cluster_counts": cluster_counts,
+        }
+        return {
+            "executable_semantic_coverage_summary": summary,
+            "executable_semantic_coverage_diagnostics": {
+                "semantic_concepts": concepts,
+                "coverage_rows": rows,
+                "support_map_size": len(support_map),
+            },
+            **summary,
+        }
+
+    def _semantic_concepts_for_coverage(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+        synthesis: dict[str, Any],
+        compiler: dict[str, Any],
+    ) -> list[str]:
+        concepts: list[str] = []
+
+        def add(value: Any) -> None:
+            if not isinstance(value, str):
+                return
+            token = value.strip().lower().replace("-", "_").replace(" ", "_")
+            if token:
+                concepts.append(token)
+
+        def visit(value: Any) -> None:
+            if isinstance(value, str):
+                add(value)
+            elif isinstance(value, dict):
+                for key, item in value.items():
+                    if key in {
+                        "concept",
+                        "concepts",
+                        "detected_concepts",
+                        "attributed_concepts",
+                        "semantic_concepts",
+                        "target_concepts",
+                        "detected_intents",
+                        "routed_concepts",
+                    }:
+                        visit(item)
+            elif isinstance(value, (list, tuple, set)):
+                for item in value:
+                    visit(item)
+
+        for source in (
+            synthesis.get("detected_concepts"),
+            compiler.get("detected_intents"),
+            report_state.get("detected_concepts"),
+            report_state.get("attributed_concepts"),
+            report_state.get("semantic_concepts"),
+            report_state.get("target_concepts"),
+            performance.get("detected_concepts"),
+            performance.get("attributed_concepts"),
+        ):
+            visit(source)
+        return list(dict.fromkeys(concepts))
+
+    def _executable_semantic_support_map(self) -> dict[str, str]:
+        support = {}
+        for concept in (
+            "rotation",
+            "rotation_reflection",
+            "orientation_change",
+        ):
+            support[concept] = "rotate"
+        for concept in (
+            "reflection",
+            "symmetry_creation",
+        ):
+            support[concept] = "reflect"
+        for concept in (
+            "path_finding",
+            "route_completion",
+            "reachability",
+            "path_construction",
+        ):
+            support[concept] = "construct_path"
+        for concept in (
+            "bridge_creation",
+            "component_connection",
+            "connectivity_change",
+        ):
+            support[concept] = "connect_components"
+        for concept in (
+            "hole_removal",
+            "topology_repair",
+            "connectivity_restoration",
+            "topology_change",
+        ):
+            support[concept] = "construct_path"
+        for concept in (
+            "scaling",
+            "scale_transformation",
+            "size_transformation",
+            "density_increase",
+        ):
+            support[concept] = "scale"
+        for concept in (
+            "noise_removal",
+            "artifact_filtering",
+            "object_removal",
+            "color_elimination",
+        ):
+            support[concept] = "remove_object"
+        for concept in (
+            "color_mapping",
+            "symbolic_remapping",
+        ):
+            support[concept] = "recolor"
+        return support
+
+    def _semantic_cluster(self, concept: str) -> str:
+        if any(token in concept for token in ("topology", "connectivity", "bridge", "component", "hole")):
+            return "Topology Transformations"
+        if any(token in concept for token in ("position", "spatial", "relative", "direction", "motion")):
+            return "Spatial And Motion"
+        if any(token in concept for token in ("density", "growth", "propagation")):
+            return "Density And Growth"
+        if any(token in concept for token in ("symmetry", "reflection", "rotation", "orientation")):
+            return "Symmetry And Geometry"
+        if any(token in concept for token in ("color", "symbolic")):
+            return "Symbolic And Color"
+        if "preservation" in concept or "identity" in concept:
+            return "Preservation And Identity"
+        return "Other"
+
+    def _coverage_status(self, coverage: float) -> str:
+        if coverage >= 0.70:
+            return "HIGH"
+        if coverage >= 0.40:
+            return "MEDIUM"
+        return "LOW"
+
+    def _tool_selected(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+        tool_name: str,
+    ) -> bool:
+        selected: set[str] = set()
+
+        def visit(value: Any) -> None:
+            if isinstance(value, str):
+                selected.add(value)
+                return
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in {"enabled_tools", "selected_tools", "tools"}:
+                        visit(item)
+                    elif key == "tool_selection_report" and isinstance(item, dict):
+                        visit(item)
+                return
+            if isinstance(value, (list, tuple, set)):
+                for item in value:
+                    visit(item)
+
+        visit(report_state.get("enabled_tools"))
+        visit(report_state.get("selected_tools"))
+        visit(report_state.get("tool_selection_report"))
+        visit(performance.get("enabled_tools"))
+        visit(performance.get("selected_tools"))
+        visit(performance.get("tool_selection_report"))
+        return tool_name in selected
 
     def _build_report_state_visibility(
         self,
@@ -1039,6 +1284,17 @@ class CanonicalReportBindingEngine:
             report_state.get("generated_concepts"),
             report_state.get("concept_count"),
         )
+        compiler_attempted = bool(
+            semantic.get("compiler_triggered")
+            or semantic.get("compiler_selected")
+            or semantic.get("execution_intent_count")
+            or semantic.get("compiled_candidate_count")
+            or semantic.get("compilation_status") in {
+                "SUCCESS",
+                "NO_MATCHING_COMPILER_RULE",
+                "REQUIRED_REPORT_MISSING",
+            }
+        )
         compiler_participation = bool(semantic.get("selected_from_compiler"))
         repair_participation = bool(
             repair.get("repair_success_rate")
@@ -1087,6 +1343,7 @@ class CanonicalReportBindingEngine:
         )
         pipeline = self._decision_pipeline(
             owner,
+            compiler_attempted,
             compiler_participation,
             transfer_participation,
             repair_participation,
@@ -1100,6 +1357,7 @@ class CanonicalReportBindingEngine:
             "winning_candidate": selected_candidate,
             "selected_operation": selected_operation,
             "decision_pipeline": pipeline,
+            "compiler_attempted": compiler_attempted,
             "compiler_participation": compiler_participation,
             "repair_participation": repair_participation,
             "transfer_learning_participation": transfer_participation,
@@ -1157,6 +1415,7 @@ class CanonicalReportBindingEngine:
     def _decision_pipeline(
         self,
         owner: str,
+        compiler_attempted: bool,
         compiler_participation: bool,
         transfer_participation: bool,
         repair_participation: bool,
@@ -1164,6 +1423,8 @@ class CanonicalReportBindingEngine:
         has_selected_program: bool,
     ) -> list[str]:
         pipeline = ["Semantic Attribution", "Pattern Analysis", "Rule Analysis"]
+        if compiler_attempted:
+            pipeline.append("Semantic Compilation")
         if compiler_participation:
             pipeline.append("Semantic-to-Transformation Compiler")
         if transfer_participation:
@@ -1217,6 +1478,67 @@ class CanonicalReportBindingEngine:
             self._first_dict(report_state, "COGNITIVE_CANDIDATE_ARENA_REPORT", "candidate_arena_report"),
             self._first_dict(performance, "COGNITIVE_CANDIDATE_ARENA_REPORT", "candidate_arena_report"),
         )
+        explicit_summary = self._first_dict(explicit, "candidate_arena_summary")
+        if not explicit_summary and explicit.get("arena_state"):
+            explicit_summary = explicit
+        if explicit_summary and explicit_summary.get("selection_mode") == "EVIDENCE_BASED_ARENA":
+            rows = self._first_list(explicit_summary, "candidate_summary", "candidate_rows")
+            summary = {
+                "arena_state": explicit_summary.get("arena_state"),
+                "candidate_count": explicit_summary.get("candidate_count"),
+                "attempted_candidate_count": explicit_summary.get("unique_candidate_count", explicit_summary.get("candidate_count")),
+                "explicit_rejection_count": explicit_summary.get("governance_blocked_count", 0),
+                "competitor_sources": explicit_summary.get("sources_entered") or [],
+                "winner_source": explicit_summary.get("winner_source"),
+                "arena_winner": explicit_summary.get("winner_candidate_id"),
+                "winner_takes_all_detected": bool(explicit_summary.get("source_dominance_detected")),
+                "dominance_source": explicit_summary.get("dominance_source"),
+                "selection_mode": explicit_summary.get("selection_mode"),
+                "validation_coverage": explicit_summary.get("validation_coverage"),
+                "candidate_rows": rows,
+                "rejected_candidate_rows": [
+                    row for row in rows
+                    if isinstance(row, dict) and str(row.get("status", "")).startswith(("BLOCKED", "REJECTED"))
+                ],
+                "source_outcomes": [
+                    {
+                        "source": row.get("source"),
+                        "candidate_id": row.get("candidate_id"),
+                        "entered_arena": row.get("entered_arena"),
+                        "status": row.get("status"),
+                        "reason": row.get("blocked_reason"),
+                    }
+                    for row in rows
+                    if isinstance(row, dict)
+                ],
+                "source_status": {
+                    source: "ENTERED"
+                    for source in explicit_summary.get("sources_entered", []) or []
+                },
+                "missing_competition_reason": explicit_summary.get("no_competition_reason"),
+                "unique_candidate_count": explicit_summary.get("unique_candidate_count"),
+                "source_count": explicit_summary.get("source_count"),
+                "competition_diversity": explicit_summary.get("competition_diversity"),
+                "simulation_count": explicit_summary.get("simulation_count"),
+                "simulation_success_count": explicit_summary.get("simulation_success_count"),
+                "governance_blocked_count": explicit_summary.get("governance_blocked_count"),
+                "winner_operation": explicit_summary.get("winner_operation"),
+                "winner_score": explicit_summary.get("winner_score"),
+                "second_best_score": explicit_summary.get("second_best_score"),
+                "selection_margin": explicit_summary.get("selection_margin"),
+                "selection_state": explicit_summary.get("selection_state"),
+                "source_dominance_detected": explicit_summary.get("source_dominance_detected"),
+                "selection_explanation": explicit_summary.get("selection_explanation"),
+            }
+            return {
+                "candidate_arena_summary": summary,
+                "candidate_arena_diagnostics": {
+                    "explicit_arena_report": explicit,
+                    "all_candidates": rows,
+                    "source_status": summary["source_status"],
+                },
+                **summary,
+            }
         candidates = []
         candidates.extend(self._arena_candidates_from_explicit(explicit))
         candidates.extend(self._arena_candidates_from_compiler(compiler, semantic, provenance))
@@ -1227,6 +1549,7 @@ class CanonicalReportBindingEngine:
         candidates.extend(self._arena_candidates_from_repair(repair, provenance))
         candidates = self._dedupe_arena_candidates(candidates)
         participants = [candidate for candidate in candidates if candidate.get("entered_arena")]
+        rejected = [candidate for candidate in candidates if not candidate.get("entered_arena")]
         winner = next((candidate for candidate in candidates if candidate.get("selected")), {})
         sources = sorted({candidate.get("source") for candidate in participants if candidate.get("source")})
         dominance_source = None
@@ -1252,6 +1575,11 @@ class CanonicalReportBindingEngine:
             repair,
             participants,
         )
+        if any(
+            candidate.get("source") == "semantic_to_transformation_compiler"
+            for candidate in rejected
+        ):
+            source_status["semantic_to_transformation_compiler"] = "BLOCKED"
         arena_state = (
             "COMPETITIVE"
             if len(sources) > 1
@@ -1259,9 +1587,25 @@ class CanonicalReportBindingEngine:
             if participants
             else "EMPTY"
         )
+        source_outcomes = [
+            {
+                "source": candidate.get("source"),
+                "candidate_id": candidate.get("candidate_id"),
+                "entered_arena": bool(candidate.get("entered_arena")),
+                "status": (
+                    "ENTERED"
+                    if candidate.get("entered_arena")
+                    else "REJECTED"
+                ),
+                "reason": candidate.get("blocked_reason"),
+            }
+            for candidate in candidates
+        ]
         summary = {
             "arena_state": explicit.get("arena_state") or arena_state,
             "candidate_count": len(participants),
+            "attempted_candidate_count": len(candidates),
+            "explicit_rejection_count": len(rejected),
             "competitor_sources": sources,
             "winner_source": winner.get("source") or provenance.get("prediction_source"),
             "arena_winner": winner.get("candidate_id") or provenance.get("winning_candidate"),
@@ -1273,6 +1617,8 @@ class CanonicalReportBindingEngine:
                 4,
             ) if participants else 0.0,
             "candidate_rows": participants,
+            "rejected_candidate_rows": rejected,
+            "source_outcomes": source_outcomes,
             "source_status": source_status,
             "missing_competition_reason": (
                 "Only one candidate source entered the arena."
@@ -1289,6 +1635,87 @@ class CanonicalReportBindingEngine:
                 "source_status": source_status,
                 "prediction_provenance_summary": provenance,
                 "explicit_arena_report": explicit,
+            },
+            **summary,
+        }
+
+    def _build_candidate_proposal_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        synthesis = self._merge_dicts(
+            self._first_dict(report_state, "TRANSFORMATION_SYNTHESIS_REPORT", "transformation_synthesis_report"),
+            self._first_dict(performance, "TRANSFORMATION_SYNTHESIS_REPORT", "transformation_synthesis_report"),
+        )
+        explicit = self._merge_dicts(
+            self._first_dict(report_state, "CANDIDATE_PROPOSAL_REPORT", "candidate_proposal_report"),
+            self._first_dict(performance, "CANDIDATE_PROPOSAL_REPORT", "candidate_proposal_report"),
+            self._first_dict(synthesis, "candidate_proposal_report"),
+        )
+        if explicit:
+            proposals = self._first_list(explicit, "candidate_proposals")
+            proposal_count = self._first_number(
+                explicit.get("proposal_count"),
+                len([row for row in proposals if isinstance(row, dict) and row.get("proposal_status") == "PROPOSED"]),
+            )
+            rejection_count = self._first_number(
+                explicit.get("explicit_rejection_count"),
+                len([row for row in proposals if isinstance(row, dict) and row.get("proposal_status") == "REJECTED"]),
+            )
+            summary = {
+                "proposal_phase_entered": bool(explicit.get("proposal_phase_entered", True)),
+                "proposal_phase_status": explicit.get("proposal_phase_status"),
+                "eligible_source_count": explicit.get("eligible_source_count"),
+                "proposal_count": proposal_count,
+                "explicit_rejection_count": rejection_count,
+                "sources_with_proposals": explicit.get("sources_with_proposals") or [],
+                "sources_rejected": explicit.get("sources_rejected") or [],
+                "candidate_proposals": proposals,
+            }
+        else:
+            arena = self._build_candidate_arena_visibility(report_state, performance).get(
+                "candidate_arena_summary",
+                {},
+            )
+            outcomes = arena.get("source_outcomes") or []
+            proposals = [
+                {
+                    "source": row.get("source"),
+                    "proposal_id": row.get("candidate_id"),
+                    "proposal_status": "PROPOSED" if row.get("entered_arena") else "REJECTED",
+                    "operation": None,
+                    "candidate_available": bool(row.get("entered_arena")),
+                    "rejection_reason": row.get("reason"),
+                }
+                for row in outcomes
+                if isinstance(row, dict)
+            ]
+            summary = {
+                "proposal_phase_entered": bool(proposals),
+                "proposal_phase_status": (
+                    "COMPETITIVE"
+                    if len(arena.get("competitor_sources") or []) > 1
+                    else "SINGLE_SOURCE"
+                    if arena.get("competitor_sources")
+                    else "EMPTY"
+                ),
+                "eligible_source_count": len(proposals),
+                "proposal_count": arena.get("candidate_count", 0),
+                "explicit_rejection_count": arena.get("explicit_rejection_count", 0),
+                "sources_with_proposals": arena.get("competitor_sources") or [],
+                "sources_rejected": sorted({
+                    row.get("source")
+                    for row in outcomes
+                    if isinstance(row, dict) and row.get("status") == "REJECTED"
+                }),
+                "candidate_proposals": proposals,
+            }
+        return {
+            "candidate_proposal_summary": summary,
+            "candidate_proposal_diagnostics": {
+                "raw_candidate_proposal_report": explicit,
+                "candidate_proposals": summary.get("candidate_proposals") or [],
             },
             **summary,
         }
@@ -1317,6 +1744,17 @@ class CanonicalReportBindingEngine:
         provenance: dict[str, Any],
     ) -> list[dict[str, Any]]:
         if not compiler:
+            if semantic.get("compiler_triggered") or semantic.get("compiler_selected"):
+                return [self._arena_candidate(
+                    source="semantic_to_transformation_compiler",
+                    candidate_id="compiler_attempt",
+                    operation=semantic.get("compiled_operation"),
+                    confidence=semantic.get("compilation_confidence"),
+                    validation_status=semantic.get("compilation_status"),
+                    selected=False,
+                    entered=False,
+                    blocked_reason=semantic.get("failure_cause") or "compiler_selected_but_no_compilation_report",
+                )]
             return []
         success = bool(compiler.get("semantic_to_transformation_compilation_success"))
         return [self._arena_candidate(

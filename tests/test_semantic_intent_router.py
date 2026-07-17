@@ -1,8 +1,82 @@
+from runtime.semantic.executable_coverage import ExecutableCoverageTracker
+from runtime.semantic.executable_semantics import ExecutableSemanticIntelligence
+from runtime.semantic.semantic_operation_mapper import SemanticOperationMapper
 from runtime.semantic_routing import CognitiveContextRouter, SemanticIntentRouter
 from runtime.memory.transformation_memory import TransformationMemory
 from runtime.reasoning.transformation_synthesis_engine import TransformationSynthesisEngine
 from runtime.transformation_compilation import SemanticToTransformationCompiler
 from runtime.transforms.primitive_executor import PrimitiveExecutor
+
+
+def test_executable_semantic_intelligence_classifies_concepts():
+    executable = ExecutableSemanticIntelligence().evaluate("replication")
+    non_executable = ExecutableSemanticIntelligence().evaluate("context_support")
+
+    assert executable["is_executable"] is True
+    assert executable["required_primitives"] == ["duplicate_object"]
+    assert executable["execution_path"] == "object_duplication"
+    assert executable["coverage_state"] == "EXECUTABLE"
+    assert non_executable["is_executable"] is False
+    assert non_executable["coverage_state"] == "NON_EXECUTABLE_SEMANTIC_CONTEXT"
+
+
+def test_semantic_operation_mapper_maps_concepts_to_operations():
+    report = SemanticOperationMapper().map("symbolic_remapping")
+
+    assert report["operation_name"] == "remap_symbols"
+    assert report["primitive_family"] == "symbolic_operations"
+    assert report["confidence"] > 0.0
+
+
+def test_executable_coverage_tracks_supported_and_unsupported_concepts():
+    report = ExecutableCoverageTracker().evaluate([
+        "replication",
+        "symmetry_preservation",
+        "growth",
+        "context_support",
+    ])
+
+    assert report["total_concepts"] == 4
+    assert report["executable_concepts"] == 3
+    assert report["coverage_percentage"] == 75.0
+    assert report["unsupported_concepts"] == ["context_support"]
+
+
+def test_router_outputs_executable_semantic_proposals():
+    report = SemanticIntentRouter().route(
+        detected_concepts=["color_preservation", "replication", "context_support"],
+        runtime_context={
+            "truth_governance_report": {"validation_success": True},
+            "identity_governance_report": {"validation_success": True},
+            "contextual_truth_report": {"validation_success": True},
+            "dependency_graph_validation": {"validation_success": True},
+        },
+    )
+
+    proposals = {
+        proposal["concept"]: proposal
+        for proposal in report["execution_proposals"]
+    }
+
+    assert report["semantic_intent_routing_success"] is True
+    assert proposals["color_preservation"]["semantic_intent"] == "preserve_color_mapping"
+    assert proposals["color_preservation"]["operation_family"] == "color_operations"
+    assert proposals["color_preservation"]["intent_ready"] is True
+    assert proposals["replication"]["semantic_intent"] == "duplicate_object"
+    assert "context_support" in report["unrouted_concepts"]
+
+
+def test_router_governance_blocks_execution_pipeline_entry():
+    report = SemanticIntentRouter().route(
+        detected_concepts=["replication"],
+        runtime_context={
+            "truth_governance_report": {"validation_success": False},
+        },
+    )
+
+    assert report["semantic_intent_routing_success"] is False
+    assert report["execution_intents"] == []
+    assert report["blocked_concepts"][0]["blocked_reason"] == "governance_rejected"
 
 
 def test_routes_rotation_concepts_and_tools_to_execution_intent():
@@ -32,6 +106,34 @@ def test_routes_rotation_concepts_and_tools_to_execution_intent():
     assert "rotation_reflection" in intent_names
     assert intents[0]["operation"] == "rotate_clockwise_90"
     assert "rotation_execution" in intents[0]["matched_tools"]
+
+
+def test_compiler_uses_semantic_router_for_duplication_candidate():
+    router_report = SemanticIntentRouter().route(
+        detected_concepts=["replication"],
+        runtime_context={"enabled_tools": ["semantic_to_transformation_compiler"]},
+    )
+
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 0, 0],
+            [0, 0, 0],
+        ],
+        output_grid=[
+            [1, 0, 1],
+            [0, 0, 0],
+        ],
+        detected_concepts=["replication"],
+        execution_intents=router_report["execution_intents"],
+        semantic_intent_report=router_report,
+    )
+
+    step = report["compiled_program"]["steps"][0]
+
+    assert report["semantic_to_transformation_compilation_success"] is True
+    assert report["compiler_triggered_by_intents"] is True
+    assert step["operation"] == "duplicate_object"
+    assert report["validation"]["exact_match"] is True
 
 
 def test_compiler_uses_execution_intent_for_rotation():
@@ -245,12 +347,19 @@ def test_synthesis_routes_overloaded_context_before_execution_intents():
 
     synthesis = report["TRANSFORMATION_SYNTHESIS_REPORT"]
     context = synthesis["context_routing_report"]
+    proposals = synthesis["candidate_proposal_report"]
     router = synthesis["semantic_intent_routing_report"]
     compiler = synthesis["semantic_to_transformation_compilation_report"]
 
     assert context["context_overload_detected"] is True
     assert context["routed_concept_count"] < context["input_concept_count"]
     assert "bridge_creation" in context["routed_concepts"]
+    assert proposals["proposal_phase_entered"] is True
+    assert proposals["proposal_count"] >= 1
+    assert "semantic_to_transformation_compiler" in {
+        proposal["source"]
+        for proposal in proposals["candidate_proposals"]
+    }
     assert router["semantic_intent_routing_success"] is True
     assert router["execution_intent_count"] > 0
     assert compiler["compiler_triggered_by_intents"] is True

@@ -24,8 +24,13 @@ SECTION_ORDER = [
     "COGNITIVE OUTPUTS",
     "PROGRAM QUALITY",
     "SEMANTIC COMPILATION",
+    "EXECUTABLE SEMANTIC COVERAGE",
     "TRANSFORMATION DECISION",
+    "MULTI HYPOTHESIS REPORT",
+    "CANDIDATE PROPOSAL PHASE",
     "COGNITIVE CANDIDATE ARENA",
+    "COUNTERFACTUAL REASONING REPORT",
+    "EXECUTABLE INTELLIGENCE REPORT",
     "SEARCH QUALITY",
     "KNOWLEDGE PIPELINE",
     "SYSTEM HEALTH",
@@ -285,8 +290,13 @@ class DeterministicFinalReportRenderer:
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
             self._render_semantic_compilation(canonical),
+            self._render_executable_semantic_coverage(canonical),
             self._render_transformation_decision(canonical),
+            self._render_multi_hypothesis_report(canonical),
+            self._render_candidate_proposal(canonical),
             self._render_candidate_arena(canonical),
+            self._render_counterfactual_reasoning(canonical),
+            self._render_executable_intelligence(canonical),
             self._render_search_quality(canonical),
             self._render_knowledge_pipeline(canonical),
             self._render_system_health(canonical),
@@ -319,8 +329,13 @@ class DeterministicFinalReportRenderer:
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
             self._render_semantic_compilation(canonical),
+            self._render_executable_semantic_coverage(canonical),
             self._render_transformation_decision(canonical),
+            self._render_multi_hypothesis_report(canonical),
+            self._render_candidate_proposal(canonical),
             self._render_candidate_arena(canonical),
+            self._render_counterfactual_reasoning(canonical),
+            self._render_executable_intelligence(canonical),
             self._render_search_quality(canonical),
             self._render_knowledge_pipeline(canonical),
             self._render_system_health(canonical),
@@ -462,6 +477,7 @@ class DeterministicFinalReportRenderer:
             f"Decision Confidence: {self._value(summary.get('decision_confidence'))}",
             f"Winning Candidate: {self._value(summary.get('winning_candidate'))}",
             f"Selected Operation: {self._value(summary.get('selected_operation'))}",
+            f"Compiler Attempted: {self._value(summary.get('compiler_attempted'))}",
             f"Compiler Participation: {self._value(summary.get('compiler_participation'))}",
             f"Repair Participation: {self._value(summary.get('repair_participation'))}",
             "Transfer Learning Participation: "
@@ -492,6 +508,34 @@ class DeterministicFinalReportRenderer:
                     lines.append(f"{self._label(key)} Fields: {len(value)}")
         return self._section("TRANSFORMATION DECISION", lines)
 
+    def _render_executable_semantic_coverage(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "executable_semantic_coverage_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        supported = summary.get("supported_operations") or []
+        supported = supported if isinstance(supported, list) else [supported]
+        unsupported = summary.get("unsupported_operations") or []
+        unsupported = unsupported if isinstance(unsupported, list) else [unsupported]
+        missing_clusters = summary.get("missing_cluster_counts") or {}
+        lines = [
+            f"Generated Concepts: {self._value(summary.get('generated_concepts'))}",
+            f"Executable Concepts: {self._value(summary.get('executable_concepts'))}",
+            f"Unsupported Concepts: {self._value(summary.get('unsupported_concepts'))}",
+            f"Coverage: {self._percent(summary.get('executable_semantic_coverage'))}",
+            f"Coverage Status: {self._value(summary.get('coverage_status'))}",
+            f"Highest Missing Semantic Cluster: {self._value(summary.get('highest_missing_semantic_cluster'))}",
+            f"Supported Operations: {', '.join(str(item) for item in supported) if supported else 'Not Available'}",
+            f"Unsupported Operations: {', '.join(str(item) for item in unsupported[:12]) if unsupported else 'Not Available'}",
+        ]
+        if isinstance(missing_clusters, dict) and missing_clusters:
+            cluster_bits = [
+                f"{cluster}={count}"
+                for cluster, count in sorted(missing_clusters.items())
+            ]
+            lines.append(f"Missing Cluster Counts: {'; '.join(cluster_bits[:8])}")
+        return self._section("EXECUTABLE SEMANTIC COVERAGE", lines)
+
     def _render_candidate_arena(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
             return ""
@@ -504,17 +548,34 @@ class DeterministicFinalReportRenderer:
         rows = rows if isinstance(rows, list) else []
         source_status = summary.get("source_status") or {}
         source_status = source_status if isinstance(source_status, dict) else {}
+        source_outcomes = summary.get("source_outcomes") or []
+        source_outcomes = source_outcomes if isinstance(source_outcomes, list) else []
         lines = [
             f"Arena State: {self._value(summary.get('arena_state'))}",
             f"Candidate Count: {self._value(summary.get('candidate_count'))}",
+            f"Unique Candidate Count: {self._value(summary.get('unique_candidate_count'))}",
+            f"Source Count: {self._value(summary.get('source_count'))}",
+            f"Attempted Candidates: {self._value(summary.get('attempted_candidate_count'))}",
+            f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
             f"Competitor Sources: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            f"Competition Diversity: {self._value(summary.get('competition_diversity'))}",
+            f"Simulation Count: {self._value(summary.get('simulation_count'))}",
+            f"Simulation Success Count: {self._value(summary.get('simulation_success_count'))}",
+            f"Governance Blocked Count: {self._value(summary.get('governance_blocked_count'))}",
             f"Winner Source: {self._value(summary.get('winner_source'))}",
             f"Arena Winner: {self._value(summary.get('arena_winner'))}",
+            f"Winner Operation: {self._value(summary.get('winner_operation'))}",
+            f"Winner Score: {self._value(summary.get('winner_score'))}",
+            f"Second Best Score: {self._value(summary.get('second_best_score'))}",
+            f"Selection Margin: {self._value(summary.get('selection_margin'))}",
+            f"Selection State: {self._value(summary.get('selection_state'))}",
             f"Winner Takes All Detected: {self._value(summary.get('winner_takes_all_detected'))}",
+            f"Source Dominance Detected: {self._value(summary.get('source_dominance_detected'))}",
             f"Dominance Source: {self._value(summary.get('dominance_source'))}",
             f"Selection Mode: {self._value(summary.get('selection_mode'))}",
             f"Validation Coverage: {self._percent(summary.get('validation_coverage'))}",
             f"Missing Competition Reason: {self._value(summary.get('missing_competition_reason'))}",
+            f"Selection Explanation: {self._value(summary.get('selection_explanation'))}",
         ]
         if rows:
             lines.append("Top Arena Candidates:")
@@ -527,15 +588,120 @@ class DeterministicFinalReportRenderer:
                     f"{index}. {self._value(row.get('source'))}: "
                     f"{self._value(row.get('candidate_id'))} "
                     f"op={self._value(row.get('operation'))} "
-                    f"confidence={self._value(row.get('confidence'))} "
+                    f"confidence={self._value(row.get('confidence', row.get('score')))} "
+                    f"accuracy={self._value(row.get('accuracy'))} "
                     f"status={self._value(row.get('validation_status'))} "
                     f"{marker}"
+                )
+        if source_outcomes:
+            lines.append("Cognitive Source Outcomes:")
+            for outcome in source_outcomes[:6]:
+                if not isinstance(outcome, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(outcome.get('source'))}: "
+                    f"{self._value(outcome.get('status'))} "
+                    f"reason={self._value(outcome.get('reason'))}"
                 )
         if canonical["report_level"] == "diagnostic" and source_status:
             lines.append("Arena Source Status:")
             for source, status in sorted(source_status.items()):
                 lines.append(f"  {source}: {status}")
         return self._section("COGNITIVE CANDIDATE ARENA", lines)
+
+    def _render_multi_hypothesis_report(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "MULTI_HYPOTHESIS_REPORT",
+            "multi_hypothesis_report",
+        )
+        if not report:
+            engine_report = self._first_dict(
+                state,
+                "MULTI_HYPOTHESIS_ENGINE_REPORT",
+                "multi_hypothesis_engine_report",
+            )
+            if not engine_report:
+                engine_report = self._first_dict(
+                    performance,
+                    "MULTI_HYPOTHESIS_ENGINE_REPORT",
+                    "multi_hypothesis_engine_report",
+                )
+            compact = self._first_dict(engine_report, "MULTI_HYPOTHESIS_REPORT")
+            report = compact or engine_report
+        best = report.get("Best Ranked") or report.get("best_ranked") or []
+        ready = report.get("Execution Ready") or report.get("execution_ready") or []
+        if isinstance(best, list):
+            best_text = ", ".join(
+                self._value(item.get("hypothesis_name") if isinstance(item, dict) else item)
+                for item in best[:6]
+            )
+        else:
+            best_text = self._value(best)
+        if isinstance(ready, list):
+            ready_text = ", ".join(
+                self._value(item.get("hypothesis_name") if isinstance(item, dict) else item)
+                for item in ready[:6]
+            )
+        else:
+            ready_text = self._value(ready)
+        lines = [
+            f"Generated Hypotheses: {self._value(report.get('Generated Hypotheses', report.get('hypothesis_count')))}",
+            f"Accepted: {self._value(report.get('Accepted', report.get('accepted_count')))}",
+            f"Rejected: {self._value(report.get('Rejected', report.get('rejected_count')))}",
+            f"Reusable: {self._value(report.get('Reusable', report.get('reusable_count')))}",
+            f"Best Ranked: {best_text or 'Not Available'}",
+            f"Execution Ready: {ready_text or 'Not Available'}",
+        ]
+        if canonical["report_level"] == "diagnostic":
+            lines.extend([
+                "Hypothesis Ranking Operational: "
+                f"{self._value(report.get('hypothesis_ranking_operational'))}",
+                "Hypothesis Validation Operational: "
+                f"{self._value(report.get('hypothesis_validation_operational'))}",
+                "Hypothesis Memory Operational: "
+                f"{self._value(report.get('hypothesis_memory_operational'))}",
+            ])
+        return self._section("MULTI HYPOTHESIS REPORT", lines)
+
+    def _render_candidate_proposal(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "candidate_proposal_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        proposals = summary.get("candidate_proposals") or []
+        proposals = proposals if isinstance(proposals, list) else []
+        sources = summary.get("sources_with_proposals") or []
+        sources = sources if isinstance(sources, list) else [sources]
+        rejected = summary.get("sources_rejected") or []
+        rejected = rejected if isinstance(rejected, list) else [rejected]
+        lines = [
+            f"Proposal Phase Entered: {self._value(summary.get('proposal_phase_entered'))}",
+            f"Proposal Phase Status: {self._value(summary.get('proposal_phase_status'))}",
+            f"Eligible Sources: {self._value(summary.get('eligible_source_count'))}",
+            f"Candidate Proposals: {self._value(summary.get('proposal_count'))}",
+            f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
+            f"Sources With Proposals: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            f"Sources Rejected: {', '.join(str(item) for item in rejected) if rejected else 'Not Available'}",
+        ]
+        if proposals:
+            lines.append("Proposal Ledger:")
+            for proposal in proposals[:6]:
+                if not isinstance(proposal, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(proposal.get('source'))}: "
+                    f"{self._value(proposal.get('proposal_status'))} "
+                    f"op={self._value(proposal.get('operation'))} "
+                    f"reason={self._value(proposal.get('rejection_reason'))}"
+                )
+        return self._section("CANDIDATE PROPOSAL PHASE", lines)
 
     def _render_search_quality(self, canonical: dict[str, Any]) -> str:
         search = canonical["search"]
@@ -546,6 +712,115 @@ class DeterministicFinalReportRenderer:
             f"Search Entropy: {self._field(canonical, 'search_entropy')}",
             f"Average Route Quality: {self._field(canonical, 'average_route_quality')}",
         ])
+
+    def _render_counterfactual_reasoning(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "COUNTERFACTUAL_REASONING_REPORT",
+            "counterfactual_reasoning_report",
+        )
+        if not report:
+            engine = self._first_dict(
+                state,
+                "COUNTERFACTUAL_REASONING_ENGINE_REPORT",
+                "counterfactual_reasoning_engine_report",
+            )
+            if not engine:
+                engine = self._first_dict(
+                    performance,
+                    "COUNTERFACTUAL_REASONING_ENGINE_REPORT",
+                    "counterfactual_reasoning_engine_report",
+                )
+            report = self._first_dict(engine, "COUNTERFACTUAL_REASONING_REPORT") or engine
+        summary = report.get("counterfactual_summary") or []
+        summary = summary if isinstance(summary, list) else []
+        lines = [
+            f"Counterfactual Required: {self._value(report.get('counterfactual_required'))}",
+            f"Eligibility State: {self._value(report.get('eligibility_state'))}",
+            f"Trigger Reasons: {', '.join(str(item) for item in report.get('trigger_reasons', [])[:6]) if isinstance(report.get('trigger_reasons'), list) and report.get('trigger_reasons') else 'Not Available'}",
+            f"Assumptions: {self._value(report.get('assumption_count'))}",
+            f"Challengeable Assumptions: {self._value(report.get('challengeable_assumption_count'))}",
+            f"Generated Counterfactuals: {self._value(report.get('generated_counterfactual_count'))}",
+            f"Simulated Counterfactuals: {self._value(report.get('simulated_counterfactual_count'))}",
+            f"Rejected Counterfactuals: {self._value(report.get('rejected_counterfactual_count'))}",
+            f"Best Counterfactual: {self._value(report.get('best_counterfactual_id'))}",
+            f"Original Still Best: {self._value(report.get('original_candidate_still_best'))}",
+            f"Falsification State: {self._value(report.get('falsification_state'))}",
+            f"Winner Stability State: {self._value(report.get('winner_stability_state'))}",
+            f"Winner Stability Score: {self._value(report.get('winner_stability_score'))}",
+            f"Minimal Revision Generated: {self._value(report.get('minimal_revision_generated'))}",
+            f"Execution Recommendation: {self._value(report.get('execution_recommendation'))}",
+            f"Budget Used: {self._value(report.get('budget_used'))}",
+            f"Stop Reason: {self._value(report.get('stop_reason'))}",
+        ]
+        if summary:
+            lines.append("Counterfactual Summary:")
+            for index, row in enumerate(summary[:6], start=1):
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{index}. {self._value(row.get('counterfactual_id'))} "
+                    f"accuracy={self._value(row.get('accuracy'))} "
+                    f"residual={self._value(row.get('residual'))} "
+                    f"evidence={self._value(row.get('evidence'))}"
+                )
+        return self._section("COUNTERFACTUAL REASONING REPORT", lines)
+
+    def _render_executable_intelligence(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "EXECUTABLE_INTELLIGENCE_REPORT",
+            "executable_intelligence_report",
+        )
+        if not report:
+            engine = self._first_dict(
+                state,
+                "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                "executable_intelligence_engine_report",
+            )
+            if not engine:
+                engine = self._first_dict(
+                    performance,
+                    "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                    "executable_intelligence_engine_report",
+                )
+            report = self._first_dict(engine, "EXECUTABLE_INTELLIGENCE_REPORT") or engine
+        lines = [
+            f"Semantic Intent Operational: {self._value(report.get('semantic_intent_operational'))}",
+            f"Object Grounding Operational: {self._value(report.get('object_grounding_operational'))}",
+            f"Localized Execution Planning Operational: {self._value(report.get('localized_execution_planning_operational'))}",
+            f"Primitive Selection Operational: {self._value(report.get('primitive_selection_operational'))}",
+            f"Program Synthesis Operational: {self._value(report.get('program_synthesis_operational'))}",
+            f"Program Compilation Operational: {self._value(report.get('program_compilation_operational'))}",
+            f"Program Validation Operational: {self._value(report.get('program_validation_operational'))}",
+            f"Residual Localization Operational: {self._value(report.get('residual_localization_operational'))}",
+            f"Residual Repair Operational: {self._value(report.get('residual_repair_operational'))}",
+            f"Execution Adaptation Operational: {self._value(report.get('execution_adaptation_operational'))}",
+            f"Execution Memory Operational: {self._value(report.get('execution_memory_operational'))}",
+            f"Governed Execution Operational: {self._value(report.get('governed_execution_operational'))}",
+            f"Knowledge Feedback Operational: {self._value(report.get('knowledge_feedback_operational'))}",
+            f"Executable Concepts: {self._value(report.get('executable_concepts'))}",
+            f"Localized Operations: {self._value(report.get('localized_operations'))}",
+            f"Target Objects: {self._value(report.get('target_objects'))}",
+            f"Synthesized Programs: {self._value(report.get('synthesized_programs'))}",
+            f"Compiled Programs: {self._value(report.get('compiled_programs'))}",
+            f"Validated Programs: {self._value(report.get('validated_programs'))}",
+            f"Residual Regions: {self._value(report.get('residual_regions'))}",
+            f"Generated Repairs: {self._value(report.get('generated_repairs'))}",
+            f"Execution Success Rate: {self._value(report.get('execution_success_rate'))}",
+            f"Execution Adaptations: {self._value(report.get('execution_adaptations'))}",
+            f"Execution Feedback: {self._value(report.get('execution_feedback'))}",
+        ]
+        return self._section("EXECUTABLE INTELLIGENCE REPORT", lines)
 
     def _render_knowledge_pipeline(self, canonical: dict[str, Any]) -> str:
         knowledge = canonical["knowledge"]

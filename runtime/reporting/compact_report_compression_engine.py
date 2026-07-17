@@ -123,6 +123,12 @@ class CompactReportCompressionEngine:
         "coverage_below_threshold",
         "lifecycle_gaps",
     }
+    REPORT_SECTION_KEYS = {
+        "EXECUTABLE_INTELLIGENCE_REPORT",
+        "executable_intelligence_report",
+        "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+        "executable_intelligence_engine_report",
+    }
 
     def __init__(self, console_budgets: dict[str, int] | None = None):
         self.console_budgets = dict(CONSOLE_BUDGETS)
@@ -599,8 +605,11 @@ class CompactReportCompressionEngine:
         canonical: dict[str, Any],
         compressed: dict[str, Any],
     ) -> dict[str, Any]:
-        for key in sorted(self.CRITICAL_KEYS | self.KNOWLEDGE_KEYS):
-            if key in canonical and key not in compressed:
+        for key in sorted(self.CRITICAL_KEYS | self.KNOWLEDGE_KEYS | self.REPORT_SECTION_KEYS):
+            if key in canonical and (
+                key not in compressed
+                or key in self.REPORT_SECTION_KEYS
+            ):
                 compressed[key] = deepcopy(canonical[key])
                 self.stats["canonical_fields_preserved"] += 1
         for source_key in ("knowledge_fabric", "semantic_memory"):

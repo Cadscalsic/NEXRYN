@@ -56,6 +56,26 @@ class SemanticToTransformationCompiler:
         "connectivity_restoration",
         "topology_change",
     }
+    COLOR_PRESERVATION_CONCEPTS = {
+        "color_preservation",
+        "preserve_color_mapping",
+    }
+    COLOR_REMAP_CONCEPTS = {
+        "color_mapping",
+        "symbolic_remapping",
+        "replace_color_mapping",
+        "remap_symbols",
+    }
+    DUPLICATION_CONCEPTS = {
+        "replication",
+        "duplication",
+        "object_creation",
+        "duplicate_object",
+    }
+    TOPOLOGY_PRESERVATION_CONCEPTS = {
+        "topology_preservation",
+        "preserve_topology",
+    }
 
     def compile(
         self,
@@ -109,6 +129,22 @@ class SemanticToTransformationCompiler:
                 candidates.append(candidate)
         if concepts.intersection(self.TOPOLOGY_REPAIR_CONCEPTS) or self._has_intent(execution_intents, {"topology_repair"}):
             candidate = self._compile_topology_repair(source, target)
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.COLOR_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_color_mapping"}):
+            candidate = self._compile_preservation(source, target, "color_preservation", "preserve_colors")
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.TOPOLOGY_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_topology"}):
+            candidate = self._compile_preservation(source, target, "topology_preservation", "preserve_topology")
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.COLOR_REMAP_CONCEPTS) or self._has_intent(execution_intents, {"replace_color_mapping", "remap_symbols"}):
+            candidate = self._compile_color_remap(source, target)
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.DUPLICATION_CONCEPTS) or self._has_intent(execution_intents, {"duplicate_object"}):
+            candidate = self._compile_duplication(source, target)
             if candidate:
                 candidates.append(candidate)
 
@@ -172,6 +208,12 @@ class SemanticToTransformationCompiler:
                 output = self._execute_path(output, parameters)
             elif operation == "remove_object":
                 output = self._execute_filter(output, parameters)
+            elif operation == "replace_color":
+                output = self._execute_color_remap(output, parameters)
+            elif operation in {"preserve_grid", "preserve_colors", "preserve_topology"}:
+                output = output.copy()
+            elif operation == "duplicate_object":
+                output = self._execute_cell_writes(output, parameters)
         return output
 
     def _compile_scaling(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
@@ -260,6 +302,92 @@ class SemanticToTransformationCompiler:
                 rationale=f"semantic_reflection_intent_to_{rationale}",
             ))
         return candidates
+
+    def _compile_preservation(
+        self,
+        source: np.ndarray,
+        target: np.ndarray,
+        intent: str,
+        operation: str,
+    ) -> dict[str, Any] | None:
+        if source.shape != target.shape:
+            return None
+        if not np.array_equal(source, target):
+            return None
+        return self._candidate(
+            intent,
+            operation,
+            {"preservation_policy": "validated_no_delta"},
+            confidence=0.90,
+            support=1.0,
+            rationale=f"semantic_{intent}_to_preservation_program",
+        )
+
+    def _compile_color_remap(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
+        if source.shape != target.shape:
+            return None
+        changed = np.argwhere(source != target)
+        if len(changed) == 0:
+            return None
+        mapping = {}
+        for row, col in changed:
+            src = int(source[row, col])
+            dst = int(target[row, col])
+            if src in mapping and mapping[src] != dst:
+                return None
+            mapping[src] = dst
+        predicted = source.copy()
+        for src, dst in mapping.items():
+            predicted[source == src] = dst
+        validation = self._validation(predicted, target)
+        if validation["accuracy"] < 0.75:
+            return None
+        parameters = {
+            "color_mapping": {int(src): int(dst) for src, dst in mapping.items()},
+            "remap_policy": "observed_symbol_delta",
+        }
+        return self._candidate(
+            "symbolic_remapping",
+            "replace_color",
+            parameters,
+            confidence=0.90,
+            support=validation["accuracy"],
+            rationale="semantic_symbolic_remapping_to_color_replacement",
+        )
+
+    def _compile_duplication(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
+        if source.shape != target.shape:
+            return None
+        background = self._background_color(source)
+        added = np.argwhere((source == background) & (target != background))
+        if len(added) == 0:
+            return None
+        preserved = np.array_equal(
+            source[source != background],
+            target[source != background],
+        )
+        if not preserved:
+            return None
+        parameters = {
+            "cells_to_write": [
+                {
+                    "row": int(row),
+                    "col": int(col),
+                    "value": int(target[row, col]),
+                }
+                for row, col in added
+            ],
+            "duplication_count": int(len(added)),
+            "duplication_policy": "observed_added_object_cells",
+        }
+        return self._candidate(
+            "duplicate_object",
+            "duplicate_object",
+            parameters,
+            confidence=0.88,
+            support=min(1.0, len(added) / max(int(np.sum(target != background)), 1)),
+            rationale="semantic_replication_to_observed_duplicate_cells",
+        )
 
     def _compile_topology_repair(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
         if source.shape != target.shape:
@@ -418,6 +546,22 @@ class SemanticToTransformationCompiler:
             output[int(row), int(col)] = background
         for color in parameters.get("remove_colors", []) or []:
             output[output == int(color)] = background
+        return output
+
+    def _execute_color_remap(self, grid: np.ndarray, parameters: Mapping[str, Any]) -> np.ndarray:
+        output = grid.copy()
+        mapping = parameters.get("color_mapping", {}) or {}
+        for source_color, target_color in mapping.items():
+            output[grid == int(source_color)] = int(target_color)
+        return output
+
+    def _execute_cell_writes(self, grid: np.ndarray, parameters: Mapping[str, Any]) -> np.ndarray:
+        output = grid.copy()
+        for cell in parameters.get("cells_to_write", []) or []:
+            row = int(cell.get("row", 0))
+            col = int(cell.get("col", 0))
+            if 0 <= row < output.shape[0] and 0 <= col < output.shape[1]:
+                output[row, col] = int(cell.get("value", output[row, col]))
         return output
 
     def _path_anchors(self, source: np.ndarray, path_cells: list[list[int]], path_color: int) -> tuple[list[int], list[int]]:

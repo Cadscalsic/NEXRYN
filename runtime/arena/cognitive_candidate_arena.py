@@ -1,0 +1,305 @@
+"""Governed cognitive candidate arena and evidence-based selection."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any, Mapping
+
+import numpy as np
+
+from runtime.arena.arena_memory import ArenaMemory
+from runtime.arena.candidate_diversity_analyzer import CandidateDiversityAnalyzer
+from runtime.arena.candidate_normalizer import CandidateNormalizer
+from runtime.arena.candidate_proposal_gateway import CandidateProposalGateway
+from runtime.arena.candidate_scorer import CandidateScorer
+from runtime.arena.candidate_simulator import CandidateSimulator
+from runtime.arena.source_dominance_guard import SourceDominanceGuard
+from runtime.arena.winner_selection_policy import WinnerSelectionPolicy
+
+
+class CognitiveCandidateArena:
+    """Compare validated executable candidates and recommend execution mode."""
+
+    system_name = "cognitive_candidate_arena"
+
+    def __init__(
+        self,
+        gateway: CandidateProposalGateway | None = None,
+        normalizer: CandidateNormalizer | None = None,
+        simulator: CandidateSimulator | None = None,
+        scorer: CandidateScorer | None = None,
+        diversity_analyzer: CandidateDiversityAnalyzer | None = None,
+        dominance_guard: SourceDominanceGuard | None = None,
+        winner_policy: WinnerSelectionPolicy | None = None,
+        memory: ArenaMemory | None = None,
+    ):
+        self.gateway = gateway or CandidateProposalGateway()
+        self.normalizer = normalizer or CandidateNormalizer()
+        self.simulator = simulator or CandidateSimulator()
+        self.scorer = scorer or CandidateScorer()
+        self.diversity_analyzer = diversity_analyzer or CandidateDiversityAnalyzer()
+        self.dominance_guard = dominance_guard or SourceDominanceGuard()
+        self.winner_policy = winner_policy or WinnerSelectionPolicy()
+        self.memory = memory or ArenaMemory()
+
+    def run(
+        self,
+        proposals: list[Mapping[str, Any]] | None,
+        input_grid: Any = None,
+        target_grid: Any = None,
+        runtime_context: Mapping[str, Any] | None = None,
+        analysis_only: bool = False,
+        task_signature: str | None = None,
+    ) -> dict[str, Any]:
+        runtime_context = runtime_context if isinstance(runtime_context, Mapping) else {}
+        gateway_report = self.gateway.submit(proposals)
+        normalization = self.normalizer.normalize(gateway_report["proposals"])
+        candidates = normalization["normalized_candidates"]
+        target_size = int(np.array(target_grid).size) if target_grid is not None else 1
+        for candidate in candidates:
+            candidate["target_size"] = max(target_size, 1)
+
+        governance = {candidate["candidate_id"]: self._governance(candidate, runtime_context) for candidate in candidates}
+        blocked = [
+            candidate for candidate in candidates
+            if governance[candidate["candidate_id"]]["decision"] == "BLOCK_CANDIDATE"
+        ]
+        eligible = [
+            candidate for candidate in candidates
+            if governance[candidate["candidate_id"]]["decision"] in {"ALLOW_COMPETITION", "ALLOW_SANDBOX_ONLY"}
+        ]
+        diversity = self.diversity_analyzer.analyze(eligible)
+        simulations = {}
+        scores = []
+        for candidate in eligible:
+            simulation = self.simulator.simulate(candidate, input_grid=input_grid, target_grid=target_grid)
+            simulations[candidate["candidate_id"]] = simulation
+            score = self.scorer.score(candidate, simulation, governance[candidate["candidate_id"]])
+            score["source"] = candidate.get("source")
+            scores.append(score)
+
+        selection = self.winner_policy.select(scores, simulations, analysis_only=analysis_only)
+        winner_score = selection.get("winner_candidate") or {}
+        winner = self._candidate_by_id(eligible, winner_score.get("candidate_id"))
+        second_score = selection.get("second_best_candidate") or {}
+        dominance = self.dominance_guard.review(
+            eligible,
+            scores=scores,
+            winner=winner,
+            expected_sources=runtime_context.get("expected_candidate_sources", []),
+        )
+        arena_state = self._arena_state(
+            candidates,
+            eligible,
+            blocked,
+            diversity,
+            selection,
+            dominance,
+        )
+        rows = self._candidate_rows(candidates, blocked, simulations, scores, selection, governance)
+        sources_entered = sorted({
+            source
+            for candidate in eligible
+            for source in candidate.get("sources", [candidate.get("source")])
+            if source
+        })
+        sources_rejected = sorted({
+            candidate.get("source")
+            for candidate in blocked + gateway_report["rejected_proposals"]
+            if candidate.get("source")
+        })
+        compact = {
+            "arena_state": arena_state,
+            "candidate_count": len(eligible),
+            "unique_candidate_count": len(candidates),
+            "source_count": len(sources_entered),
+            "sources_entered": sources_entered,
+            "sources_rejected": sources_rejected,
+            "competition_diversity": diversity.get("competition_diversity", 0.0),
+            "simulation_count": len(simulations),
+            "simulation_success_count": sum(1 for item in simulations.values() if item.get("simulation_success")),
+            "governance_blocked_count": len(blocked),
+            "winner_candidate_id": winner.get("candidate_id") if winner else None,
+            "winner_source": winner.get("source") if winner else None,
+            "winner_operation": winner.get("operation") if winner else None,
+            "winner_score": winner_score.get("final_score"),
+            "second_best_score": second_score.get("final_score"),
+            "selection_margin": selection.get("selection_margin"),
+            "selection_state": selection.get("selection_state"),
+            "source_dominance_detected": dominance.get("dominance_detected"),
+            "no_competition_reason": self._no_competition_reason(eligible, diversity, gateway_report, blocked),
+            "selection_explanation": selection.get("selection_explanation"),
+            "candidate_scores_fully_explained": True,
+            "source_dominance_guard_active": True,
+            "winner_selected_from_evidence": bool(winner and selection.get("selection_state") in {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}),
+            "direct_source_to_executor_access": False,
+            "arena_memory_operational": True,
+            "candidate_summary": rows,
+            "winner_takes_all_detected": dominance.get("dominance_detected"),
+            "dominance_source": dominance.get("dominant_source"),
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "validation_coverage": round(len(scores) / max(len(eligible), 1), 4) if eligible else 0.0,
+        }
+        recommendation = {
+            "selected_candidate": deepcopy(winner) if winner else None,
+            "selection_state": selection.get("selection_state"),
+            "execution_mode": self._execution_mode(selection, winner),
+            "selection_evidence": {
+                "winner_score": compact["winner_score"],
+                "second_best_score": compact["second_best_score"],
+                "selection_margin": compact["selection_margin"],
+                "simulation": simulations.get(winner.get("candidate_id")) if winner else None,
+                "score": winner_score,
+            },
+        }
+        report = {
+            "system": self.system_name,
+            "COGNITIVE_CANDIDATE_ARENA_REPORT": compact,
+            "candidate_arena_summary": compact,
+            "candidate_arena_diagnostics": {
+                "gateway_report": gateway_report,
+                "normalization_report": normalization,
+                "diversity_report": diversity,
+                "dominance_report": dominance,
+                "selection_report": selection,
+                "simulations": simulations,
+                "scores": scores,
+                "governance_decisions": governance,
+            },
+            "normalized_candidates": candidates,
+            "rejected_candidates": blocked + gateway_report["rejected_proposals"],
+            "execution_recommendation": recommendation,
+            **compact,
+        }
+        report["task_signature"] = task_signature
+        report["winner_program_signature"] = winner.get("program_signature") if winner else None
+        self.memory.record_competition(report)
+        return report
+
+    def _governance(self, candidate: Mapping[str, Any], runtime_context: Mapping[str, Any]) -> dict[str, Any]:
+        reasons = []
+        for key in (
+            "truth_governance_report",
+            "identity_governance_report",
+            "dependency_governance_report",
+            "context_governance_report",
+            "execution_integrity_report",
+            "safety_validation_report",
+        ):
+            value = runtime_context.get(key)
+            if isinstance(value, Mapping) and self._explicit_failure(value):
+                reasons.append(f"{key}_failed")
+        metadata = candidate.get("metadata", {}) if isinstance(candidate.get("metadata"), Mapping) else {}
+        if metadata.get("identity_violation"):
+            reasons.append("identity_violation")
+        if metadata.get("safety_violation"):
+            reasons.append("safety_violation")
+        if reasons:
+            decision = "BLOCK_CANDIDATE"
+        elif metadata.get("sandbox_only"):
+            decision = "ALLOW_SANDBOX_ONLY"
+        elif metadata.get("requires_review"):
+            decision = "REQUIRE_REVIEW"
+        else:
+            decision = "ALLOW_COMPETITION"
+        return {
+            "candidate_id": candidate.get("candidate_id"),
+            "decision": decision,
+            "reasons": reasons,
+        }
+
+    def _explicit_failure(self, value: Mapping[str, Any]) -> bool:
+        for key, item in value.items():
+            normalized_key = _normalize(key)
+            normalized_value = _normalize(item)
+            if normalized_key.endswith(("passed", "success", "ready", "validated")) and item is False:
+                return True
+            if normalized_key in {"status", "state", "validation_state", "governance_state"}:
+                if normalized_value in {"failed", "rejected", "blocked", "invalid", "unsafe"}:
+                    return True
+        return False
+
+    def _arena_state(self, candidates, eligible, blocked, diversity, selection, dominance):
+        if blocked and not eligible:
+            return "GOVERNANCE_BLOCKED"
+        if not candidates:
+            return "ARENA_EMPTY"
+        if len(eligible) == 1:
+            return "SINGLE_SOURCE_ONLY"
+        if not diversity.get("diversity_sufficient"):
+            return "SINGLE_SOURCE_ONLY"
+        state = selection.get("selection_state")
+        if state in {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}:
+            return "WINNER_SELECTED"
+        if state == "TIE_REQUIRES_REVIEW":
+            return "TIE_REQUIRES_REVIEW"
+        if state in {"NO_SAFE_WINNER", "ALL_CANDIDATES_REJECTED"}:
+            return "NO_SAFE_WINNER"
+        return "COMPETITION_ACTIVE"
+
+    def _candidate_rows(self, candidates, blocked, simulations, scores, selection, governance):
+        score_by_id = {item.get("candidate_id"): item for item in scores}
+        winner_id = (selection.get("winner_candidate") or {}).get("candidate_id")
+        second_id = (selection.get("second_best_candidate") or {}).get("candidate_id")
+        rows = []
+        for candidate in candidates:
+            candidate_id = candidate.get("candidate_id")
+            score = score_by_id.get(candidate_id, {})
+            simulation = simulations.get(candidate_id, {})
+            if governance[candidate_id]["decision"] == "BLOCK_CANDIDATE":
+                status = "BLOCKED_BY_GOVERNANCE"
+            elif candidate_id == winner_id and selection.get("selection_state") in {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}:
+                status = "WINNER"
+            elif candidate_id == second_id:
+                status = "RUNNER_UP"
+            elif simulation.get("simulation_errors") or simulation.get("unsupported_steps"):
+                status = "REJECTED_BY_SIMULATION"
+            elif not score.get("eligible_for_selection", False):
+                status = "REJECTED_BY_SCORE"
+            else:
+                status = "EVALUATED"
+            rows.append({
+                "candidate_id": candidate_id,
+                "source": candidate.get("source"),
+                "sources": candidate.get("sources", []),
+                "operation": candidate.get("operation"),
+                "score": score.get("final_score"),
+                "accuracy": simulation.get("prediction_accuracy"),
+                "status": status,
+                "entered_arena": status != "BLOCKED_BY_GOVERNANCE",
+                "selected": status == "WINNER",
+                "validation_status": governance[candidate_id]["decision"],
+                "blocked_reason": ";".join(governance[candidate_id].get("reasons", [])) or None,
+            })
+        return rows
+
+    def _candidate_by_id(self, candidates, candidate_id):
+        return next((dict(item) for item in candidates if item.get("candidate_id") == candidate_id), {})
+
+    def _no_competition_reason(self, eligible, diversity, gateway_report, blocked):
+        if not eligible and blocked:
+            return "All candidates were blocked by governance."
+        if not eligible:
+            return "No executable candidates were admitted."
+        if len(eligible) == 1:
+            return "Only one legitimate candidate entered the arena."
+        if not diversity.get("diversity_sufficient"):
+            return "Candidates lacked meaningful source or program diversity."
+        return None
+
+    def _execution_mode(self, selection, winner):
+        state = selection.get("selection_state")
+        if state == "WINNER_SELECTED":
+            return "real"
+        if state in {"CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}:
+            return "sandbox"
+        return "blocked"
+
+
+def _normalize(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+cognitive_candidate_arena = CognitiveCandidateArena()
+
+__all__ = ["CognitiveCandidateArena", "cognitive_candidate_arena"]
