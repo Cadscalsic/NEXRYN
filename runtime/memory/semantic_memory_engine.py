@@ -93,6 +93,7 @@ class SemanticMemoryRegistry:
     def __init__(self) -> None:
         self.entities: dict[str, SemanticMemoryEntity] = {}
         self.relationships: list[dict[str, Any]] = []
+        self._relationship_markers: set[tuple[str, str, str]] = set()
         self.indexes: dict[str, dict[str, set[str]]] = {
             "meaning": {},
             "domain": {},
@@ -150,12 +151,13 @@ class SemanticMemoryRegistry:
             "lineage": dict(relationship.get("lineage") or {}),
         }
         marker = (item["source"], item["target"], item["relationship_type"])
-        existing = {
-            (rel["source"], rel["target"], rel["relationship_type"])
-            for rel in self.relationships
-        }
-        if item["source"] and item["target"] and marker not in existing:
+        if (
+            item["source"]
+            and item["target"]
+            and marker not in self._relationship_markers
+        ):
             self.relationships.append(item)
+            self._relationship_markers.add(marker)
 
     def retrieve(self, *, meaning: str = "", domain: str = "", top_k: int = 5) -> dict[str, Any]:
         self.retrieval_count += 1

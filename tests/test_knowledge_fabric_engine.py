@@ -1,4 +1,4 @@
-from runtime.knowledge import KnowledgeFabricEngine
+from runtime.knowledge import KnowledgeFabricEngine, KnowledgeFabricRegistry
 
 
 REQUIRED_FABRIC_FIELDS = {
@@ -128,6 +128,25 @@ def test_knowledge_fabric_builds_unified_cross_domain_relationships():
     assert topology["world_model_preparation"]["uses_ids_only"] is True
     assert report["Connectivity Metrics"]["cross_domain_coverage"] == 1.0
     assert report["Semantic Coverage"]["coverage_ratio"] == 1.0
+
+
+def test_knowledge_fabric_registry_deduplicates_relationships_with_marker_index():
+    registry = KnowledgeFabricRegistry()
+    registry.allow_references(["sem:left", "sem:right"])
+    relationship = {
+        "source": "sem:left",
+        "target": "sem:right",
+        "relationship_type": "Supports",
+        "confidence": 0.8,
+    }
+
+    registry.add_relationship(relationship)
+    registry.add_relationship(relationship)
+
+    assert len(registry.fabric_relationships) == 1
+    assert registry.fabric_relationships[0]["source_entity_id"] == "sem:left"
+    assert registry.fabric_relationships[0]["target_entity_id"] == "sem:right"
+    assert len(registry._fabric_relationship_markers) == 1
 
 
 def test_fabric_entities_and_relations_reference_semantic_ids_only():

@@ -105,6 +105,7 @@ class KnowledgeFabricRegistry:
     def __init__(self) -> None:
         self.fabric_entities: dict[str, FabricEntity] = {}
         self.fabric_relationships: list[dict[str, Any]] = []
+        self._fabric_relationship_markers: set[tuple[str, str, str]] = set()
         self.legal_reference_ids: set[str] = set()
         self.integration_count = 0
 
@@ -188,12 +189,14 @@ class KnowledgeFabricRegistry:
             "version": int(relationship.get("version", 1)),
         }
         marker = (item["source_entity_id"], item["target_entity_id"], item["relation_type"])
-        existing = {
-            (rel["source_entity_id"], rel["target_entity_id"], rel["relation_type"])
-            for rel in self.fabric_relationships
-        }
-        if source_id and target_id and source_id != target_id and marker not in existing:
+        if (
+            source_id
+            and target_id
+            and source_id != target_id
+            and marker not in self._fabric_relationship_markers
+        ):
             self.fabric_relationships.append(item)
+            self._fabric_relationship_markers.add(marker)
 
 
 class KnowledgeFabricEngine:

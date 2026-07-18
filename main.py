@@ -3875,13 +3875,38 @@ try:
         "flow",
         {},
     )
-    shared_state_save_report = shared_cognitive_state.save()
-    shared_cognitive_state_report = shared_cognitive_state.build_report()
-    cognitive_observability_report = shared_cognitive_state_report.get(
-        "cognitive_observability",
-        {},
+    fast_terminal_mode = (
+        args.mode == "fast"
+        and args.report_level == "minimal"
+        and args.post_success_mode == "fast"
     )
-    knowledge_propagation_report = knowledge_bus.report()
+    if fast_terminal_mode:
+        shared_state_save_report = {
+            "saved": False,
+            "reason": "fast_mode_shared_state_persistence_deferred",
+            "deferred_to_offline_cognitive_maintenance": True,
+        }
+        shared_cognitive_state_report = {
+            "deferred": True,
+            "reason": "fast_mode_shared_state_report_deferred",
+            "counts": shared_cognitive_state.counts(),
+        }
+        cognitive_observability_report = {
+            "deferred": True,
+            "reason": "fast_mode_cognitive_observability_deferred",
+        }
+        knowledge_propagation_report = {
+            "deferred": True,
+            "reason": "fast_mode_knowledge_propagation_report_deferred",
+        }
+    else:
+        shared_state_save_report = shared_cognitive_state.save()
+        shared_cognitive_state_report = shared_cognitive_state.build_report()
+        cognitive_observability_report = shared_cognitive_state_report.get(
+            "cognitive_observability",
+            {},
+        )
+        knowledge_propagation_report = knowledge_bus.report()
     performance_report["SHARED_COGNITIVE_STATE_REPORT"] = (
         shared_cognitive_state_report
     )
@@ -4113,7 +4138,17 @@ execution_time = round(
     4,
 )
 
-if isinstance(results, dict) and isinstance(results.get("performance_report"), dict):
+fast_terminal_mode = (
+    args.mode == "fast"
+    and args.report_level == "minimal"
+    and args.post_success_mode == "fast"
+)
+
+if (
+    isinstance(results, dict)
+    and isinstance(results.get("performance_report"), dict)
+    and not fast_terminal_mode
+):
     from runtime.performance.runtime_attribution_engine import (
         runtime_attribution_engine,
     )
@@ -4597,6 +4632,34 @@ if runtime_status == "completed" and isinstance(results, dict):
 # ============================================
 
 if runtime_status == "completed":
+    if fast_terminal_mode:
+        print({
+            "system": "nexryn_fast_terminal_summary",
+            "status": runtime_status,
+            "mode": args.mode,
+            "report_level": effective_report_level,
+            "execution_time": execution_time,
+            "tasks_executed": results.get("tasks_executed", 0)
+            if isinstance(results, dict) else 0,
+            "successful_tasks": results.get("successful_tasks", 0)
+            if isinstance(results, dict) else 0,
+            "failed_tasks": results.get("failed_tasks", 0)
+            if isinstance(results, dict) else 0,
+            "incomplete_tasks": results.get("incomplete_tasks", 0)
+            if isinstance(results, dict) else 0,
+            "deferred_work": [
+                "post_execution_cognitive_memory",
+                "shared_cognitive_state_persistence",
+                "canonical_final_report_rendering",
+            ],
+        })
+        if shutdown_controller is not None:
+            shutdown_controller.exit_enforcer.enforce_exit(
+                exit_process=True,
+                code=0,
+            )
+        sys.exit(0)
+
     from runtime.reporting.final_report_renderer import final_report_renderer
 
     final_report_level = effective_report_level

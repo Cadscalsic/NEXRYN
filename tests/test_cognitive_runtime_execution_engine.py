@@ -203,6 +203,36 @@ def test_post_execution_pipeline_turns_cognitive_outputs_into_semantic_memory_en
     assert report["parent_execution_aggregation"]["generated_memory_entries"] > 0
 
 
+def test_fast_mode_defers_post_execution_cognitive_memory_pipeline():
+    runtime_lifecycle.clear()
+    engine = CognitiveRuntimeExecutionEngine()
+    root = engine.start_cycle(mode="fast")
+
+    with engine.execution("concept_formation_runtime", mode="fast") as execution:
+        execution.capture({"generated_concepts": [{"id": f"concept:{index}"} for index in range(43)]})
+    with engine.execution("program_synthesis_runtime", mode="fast") as execution:
+        execution.capture({"generated_programs": 20})
+    with engine.execution("truth_runtime", mode="fast") as execution:
+        execution.capture({"truth_candidates": [{"id": f"truth:{index}"} for index in range(18)]})
+
+    engine.complete_cycle()
+    report = engine.build_report()
+    parent = next(
+        item for item in report["execution_instances"]
+        if item["execution_id"] == root.execution_id
+    )
+    pipeline = report["post_execution_cognitive_pipeline"]
+
+    assert report["parent_execution_aggregation"]["generated_concepts"] == 43
+    assert report["parent_execution_aggregation"]["generated_programs"] == 20
+    assert report["parent_execution_aggregation"]["generated_truth_candidates"] == 18
+    assert pipeline["pipeline_available"] is False
+    assert pipeline["reason"] == "fast_mode_post_execution_cognitive_memory_deferred"
+    assert pipeline["deferred_to_offline_cognitive_maintenance"] is True
+    assert pipeline["post_execution_cognitive_time"] == 0.0
+    assert parent["generated_memory_entries"] == 0
+
+
 def test_evaluation_evidence_does_not_publish_truth_candidates():
     runtime_lifecycle.clear()
     engine = CognitiveRuntimeExecutionEngine()

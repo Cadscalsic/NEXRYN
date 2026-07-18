@@ -1,5 +1,5 @@
 from runtime.experience import ExperienceEngine
-from runtime.memory import SemanticMemoryEngine
+from runtime.memory import SemanticMemoryEngine, SemanticMemoryRegistry
 from runtime.reflection import ReflectionEngine
 
 
@@ -115,6 +115,30 @@ def test_semantic_memory_organizes_experience_and_reflection_into_domains(tmp_pa
     assert report["Semantic Clusters"]
     assert report["Graph Statistics"]["node_count"] == report["semantic_entity_count"]
     assert report["Graph Statistics"]["edge_count"] >= 1
+
+
+def test_semantic_memory_registry_deduplicates_relationships_with_marker_index():
+    registry = SemanticMemoryRegistry()
+    relationship = {
+        "source": "sem:left",
+        "target": "sem:right",
+        "relationship_type": "Supports",
+        "confidence": 0.8,
+    }
+
+    registry.add_relationship(relationship)
+    registry.add_relationship(relationship)
+
+    assert registry.relationships == [
+        {
+            "source": "sem:left",
+            "target": "sem:right",
+            "relationship_type": "Supports",
+            "confidence": 0.8,
+            "lineage": {},
+        }
+    ]
+    assert len(registry._relationship_markers) == 1
 
 
 def test_semantic_memory_entities_preserve_context_lineage_and_maturity(tmp_path):

@@ -1176,6 +1176,17 @@ class CognitiveRuntimeExecutionEngine:
             }
             self._post_execution_pipeline_signature = signature
             return
+        if str(root.execution_mode).lower() == "fast":
+            self._post_execution_pipeline_report = {
+                "pipeline_available": False,
+                "reason": "fast_mode_post_execution_cognitive_memory_deferred",
+                "reflection_to_experience_to_semantic_memory_productive": False,
+                "semantic_memory_to_knowledge_fabric_productive": False,
+                "post_execution_cognitive_time": 0.0,
+                "deferred_to_offline_cognitive_maintenance": True,
+            }
+            self._post_execution_pipeline_signature = signature
+            return
 
         try:
             from runtime.experience import ExperienceEngine
