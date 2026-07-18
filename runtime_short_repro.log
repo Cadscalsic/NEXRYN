@@ -1,0 +1,165 @@
+
+==================================================
+NEXRYN :: ADAPTIVE COGNITIVE RUNTIME
+==================================================
+BOOT MODE :: META-COGNITIVE EXECUTION
+==================================================
+
+
+==================================================
+NEXRYN :: TRAINING ASSISTANT BATCH
+==================================================
+
+training_mode: random
+selected_tasks: 1
+tasks_completed: 0
+tasks_failed: 0
+tasks_remaining: 1
+current_batch_size: 1
+selected_task_files: ['task_010.json']
+prioritized_concepts: []
+
+TRAINING SELECTION DIVERSITY REPORT
+total_available_tasks= 1 selected_tasks= ['task_010.json'] selection_mode= random random_seed= 1
+previous_batch_overlap_count= 1 unseen_tasks_selected= 0 cooldown_filtered_tasks= 0 average_task_selection_frequency= 7.0 repeated_task_penalty_applied= True diversity_score= 0.3687
+
+==================================================
+NEXRYN :: RUNNING TASK :: task_010.json
+==================================================
+
+NEXRYN :: TASK EXECUTION STARTED
+
+==================================================
+NEXRYN :: TASK LOADING STAGE
+==================================================
+
+
+===================================
+NEXRYN TASK INGESTION
+===================================
+
+TASK PATH:
+.\runtime_repro_tasks\task_010.json
+
+FILE EXISTS: True
+
+TASK LOADED SUCCESSFULLY
+
+
+========== NEXRYN TASK SUMMARY ==========
+
+task_path: .\runtime_repro_tasks\task_010.json
+train_examples: 2
+test_examples: 1
+complexity: {'example_count': 2, 'total_cells': 50, 'average_grid_size': 25.0}
+metadata: {'task_loaded': True, 'validation_passed': True, 'task_profile_created': True, 'ingestion_timestamp': '2026-07-18 04:18:16.790648'}
+
+TASK METADATA:
+
+{'input_shape': (5, 5), 'output_shape': (5, 5), 'shape_changed': False}
+
+TASK ANALYSIS:
+
+{'task_loaded': True, 'has_input_grid': True, 'has_output_grid': True, 'shape_changed': False}
+
+TASK COMPLEXITY REPORT:
+
+{'task_signature': 'f1c135cd9698eab4', 'complexity': 'high', 'object_count': 1, 'transformation_count': 1, 'spatial_complexity': 0.0578, 'process_complexity': 0.4753, 'temporal_complexity': 0.8, 'estimated_cost': 0.5005}
+
+COGNITIVE COST REPORT:
+
+{'object_cost': 0.25, 'relation_cost': 0.1078, 'dependency_cost': 0.8803, 'governance_cost': 0.9328, 'explanation_cost': 0.3367, 'total_cost': 0.5005}
+
+COGNITIVE BUDGET REPORT:
+
+{'selected_mode': 'fast', 'execution_profile': 'fast', 'cognitive_pipeline': 'adaptive', 'max_hypotheses': 0, 'max_reasoning_depth': 2, 'max_dependency_depth': 2, 'max_active_routes': 2, 'telemetry_enabled': False, 'explanation_enabled': False, 'process_semantics_enabled': False, 'report_level': 'minimal'}
+
+TOOL SELECTION REPORT:
+
+{'enabled_tools': ['causal_validation', 'color_mapping', 'contradiction_checks', 'dependency_reasoning', 'identity_governance', 'object_tracking', 'process_semantics', 'semantic_to_transformation_compiler', 'transformation_compilation', 'transformation_execution', 'truth_governance'], 'disabled_tools': ['spatial_reasoning', 'temporal_reasoning', 'telemetry', 'explanation_generation', 'strategy_evolution', 'rotation_execution', 'reflection_execution', 'scaling_execution', 'path_execution'], 'selection_reason': {'safety_floor': 'identity, truth, contradiction, and causal checks remain enabled', 'object_tracking': 'task contains detected objects', 'color_mapping': 'task contains transformations', 'semantic_to_transformation_compiler': 'transformation task requires semantic-to-program compilation telemetry', 'transformation_compilation': 'transformation task requires compiler visibility', 'transformation_execution': 'transformation task requires executable primitive visibility', 'dependency_reasoning': 'dependency budget allocated', 'process_semantics': 'dependency reasoning requires process context synthesis'}}
+
+==================================================
+NEXRYN :: GRID ANALYSIS STAGE
+==================================================
+
+INPUT GRID SUMMARY:
+
+{'shape': (5, 5), 'height': 5, 'width': 5, 'total_cells': 25, 'colors': [0, 1], 'color_count': 2, 'dominant_color': 0, 'object_count': 1, 'density': 0.12, 'horizontal_symmetry': False, 'vertical_symmetry': False}
+
+OUTPUT GRID SUMMARY:
+
+{'shape': (5, 5), 'height': 5, 'width': 5, 'total_cells': 25, 'colors': [0, 1], 'color_count': 2, 'dominant_color': 0, 'object_count': 1, 'density': 0.12, 'horizontal_symmetry': False, 'vertical_symmetry': False}
+
+GRID DIMENSION ANALYSIS:
+
+{'input_shape': (5, 5), 'output_shape': (5, 5), 'shape_changed': False}
+
+GRID COMPLEXITY REPORT:
+
+{'input_cells': 25, 'output_cells': 25, 'complexity_ratio': 1.0}
+
+==================================================
+NEXRYN :: PATTERN & RULE STAGE
+==================================================
+
+
+PATTERN ANALYSIS:
+
+
+========== AMIS PATTERN ANALYSIS ==========
+
+{'pattern': 'grid_size_changed', 'value': False}
+
+{'pattern': 'colors_added', 'value': []}
+
+{'pattern': 'colors_removed', 'value': []}
+
+{'pattern': 'colors_preserved', 'value': [0, 1]}
+
+{'pattern': 'input_object_count', 'value': 1}
+
+{'pattern': 'output_object_count', 'value': 1}
+
+{'pattern': 'object_count_changed', 'value': False}
+
+{'pattern': 'symmetry_changes', 'value': {'input_horizontal': False, 'output_horizontal': False, 'input_vertical': False, 'output_vertical': False}}
+
+{'pattern': 'density_change', 'value': {'input_density': 0.12, 'output_density': 0.12, 'difference': 0.0}}
+
+
+RULE ANALYSIS:
+
+
+========== AMIS RULE ENGINE ==========
+
+{'rule': 'color_changes', 'added_colors': [], 'removed_colors': []}
+
+{'rule': 'size_change', 'input_shape': (5, 5), 'output_shape': (5, 5), 'changed': False}
+
+{'rule': 'object_change', 'input_count': 1, 'output_count': 1, 'difference': 0}
+
+{'rule': 'density_change', 'input_density': 0.12, 'output_density': 0.12, 'difference': 0.0}
+
+{'rule': 'symmetry_change', 'input_horizontal': False, 'output_horizontal': False, 'input_vertical': False, 'output_vertical': False}
+
+
+==================================================
+NEXRYN :: EVALUATION STAGE
+==================================================
+
+EVALUATION RESULT:
+
+{'accuracy': 0.84, 'difference_count': 4, 'color_similarity': 1.0, 'structural_score': 1.0, 'final_score': 0.904, 'confidence': 'high', 'success': False, 'success_state': 'RECOVERABLE_FAILURE', 'exact_success': False, 'partial_success': False, 'high_value_partial_success': False, 'minimum_partial_accuracy': 0.95, 'high_value_partial_accuracy': 0.9, 'high_value_max_residual_cells': 2, 'failure_detected': True, 'partial_success_detected': False, 'episode_completed': False, 'retry_allowed': True, 'shutdown_mode': 'normal', 'termination_reason': None, 'residual_analysis': {'system': 'RESIDUAL_ANALYSIS_REPORT', 'residual_difference_count': 4, 'residual_locations': [[1, 1], [1, 3], [2, 1], [2, 3]], 'residual_type': 'localized_color_residual', 'probable_root_cause': 'localized_prediction_mismatch', 'future_learning_priority': 'refine_residual_localization', 'blocks_runtime_termination': False, 'success_state': 'RECOVERABLE_FAILURE'}}
+
+INTROSPECTION SUMMARY:
+
+{'history_size': 1, 'latest_report': {'reasoning_depth': 4, 'cognitive_complexity': 'unknown', 'goal_confidence': 0.0, 'semantic_concept_count': 6, 'attributed_concepts': ['rotation', 'orientation_change', 'reflection', 'relative_position', 'spatial_relation', 'transformation_sequence'], 'semantic_attribution_evidence': {'evidence_keys': ['color_delta_key_count', 'color_delta_keys', 'density_delta', 'evidence_compacted', 'evidence_key_count', 'evidence_keys', 'object_count_delta', 'spatial_delta_key_count', 'spatial_delta_keys', 'symmetry_delta_key_count', 'symmetry_delta_keys'], 'evidence_key_count': 5, 'evidence_compacted': True, 'evidence_keys_count': 5, 'evidence_keys_sample': ['color_delta', 'density_delta', 'object_count_delta'], 'object_count_delta': 0.0, 'density_delta': 0.0, 'color_delta_keys_count': 5, 'color_delta_keys_sample': ['colors_added', 'colors_changed', 'colors_removed'], 'color_delta_key_count': 5, 'symmetry_delta_keys_count': 5, 'symmetry_delta_keys_sample': ['input_symmetric', 'output_symmetric', 'symmetry_changed'], 'symmetry_delta_key_count': 5, 'spatial_delta_keys_count': 2, 'spatial_delta_keys_sample': ['concepts', 'evidence'], 'spatial_delta_key_count': 2}, 'semantic_attribution_source': 'contextual_transformation_evidence', 'active_routes': 11, 'execution_nodes': 1, 'pipeline_activity': {'active_stages': ['task_loaded', 'input_summary', 'output_summary', 'predicted_output'], 'reasoning_depth': 4, 'route_count': 11, 'execution_nodes': 1}, 'accuracy': 0.84, 'success': False, 'success_state': 'RECOVERABLE_FAILURE', 'partial_success': False}}
+
+FAILURE SUMMARY:
+
+{'total_failures': 1, 'severe_failures': 0, 'latest_failure': {'failure_detected': True, 'accuracy': 0.84, 'success_state': 'RECOVERABLE_FAILURE', 'partial_success_detected': False, 'reasoning_depth': 4, 'cognitive_complexity': 'unknown', 'semantic_density': 6, 'route_count': 11, 'execution_nodes': 1, 'pipeline_activity': {'active_stages': ['task_loaded', 'input_summary', 'output_summary', 'predicted_output'], 'reasoning_depth': 4, 'route_count': 11, 'execution_nodes': 1}, 'failure_causes': ['routing_overload'], 'diagnostic_signals': []}}
+
+EVALUATION METRICS:
+
+{'history_size': 1, 'recent_episodes': 1, 'introspection_insights': 2, 'failure_detected': True, 'episode_completed': False, 'success_state': 'RECOVERABLE_FAILURE', 'residual_count': 4, 'residual_type': 'localized_color_residual', 'repair_attempts': 0, 'repair_successes': 0, 'repair_failures': 0, 'repair_success_rate': 0.0, 'localized_repairs': 0, 'counterfactual_repairs': 0, 'context_guided_repairs': 0, 'dependency_guided_repairs': 0, 'truth_guided_repairs': 0, 'average_residual_reduction': 0.0}
+FAST MINIMAL EVALUATION CLOSURE: returning minimal context

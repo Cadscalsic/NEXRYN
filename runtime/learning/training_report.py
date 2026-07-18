@@ -6,8 +6,10 @@ def build_training_report(
     concept_lifecycle_report=None,
     curriculum_coverage_report=None,
     include_truth_evaluations=False,
+    report_level="normal",
 ):
     discovery_only_mode = not include_truth_evaluations
+    report_level = str(report_level or "normal").lower()
     training_batch = training_batch or {}
     training_assistant_report = training_assistant_report or {}
     multi_task_results = list(multi_task_results or [])
@@ -1179,6 +1181,12 @@ def build_training_report(
         }
         for item in multi_task_results
     ]
+    projection_guard = {
+        "report_level": report_level,
+        "multi_task_results_projected": True,
+        "raw_task_result_payloads_omitted": True,
+        "max_task_result_fields": 3,
+    }
 
     def aggregate_execution_layer_audit_report():
         audits = []
@@ -3947,6 +3955,7 @@ def build_training_report(
             for item in task_results
         ),
         "multi_task_results": task_results,
+        "training_report_projection_guard": projection_guard,
         "EXECUTION_PLAN_REPORT": execution_plan_report,
         "execution_plan_report": dict(execution_plan_report),
         "EXECUTION_DISPATCH_REPORT": execution_dispatch_report,

@@ -2117,6 +2117,22 @@ class SemanticAbstractionEngine:
 
         fields = []
 
+        def append_signal(value, item_limit=16):
+            if value is None:
+                return
+            if isinstance(value, dict):
+                for key in list(value.keys())[:item_limit]:
+                    append_signal(key, item_limit=item_limit)
+                return
+            if isinstance(value, (list, tuple, set)):
+                for item in list(value)[:item_limit]:
+                    append_signal(item, item_limit=item_limit)
+                return
+            text = str(value).strip()
+            if not text:
+                return
+            fields.append(text[:120])
+
         for key in (
             "task_id",
             "task_path",
@@ -2131,9 +2147,7 @@ class SemanticAbstractionEngine:
             )
 
             if value:
-                fields.append(
-                    str(value)
-                )
+                append_signal(value)
 
         for parent_key in (
             "cognitive_cycle",
@@ -2164,9 +2178,7 @@ class SemanticAbstractionEngine:
                 )
 
                 if value:
-                    fields.append(
-                        str(value)
-                    )
+                    append_signal(value)
 
         for key in (
             "target_concepts",
@@ -2182,15 +2194,9 @@ class SemanticAbstractionEngine:
             )
 
             if isinstance(value, (list, tuple, set)):
-                fields.extend(
-                    str(item)
-                    for item in value
-                    if item
-                )
+                append_signal(value)
             elif value:
-                fields.append(
-                    str(value)
-                )
+                append_signal(value)
 
         for parent_key in (
             "cognitive_cycle",
@@ -2221,17 +2227,11 @@ class SemanticAbstractionEngine:
                 )
 
                 if isinstance(value, (list, tuple, set)):
-                    fields.extend(
-                        str(item)
-                        for item in value
-                        if item
-                    )
+                    append_signal(value)
                 elif value:
-                    fields.append(
-                        str(value)
-                    )
+                    append_signal(value)
 
-        return " ".join(fields).lower()
+        return " ".join(fields)[:2000].lower()
 
     def _concepts_from_spatial_signals(
         self,

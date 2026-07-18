@@ -3917,6 +3917,21 @@ class AdaptiveCognitivePipeline:
                     stage_name == "evaluation"
                 ):
 
+                    if (
+                        runtime_context.get(
+                            "fast_minimal_evaluation_closure",
+                            {},
+                        ).get("enabled") is True
+                    ):
+
+                        stage_report[
+                            "fast_minimal_evaluation_closure"
+                        ] = True
+                        stage_report[
+                            "post_evaluation_work_skipped"
+                        ] = True
+                        break
+
                     if runtime_context.get("episode_completed") is True:
                         runtime_context[
                             "post_success_isolation"
@@ -4068,6 +4083,7 @@ class AdaptiveCognitivePipeline:
             "stage_cycle",
             stage_cycle_start,
         )
+        return runtime_context
 
     def run_dependency_context_activation_audit_cycle(
         self,
@@ -12737,10 +12753,18 @@ class AdaptiveCognitivePipeline:
 
     def finalize_runtime(self):
 
+        runtime_context = self.runtime.get_context()
+        if (
+            self.reasoning_budget.get("mode") == "fast"
+            and self.reasoning_budget.get("report_level") == "minimal"
+        ):
+
+            return self.finalize_runtime_fast()
+
         mode = self.runtime_finalization_optimizer.choose_mode(
             reasoning_budget=self.runtime.current_reasoning_budget,
             invalidated_concepts=self.runtime.invalidated_concepts,
-            runtime_context=self.runtime.get_context(),
+            runtime_context=runtime_context,
         )
 
         if mode == "fast":
@@ -12806,14 +12830,29 @@ class AdaptiveCognitivePipeline:
             },
         )
 
-        runtime_context[
-            "knowledge_generalization_engine_report"
-        ] = runtime_context.get(
-            "knowledge_generalization_engine_report",
-            self.cross_task_replication_collector
-            .knowledge_generalization_engine
-            .report(),
-        )
+        if "knowledge_generalization_engine_report" not in runtime_context:
+
+            if (
+                self.reasoning_budget.get("mode") == "fast"
+                and self.reasoning_budget.get("report_level") == "minimal"
+            ):
+
+                runtime_context[
+                    "knowledge_generalization_engine_report"
+                ] = {
+                    "finalization_state": "deferred",
+                    "reason": "fast_minimal_terminal_projection",
+                }
+
+            else:
+
+                runtime_context[
+                    "knowledge_generalization_engine_report"
+                ] = (
+                    self.cross_task_replication_collector
+                    .knowledge_generalization_engine
+                    .report()
+                )
 
         finalization_report = (
             self.runtime_finalization_optimizer
@@ -13276,8 +13315,92 @@ class AdaptiveCognitivePipeline:
             self.runtime.bulk_update_context(context)
 
         module_start = time.perf_counter()
-        self.run_stage_cycle()
+        stage_context = self.run_stage_cycle()
         self._record_module_timing("stage_cycle", module_start)
+
+        context = (
+            stage_context
+            if isinstance(stage_context, dict)
+            else self.runtime.get_context()
+        )
+        budget_report = context.get(
+            "cognitive_budget_report",
+            {},
+        )
+        if not isinstance(budget_report, dict):
+            budget_report = {}
+        minimal_report_requested = (
+            self.reasoning_budget.get("report_level") == "minimal"
+            or budget_report.get("report_level") == "minimal"
+        )
+        if (
+            minimal_report_requested
+            and context.get("fast_minimal_evaluation_closure", {}).get(
+                "enabled"
+            ) is True
+        ):
+
+            selected_mode = (
+                budget_report.get("selected_mode")
+                or self.reasoning_budget.get("mode")
+            )
+
+            context[
+                "runtime_finalization_report"
+            ] = {
+                "runtime_state": "completed",
+                "shutdown_mode": context.get("shutdown_mode", "fast"),
+                "reason": "fast_minimal_post_evaluation_return",
+                "post_evaluation_operations_skipped": [
+                    "reasoning_cycle",
+                    "dependency_reasoning_cycle",
+                    "process_semantic_cycle",
+                    "context_truth_advancement_cycle",
+                    "governance_cycle",
+                    "safe_self_repair_cycle",
+                    "health_cycle",
+                    "pipeline_cache_store",
+                    "motivation_cycle",
+                ],
+                "success_preserved": context.get("episode_completed") is True,
+                "timestamp": str(datetime.utcnow()),
+            }
+            context[
+                "finalization_report"
+            ] = context["runtime_finalization_report"]
+            context[
+                "performance_report"
+            ] = {
+                "system": "runtime_reasoning_budget",
+                "mode": selected_mode,
+                "report_level": (
+                    budget_report.get("report_level")
+                    or self.reasoning_budget.get("report_level")
+                ),
+                "module_timings": list(
+                    self.performance_counters.get(
+                        "module_timings",
+                        [],
+                    )
+                ),
+                "minimal_terminal_closure": True,
+            }
+            context[
+                "cache_metrics_report"
+            ] = {
+                "report_state": "deferred",
+                "reason": "fast_minimal_post_evaluation_return",
+            }
+            context[
+                "cognitive_cache_report"
+            ] = context["cache_metrics_report"]
+            context[
+                "pipeline_fast_minimal_return"
+            ] = {
+                "enabled": True,
+                "reason": "fast_minimal_post_evaluation_return",
+            }
+            return context
 
         if self.cached_pipeline_result is not None:
 

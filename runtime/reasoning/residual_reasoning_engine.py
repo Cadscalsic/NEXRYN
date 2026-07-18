@@ -70,18 +70,26 @@ class ResidualReasoningEngine:
         high_value_partial = (
             evaluation.get("high_value_partial_success") is True
         )
+        localized_repair_max_residual_cells = int(_number(
+            evaluation.get(
+                "localized_repair_max_residual_cells",
+                evaluation.get("high_value_max_residual_cells", 2),
+            ),
+            default=2,
+        ))
+        localized_repair_minimum_accuracy = _number(
+            evaluation.get("localized_repair_minimum_accuracy"),
+            default=_number(
+                evaluation.get("high_value_partial_accuracy"),
+                default=0.90,
+            ),
+        )
         localized_repair_eligible = (
-            residual_count <= 2
+            residual_count <= localized_repair_max_residual_cells
             and residual_count > 0
             and (
                 accuracy >= 0.95
-                or (
-                    high_value_partial
-                    and accuracy >= _number(
-                        evaluation.get("high_value_partial_accuracy"),
-                        default=0.90,
-                    )
-                )
+                or accuracy >= localized_repair_minimum_accuracy
             )
         )
         repair_mode = (
@@ -113,7 +121,11 @@ class ResidualReasoningEngine:
             "repair_mode": repair_mode,
             "repair_activation_reason": (
                 "near_exact_residual"
-                if accuracy >= 0.95 and residual_count <= 2 and residual_count > 0
+                if (
+                    accuracy >= 0.95
+                    and residual_count <= localized_repair_max_residual_cells
+                    and residual_count > 0
+                )
                 else "high_value_partial_residual"
                 if localized_repair_eligible
                 else "no_residual"

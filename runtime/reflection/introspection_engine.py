@@ -134,9 +134,11 @@ class IntrospectionEngine:
             ),
 
             "semantic_attribution_evidence":
-            contextual_concepts.get(
-                "evidence",
-                {}
+            self._compact_semantic_evidence(
+                contextual_concepts.get(
+                    "evidence",
+                    {}
+                )
             ),
 
             "semantic_attribution_source":
@@ -301,8 +303,7 @@ class IntrospectionEngine:
     ):
 
         self.introspection_history.append(
-
-            introspection_report
+            self._compact_history_report(introspection_report)
         )
 
     # ============================================
@@ -325,3 +326,64 @@ class IntrospectionEngine:
 
             else {}
         }
+
+    def _compact_semantic_evidence(self, evidence):
+        if not isinstance(evidence, dict):
+            return {
+                "evidence_type": type(evidence).__name__,
+                "evidence_repr": self._truncate_scalar(evidence),
+                "evidence_compacted": True,
+            }
+
+        compact = {
+            "evidence_keys": sorted(str(key) for key in evidence.keys())[:12],
+            "evidence_key_count": len(evidence),
+            "evidence_compacted": True,
+        }
+        for key, value in evidence.items():
+            key_name = str(key)
+            if key_name in {
+                "task_name",
+                "task_id",
+                "source",
+                "concept_count",
+                "semantic_concept_count",
+            }:
+                compact[key_name] = self._truncate_scalar(value, limit=120)
+                continue
+            if isinstance(value, (list, tuple, set)):
+                compact[f"{key_name}_count"] = len(value)
+                compact[f"{key_name}_sample"] = [
+                    self._truncate_scalar(item, limit=80)
+                    for item in list(value)[:3]
+                ]
+                continue
+            if isinstance(value, dict):
+                compact[f"{key_name}_keys"] = sorted(
+                    str(item_key) for item_key in value.keys()
+                )[:8]
+                compact[f"{key_name}_key_count"] = len(value)
+                continue
+            compact[key_name] = self._truncate_scalar(value, limit=160)
+        return compact
+
+    def _compact_history_report(self, report):
+        if not isinstance(report, dict):
+            return report
+        compact = dict(report)
+        compact["attributed_concepts"] = [
+            self._truncate_scalar(concept, limit=80)
+            for concept in list(compact.get("attributed_concepts", []) or [])[:12]
+        ]
+        compact["semantic_attribution_evidence"] = self._compact_semantic_evidence(
+            compact.get("semantic_attribution_evidence", {})
+        )
+        return compact
+
+    def _truncate_scalar(self, value, limit=160):
+        if isinstance(value, (int, float, bool)) or value is None:
+            return value
+        text = str(value)
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}...<truncated:{len(text) - limit}>"

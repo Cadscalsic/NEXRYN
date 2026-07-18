@@ -106,3 +106,28 @@ def test_high_value_partial_residual_starts_repair_attempts():
     assert result["FINAL_REPAIR_REPORT"]["repair_attempts"] > 0
     assert result["FINAL_REPAIR_REPORT"]["localized_repairs"] > 0
     assert result["FINAL_REPAIR_REPORT"]["counterfactual_repairs"] > 0
+
+
+def test_recoverable_four_cell_residual_starts_repair_attempts():
+    predicted = np.zeros((5, 5), dtype=int)
+    target = predicted.copy()
+    target[1, 1] = 7
+    target[1, 2] = 7
+    target[2, 1] = 7
+    target[2, 2] = 7
+
+    result = evaluation_stage({
+        "predicted_output": predicted,
+        "output_grid": target,
+        "cognitive_cycle": {"task_id": "four_cell_localized_residual"},
+        "active_concepts": ["artifact_filtering", "symbolic_remapping"],
+    })
+
+    assert result["pre_repair_evaluation_result"]["accuracy"] == 0.84
+    assert result["pre_repair_evaluation_result"]["difference_count"] == 4
+    assert result["residual_reasoning_report"]["repair_mode"] == (
+        "LOCALIZED_REPAIR_MODE"
+    )
+    assert result["FINAL_REPAIR_REPORT"]["repair_attempts"] >= 4
+    assert result["FINAL_REPAIR_REPORT"]["repair_accepted"] is True
+    assert result["evaluation_result"]["difference_count"] == 0

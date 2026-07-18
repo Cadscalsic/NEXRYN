@@ -2,6 +2,8 @@ from runtime.learning.training_report import (
     build_training_report,
     print_training_report,
 )
+from runtime.reflection.introspection_engine import IntrospectionEngine
+from runtime.reporting.final_report_renderer import final_report_renderer
 
 
 def test_training_report_exposes_compact_results_and_concept_memory(capsys):
@@ -164,6 +166,69 @@ def test_training_report_minimal_prints_compact_concept_report(capsys):
     assert "'concept_name': 'replication'" in output
     assert "TRUTH CANDIDATE REPORT" not in output
     assert "effective_contradiction=" not in output
+
+
+def test_introspection_compacts_semantic_attribution_evidence():
+    engine = IntrospectionEngine()
+    evidence = engine._compact_semantic_evidence({
+        "task_spatial_signal": "x" * 1000,
+        "tool_names": ["a", "b", "c", "d"],
+        "nested": {"a": 1, "b": 2},
+    })
+
+    assert evidence["evidence_compacted"] is True
+    assert len(evidence["task_spatial_signal"]) < 220
+    assert evidence["tool_names_count"] == 4
+    engine.store_report({
+        "attributed_concepts": ["object_counting"],
+        "semantic_attribution_evidence": evidence,
+    })
+    assert engine.build_summary()["latest_report"]["semantic_attribution_evidence"]["evidence_compacted"] is True
+
+
+def test_training_report_records_projection_guard_for_minimal_payloads():
+    report = build_training_report(
+        training_batch={"selected_task_count": 1},
+        report_level="minimal",
+        multi_task_results=[{
+            "task": "task_001.json",
+            "status": "completed",
+            "result": {"huge": "x" * 5000},
+        }],
+    )
+
+    assert report["training_report_projection_guard"]["report_level"] == "minimal"
+    assert report["training_report_projection_guard"]["raw_task_result_payloads_omitted"] is True
+    assert report["multi_task_results"] == [{"task": "task_001.json", "status": "completed"}]
+
+
+def test_final_renderer_minimal_projects_before_binding():
+    rendered = final_report_renderer.render(
+        {
+            "runtime_status": "completed",
+            "multi_task_results": [{
+                "task": "task_001.json",
+                "status": "completed",
+                "result": {"large_runtime_context": "x" * 10000},
+            }],
+            "training_report": build_training_report(
+                training_batch={"selected_task_count": 1},
+                report_level="minimal",
+                multi_task_results=[{
+                    "task": "task_001.json",
+                    "status": "completed",
+                    "result": {"large_runtime_context": "x" * 10000},
+                }],
+            ),
+        },
+        runtime_metadata={"runtime_status": "completed", "mode": "fast"},
+        report_level="minimal",
+        write_artifact=False,
+    )
+
+    assert rendered.startswith("<<< NEXRYN_REPORT_BEGIN >>>")
+    assert "large_runtime_context" not in rendered
+    assert "raw_python_structure_detected" not in final_report_renderer.report()["report_validation_errors"]
 
 
 def test_training_report_prints_curriculum_coverage_report(capsys):

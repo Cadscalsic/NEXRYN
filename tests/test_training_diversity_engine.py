@@ -70,3 +70,31 @@ def test_task_diversity_penalizes_recent_core_concepts_and_rewards_frontier():
         "shape_preservation",
     ]
     assert "occlusion" in diversity["frontier_concepts_explored"]
+
+
+def test_task_diversity_handles_missing_numeric_values():
+    diversity = TaskDiversityEngine().rerank(
+        [
+            {
+                "task_file": "task_missing_numbers.json",
+                "target_concepts": ["shape_preservation"],
+                "priority": None,
+                "target_coverage_gap": None,
+                "original_order": 0,
+            }
+        ],
+        core_knowledge=[
+            {
+                "concept": "shape_preservation",
+                "mastery_score": None,
+                "training_dominance_penalty": None,
+            }
+        ],
+        concept_counts={"shape_preservation": None},
+    )
+
+    ranked = diversity["ranked_task_reports"][0]
+    assert ranked["task_file"] == "task_missing_numbers.json"
+    assert ranked["base_priority"] == 0.0
+    assert ranked["concept_cooldown_penalty"] == 0.0
+    assert diversity["concept_reports"][0]["mastery_score"] == 0.0

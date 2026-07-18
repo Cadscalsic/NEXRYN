@@ -99,6 +99,91 @@ reflective_meta_learning_engine = (
 )
 
 
+def _is_fast_minimal_context(context):
+
+    budget_report = context.get(
+        "cognitive_budget_report",
+        {}
+    )
+    if not isinstance(budget_report, dict):
+        budget_report = {}
+
+    report_level = str(
+        context.get("report_level")
+        or budget_report.get("report_level")
+        or ""
+    ).lower()
+    mode = str(
+        context.get("mode")
+        or context.get("selected_mode")
+        or budget_report.get("mode")
+        or budget_report.get("selected_mode")
+        or ""
+    ).lower()
+    profile = context.get(
+        "execution_profile",
+        budget_report.get("execution_profile", {})
+    )
+    profile_name = ""
+    if isinstance(profile, dict):
+        profile_name = str(
+            profile.get("name")
+            or profile.get("mode")
+            or profile.get("pipeline_name")
+            or ""
+        ).lower()
+    elif isinstance(profile, str):
+        profile_name = profile.lower()
+
+    return (
+        report_level == "minimal"
+        and (mode == "fast" or profile_name == "fast")
+    )
+
+
+def _compact_evaluation_list(values, limit=3):
+
+    if not isinstance(values, list):
+        return []
+
+    return values[:limit]
+
+
+def _localized_repair_gate(evaluation_result):
+
+    accuracy = float(evaluation_result.get("accuracy", 0.0) or 0.0)
+    difference_count = int(
+        evaluation_result.get("difference_count", 0) or 0
+    )
+    high_value_max = int(
+        evaluation_result.get("high_value_max_residual_cells", 2) or 2
+    )
+    high_value_minimum = float(
+        evaluation_result.get("high_value_partial_accuracy", 0.90) or 0.90
+    )
+
+    if (
+        difference_count > high_value_max
+        and difference_count <= 4
+        and accuracy >= 0.80
+    ):
+        return {
+            "max_residual_cells": 4,
+            "minimum_repair_accuracy": 0.80,
+            "reason": "recoverable_localized_residual",
+        }
+
+    return {
+        "max_residual_cells": high_value_max,
+        "minimum_repair_accuracy": (
+            high_value_minimum
+            if evaluation_result.get("high_value_partial_success") is True
+            else 0.95
+        ),
+        "reason": "standard_localized_residual",
+    }
+
+
 def _run_residual_repair(
     context,
     predicted_output,
@@ -106,11 +191,20 @@ def _run_residual_repair(
     evaluation_result,
 ):
 
+    repair_gate = _localized_repair_gate(evaluation_result)
+    repair_evaluation = {
+        **evaluation_result,
+        "localized_repair_max_residual_cells":
+        repair_gate["max_residual_cells"],
+        "localized_repair_minimum_accuracy":
+        repair_gate["minimum_repair_accuracy"],
+    }
+
     residual_report = residual_reasoning_engine.analyze(
         predicted_output,
         target_output,
         runtime_context=context,
-        evaluation_result=evaluation_result,
+        evaluation_result=repair_evaluation,
     )
     spatial_report = spatial_residual_repair.propose(
         predicted_output,
@@ -190,13 +284,9 @@ def _run_residual_repair(
             object_report,
             candidate_report,
         ],
-        max_passes=3,
-        max_residual_cells=2,
-        minimum_repair_accuracy=(
-            evaluation_result.get("high_value_partial_accuracy", 0.90)
-            if evaluation_result.get("high_value_partial_success") is True
-            else 0.95
-        ),
+        max_passes=max(3, repair_gate["max_residual_cells"]),
+        max_residual_cells=repair_gate["max_residual_cells"],
+        minimum_repair_accuracy=repair_gate["minimum_repair_accuracy"],
     )
     repaired_output = final_report.get("repaired_output", predicted_output)
     if final_report.get("repair_accepted") is True:
@@ -935,6 +1025,134 @@ def evaluation_stage(context):
     print(
         evaluation_metrics
     )
+
+    if _is_fast_minimal_context(context):
+
+        final_repair_report = {
+            "report_state": "minimal",
+            "repair_accepted": repair_result[
+                "final_repair_report"
+            ].get("repair_accepted", False),
+            "repair_attempts": repair_result[
+                "final_repair_report"
+            ].get("repair_attempts", 0),
+            "repair_successes": repair_result[
+                "final_repair_report"
+            ].get("repair_successes", 0),
+        }
+        print(
+            "FAST MINIMAL EVALUATION CLOSURE: returning minimal context",
+            flush=True,
+        )
+        return {
+            "task_path": context.get("task_path"),
+            "task_metadata": context.get("task_metadata", {}),
+            "cognitive_budget_report": context.get(
+                "cognitive_budget_report",
+                {},
+            ),
+            "evaluation_result": evaluation_result,
+            "success_semantics_report": success_semantics_report,
+            "SUCCESS_SEMANTICS_AUDIT_REPORT": {
+                "report_state": "deferred",
+                "reason": "fast_minimal_terminal_projection",
+            },
+            "residual_analysis": residual_analysis,
+            "RESIDUAL_ANALYSIS_REPORT": residual_analysis,
+            "residual_reasoning_report": {
+                "residual_count": repair_result[
+                    "residual_reasoning_report"
+                ].get("residual_count", 0),
+                "residual_type": repair_result[
+                    "residual_reasoning_report"
+                ].get("residual_type"),
+                "report_state": "minimal",
+            },
+            "FINAL_REPAIR_REPORT": final_repair_report,
+            "residual_repair_applied": final_repair_report.get(
+                "repair_accepted",
+                False,
+            ),
+            "success_state": evaluation_result.get("success_state"),
+            "episode_completed": episode_completed,
+            "termination_reason": success_semantics_report.get(
+                "termination_reason",
+            ),
+            "shutdown_mode": success_semantics_report.get(
+                "shutdown_mode",
+            ),
+            "background_task_control": success_semantics_report.get(
+                "background_task_control",
+                {},
+            ),
+            "learning_signal": {
+                "recorded": episode_completed,
+                "success_state": evaluation_result.get("success_state"),
+                "failure_history_incremented": False
+                if episode_completed
+                else failure_analysis.get("failure_detected", False),
+            },
+            "latent_reasoning_report": {
+                "report_state": "deferred",
+                "reason": "fast_minimal_terminal_projection",
+            },
+            "meta_success_rate": meta_success_rate,
+            "evaluation_history": {
+                "report_state": "deferred",
+                "history_size": evaluation_metrics.get("history_size", 0),
+                "reason": "fast_minimal_terminal_projection",
+            },
+            "evaluation_complete": True,
+            "recent_episodes": {
+                "report_state": "deferred",
+                "recent_episode_count": evaluation_metrics.get(
+                    "recent_episodes",
+                    0,
+                ),
+                "reason": "fast_minimal_terminal_projection",
+            },
+            "introspection_summary": introspection_summary,
+            "semantic_attribution_report": {
+                "semantic_concept_count": introspection_report.get(
+                    "semantic_concept_count",
+                    0,
+                ),
+                "attributed_concepts": _compact_evaluation_list(
+                    introspection_report.get("attributed_concepts", []),
+                    limit=5,
+                ),
+                "semantic_attribution_source": introspection_report.get(
+                    "semantic_attribution_source",
+                ),
+            },
+            "failure_analysis": {
+                "failure_detected": failure_analysis.get(
+                    "failure_detected",
+                    False,
+                ),
+                "failure_causes": _compact_evaluation_list(
+                    failure_analysis.get("failure_causes", []),
+                    limit=5,
+                ),
+                "report_state": "minimal",
+            },
+            "failure_summary": failure_summary,
+            "reflective_learning_report": {
+                "report_state": "deferred",
+                "reason": "fast_minimal_terminal_projection",
+            },
+            "program_memory_report": {
+                "report_state": "deferred",
+                "reason": "fast_minimal_terminal_projection",
+            },
+            "evaluation_metrics": evaluation_metrics,
+            "evaluation_stage_report": stage_report,
+            "fast_minimal_evaluation_closure": {
+                "enabled": True,
+                "heavy_evaluation_reports_deferred": True,
+                "reason": "fast_minimal_terminal_projection",
+            },
+        }
 
     # ========================================
     # SAVE CONTEXT

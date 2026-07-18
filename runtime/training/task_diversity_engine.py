@@ -110,6 +110,10 @@ class TaskDiversityEngine:
             reranked.append({
                 **report,
                 "base_priority": base_priority,
+                "target_coverage_gap": _float(
+                    report.get("target_coverage_gap")
+                ),
+                "original_order": _int(report.get("original_order")),
                 "task_cooldown_penalty": round(task_penalty, 4),
                 "concept_cooldown_penalty": round(concept_penalty, 4),
                 "novelty_weight": round(novelty_bonus, 4),
@@ -253,6 +257,8 @@ class TaskDiversityEngine:
 
 
 def _float(value: Any) -> float:
+    if value is None:
+        return 0.0
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -260,6 +266,8 @@ def _float(value: Any) -> float:
 
 
 def _int(value: Any) -> int:
+    if value is None:
+        return 0
     try:
         return int(value)
     except (TypeError, ValueError):

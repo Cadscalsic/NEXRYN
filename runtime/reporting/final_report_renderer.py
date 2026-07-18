@@ -88,6 +88,8 @@ class DeterministicFinalReportRenderer:
             if console_budget_chars is None
             else int(console_budget_chars)
         )
+        if report_level == "minimal":
+            report_state = self._minimal_report_projection(report_state)
         binding_result = canonical_report_binding_engine.bind(
             report_state,
             runtime_metadata=runtime_metadata,
@@ -214,6 +216,100 @@ class DeterministicFinalReportRenderer:
 
     def report(self) -> dict[str, Any]:
         return dict(self.metrics)
+
+    def _minimal_report_projection(
+        self,
+        report_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not isinstance(report_state, dict):
+            return {}
+        training = report_state.get("training_report", {})
+        training = training if isinstance(training, dict) else {}
+        performance = report_state.get("performance_report", {})
+        performance = performance if isinstance(performance, dict) else {}
+        task_results = [
+            {
+                "task": item.get("task"),
+                "status": item.get("status"),
+                **({"error": item.get("error")} if item.get("error") else {}),
+            }
+            for item in list(report_state.get("multi_task_results", []) or [])[:20]
+            if isinstance(item, dict)
+        ]
+        training_task_results = [
+            {
+                "task": item.get("task"),
+                "status": item.get("status"),
+                **({"error": item.get("error")} if item.get("error") else {}),
+            }
+            for item in list(training.get("multi_task_results", []) or [])[:20]
+            if isinstance(item, dict)
+        ]
+        return {
+            "system": report_state.get("system", "nexryn_runtime"),
+            "runtime_status": report_state.get("runtime_status"),
+            "tasks_executed": report_state.get("tasks_executed"),
+            "successful_tasks": report_state.get("successful_tasks"),
+            "failed_tasks": report_state.get("failed_tasks"),
+            "incomplete_tasks": report_state.get("incomplete_tasks"),
+            "multi_task_results": task_results,
+            "training_report": {
+                "system": training.get("system", "training_report"),
+                "tasks_selected": training.get("tasks_selected"),
+                "tasks_executed": training.get("tasks_executed"),
+                "successful_tasks": training.get("successful_tasks"),
+                "failed_tasks": training.get("failed_tasks"),
+                "incomplete_tasks": training.get("incomplete_tasks"),
+                "multi_task_results": training_task_results,
+                "concepts_discovered": dict(
+                    list((training.get("concepts_discovered", {}) or {}).items())[:24]
+                ) if isinstance(training.get("concepts_discovered"), dict) else {},
+                "training_report_projection_guard": {
+                    **dict(training.get("training_report_projection_guard", {}) or {}),
+                    "final_renderer_minimal_projection": True,
+                },
+                "performance_report": self._compact_metric_map(
+                    training.get("performance_report", {})
+                ),
+            },
+            "performance_report": self._compact_metric_map(performance),
+            "report_projection_guard": {
+                "report_level": "minimal",
+                "raw_runtime_state_omitted": True,
+                "final_renderer_minimal_projection": True,
+                "projected_task_result_count": len(task_results),
+                "projected_training_task_result_count": len(training_task_results),
+            },
+        }
+
+    def _compact_metric_map(self, value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            return {}
+        allowed = {}
+        for key in (
+            "system",
+            "total_runtime_seconds",
+            "execution_time",
+            "runtime_summary",
+            "cognitive_efficiency",
+            "memory_efficiency",
+            "shutdown_efficiency",
+            "top_expensive_modules",
+            "stage_metrics",
+            "runtime_attribution_report",
+        ):
+            item = value.get(key)
+            if isinstance(item, list):
+                allowed[key] = item[:8]
+            elif isinstance(item, dict):
+                allowed[key] = {
+                    sub_key: sub_value
+                    for sub_key, sub_value in item.items()
+                    if isinstance(sub_value, (str, int, float, bool, type(None)))
+                }
+            elif item is not None:
+                allowed[key] = item
+        return allowed
 
     def _canonical_state(
         self,

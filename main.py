@@ -1692,6 +1692,105 @@ try:
             4,
         )
 
+    minimal_terminal_closure = (
+        args.mode == "fast"
+        and args.report_level in {"minimal", "normal"}
+    )
+    if minimal_terminal_closure:
+        module_start = time.perf_counter()
+        training_assistant_report = training_assistant.complete_cycle(
+            successful_tasks=successful_tasks,
+            failed_tasks=failed_tasks,
+            incomplete_tasks=incomplete_tasks,
+        )
+        record_main_timing("training_assistant_complete", module_start)
+
+        from runtime.learning.training_report import build_training_report
+        from runtime.reporting.final_report_renderer import final_report_renderer
+
+        training_report = build_training_report(
+            training_batch=training_batch,
+            training_assistant_report=training_assistant_report,
+            multi_task_results=all_results,
+            ledger_report={
+                "report_state": "deferred",
+                "reason": "fast_minimal_ledger_report_deferred",
+            },
+            concept_lifecycle_report={
+                "report_state": "deferred",
+                "reason": "fast_minimal_concept_lifecycle_deferred",
+                "concepts": [],
+            },
+            report_level="minimal",
+            include_truth_evaluations=False,
+        )
+        execution_time = round(time.time() - runtime_start, 4)
+        performance_report = {
+            "system": "runtime_reasoning_budget",
+            "total_runtime_seconds": execution_time,
+            "execution_time": execution_time,
+            "task_execution_time_seconds": runtime_metrics.get(
+                "task_execution_time_seconds",
+                0.0,
+            ),
+                "report_level": args.report_level,
+                "minimal_terminal_closure_report": {
+                    "system": "minimal_terminal_closure",
+                    "post_task_enrichment": "deferred",
+                    "reason": "fast_minimal_result_available_before_heavy_finalization",
+                    "requested_report_level": args.report_level,
+                    "projected_report_level": "minimal",
+                    "result_available": True,
+                },
+            "module_timings": list(main_module_timings),
+        }
+        results = {
+            "multi_task_results": [
+                {
+                    "task": item.get("task"),
+                    "status": item.get("status"),
+                    **({"error": item.get("error")} if item.get("error") else {}),
+                }
+                for item in all_results
+            ],
+            "training_assistant_batch": training_batch,
+            "training_assistant_report": training_assistant_report,
+            "training_report": training_report,
+            "performance_report": performance_report,
+            "tasks_executed": len(all_results),
+            "successful_tasks": successful_tasks,
+            "failed_tasks": failed_tasks,
+            "incomplete_tasks": incomplete_tasks,
+            "runtime_status": "completed",
+        }
+        runtime_metadata = build_runtime_metadata(
+            args,
+            execution_time,
+            "completed",
+            context_count=0,
+            runtime_metrics={
+                **runtime_metrics,
+                "training_batch_size": training_batch_size,
+                "training_batch_size_source": training_batch_size_source,
+                "finalization_duration": 0,
+                "minimal_terminal_closure": True,
+                "post_task_enrichment": "deferred",
+            },
+        )
+        runtime_metadata["requested_report_level"] = args.report_level
+        runtime_metadata["report_level"] = "minimal"
+        runtime_metadata["projected_report_level"] = "minimal"
+        rendered_final_report = final_report_renderer.render(
+            results,
+            runtime_metadata=runtime_metadata,
+            report_level="minimal",
+            artifact_directory="runtime/artifacts",
+            write_artifact=True,
+            write_diagnostic_artifact=False,
+        )
+        final_report_renderer.emit(rendered_final_report)
+        sys.exit(0)
+
     module_start = time.perf_counter()
     training_assistant_report = training_assistant.complete_cycle(
         successful_tasks=successful_tasks,
@@ -1831,6 +1930,7 @@ try:
         multi_task_results=all_results,
         ledger_report=ledger_report,
         concept_lifecycle_report=concept_lifecycle_report,
+        report_level=args.report_level,
         include_truth_evaluations=(
             args.mode not in {"deep", "full"}
             or deep_mode_budget_manager.should_expand(
@@ -3880,24 +3980,28 @@ try:
         and args.report_level == "minimal"
         and args.post_success_mode == "fast"
     )
-    if fast_terminal_mode:
+    minimal_terminal_closure = (
+        args.mode == "fast"
+        and args.report_level == "minimal"
+    )
+    if minimal_terminal_closure:
         shared_state_save_report = {
             "saved": False,
-            "reason": "fast_mode_shared_state_persistence_deferred",
+            "reason": "fast_minimal_shared_state_persistence_deferred",
             "deferred_to_offline_cognitive_maintenance": True,
         }
         shared_cognitive_state_report = {
             "deferred": True,
-            "reason": "fast_mode_shared_state_report_deferred",
+            "reason": "fast_minimal_shared_state_report_deferred",
             "counts": shared_cognitive_state.counts(),
         }
         cognitive_observability_report = {
             "deferred": True,
-            "reason": "fast_mode_cognitive_observability_deferred",
+            "reason": "fast_minimal_cognitive_observability_deferred",
         }
         knowledge_propagation_report = {
             "deferred": True,
-            "reason": "fast_mode_knowledge_propagation_report_deferred",
+            "reason": "fast_minimal_knowledge_propagation_report_deferred",
         }
     else:
         shared_state_save_report = shared_cognitive_state.save()
@@ -4143,11 +4247,15 @@ fast_terminal_mode = (
     and args.report_level == "minimal"
     and args.post_success_mode == "fast"
 )
+minimal_terminal_closure = (
+    args.mode == "fast"
+    and args.report_level == "minimal"
+)
 
 if (
     isinstance(results, dict)
     and isinstance(results.get("performance_report"), dict)
-    and not fast_terminal_mode
+    and not minimal_terminal_closure
 ):
     from runtime.performance.runtime_attribution_engine import (
         runtime_attribution_engine,
@@ -4535,6 +4643,33 @@ if (
                     4,
                 )
 
+if (
+    isinstance(results, dict)
+    and isinstance(results.get("performance_report"), dict)
+    and minimal_terminal_closure
+):
+    minimal_closure_report = {
+        "system": "minimal_terminal_closure",
+        "post_task_enrichment": "deferred",
+        "reason": "fast_minimal_result_available_before_heavy_finalization",
+        "deferred_work": [
+            "runtime_attribution_enrichment",
+            "cognitive_runtime_archival",
+            "shared_state_persistence",
+            "runtime_observability_expansion",
+            "execution_binding_archive",
+        ],
+        "result_available": True,
+    }
+    results["minimal_terminal_closure_report"] = minimal_closure_report
+    results["performance_report"]["minimal_terminal_closure_report"] = (
+        minimal_closure_report
+    )
+    if isinstance(results.get("PERFORMANCE_REPORT"), dict):
+        results["PERFORMANCE_REPORT"]["minimal_terminal_closure_report"] = (
+            minimal_closure_report
+        )
+
 
 # ============================================
 # DETERMINISTIC POST-SUCCESS SHUTDOWN
@@ -4633,7 +4768,7 @@ if runtime_status == "completed" and isinstance(results, dict):
 
 if runtime_status == "completed":
     if fast_terminal_mode:
-        print({
+        fast_summary = {
             "system": "nexryn_fast_terminal_summary",
             "status": runtime_status,
             "mode": args.mode,
@@ -4650,15 +4785,11 @@ if runtime_status == "completed":
             "deferred_work": [
                 "post_execution_cognitive_memory",
                 "shared_cognitive_state_persistence",
-                "canonical_final_report_rendering",
             ],
-        })
-        if shutdown_controller is not None:
-            shutdown_controller.exit_enforcer.enforce_exit(
-                exit_process=True,
-                code=0,
-            )
-        sys.exit(0)
+            "final_report_renderer": "minimal_projected",
+        }
+        if isinstance(results, dict):
+            results["fast_terminal_summary"] = fast_summary
 
     from runtime.reporting.final_report_renderer import final_report_renderer
 
