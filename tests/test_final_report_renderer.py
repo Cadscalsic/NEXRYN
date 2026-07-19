@@ -222,6 +222,61 @@ def test_render_includes_cognitive_domain_ecosystem_report():
     assert "Ecosystem Maturity:" in report
 
 
+def test_render_includes_cognitive_capability_coverage_map():
+    state = _report_state()
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 2,
+        "eligible_concepts": 2,
+        "generated_blueprints": 2,
+        "missing_requirements": ["compiler_support"],
+    }
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_phase_entered": True,
+        "eligible_source_count": 1,
+        "proposal_count": 1,
+        "candidate_proposals": [
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "construct_path",
+            }
+        ],
+        "sources_with_proposals": ["program_generation"],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "arena_state": "SINGLE_SOURCE_ONLY",
+            "candidate_count": 1,
+            "source_count": 1,
+            "sources_entered": ["semantic_compiler"],
+            "candidate_summary": [
+                {
+                    "source": "semantic_compiler",
+                    "candidate_id": "semantic_program:path_finding",
+                    "operation": "construct_path",
+                    "entered_arena": True,
+                }
+            ],
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "COGNITIVE CAPABILITY COVERAGE" in report
+    assert "Overall Cognitive Capability Coverage:" in report
+    assert "Execution Package Coverage:" in report
+    assert "Missing Compiler Requirements: compiler_support" in report
+    assert (
+        "raw=program_generation -> adapter=candidate_proposal_runtime -> "
+        "normalized=semantic_compiler -> arena=semantic_compiler"
+    ) in report
+
+
 def test_render_includes_cognitive_domain_constitution_report():
     report = DeterministicFinalReportRenderer().render(
         _report_state(),

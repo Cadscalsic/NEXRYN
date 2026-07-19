@@ -1039,6 +1039,80 @@ def test_executable_semantic_coverage_identifies_unsupported_clusters():
     assert "connect_components" in coverage["supported_operations"]
 
 
+def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
+    state = _state()
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": [
+            "path_finding",
+            "route_completion",
+            "growth",
+            "position_preservation",
+        ],
+    }
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 2,
+        "eligible_concepts": 2,
+        "generated_blueprints": 2,
+        "missing_requirements": ["compiler_support"],
+    }
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_phase_entered": True,
+        "eligible_source_count": 1,
+        "proposal_count": 1,
+        "candidate_proposals": [
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "construct_path",
+            }
+        ],
+        "sources_with_proposals": ["program_generation"],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "arena_state": "SINGLE_SOURCE_ONLY",
+            "candidate_count": 1,
+            "unique_candidate_count": 1,
+            "source_count": 1,
+            "sources_entered": ["semantic_compiler"],
+            "candidate_summary": [
+                {
+                    "source": "semantic_compiler",
+                    "candidate_id": "semantic_program:path_finding",
+                    "operation": "construct_path",
+                    "entered_arena": True,
+                }
+            ],
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "compiled_programs": 1,
+        "validated_programs": 1,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "cognitive_capability_coverage_summary"
+    ]["value"]
+
+    assert coverage["generated_concepts"] == 4
+    assert coverage["compiler_coverage"] == 0.5
+    assert coverage["candidate_coverage"] == 0.5
+    assert coverage["operational_capability_coverage"] == 0.25
+    assert coverage["missing_compiler_requirements"] == ["compiler_support"]
+    assert coverage["candidate_source_lineage"][0]["raw_source"] == (
+        "program_generation"
+    )
+    assert coverage["candidate_source_lineage"][0]["arena_source"] == (
+        "semantic_compiler"
+    )
+
+
 def test_canonical_timing_bindings_use_existing_timing_sources():
     result = CanonicalReportBindingEngine().bind(
         _state(),

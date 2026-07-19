@@ -58,6 +58,13 @@ RUNTIME_SNAPSHOT_TYPES = {
         "reuse_application",
         "reuse_summary",
     ),
+    "executable_intelligence_runtime": (
+        "semantic_program_activation",
+        "program_blueprint_generation",
+        "candidate_proposal",
+        "candidate_arena",
+        "executable_intelligence_summary",
+    ),
 }
 
 DEFAULT_RUNTIME_SNAPSHOT_TYPES = (

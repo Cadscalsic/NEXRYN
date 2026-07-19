@@ -13,6 +13,9 @@ from runtime.reporting.canonical_report_binding_engine import (
 from runtime.reporting.compact_report_compression_engine import (
     compact_report_compression_engine,
 )
+from runtime.reporting.pre_final_report_diagnostics import (
+    pre_final_report_diagnostics,
+)
 
 
 REPORT_BEGIN_MARKER = "<<< NEXRYN_REPORT_BEGIN >>>"
@@ -36,6 +39,7 @@ SECTION_ORDER = [
     "COGNITIVE DOMAIN CONSTITUTION REPORT",
     "SEMANTIC COMPILATION",
     "EXECUTABLE SEMANTIC COVERAGE",
+    "COGNITIVE CAPABILITY COVERAGE",
     "TRANSFORMATION DECISION",
     "MULTI HYPOTHESIS REPORT",
     "CANDIDATE PROPOSAL PHASE",
@@ -89,11 +93,31 @@ class DeterministicFinalReportRenderer:
             else int(console_budget_chars)
         )
         if report_level == "minimal":
+            pre_final_report_diagnostics.phase_enter(
+                "REPORT_PROJECTION",
+                input_keys=len(report_state),
+                multi_task_results=len(report_state.get("multi_task_results", []) or []),
+            )
             report_state = self._minimal_report_projection(report_state)
+            pre_final_report_diagnostics.phase_exit(
+                "REPORT_PROJECTION",
+                output_keys=len(report_state),
+                projected_tasks=len(report_state.get("multi_task_results", []) or []),
+            )
+        pre_final_report_diagnostics.phase_enter(
+            "CANONICAL_BIND",
+            report_keys=len(report_state),
+            report_level=report_level,
+        )
         binding_result = canonical_report_binding_engine.bind(
             report_state,
             runtime_metadata=runtime_metadata,
             report_level=report_level,
+        )
+        pre_final_report_diagnostics.phase_exit(
+            "CANONICAL_BIND",
+            source_count=len(binding_result.get("canonical_source_registry", {}) or {}),
+            field_count=len(binding_result.get("report_field_registry", {}) or {}),
         )
         bound_report_state = dict(report_state)
         bound_report_state["CANONICAL_REPORT_BINDING"] = binding_result
@@ -107,13 +131,43 @@ class DeterministicFinalReportRenderer:
             binding_result["binding_diagnostics"]
         )
 
-        compression_result = compact_report_compression_engine.compress(
-            bound_report_state,
-            profile=report_level,
-            artifact_directory=artifact_directory,
-            write_appendix=write_diagnostic_artifact,
+        pre_final_report_diagnostics.phase_enter(
+            "REPORT_RENDER_PREP",
+            bound_keys=len(bound_report_state),
         )
-        compressed_report_state = compression_result["compressed_report"]
+        if report_level in {"minimal", "normal"}:
+            compression_result = {
+                "compressed_report": bound_report_state,
+                "compression_report": {
+                    "compression_status": "NOT_REQUIRED",
+                    "report_level": report_level,
+                    "reason": "interactive_final_report_projection",
+                },
+                "compression_statistics": {
+                    "original_size": 0,
+                    "compressed_size": 0,
+                    "compression_ratio": 1.0,
+                    "heavy_keys_removed": 0,
+                    "arrays_summarized": 0,
+                    "repeated_reports_collapsed": 0,
+                },
+            }
+            bound_report_state["compression_report"] = compression_result[
+                "compression_report"
+            ]
+            compressed_report_state = bound_report_state
+        else:
+            compression_result = compact_report_compression_engine.compress(
+                bound_report_state,
+                profile=report_level,
+                artifact_directory=artifact_directory,
+                write_appendix=write_diagnostic_artifact,
+            )
+            compressed_report_state = compression_result["compressed_report"]
+        pre_final_report_diagnostics.collection_snapshot(
+            "COMPRESSED_REPORT_STATE",
+            compressed_report_state,
+        )
 
         canonical = self._canonical_state(
             compressed_report_state,
@@ -121,13 +175,28 @@ class DeterministicFinalReportRenderer:
             report_level=report_level,
             binding_result=binding_result,
         )
+        pre_final_report_diagnostics.collection_snapshot(
+            "CANONICAL_RENDER_STATE",
+            canonical,
+        )
         full_report = self._render_full_report(canonical)
+        pre_final_report_diagnostics.mark(
+            "REPORT_FULL_STRING_CONSTRUCTED",
+            full_report_chars=len(full_report),
+            full_report_bytes=len(full_report.encode("utf-8")),
+        )
         validation_errors = self.validate(full_report)
         rendered_report = full_report
 
         if budget > 0 and len(full_report) > budget:
             rendered_report = self._render_budget_summary(canonical, full_report)
             validation_errors = self.validate(rendered_report)
+        pre_final_report_diagnostics.phase_exit(
+            "REPORT_RENDER_PREP",
+            rendered_chars=len(rendered_report),
+            validation_errors=len(validation_errors),
+            budget=budget,
+        )
 
         artifact_written = False
         diagnostic_artifact_written = False
@@ -161,10 +230,19 @@ class DeterministicFinalReportRenderer:
 
     def emit(self, rendered_report: str, stream: Any | None = None) -> None:
         stream = stream or os.sys.stdout
+        pre_final_report_diagnostics.mark(
+            "FINAL_REPORT_FIRST_BYTE_WRITTEN",
+            rendered_chars=len(rendered_report),
+            rendered_bytes=len(rendered_report.encode("utf-8")),
+        )
         stream.write(rendered_report)
         if not rendered_report.endswith("\n"):
             stream.write("\n")
         stream.flush()
+        pre_final_report_diagnostics.mark(
+            "FINAL_REPORT_LAST_BYTE_WRITTEN",
+            rendered_chars=len(rendered_report),
+        )
 
     def validate(self, rendered_report: str) -> list[str]:
         errors: list[str] = []
@@ -273,6 +351,9 @@ class DeterministicFinalReportRenderer:
                 ),
             },
             "performance_report": self._compact_metric_map(performance),
+            "execution_timing": self._compact_metric_map(
+                report_state.get("execution_timing", {})
+            ),
             "report_projection_guard": {
                 "report_level": "minimal",
                 "raw_runtime_state_omitted": True,
@@ -289,6 +370,8 @@ class DeterministicFinalReportRenderer:
         for key in (
             "system",
             "total_runtime_seconds",
+            "active_compute_time_seconds",
+            "untracked_runtime_seconds",
             "execution_time",
             "runtime_summary",
             "cognitive_efficiency",
@@ -296,6 +379,8 @@ class DeterministicFinalReportRenderer:
             "shutdown_efficiency",
             "top_expensive_modules",
             "stage_metrics",
+            "execution_timing_state",
+            "timing_records",
             "runtime_attribution_report",
         ):
             item = value.get(key)
@@ -409,6 +494,7 @@ class DeterministicFinalReportRenderer:
             self._render_cognitive_domain_constitution(canonical),
             self._render_semantic_compilation(canonical),
             self._render_executable_semantic_coverage(canonical),
+            self._render_cognitive_capability_coverage(canonical),
             self._render_transformation_decision(canonical),
             self._render_multi_hypothesis_report(canonical),
             self._render_candidate_proposal(canonical),
@@ -459,6 +545,7 @@ class DeterministicFinalReportRenderer:
             self._render_cognitive_domain_constitution(canonical),
             self._render_semantic_compilation(canonical),
             self._render_executable_semantic_coverage(canonical),
+            self._render_cognitive_capability_coverage(canonical),
             self._render_transformation_decision(canonical),
             self._render_multi_hypothesis_report(canonical),
             self._render_candidate_proposal(canonical),
@@ -1331,6 +1418,91 @@ class DeterministicFinalReportRenderer:
             lines.append(f"Missing Cluster Counts: {'; '.join(cluster_bits[:8])}")
         return self._section("EXECUTABLE SEMANTIC COVERAGE", lines)
 
+    def _render_cognitive_capability_coverage(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_capability_coverage_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        bottlenecks = summary.get("lowest_coverage_bottlenecks") or []
+        bottlenecks = bottlenecks if isinstance(bottlenecks, list) else []
+        lineage = summary.get("candidate_source_lineage") or []
+        lineage = lineage if isinstance(lineage, list) else []
+        missing_packages = summary.get("missing_execution_packages") or []
+        missing_packages = (
+            missing_packages if isinstance(missing_packages, list) else [missing_packages]
+        )
+        missing_requirements = summary.get("missing_compiler_requirements") or []
+        missing_requirements = (
+            missing_requirements
+            if isinstance(missing_requirements, list)
+            else [missing_requirements]
+        )
+        lines = [
+            "Overall Cognitive Capability Coverage: "
+            f"{self._percent(summary.get('overall_cognitive_capability_coverage'))}",
+            f"Coverage Status: {self._value(summary.get('coverage_status'))}",
+            f"Semantic Coverage: {self._percent(summary.get('semantic_coverage'))}",
+            f"Compiler Coverage: {self._percent(summary.get('compiler_coverage'))}",
+            "Execution Package Coverage: "
+            f"{self._percent(summary.get('execution_package_coverage'))}",
+            f"Candidate Coverage: {self._percent(summary.get('candidate_coverage'))}",
+            f"Arena Coverage: {self._percent(summary.get('arena_coverage'))}",
+            "Arena Source Coverage: "
+            f"{self._percent(summary.get('arena_source_coverage'))}",
+            f"Program Coverage: {self._percent(summary.get('program_coverage'))}",
+            "Compiler Runtime Coverage: "
+            f"{self._percent(summary.get('compiler_runtime_coverage'))}",
+            "Operational Capability Coverage: "
+            f"{self._percent(summary.get('operational_capability_coverage'))}",
+            f"Generated Concepts: {self._value(summary.get('generated_concepts'))}",
+            f"Generated Programs: {self._value(summary.get('generated_programs'))}",
+            f"Generated Blueprints: {self._value(summary.get('generated_blueprints'))}",
+            f"Candidate Count: {self._value(summary.get('candidate_count'))}",
+            f"Arena Candidate Count: {self._value(summary.get('arena_candidate_count'))}",
+            f"Arena Source Count: {self._value(summary.get('arena_source_count'))}",
+            f"Compiled Programs: {self._value(summary.get('compiled_programs'))}",
+            f"Validated Programs: {self._value(summary.get('validated_programs'))}",
+            f"Decision Authority: {self._value(summary.get('arena_decision_authority'))}",
+            "Prediction Authority Preserved: "
+            f"{self._value(summary.get('prediction_authority_preserved'))}",
+        ]
+        if bottlenecks:
+            lines.append("Lowest Coverage Bottlenecks:")
+            for item in bottlenecks[:5]:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._label(item.get('coverage_type'))}: "
+                    f"{self._percent(item.get('coverage'))} "
+                    f"status={self._value(item.get('status'))}"
+                )
+        if missing_packages:
+            lines.append(
+                "Missing Execution Packages: "
+                + ", ".join(str(item) for item in missing_packages[:12])
+            )
+        if missing_requirements:
+            lines.append(
+                "Missing Compiler Requirements: "
+                + ", ".join(str(item) for item in missing_requirements[:12])
+            )
+        if lineage:
+            lines.append("Candidate Source Lineage:")
+            for row in lineage[:6]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"raw={self._value(row.get('raw_source'))} -> "
+                    f"adapter={self._value(row.get('candidate_adapter'))} -> "
+                    f"normalized={self._value(row.get('normalized_source'))} -> "
+                    f"arena={self._value(row.get('arena_source'))} "
+                    f"op={self._value(row.get('operation'))} "
+                    f"entered={self._value(row.get('entered_arena'))}"
+                )
+        return self._section("COGNITIVE CAPABILITY COVERAGE", lines)
+
     def _render_candidate_arena(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
             return ""
@@ -1881,6 +2053,12 @@ class DeterministicFinalReportRenderer:
         program = canonical["program"]
         state = canonical["report_state"]
         compact = self._first_dict(state, "compact_report")
+        compression_report = self._first_dict(state, "compression_report")
+        program_lifecycle = self._first_dict(
+            state,
+            "COGNITIVE_PROGRAM_LIFECYCLE_REPORT",
+            "cognitive_program_lifecycle_report",
+        )
         entropy = self._read_any(search, "search_entropy")
         routes = self._read_any(search, "route_count", "unique_route_count")
         if self._number(entropy) == 0 and (self._number(routes) or 0) > 1:
@@ -1888,14 +2066,22 @@ class DeterministicFinalReportRenderer:
         if (
             self._read_any(program, "validation_distribution") is None
             and self._read_any(program, "generated_programs") is not None
+            and not program_lifecycle.get("program_registry")
         ):
             warnings.append("Generated programs lack final lifecycle states.")
-        if isinstance(compact, dict) and all(
+        compression_status = str(
+            compression_report.get("compression_status", "")
+        ).upper()
+        if (
+            compression_status not in {"NOT_REQUIRED", "SKIPPED"}
+            and isinstance(compact, dict)
+            and all(
             int(compact.get(key, 0) or 0) == 0
             for key in (
                 "heavy_keys_removed",
                 "arrays_summarized",
                 "repeated_reports_collapsed",
+            )
             )
         ):
             warnings.append("Compact reporting performed no compression.")

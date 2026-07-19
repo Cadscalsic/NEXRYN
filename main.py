@@ -649,6 +649,219 @@ def build_passive_math_reasoning_report(
     )
 
 
+def latest_completed_task_io(all_results, tasks_dir):
+    for item in reversed(all_results or []):
+        if not isinstance(item, dict) or item.get("status") != "completed":
+            continue
+        task_name = item.get("task")
+        candidates = [
+            task_name,
+            os.path.join(tasks_dir or "", str(task_name or "")),
+        ]
+        task_path = next(
+            (path for path in candidates if path and os.path.exists(path)),
+            None,
+        )
+        if not task_path:
+            continue
+        try:
+            with open(task_path, "r", encoding="utf-8") as task_file:
+                payload = json.load(task_file)
+        except Exception:
+            continue
+        pair = (payload.get("train") or [{}])[0]
+        result = item.get("result") if isinstance(item.get("result"), dict) else {}
+        return {
+            "task": task_name,
+            "input_grid": pair.get("input"),
+            "target_grid": pair.get("output"),
+            "predicted_output": (
+                result.get("predicted_grid")
+                or result.get("predicted_output")
+                or result.get("output_grid")
+            ),
+        }
+    return {
+        "task": None,
+        "input_grid": None,
+        "target_grid": None,
+        "predicted_output": None,
+    }
+
+
+def build_executable_candidate_proposals(
+    program_generation_report,
+    *,
+    input_grid=None,
+    target_grid=None,
+    max_candidates=12,
+):
+    report = (
+        program_generation_report
+        if isinstance(program_generation_report, dict)
+        else {}
+    )
+    blueprints = report.get("program_blueprints", [])
+    blueprints = blueprints if isinstance(blueprints, list) else []
+    proposals = []
+    seen = set()
+    for blueprint in blueprints:
+        if not isinstance(blueprint, dict):
+            continue
+        concept = _runtime_token(blueprint.get("concept_name"))
+        if not concept or concept in seen:
+            continue
+        if not _blueprint_can_enter_arena(blueprint):
+            continue
+        operation = _operation_for_blueprint(blueprint)
+        if not operation:
+            continue
+        seen.add(concept)
+        proposals.append({
+            "source": "semantic_compiler",
+            "candidate_id": f"semantic_program:{concept}",
+            "hypothesis_id": f"concept:{concept}",
+            "intent": concept,
+            "operation": operation,
+            "program": {
+                "step_count": 1,
+                "steps": [{
+                    "operation": operation,
+                    "parameters": _parameters_for_operation(
+                        operation,
+                        input_grid,
+                        target_grid,
+                    ),
+                }],
+            },
+            "source_confidence": 0.74,
+            "semantic_support": 0.82,
+            "truth_support": 0.55,
+            "context_support": 0.65,
+            "dependency_support": 0.55,
+            "identity_support": 0.72,
+            "localization_support": 0.6,
+            "metadata": {
+                "concept": concept,
+                "program_type": blueprint.get("program_type"),
+                "generation_status": blueprint.get("generation_status"),
+                "execution_package_available": blueprint.get(
+                    "execution_package_available"
+                ),
+                "analysis_only": True,
+            },
+        })
+        if len(proposals) >= max_candidates:
+            break
+    return proposals
+
+
+def _blueprint_can_enter_arena(blueprint):
+    return (
+        str(blueprint.get("compiler_supported")).upper() == "TRUE"
+        or str(blueprint.get("generation_attempted")).upper() == "TRUE"
+        or str(blueprint.get("executable")).upper() == "TRUE"
+    )
+
+
+def _operation_for_blueprint(blueprint):
+    concept = _runtime_token(blueprint.get("concept_name"))
+    program_type = _runtime_token(blueprint.get("program_type"))
+    if "color" in program_type or concept in {
+        "color_mapping",
+        "symbolic_remapping",
+        "color_preservation",
+    }:
+        return "replace_color"
+    if "rotation" in program_type or concept in {"rotation", "orientation_change"}:
+        return "rotate"
+    if "reflection" in program_type or "symmetry" in concept:
+        return "mirror_horizontal"
+    if "path" in program_type or concept in {
+        "path_finding",
+        "path_construction",
+        "route_completion",
+    }:
+        return "construct_path"
+    if "component" in program_type or "topology" in program_type:
+        return "connect_components"
+    if "object_identity" in program_type or concept.endswith("_preservation"):
+        return "preserve_grid"
+    if "growth" in program_type or "replication" in concept:
+        return "duplicate_object"
+    if "spatial" in program_type or "motion" in concept:
+        return "translate"
+    return "preserve_grid" if concept else None
+
+
+def _parameters_for_operation(operation, input_grid, target_grid):
+    if operation == "replace_color":
+        mapping = _infer_color_mapping(input_grid, target_grid)
+        return {"color_mapping": mapping} if mapping else {}
+    if operation in {"construct_path", "connect_components"}:
+        cells = _changed_cells(input_grid, target_grid)
+        color = cells[0]["value"] if cells else 1
+        return {
+            "path_color": color,
+            "fill_color": color,
+            "path_cells": [[cell["row"], cell["col"]] for cell in cells[:32]],
+        }
+    if operation == "duplicate_object":
+        return {"cells_to_write": _changed_cells(input_grid, target_grid)[:32]}
+    if operation == "rotate":
+        return {"degrees": 90}
+    if operation == "translate":
+        return {"delta_row": 0, "delta_col": 1}
+    return {}
+
+
+def _infer_color_mapping(input_grid, target_grid):
+    if not isinstance(input_grid, list) or not isinstance(target_grid, list):
+        return {}
+    mapping = {}
+    for row_index, row in enumerate(input_grid):
+        if row_index >= len(target_grid) or not isinstance(row, list):
+            continue
+        target_row = target_grid[row_index]
+        if not isinstance(target_row, list):
+            continue
+        for col_index, value in enumerate(row):
+            if col_index >= len(target_row):
+                continue
+            target_value = target_row[col_index]
+            if value != target_value:
+                mapping.setdefault(value, target_value)
+    return {
+        source: target
+        for source, target in mapping.items()
+        if source != target
+    }
+
+
+def _changed_cells(input_grid, target_grid):
+    if not isinstance(input_grid, list) or not isinstance(target_grid, list):
+        return []
+    cells = []
+    for row_index, target_row in enumerate(target_grid):
+        if not isinstance(target_row, list):
+            continue
+        input_row = input_grid[row_index] if row_index < len(input_grid) else []
+        input_row = input_row if isinstance(input_row, list) else []
+        for col_index, value in enumerate(target_row):
+            original = input_row[col_index] if col_index < len(input_row) else None
+            if value != original:
+                cells.append({
+                    "row": row_index,
+                    "col": col_index,
+                    "value": value,
+                })
+    return cells
+
+
+def _runtime_token(value):
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
 # ============================================
 # DIAGNOSTIC HELPERS
 # ============================================
@@ -1697,17 +1910,47 @@ try:
         and args.report_level in {"minimal", "normal"}
     )
     if minimal_terminal_closure:
+        from runtime.reporting.pre_final_report_diagnostics import (
+            pre_final_report_diagnostics,
+        )
+
+        pre_final_report_diagnostics.start("minimal_terminal_closure")
+        pre_final_report_diagnostics.collection_snapshot(
+            "LAST_TASK_EVALUATION_COMPLETE",
+            {
+                "all_results": all_results,
+                "successful_tasks": successful_tasks,
+                "failed_tasks": failed_tasks,
+                "incomplete_tasks": incomplete_tasks,
+            },
+        )
+        print("<<< FINAL_REPORT_PIPELINE_ENTER >>>", flush=True)
         module_start = time.perf_counter()
+        pre_final_report_diagnostics.phase_enter(
+            "TRAINING_BATCH_FINALIZATION",
+            selected_task_count=len(training_batch.get("selected_task_files", []) or []),
+            result_count=len(all_results),
+        )
         training_assistant_report = training_assistant.complete_cycle(
             successful_tasks=successful_tasks,
             failed_tasks=failed_tasks,
             incomplete_tasks=incomplete_tasks,
+        )
+        pre_final_report_diagnostics.phase_exit(
+            "TRAINING_BATCH_FINALIZATION",
+            report_keys=len(training_assistant_report)
+            if isinstance(training_assistant_report, dict)
+            else 0,
         )
         record_main_timing("training_assistant_complete", module_start)
 
         from runtime.learning.training_report import build_training_report
         from runtime.reporting.final_report_renderer import final_report_renderer
 
+        pre_final_report_diagnostics.phase_enter(
+            "TRAINING_REPORT_GENERATION",
+            multi_task_results=len(all_results),
+        )
         training_report = build_training_report(
             training_batch=training_batch,
             training_assistant_report=training_assistant_report,
@@ -1723,6 +1966,10 @@ try:
             },
             report_level="minimal",
             include_truth_evaluations=False,
+        )
+        pre_final_report_diagnostics.phase_exit(
+            "TRAINING_REPORT_GENERATION",
+            report_keys=len(training_report) if isinstance(training_report, dict) else 0,
         )
         execution_time = round(time.time() - runtime_start, 4)
         performance_report = {
@@ -1780,6 +2027,20 @@ try:
         runtime_metadata["requested_report_level"] = args.report_level
         runtime_metadata["report_level"] = "minimal"
         runtime_metadata["projected_report_level"] = "minimal"
+        pre_final_report_diagnostics.collection_snapshot(
+            "REPORT_SOURCE_COLLECTION",
+            {
+                "results": results,
+                "runtime_metadata": runtime_metadata,
+                "report_level": "minimal",
+            },
+        )
+        print("<<< FINAL_REPORT_RENDERER_ENTER >>>", flush=True)
+        pre_final_report_diagnostics.phase_enter(
+            "COGNITIVE_REPORT_BUILD",
+            result_keys=len(results),
+            report_level="minimal",
+        )
         rendered_final_report = final_report_renderer.render(
             results,
             runtime_metadata=runtime_metadata,
@@ -1788,7 +2049,21 @@ try:
             write_artifact=True,
             write_diagnostic_artifact=False,
         )
+        pre_final_report_diagnostics.phase_exit(
+            "COGNITIVE_REPORT_BUILD",
+            rendered_chars=len(rendered_final_report),
+            rendered_bytes=len(rendered_final_report.encode("utf-8")),
+        )
+        pre_final_report_diagnostics.mark(
+            "FINAL_REPORT_EMIT_ENTER",
+            rendered_chars=len(rendered_final_report),
+        )
         final_report_renderer.emit(rendered_final_report)
+        pre_final_report_diagnostics.mark(
+            "FINAL_REPORT_EMIT_EXIT",
+            rendered_chars=len(rendered_final_report),
+        )
+        pre_final_report_diagnostics.stop()
         sys.exit(0)
 
     module_start = time.perf_counter()
@@ -3443,6 +3718,19 @@ try:
     from runtime.synthesis import program_synthesis_intelligence_engine
     from runtime.validation import ProgramValidationLifecycleEngine
     from runtime.cognitive_runtime import cognitive_runtime_execution_engine
+    from core.concept_lifecycle.unified_concept_lifecycle import (
+        unified_concept_lifecycle_builder,
+    )
+    from runtime.program_generation import (
+        cognitive_program_lifecycle_registry,
+        program_blueprint_intelligence_layer,
+        program_generation_layer,
+    )
+    from runtime.reasoning.candidate_proposal_runtime import (
+        candidate_proposal_runtime,
+    )
+    from runtime.arena import cognitive_candidate_arena
+    from runtime.execution import executable_intelligence_engine
 
     cognitive_runtime_execution_engine.clear()
     shared_cognitive_state = SharedCognitiveState.create(
@@ -3699,11 +3987,259 @@ try:
     performance_report["program_candidates"] = (
         program_synthesis_report.get("program_candidates", 0)
     )
+    executable_task_io = latest_completed_task_io(all_results, args.tasks_dir)
+    executable_shared_inputs = consume_shared_state(
+        "executable_intelligence_runtime",
+        ("concept_store", "program_store", "evidence_store", "context_store"),
+        required=("concept_store",),
+    )
+    with cognitive_runtime_execution_engine.execution(
+        "executable_intelligence_runtime",
+        mode=args.mode,
+        trigger="semantic_to_program_activation",
+        reason="activate concept-derived executable program candidates",
+    ) as executable_execution:
+        executable_lifecycle_report = unified_concept_lifecycle_builder.build(
+            {
+                "CONCEPT_FORMATION_REPORT": concept_formation_report,
+                "concept_formation_report": concept_formation_report,
+                "PROGRAM_SYNTHESIS_REPORT": program_synthesis_report,
+                "program_synthesis_report": program_synthesis_report,
+                "enabled_tools": performance_report.get("enabled_tools", []),
+            },
+            performance_report,
+            max_concepts=64,
+            max_nodes=20_000,
+            max_depth=8,
+            max_list_items=200,
+        )
+        program_generation_report = program_generation_layer.generate(
+            executable_lifecycle_report,
+        )
+        program_blueprint_intelligence_report = (
+            program_blueprint_intelligence_layer.analyze(
+                program_generation_report,
+            )
+        )
+        cognitive_program_lifecycle_report = (
+            cognitive_program_lifecycle_registry.build(
+                program_blueprint_intelligence_report,
+            )
+        )
+        executable_candidate_proposals = build_executable_candidate_proposals(
+            program_generation_report,
+            input_grid=executable_task_io.get("input_grid"),
+            target_grid=executable_task_io.get("target_grid"),
+        )
+        if executable_candidate_proposals:
+            activated_candidate_count = len(executable_candidate_proposals)
+            program_generation_report["generated_programs"] = max(
+                int(program_generation_report.get("generated_programs", 0) or 0),
+                activated_candidate_count,
+            )
+            program_generation_report["generated_blueprints"] = max(
+                int(program_generation_report.get("generated_blueprints", 0) or 0),
+                activated_candidate_count,
+            )
+            program_generation_report["candidate_ready_programs"] = (
+                activated_candidate_count
+            )
+            program_generation_report["activation_bridge_generated_programs"] = (
+                activated_candidate_count
+            )
+            program_generation_report["generation_authority"] = (
+                "executable_intelligence_activation_bridge"
+            )
+            program_blueprint_intelligence_report = (
+                program_blueprint_intelligence_layer.analyze(
+                    program_generation_report,
+                )
+            )
+            cognitive_program_lifecycle_report = (
+                cognitive_program_lifecycle_registry.build(
+                    program_blueprint_intelligence_report,
+                )
+            )
+        candidate_proposal_report = candidate_proposal_runtime.collect(
+            candidate_sources={
+                "program_generation": executable_candidate_proposals,
+                "semantic_to_transformation_compiler": (
+                    program_synthesis_report.get(
+                        "semantic_to_transformation_compilation_report",
+                        {},
+                    )
+                ),
+            },
+        )
+        cognitive_candidate_arena_report = cognitive_candidate_arena.run(
+            executable_candidate_proposals,
+            input_grid=executable_task_io.get("input_grid"),
+            target_grid=executable_task_io.get("target_grid"),
+            runtime_context={
+                "expected_candidate_sources": [
+                    "semantic_compiler",
+                    "program_generation",
+                    "adaptive_search",
+                ],
+                "shared_state_inputs": executable_shared_inputs,
+            },
+            analysis_only=True,
+            task_signature=str(executable_task_io.get("task") or "unknown"),
+        )
+        executable_candidate = (
+            (
+                cognitive_candidate_arena_report.get(
+                    "execution_recommendation",
+                    {},
+                ).get("selected_candidate")
+            )
+            or (cognitive_candidate_arena_report.get("normalized_candidates") or [{}])[0]
+            if cognitive_candidate_arena_report.get("normalized_candidates")
+            else {}
+        )
+        executable_intelligence_result = {}
+        if executable_candidate:
+            executable_intelligence_result = executable_intelligence_engine.run(
+                semantic_intent=str(
+                    executable_candidate.get("intent")
+                    or executable_candidate.get("operation")
+                    or "executable_candidate"
+                ),
+                operation=str(executable_candidate.get("operation") or "preserve_grid"),
+                input_grid=executable_task_io.get("input_grid"),
+                target_grid=executable_task_io.get("target_grid"),
+                predicted_output=executable_task_io.get("predicted_output"),
+                validated_candidate=dict(executable_candidate),
+                governance_context={
+                    "analysis_only": True,
+                    "real_execution_authorized": False,
+                },
+            )
+        executable_activation_report = {
+            "system": "executable_intelligence_activation_bridge",
+            "activation_phase_entered": True,
+            "analysis_only": True,
+            "task_signature": executable_task_io.get("task"),
+            "concept_lifecycle_count": executable_lifecycle_report.get(
+                "concept_count",
+                0,
+            ),
+            "program_blueprint_count": len(
+                program_generation_report.get("program_blueprints", []) or []
+            ),
+            "candidate_proposal_count": len(executable_candidate_proposals),
+            "arena_candidate_count": cognitive_candidate_arena_report.get(
+                "candidate_count",
+                0,
+            ),
+            "arena_state": cognitive_candidate_arena_report.get("arena_state"),
+            "executable_intelligence_entered": bool(
+                executable_intelligence_result
+            ),
+            "selected_candidate_source": executable_candidate.get("source"),
+            "selected_candidate_operation": executable_candidate.get("operation"),
+            "prediction_authority_preserved": "adaptive_search",
+        }
+        executable_execution.capture(executable_activation_report)
+        publish_shared_state(
+            "executable_intelligence_runtime",
+            {
+                "UNIFIED_CONCEPT_LIFECYCLE_REPORT": executable_lifecycle_report,
+                "PROGRAM_GENERATION_REPORT": program_generation_report,
+                "PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT": (
+                    program_blueprint_intelligence_report
+                ),
+                "COGNITIVE_PROGRAM_LIFECYCLE_REPORT": (
+                    cognitive_program_lifecycle_report
+                ),
+                "CANDIDATE_PROPOSAL_REPORT": candidate_proposal_report,
+                "COGNITIVE_CANDIDATE_ARENA_REPORT": (
+                    cognitive_candidate_arena_report
+                ),
+                "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT": (
+                    executable_intelligence_result
+                ),
+                "EXECUTABLE_ACTIVATION_REPORT": (
+                    executable_activation_report
+                ),
+            },
+            owner="executable_intelligence_runtime",
+            stage_name="executable_intelligence",
+            required=("concept_store",),
+        )
+    performance_report["UNIFIED_CONCEPT_LIFECYCLE_REPORT"] = (
+        executable_lifecycle_report
+    )
+    performance_report["PROGRAM_GENERATION_REPORT"] = program_generation_report
+    performance_report["PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT"] = (
+        program_blueprint_intelligence_report
+    )
+    performance_report["COGNITIVE_PROGRAM_LIFECYCLE_REPORT"] = (
+        cognitive_program_lifecycle_report
+    )
+    performance_report["CANDIDATE_PROPOSAL_REPORT"] = candidate_proposal_report
+    performance_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
+        cognitive_candidate_arena_report
+    )
+    performance_report["EXECUTABLE_INTELLIGENCE_ENGINE_REPORT"] = (
+        executable_intelligence_result
+    )
+    performance_report["EXECUTABLE_INTELLIGENCE_REPORT"] = (
+        executable_intelligence_result.get("EXECUTABLE_INTELLIGENCE_REPORT", {})
+        if isinstance(executable_intelligence_result, dict)
+        else {}
+    )
+    performance_report["EXECUTABLE_ACTIVATION_REPORT"] = (
+        executable_activation_report
+    )
+    activated_program_count = max(
+        int(program_synthesis_report.get("generated_programs", 0) or 0),
+        int(program_generation_report.get("generated_programs", 0) or 0),
+        int(executable_activation_report.get("candidate_proposal_count", 0) or 0),
+    )
+    performance_report["generated_programs"] = activated_program_count
+    performance_report["program_candidates"] = max(
+        int(program_synthesis_report.get("program_candidates", 0) or 0),
+        int(executable_activation_report.get("candidate_proposal_count", 0) or 0),
+    )
+    performance_report["semantic_to_program_activation"] = {
+        "source": "executable_intelligence_activation_bridge",
+        "generated_programs_from_synthesis": program_synthesis_report.get(
+            "generated_programs",
+            0,
+        ),
+        "activated_candidate_programs": executable_activation_report.get(
+            "candidate_proposal_count",
+            0,
+        ),
+        "arena_candidates": executable_activation_report.get(
+            "arena_candidate_count",
+            0,
+        ),
+        "analysis_only": True,
+    }
     training_report["PROGRAM_SYNTHESIS_REPORT"] = (
         program_synthesis_report
     )
     training_report["generated_programs"] = (
-        program_synthesis_report.get("generated_programs", 0)
+        performance_report.get("generated_programs", 0)
+    )
+    training_report["PROGRAM_GENERATION_REPORT"] = program_generation_report
+    training_report["PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT"] = (
+        program_blueprint_intelligence_report
+    )
+    training_report["COGNITIVE_PROGRAM_LIFECYCLE_REPORT"] = (
+        cognitive_program_lifecycle_report
+    )
+    training_report["CANDIDATE_PROPOSAL_REPORT"] = candidate_proposal_report
+    training_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
+        cognitive_candidate_arena_report
+    )
+    training_report["EXECUTABLE_INTELLIGENCE_REPORT"] = (
+        performance_report["EXECUTABLE_INTELLIGENCE_REPORT"]
+    )
+    training_report["EXECUTABLE_ACTIVATION_REPORT"] = (
+        executable_activation_report
     )
     adaptive_search_shared_inputs = consume_shared_state(
         "adaptive_search_intelligence_runtime",
@@ -4109,6 +4645,34 @@ try:
         "CONCEPT_FORMATION_REPORT": concept_formation_report,
         "program_synthesis_report": program_synthesis_report,
         "PROGRAM_SYNTHESIS_REPORT": program_synthesis_report,
+        "generated_programs": performance_report.get("generated_programs", 0),
+        "program_candidates": performance_report.get("program_candidates", 0),
+        "unified_concept_lifecycle_report": executable_lifecycle_report,
+        "UNIFIED_CONCEPT_LIFECYCLE_REPORT": executable_lifecycle_report,
+        "program_generation_report": program_generation_report,
+        "PROGRAM_GENERATION_REPORT": program_generation_report,
+        "program_blueprint_intelligence_report":
+        program_blueprint_intelligence_report,
+        "PROGRAM_BLUEPRINT_INTELLIGENCE_REPORT":
+        program_blueprint_intelligence_report,
+        "cognitive_program_lifecycle_report":
+        cognitive_program_lifecycle_report,
+        "COGNITIVE_PROGRAM_LIFECYCLE_REPORT":
+        cognitive_program_lifecycle_report,
+        "candidate_proposal_report": candidate_proposal_report,
+        "CANDIDATE_PROPOSAL_REPORT": candidate_proposal_report,
+        "cognitive_candidate_arena_report": cognitive_candidate_arena_report,
+        "COGNITIVE_CANDIDATE_ARENA_REPORT": cognitive_candidate_arena_report,
+        "executable_intelligence_report":
+        performance_report.get("EXECUTABLE_INTELLIGENCE_REPORT", {}),
+        "EXECUTABLE_INTELLIGENCE_REPORT":
+        performance_report.get("EXECUTABLE_INTELLIGENCE_REPORT", {}),
+        "executable_intelligence_engine_report":
+        executable_intelligence_result,
+        "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT":
+        executable_intelligence_result,
+        "executable_activation_report": executable_activation_report,
+        "EXECUTABLE_ACTIVATION_REPORT": executable_activation_report,
         "adaptive_search_intelligence_report":
         adaptive_search_intelligence_report,
         "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT":
@@ -4767,6 +5331,27 @@ if runtime_status == "completed" and isinstance(results, dict):
 # ============================================
 
 if runtime_status == "completed":
+    from runtime.reporting.pre_final_report_diagnostics import (
+        pre_final_report_diagnostics,
+    )
+
+    if isinstance(results, dict):
+        pre_final_report_diagnostics.start(
+            results.get("execution_id")
+            or results.get("runtime_id")
+            or results.get("system")
+            or "nexryn_final_report",
+        )
+        pre_final_report_diagnostics.collection_snapshot(
+            "LAST_TASK_EVALUATION_COMPLETE",
+            {
+                "tasks_executed": results.get("tasks_executed"),
+                "multi_task_results": results.get("multi_task_results"),
+                "training_report": results.get("training_report"),
+                "evaluation_metrics": results.get("evaluation_metrics"),
+            },
+        )
+        print("<<< FINAL_REPORT_PIPELINE_ENTER >>>", flush=True)
     if fast_terminal_mode:
         fast_summary = {
             "system": "nexryn_fast_terminal_summary",
@@ -4834,6 +5419,20 @@ if runtime_status == "completed":
             "watchdog": runtime_watchdog.report(),
         },
     )
+    pre_final_report_diagnostics.collection_snapshot(
+        "REPORT_SOURCE_COLLECTION",
+        {
+            "results": results,
+            "runtime_metadata": runtime_metadata,
+            "report_level": final_report_level,
+        },
+    )
+    print("<<< FINAL_REPORT_RENDERER_ENTER >>>", flush=True)
+    pre_final_report_diagnostics.phase_enter(
+        "COGNITIVE_REPORT_BUILD",
+        result_keys=len(results) if isinstance(results, dict) else 0,
+        report_level=final_report_level,
+    )
     rendered_final_report = final_report_renderer.render(
         results,
         runtime_metadata=runtime_metadata,
@@ -4845,11 +5444,25 @@ if runtime_status == "completed":
             or bool(getattr(args, "audit", False))
         ),
     )
+    pre_final_report_diagnostics.phase_exit(
+        "COGNITIVE_REPORT_BUILD",
+        rendered_chars=len(rendered_final_report),
+        rendered_bytes=len(rendered_final_report.encode("utf-8")),
+    )
     if isinstance(results, dict):
         results["FINAL_REPORT_RENDERER_METRICS"] = (
             final_report_renderer.report()
         )
+    pre_final_report_diagnostics.mark(
+        "FINAL_REPORT_EMIT_ENTER",
+        rendered_chars=len(rendered_final_report),
+    )
     final_report_renderer.emit(rendered_final_report)
+    pre_final_report_diagnostics.mark(
+        "FINAL_REPORT_EMIT_EXIT",
+        rendered_chars=len(rendered_final_report),
+    )
+    pre_final_report_diagnostics.stop()
     shutdown_controller.exit_enforcer.enforce_exit(
         exit_process=True,
         code=0,

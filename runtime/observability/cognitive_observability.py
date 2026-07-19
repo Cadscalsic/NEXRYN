@@ -34,6 +34,7 @@ OBSERVABILITY_LEVELS = {
 REQUIRED_COGNITIVE_RUNTIMES = [
     "concept_formation_runtime",
     "program_synthesis_runtime",
+    "executable_intelligence_runtime",
     "adaptive_search_intelligence_runtime",
     "evidence_builder_runtime",
     "knowledge_integration_runtime",

@@ -36,6 +36,10 @@ RUNTIME_TYPES = {
         "ProgramSynthesisExecution",
         "Program Synthesis Runtime",
     ),
+    "executable_intelligence_runtime": (
+        "ExecutableIntelligenceExecution",
+        "Executable Intelligence Runtime",
+    ),
     "adaptive_search_intelligence_runtime": (
         "AdaptiveSearchIntelligenceExecution",
         "Adaptive Search Intelligence Runtime",
@@ -802,6 +806,7 @@ class CognitiveRuntimeExecutionEngine:
         for runtime_id in (
             "reasoning_runtime",
             "search_runtime",
+            "executable_intelligence_runtime",
             "evidence_builder_runtime",
             "memory_runtime",
             "truth_runtime",
@@ -859,6 +864,7 @@ class CognitiveRuntimeExecutionEngine:
         }
         snapshot_required = required | {
             "execution_runtime",
+            "executable_intelligence_runtime",
             "dependency_runtime",
             "process_runtime",
             "causal_runtime",

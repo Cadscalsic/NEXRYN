@@ -7,6 +7,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from runtime.reporting.pre_final_report_diagnostics import (
+    pre_final_report_diagnostics,
+)
+
 
 COMPRESSION_PROFILES = {
     "minimal": "MINIMAL",
@@ -149,6 +153,15 @@ class CompactReportCompressionEngine:
         )
         profile_name = self._profile(profile)
         self.stats = self._empty_stats()
+        pre_final_report_diagnostics.phase_enter(
+            "REPORT_COMPRESSION",
+            profile=profile_name,
+            top_level_keys=len(canonical_report),
+        )
+        pre_final_report_diagnostics.collection_snapshot(
+            "COMPRESSION_INPUT",
+            canonical_report,
+        )
         actual_size_before = self._actual_size(canonical_report)
 
         if profile_name == "FULL_DIAGNOSTIC":
@@ -226,6 +239,13 @@ class CompactReportCompressionEngine:
             compressed["technical_appendix_artifact_reference"] = str(
                 appendix_path,
             )
+        pre_final_report_diagnostics.phase_exit(
+            "REPORT_COMPRESSION",
+            actual_size_before=actual_size_before,
+            actual_size_after=actual_size_after,
+            compressed_keys=len(compressed),
+            appendix_entries=len(appendix),
+        )
         return {
             "canonical_report": canonical_report,
             "compressed_report": compressed,
@@ -257,6 +277,7 @@ class CompactReportCompressionEngine:
         compressed: dict[str, Any] = {}
         appendix: dict[str, Any] = {}
         for key in sorted(value.keys(), key=str):
+            pre_final_report_diagnostics.count("compression_dict_keys")
             item = value[key]
             child_path = f"{path}.{key}" if path else str(key)
             if key in self.HEAVY_KEYS and key not in self.CRITICAL_KEYS:
@@ -740,7 +761,13 @@ class CompactReportCompressionEngine:
         return round(max(0.0, 1.0 - (after / before)), 4)
 
     def _actual_size(self, value: Any) -> int:
-        return len(json.dumps(self._json_safe(value), sort_keys=True))
+        pre_final_report_diagnostics.phase_enter("JSON_SIZE_SERIALIZATION")
+        size = len(json.dumps(self._json_safe(value), sort_keys=True))
+        pre_final_report_diagnostics.phase_exit(
+            "JSON_SIZE_SERIALIZATION",
+            serialized_chars=size,
+        )
+        return size
 
     def _signature(self, value: Any) -> str:
         try:
@@ -748,11 +775,58 @@ class CompactReportCompressionEngine:
         except (TypeError, ValueError):
             return str(value)
 
-    def _json_safe(self, value: Any) -> Any:
+    def _json_safe(
+        self,
+        value: Any,
+        *,
+        _depth: int = 0,
+        _seen: set[int] | None = None,
+        _count: list[int] | None = None,
+    ) -> Any:
+        pre_final_report_diagnostics.count("json_safe_objects")
+        _count = _count or [0]
+        _count[0] += 1
+        if _count[0] > 50_000:
+            return {"__json_node_budget_exceeded__": True}
+        if _depth >= 6:
+            return self._container_summary(value)
         if isinstance(value, dict):
-            return {str(key): self._json_safe(item) for key, item in value.items()}
+            _seen = _seen or set()
+            object_id = id(value)
+            if object_id in _seen:
+                return {"__recursive_reference__": True}
+            _seen.add(object_id)
+            result = {}
+            for index, (key, item) in enumerate(value.items()):
+                if index >= 200:
+                    result["__truncated_dict_items__"] = len(value) - 200
+                    break
+                result[str(key)] = self._json_safe(
+                    item,
+                    _depth=_depth + 1,
+                    _seen=_seen,
+                    _count=_count,
+                )
+            return result
         if isinstance(value, (list, tuple, set)):
-            return [self._json_safe(item) for item in value]
+            _seen = _seen or set()
+            object_id = id(value)
+            if object_id in _seen:
+                return [{"__recursive_reference__": True}]
+            _seen.add(object_id)
+            items = list(value)
+            result = [
+                self._json_safe(
+                    item,
+                    _depth=_depth + 1,
+                    _seen=_seen,
+                    _count=_count,
+                )
+                for item in items[:200]
+            ]
+            if len(items) > 200:
+                result.append({"__truncated_list_items__": len(items) - 200})
+            return result
         if isinstance(value, (str, int, float, bool)) or value is None:
             return value
         if hasattr(value, "tolist"):
@@ -760,6 +834,13 @@ class CompactReportCompressionEngine:
                 return value.tolist()
             except Exception:
                 return str(value)
+        return str(value)
+
+    def _container_summary(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {"__dict_keys__": len(value)}
+        if isinstance(value, (list, tuple, set)):
+            return {"__list_items__": len(value)}
         return str(value)
 
     def _is_array_like(self, value: Any) -> bool:

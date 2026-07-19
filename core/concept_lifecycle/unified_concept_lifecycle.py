@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 try:
     from runtime.semantic.executable_semantics import EXECUTABLE_SEMANTICS
@@ -107,15 +108,38 @@ class UnifiedConceptLifecycleBuilder:
         self,
         report_state: Mapping[str, Any] | None,
         performance: Mapping[str, Any] | None = None,
+        *,
+        max_concepts: int | None = 128,
+        include_rows: bool = True,
+        max_nodes: int = 20_000,
+        max_depth: int = 8,
+        max_list_items: int = 200,
     ) -> dict[str, Any]:
         report_state = report_state if isinstance(report_state, Mapping) else {}
         performance = performance if isinstance(performance, Mapping) else {}
         context = _merge_dicts(dict(performance), dict(report_state))
-        concepts = self._collect_concepts(context)
-        rows = [
-            self._build_concept(concept, context).as_dict()
-            for concept in concepts
-        ]
+        self._concept_collect_cache: dict[int, list[str]] = {}
+        self._concept_collect_budget = {
+            "max_nodes": max(1, int(max_nodes)),
+            "max_depth": max(1, int(max_depth)),
+            "max_list_items": max(1, int(max_list_items)),
+        }
+        try:
+            concepts = self._collect_concepts(context)
+            selected_concepts = concepts
+            if max_concepts is not None:
+                selected_concepts = concepts[:max(0, int(max_concepts))]
+            rows = (
+                [
+                    self._build_concept(concept, context).as_dict()
+                    for concept in selected_concepts
+                ]
+                if include_rows
+                else []
+            )
+        finally:
+            self._concept_collect_cache = {}
+            self._concept_collect_budget = {}
         status_counts: dict[str, int] = {}
         for row in rows:
             status = str(row.get("lifecycle_status") or "DISCOVERED")
@@ -123,9 +147,12 @@ class UnifiedConceptLifecycleBuilder:
         return {
             "system": self.system_name,
             "UNIFIED_CONCEPT_LIFECYCLE_REPORT": True,
-            "concept_count": len(rows),
+            "concept_count": len(concepts),
             "concept_lifecycles": rows,
             "lifecycle_status_counts": status_counts,
+            "concept_lifecycle_rows_rendered": len(rows),
+            "concept_lifecycle_rows_limited": len(rows) < len(concepts),
+            "concept_lifecycle_max_rows": max_concepts,
             "canonical_concept_lifecycle_source": True,
             "concepts_traceable_from_discovery": True,
         }
@@ -225,28 +252,56 @@ class UnifiedConceptLifecycleBuilder:
     def mental_model(self, concept: str) -> str:
         return _classify(concept, MENTAL_MODEL_RULES, "Not Available")
 
-    def _collect_concepts(self, context: Mapping[str, Any]) -> list[str]:
+    def _collect_concepts(self, context: Any) -> list[str]:
+        if isinstance(context, (Mapping, list, tuple, set)):
+            cache = getattr(self, "_concept_collect_cache", None)
+            cache_key = id(context)
+            if isinstance(cache, dict) and cache_key in cache:
+                return list(cache[cache_key])
         concepts: list[str] = []
+        visited: set[int] = set()
+        nodes_seen = 0
+        budget = getattr(self, "_concept_collect_budget", {}) or {}
+        max_nodes = int(budget.get("max_nodes") or 20_000)
+        max_depth = int(budget.get("max_depth") or 8)
+        max_list_items = int(budget.get("max_list_items") or 200)
 
-        def visit(value: Any, key_hint: str = "") -> None:
+        def visit(value: Any, key_hint: str = "", depth: int = 0) -> None:
+            nonlocal nodes_seen
+            if nodes_seen >= max_nodes or depth > max_depth:
+                return
+            nodes_seen += 1
             if isinstance(value, str):
                 if key_hint in CONCEPT_KEYS:
                     concepts.append(_normalize(value))
                 return
             if isinstance(value, Mapping):
+                object_id = id(value)
+                if object_id in visited:
+                    return
+                visited.add(object_id)
                 for key, item in value.items():
                     key_text = str(key)
                     if key_text in CONCEPT_KEYS:
-                        visit(item, key_text)
+                        visit(item, key_text, depth + 1)
                     elif key_text in REPORT_KEYS or isinstance(item, (Mapping, list, tuple, set)):
-                        visit(item, key_text)
+                        visit(item, key_text, depth + 1)
                 return
             if isinstance(value, (list, tuple, set)):
-                for item in value:
-                    visit(item, key_hint)
+                object_id = id(value)
+                if object_id in visited:
+                    return
+                visited.add(object_id)
+                for item in list(value)[:max_list_items]:
+                    visit(item, key_hint, depth + 1)
 
         visit(context)
-        return [item for item in dict.fromkeys(concepts) if item]
+        result = [item for item in dict.fromkeys(concepts) if item]
+        if isinstance(context, (Mapping, list, tuple, set)):
+            cache = getattr(self, "_concept_collect_cache", None)
+            if isinstance(cache, dict):
+                cache[id(context)] = result
+        return result
 
     def _discovery_source(self, concept: str, context: Mapping[str, Any]) -> str:
         source_names = []
@@ -266,10 +321,24 @@ class UnifiedConceptLifecycleBuilder:
     def _truth_state(self, concept: str, context: Mapping[str, Any]) -> dict[str, str]:
         truth_candidate = "FALSE"
         truth_state = "UNVERIFIED"
+        visited: set[int] = set()
+        nodes_seen = 0
+        budget = getattr(self, "_concept_collect_budget", {}) or {}
+        max_nodes = min(5_000, int(budget.get("max_nodes") or 20_000))
+        max_depth = int(budget.get("max_depth") or 8)
+        max_list_items = int(budget.get("max_list_items") or 200)
 
-        def visit(value: Any) -> None:
+        def visit(value: Any, depth: int = 0) -> None:
             nonlocal truth_candidate, truth_state
+            nonlocal nodes_seen
+            if nodes_seen >= max_nodes or depth > max_depth:
+                return
+            nodes_seen += 1
             if isinstance(value, Mapping):
+                object_id = id(value)
+                if object_id in visited:
+                    return
+                visited.add(object_id)
                 if _normalize(value.get("concept")) == concept:
                     if value.get("eligible_for_truth_candidate") is True or value.get("candidate_ready") is True:
                         truth_candidate = "TRUE"
@@ -278,10 +347,14 @@ class UnifiedConceptLifecycleBuilder:
                         truth_state = str(state).upper()
                 for item in value.values():
                     if isinstance(item, (Mapping, list, tuple, set)):
-                        visit(item)
+                        visit(item, depth + 1)
             elif isinstance(value, (list, tuple, set)):
-                for item in value:
-                    visit(item)
+                object_id = id(value)
+                if object_id in visited:
+                    return
+                visited.add(object_id)
+                for item in list(value)[:max_list_items]:
+                    visit(item, depth + 1)
 
         for key in ("truth_candidate_report", "truth_candidate_engine_report", "concept_lifecycle_report", "CONCEPT_LIFECYCLE_REPORT"):
             visit(context.get(key))

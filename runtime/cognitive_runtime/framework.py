@@ -144,6 +144,24 @@ class CognitiveRuntimeFramework:
                 "program_memory",
             ],
         },
+        "executable_intelligence_runtime": {
+            "runtime_name": "Executable Intelligence Runtime",
+            "owner": "executable_intelligence_runtime",
+            "timing_metric": "executable_intelligence_time_seconds",
+            "lifecycle": [
+                "semantic_program_activation",
+                "program_blueprint_generation",
+                "candidate_proposal",
+                "candidate_arena",
+                "executable_intelligence_summary",
+            ],
+            "children": [
+                "program_generation_layer",
+                "program_blueprint_intelligence_layer",
+                "cognitive_candidate_arena",
+                "executable_intelligence_engine",
+            ],
+        },
         "adaptive_search_intelligence_runtime": {
             "runtime_name": "Adaptive Search Intelligence Runtime",
             "owner": "adaptive_search_intelligence_runtime",
@@ -311,6 +329,7 @@ class CognitiveRuntimeFramework:
         core_runtime_ids = {
             "reasoning_runtime",
             "search_runtime",
+            "executable_intelligence_runtime",
             "truth_runtime",
             "memory_runtime",
             "evaluation_runtime",
@@ -569,6 +588,7 @@ class CognitiveRuntimeFramework:
                 return round(value, 6)
         total = 0.0
         token = runtime_id.replace("_runtime", "")
+        token_text = token.replace("_", " ")
         for execution in lifecycle.get("executions", []) or []:
             if not isinstance(execution, Mapping):
                 continue
@@ -576,8 +596,9 @@ class CognitiveRuntimeFramework:
                 str(execution.get("runtime_name", "")),
                 str(execution.get("module_name", "")),
                 str(execution.get("trigger", "")),
+                str(execution.get("execution_type", "")),
             ]).lower()
-            if token not in text:
+            if token not in text and token_text not in text:
                 continue
             total += max(
                 _number(execution.get("elapsed_seconds")),
@@ -592,6 +613,7 @@ class CognitiveRuntimeFramework:
             "execution_runtime": "ExecutionExecution",
             "reasoning_runtime": "ReasoningExecution",
             "search_runtime": "SearchExecution",
+            "executable_intelligence_runtime": "ExecutableIntelligenceExecution",
             "memory_runtime": "MemoryExecution",
             "truth_runtime": "TruthExecution",
             "evaluation_runtime": "EvaluationExecution",
@@ -832,6 +854,33 @@ class CognitiveRuntimeFramework:
             return snapshots
         if runtime_id == "memory_runtime" and source_payload:
             return [{"snapshot_type": "memory_state", "keys": sorted(source_payload.keys())}]
+        if runtime_id == "executable_intelligence_runtime":
+            execution_id = self._execution_id(runtime_id, lifecycle)
+            return [{
+                "snapshot_id": (
+                    f"{runtime_id}:{execution_id}:framework:"
+                    "executable_intelligence_summary"
+                ),
+                "runtime_id": runtime_id,
+                "execution_id": execution_id,
+                "snapshot_type": "executable_intelligence_summary",
+                "timestamp": str(datetime.utcnow()),
+                "execution_stage": "executable_intelligence_summary",
+                "status": "COMPLETED",
+                "input_summary": {
+                    "source_payload_available": bool(source_payload),
+                },
+                "output_summary": {
+                    "materialized_for_observability": True,
+                },
+                "metrics": {},
+                "observations": [],
+                "warnings": [],
+                "errors": [],
+                "duration": 0.0,
+                "parent_execution": None,
+                "episode_id": None,
+            }]
         if source_payload:
             return [{"snapshot_type": "source_payload", "keys": sorted(source_payload.keys())[:20]}]
         return []

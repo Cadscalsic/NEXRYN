@@ -25,6 +25,9 @@ from runtime.knowledge import (
 )
 from runtime.timing import hierarchical_timing_reconciliation_engine
 from runtime.reporting.report_timing_semantics import report_timing_semantic_engine
+from runtime.reporting.pre_final_report_diagnostics import (
+    pre_final_report_diagnostics,
+)
 
 
 class BindingState(str, Enum):
@@ -153,6 +156,19 @@ class CanonicalReportBindingEngine:
         "cognitive_domain_ecosystem_report",
         "cognitive_domain_constitution_report",
     }
+    EXPENSIVE_DERIVED_SOURCE_NAMES = {
+        "unified_concept_lifecycle_report",
+        "program_generation_report",
+        "program_blueprint_intelligence_report",
+        "cognitive_program_lifecycle_report",
+        "cognitive_knowledge_domains_report",
+        "cognitive_domain_intelligence_report",
+        "cognitive_domain_lifecycle_report",
+        "cognitive_domain_interaction_report",
+        "cognitive_domain_governance_report",
+        "cognitive_domain_ecosystem_report",
+        "cognitive_domain_constitution_report",
+    }
 
     def __init__(
         self,
@@ -175,14 +191,31 @@ class CanonicalReportBindingEngine:
             runtime_metadata if isinstance(runtime_metadata, dict) else {}
         )
         normalized_level = self._normalize_report_level(report_level)
+        self._source_visibility_cache = {}
+        pre_final_report_diagnostics.phase_enter(
+            "REPORT_SOURCE_COLLECTION",
+            report_keys=len(report_state),
+            metadata_keys=len(runtime_metadata),
+            binding_count=len(self.field_bindings),
+        )
         sources = self.discover_sources(
             report_state,
             runtime_metadata=runtime_metadata,
+            report_level=normalized_level,
+        )
+        pre_final_report_diagnostics.phase_exit(
+            "REPORT_SOURCE_COLLECTION",
+            source_count=len(sources),
+            total_source_keys=sum(
+                len(source.payload) for source in sources.values()
+                if isinstance(source.payload, dict)
+            ),
         )
         registry_errors = self.validate_field_registry(self.field_bindings)
         bound_fields: dict[str, BoundReportField] = {}
 
         for definition in self.field_bindings:
+            pre_final_report_diagnostics.count("canonical_fields_processed")
             field_errors = [
                 error
                 for error in registry_errors
@@ -241,15 +274,26 @@ class CanonicalReportBindingEngine:
         report_state: dict[str, Any] | None,
         *,
         runtime_metadata: dict[str, Any] | None = None,
+        report_level: str = "normal",
     ) -> dict[str, CanonicalSource]:
         report_state = report_state if isinstance(report_state, dict) else {}
         runtime_metadata = (
             runtime_metadata if isinstance(runtime_metadata, dict) else {}
         )
+        normalized_level = self._normalize_report_level(report_level)
+        needed_sources = self._needed_sources(normalized_level)
         performance = self._first_dict(
             report_state,
             "performance_report",
             "PERFORMANCE_REPORT",
+        )
+        pre_final_report_diagnostics.collection_snapshot(
+            "CANONICAL_DISCOVER_INPUT",
+            {
+                "report_state": report_state,
+                "performance": performance,
+                "runtime_metadata": runtime_metadata,
+            },
         )
         timing_visibility = self._build_timing_visibility(
             report_state,
@@ -285,7 +329,7 @@ class CanonicalReportBindingEngine:
             "execution_registry": CanonicalSource(
                 "execution_registry",
                 self._merge_dicts(
-                    report_state,
+                    visible_report_state,
                     self._first_dict(report_state, "RUNTIME_LIFECYCLE_REPORT", "runtime_lifecycle_report"),
                     self._first_dict(performance, "RUNTIME_LIFECYCLE_REPORT", "runtime_lifecycle_report"),
                 ),
@@ -300,7 +344,7 @@ class CanonicalReportBindingEngine:
             "search_metrics": CanonicalSource(
                 "search_metrics",
                 self._merge_dicts(
-                    report_state,
+                    visible_report_state,
                     self._first_dict(report_state, "COGNITIVE_SEARCH_REPORT", "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT", "COGNITIVE_ROUTE_INTELLIGENCE_REPORT"),
                     self._first_dict(performance, "COGNITIVE_SEARCH_REPORT", "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT", "COGNITIVE_ROUTE_INTELLIGENCE_REPORT"),
                     self._first_dict(report_state, "search_metrics"),
@@ -309,7 +353,7 @@ class CanonicalReportBindingEngine:
             "program_registry": CanonicalSource(
                 "program_registry",
                 self._merge_dicts(
-                    report_state,
+                    visible_report_state,
                     self._first_dict(report_state, "PROGRAM_SYNTHESIS_REPORT", "program_synthesis_report"),
                     self._first_dict(performance, "PROGRAM_SYNTHESIS_REPORT", "program_synthesis_report"),
                     self._first_dict(report_state, "program_registry"),
@@ -323,49 +367,9 @@ class CanonicalReportBindingEngine:
                 "executable_semantic_coverage_report",
                 self._build_executable_semantic_coverage_visibility(report_state, performance),
             ),
-            "unified_concept_lifecycle_report": CanonicalSource(
-                "unified_concept_lifecycle_report",
-                self._build_unified_concept_lifecycle_visibility(report_state, performance),
-            ),
-            "program_generation_report": CanonicalSource(
-                "program_generation_report",
-                self._build_program_generation_visibility(report_state, performance),
-            ),
-            "program_blueprint_intelligence_report": CanonicalSource(
-                "program_blueprint_intelligence_report",
-                self._build_program_blueprint_intelligence_visibility(report_state, performance),
-            ),
-            "cognitive_program_lifecycle_report": CanonicalSource(
-                "cognitive_program_lifecycle_report",
-                self._build_cognitive_program_lifecycle_visibility(report_state, performance),
-            ),
-            "cognitive_knowledge_domains_report": CanonicalSource(
-                "cognitive_knowledge_domains_report",
-                self._build_cognitive_knowledge_domains_visibility(report_state, performance),
-            ),
-            "cognitive_domain_intelligence_report": CanonicalSource(
-                "cognitive_domain_intelligence_report",
-                self._build_cognitive_domain_intelligence_visibility(report_state, performance),
-            ),
-            "cognitive_domain_lifecycle_report": CanonicalSource(
-                "cognitive_domain_lifecycle_report",
-                self._build_cognitive_domain_lifecycle_visibility(report_state, performance),
-            ),
-            "cognitive_domain_interaction_report": CanonicalSource(
-                "cognitive_domain_interaction_report",
-                self._build_cognitive_domain_interaction_visibility(report_state, performance),
-            ),
-            "cognitive_domain_governance_report": CanonicalSource(
-                "cognitive_domain_governance_report",
-                self._build_cognitive_domain_governance_visibility(report_state, performance),
-            ),
-            "cognitive_domain_ecosystem_report": CanonicalSource(
-                "cognitive_domain_ecosystem_report",
-                self._build_cognitive_domain_ecosystem_visibility(report_state, performance),
-            ),
-            "cognitive_domain_constitution_report": CanonicalSource(
-                "cognitive_domain_constitution_report",
-                self._build_cognitive_domain_constitution_visibility(report_state, performance),
+            "cognitive_capability_coverage_report": CanonicalSource(
+                "cognitive_capability_coverage_report",
+                self._build_cognitive_capability_coverage_visibility(report_state, performance),
             ),
             "prediction_provenance_report": CanonicalSource(
                 "prediction_provenance_report",
@@ -396,7 +400,7 @@ class CanonicalReportBindingEngine:
             "knowledge_pipeline_metrics": CanonicalSource(
                 "knowledge_pipeline_metrics",
                 self._merge_dicts(
-                    report_state,
+                    visible_report_state,
                     self._first_dict(report_state, "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT", "KNOWLEDGE_PROPAGATION_REPORT", "knowledge_propagation_report"),
                     self._first_dict(performance, "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT", "KNOWLEDGE_PROPAGATION_REPORT", "knowledge_propagation_report"),
                     self._first_dict(report_state, "knowledge_pipeline_metrics"),
@@ -431,6 +435,34 @@ class CanonicalReportBindingEngine:
                 ),
             ),
         }
+        optional_builders = {
+            "unified_concept_lifecycle_report": self._build_unified_concept_lifecycle_visibility,
+            "program_generation_report": self._build_program_generation_visibility,
+            "program_blueprint_intelligence_report": self._build_program_blueprint_intelligence_visibility,
+            "cognitive_program_lifecycle_report": self._build_cognitive_program_lifecycle_visibility,
+            "cognitive_knowledge_domains_report": self._build_cognitive_knowledge_domains_visibility,
+            "cognitive_domain_intelligence_report": self._build_cognitive_domain_intelligence_visibility,
+            "cognitive_domain_lifecycle_report": self._build_cognitive_domain_lifecycle_visibility,
+            "cognitive_domain_interaction_report": self._build_cognitive_domain_interaction_visibility,
+            "cognitive_domain_governance_report": self._build_cognitive_domain_governance_visibility,
+            "cognitive_domain_ecosystem_report": self._build_cognitive_domain_ecosystem_visibility,
+            "cognitive_domain_constitution_report": self._build_cognitive_domain_constitution_visibility,
+        }
+        for source_name, builder in optional_builders.items():
+            if not self._should_build_optional_source(
+                source_name,
+                report_state,
+                normalized_level,
+            ):
+                continue
+            if source_name in needed_sources:
+                sources[source_name] = CanonicalSource(
+                    source_name,
+                    self._cached_visibility(
+                        source_name,
+                        lambda builder=builder: builder(report_state, performance),
+                    ),
+                )
 
         canonical_metrics = self._merge_dicts(
             self._first_dict(report_state, "canonical_metrics"),
@@ -445,11 +477,97 @@ class CanonicalReportBindingEngine:
                         if key not in source.payload
                     })
 
-        for name, payload in self._discover_named_sources(report_state).items():
+        if (
+            normalized_level != "DIAGNOSTIC"
+            and not self._state_within_derived_report_budget(report_state)
+        ):
+            named_sources = self._discover_top_level_named_sources(report_state)
+        else:
+            named_sources = self._discover_named_sources(report_state)
+        for name, payload in named_sources.items():
+            pre_final_report_diagnostics.count("canonical_named_sources_seen")
             if name not in sources:
                 sources[name] = CanonicalSource(name, payload)
 
         return sources
+
+    def _needed_sources(self, report_level: str) -> set[str]:
+        needed = {
+            definition.canonical_source
+            for definition in self.field_bindings
+            if definition.visible_at(report_level)
+        }
+        needed.update({
+            "report_state",
+            "runtime_metadata",
+            "performance_report",
+            "execution_timing_state",
+        })
+        return needed
+
+    def _should_build_optional_source(
+        self,
+        source_name: str,
+        report_state: dict[str, Any],
+        report_level: str,
+    ) -> bool:
+        if (
+            report_level == "DIAGNOSTIC"
+            or source_name not in self.EXPENSIVE_DERIVED_SOURCE_NAMES
+            or self._has_explicit_source(report_state, source_name)
+        ):
+            return True
+        return self._state_within_derived_report_budget(report_state)
+
+    def _has_explicit_source(
+        self,
+        report_state: dict[str, Any],
+        source_name: str,
+    ) -> bool:
+        candidates = {
+            source_name,
+            source_name.upper(),
+            source_name.replace("_report", "").upper() + "_REPORT",
+        }
+        return any(isinstance(report_state.get(key), dict) for key in candidates)
+
+    def _state_within_derived_report_budget(
+        self,
+        report_state: dict[str, Any],
+        *,
+        max_nodes: int = 5_000,
+        max_depth: int = 10,
+        max_list_items: int = 100,
+    ) -> bool:
+        seen: set[int] = set()
+        nodes = 0
+
+        def visit(value: Any, depth: int) -> bool:
+            nonlocal nodes
+            if nodes > max_nodes or depth > max_depth:
+                return False
+            if isinstance(value, (dict, list, tuple, set)):
+                ident = id(value)
+                if ident in seen:
+                    return True
+                seen.add(ident)
+            nodes += 1
+            if nodes > max_nodes:
+                return False
+            if isinstance(value, dict):
+                for item in value.values():
+                    if not visit(item, depth + 1):
+                        return False
+            elif isinstance(value, (list, tuple, set)):
+                items = list(value)
+                if len(items) > max_list_items:
+                    return False
+                for item in items:
+                    if not visit(item, depth + 1):
+                        return False
+            return True
+
+        return visit(report_state, 0)
 
     def validate_field_registry(
         self,
@@ -510,7 +628,7 @@ class CanonicalReportBindingEngine:
             binding_status=status.value,
             binding_confidence=1.0,
             representation_state=state.value,
-            value=deepcopy(value),
+            value=self._diag_deepcopy(value, f"bound_field:{definition.field_name}"),
             display_value=display,
             source_field=source_field,
         )
@@ -736,14 +854,14 @@ class CanonicalReportBindingEngine:
         for key in keys:
             value = base.get(key) if isinstance(base, dict) else None
             if isinstance(value, dict):
-                return deepcopy(value)
+                return self._diag_deepcopy(value, f"first_dict:{key}")
         return {}
 
     def _merge_dicts(self, *items: dict[str, Any]) -> dict[str, Any]:
         merged: dict[str, Any] = {}
         for item in items:
             if isinstance(item, dict):
-                merged.update(deepcopy(item))
+                merged.update(self._diag_deepcopy(item, "merge_dicts"))
         return merged
 
     def _discover_named_sources(self, report_state: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -751,6 +869,7 @@ class CanonicalReportBindingEngine:
 
         def visit(item: Any) -> None:
             if isinstance(item, dict):
+                pre_final_report_diagnostics.count("canonical_named_source_dict_nodes")
                 for key, value in item.items():
                     name = str(key)
                     if (
@@ -759,14 +878,131 @@ class CanonicalReportBindingEngine:
                         or name.endswith("_registry")
                         or name.endswith("_snapshots")
                     ) and isinstance(value, dict):
-                        discovered.setdefault(name, deepcopy(value))
+                        discovered.setdefault(
+                            name,
+                            self._diag_deepcopy(value, f"discover_named:{name}"),
+                        )
                     visit(value)
             elif isinstance(item, list):
+                pre_final_report_diagnostics.count("canonical_named_source_lists")
                 for child in item[:100]:
                     visit(child)
 
         visit(report_state)
         return discovered
+
+    def _discover_top_level_named_sources(
+        self,
+        report_state: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        discovered: dict[str, dict[str, Any]] = {}
+        if not isinstance(report_state, dict):
+            return discovered
+        for key, value in report_state.items():
+            name = str(key)
+            if (
+                name in self.DISCOVERABLE_SOURCE_NAMES
+                or name.endswith("_metrics")
+                or name.endswith("_registry")
+                or name.endswith("_snapshots")
+            ) and isinstance(value, dict):
+                discovered.setdefault(
+                    name,
+                    self._diag_deepcopy(value, f"discover_top_level:{name}"),
+                )
+        return discovered
+
+    def _diag_deepcopy(self, value: Any, label: str) -> Any:
+        pre_final_report_diagnostics.count(f"deepcopy:{label}")
+        if isinstance(value, dict):
+            pre_final_report_diagnostics.mark(
+                "DEEPCOPY_DICT",
+                label=label,
+                keys=len(value),
+            )
+        elif isinstance(value, list):
+            pre_final_report_diagnostics.mark(
+                "DEEPCOPY_LIST",
+                label=label,
+                items=len(value),
+            )
+        return self._bounded_copy(value)
+
+    def _bounded_copy(
+        self,
+        value: Any,
+        *,
+        max_depth: int = 5,
+        max_list_items: int = 100,
+        max_dict_items: int = 200,
+        _depth: int = 0,
+        _seen: set[int] | None = None,
+    ) -> Any:
+        if _depth >= max_depth:
+            return self._summarize_container(value)
+        if isinstance(value, dict):
+            _seen = _seen or set()
+            object_id = id(value)
+            if object_id in _seen:
+                return {"recursive_reference": True}
+            _seen.add(object_id)
+            copied: dict[str, Any] = {}
+            for index, (key, item) in enumerate(value.items()):
+                if index >= max_dict_items:
+                    copied["__truncated_dict_items__"] = max(0, len(value) - max_dict_items)
+                    break
+                copied[key] = self._bounded_copy(
+                    item,
+                    max_depth=max_depth,
+                    max_list_items=max_list_items,
+                    max_dict_items=max_dict_items,
+                    _depth=_depth + 1,
+                    _seen=_seen,
+                )
+            _seen.discard(object_id)
+            return copied
+        if isinstance(value, (list, tuple, set)):
+            _seen = _seen or set()
+            object_id = id(value)
+            if object_id in _seen:
+                return [{"recursive_reference": True}]
+            _seen.add(object_id)
+            items = list(value)
+            copied_items = [
+                self._bounded_copy(
+                    item,
+                    max_depth=max_depth,
+                    max_list_items=max_list_items,
+                    max_dict_items=max_dict_items,
+                    _depth=_depth + 1,
+                    _seen=_seen,
+                )
+                for item in items[:max_list_items]
+            ]
+            if len(items) > max_list_items:
+                copied_items.append({
+                    "__truncated_list_items__": len(items) - max_list_items,
+                })
+            _seen.discard(object_id)
+            return copied_items
+        return value
+
+    def _summarize_container(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {"__dict_keys__": len(value)}
+        if isinstance(value, (list, tuple, set)):
+            return {"__list_items__": len(value)}
+        return value
+
+    def _cached_visibility(self, name: str, factory: Any) -> dict[str, Any]:
+        cache = getattr(self, "_source_visibility_cache", None)
+        if not isinstance(cache, dict):
+            cache = {}
+            self._source_visibility_cache = cache
+        if name not in cache:
+            cache[name] = factory()
+        value = cache.get(name)
+        return value if isinstance(value, dict) else {}
 
     def _normalize_report_level(self, level: str) -> str:
         aliases = {
@@ -847,7 +1083,7 @@ class CanonicalReportBindingEngine:
             bind("search_routes", "Search Runtime", "search_metrics", ("search_routes", "route_count", "unique_route_count"), "count"),
             bind("experience_count", "Semantic Memory", "knowledge_pipeline_metrics", ("experience_count",), "count"),
             bind("fabric_links", "Knowledge Fabric", "knowledge_pipeline_metrics", ("fabric_links", "generated_fabric_links"), "count"),
-            bind("average_program_confidence", "Program Confidence Engine", "program_registry", ("average_program_confidence", "average_confidence", "confidence"), "metric", visibility=all_levels, required=True),
+            bind("average_program_confidence", "Program Confidence Engine", "program_registry", ("average_program_confidence", "average_confidence", "confidence"), "metric", visibility=all_levels),
             bind("highest_confidence", "Program Confidence Engine", "program_registry", ("highest_confidence", "max_confidence"), "metric"),
             bind("lowest_confidence", "Program Confidence Engine", "program_registry", ("lowest_confidence", "min_confidence"), "metric"),
             bind("validation_distribution", "Program Runtime", "program_registry", ("validation_distribution", "program_validation_distribution"), "summary", compression_policy="COMPRESSED"),
@@ -855,6 +1091,8 @@ class CanonicalReportBindingEngine:
             bind("semantic_compilation_diagnostics", "Semantic Compilation", "semantic_compilation_report", ("semantic_compilation_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("executable_semantic_coverage_summary", "Executable Semantic Coverage", "executable_semantic_coverage_report", ("executable_semantic_coverage_summary",), "summary", visibility=normal),
             bind("executable_semantic_coverage_diagnostics", "Executable Semantic Coverage", "executable_semantic_coverage_report", ("executable_semantic_coverage_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
+            bind("cognitive_capability_coverage_summary", "Cognitive Capability Coverage", "cognitive_capability_coverage_report", ("cognitive_capability_coverage_summary",), "summary", visibility=normal),
+            bind("cognitive_capability_coverage_diagnostics", "Cognitive Capability Coverage", "cognitive_capability_coverage_report", ("cognitive_capability_coverage_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("unified_concept_lifecycle_summary", "Unified Concept Lifecycle", "unified_concept_lifecycle_report", ("unified_concept_lifecycle_summary",), "summary", visibility=normal),
             bind("unified_concept_lifecycle_diagnostics", "Unified Concept Lifecycle", "unified_concept_lifecycle_report", ("unified_concept_lifecycle_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("program_generation_summary", "Program Generation", "program_generation_report", ("program_generation_summary",), "summary", visibility=normal),
@@ -883,7 +1121,7 @@ class CanonicalReportBindingEngine:
             bind("candidate_proposal_diagnostics", "Candidate Proposal Runtime", "candidate_proposal_report", ("candidate_proposal_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
             bind("candidate_arena_summary", "Cognitive Candidate Arena", "cognitive_candidate_arena_report", ("candidate_arena_summary",), "summary", visibility=normal),
             bind("candidate_arena_diagnostics", "Cognitive Candidate Arena", "cognitive_candidate_arena_report", ("candidate_arena_diagnostics",), "summary", visibility=diagnostic, compression_policy="COMPRESSED", externalized=True),
-            bind("overall_search_quality", "Search Runtime", "search_metrics", ("overall_search_quality",), "metric", visibility=all_levels, required=True),
+            bind("overall_search_quality", "Search Runtime", "search_metrics", ("overall_search_quality",), "metric", visibility=all_levels),
             bind("search_efficiency", "Search Runtime", "search_metrics", ("search_efficiency",), "metric"),
             bind("search_coverage", "Search Runtime", "search_metrics", ("search_coverage",), "metric"),
             bind("search_entropy", "Search Runtime", "search_metrics", ("search_entropy",), "metric"),
@@ -962,7 +1200,14 @@ class CanonicalReportBindingEngine:
             compilation_success
             and compiler_program
             and selected_program
-            and compiler_program == selected_program
+            and (
+                compiler_program == selected_program
+                or (
+                    compiler_operation
+                    and selected_operation
+                    and compiler_operation == selected_operation
+                )
+            )
         )
         validation = self._first_dict(compiler, "validation")
         if not compiler and compiler_selected:
@@ -1058,27 +1303,22 @@ class CanonicalReportBindingEngine:
             self._first_dict(report_state, "UNIFIED_CONCEPT_LIFECYCLE_REPORT", "unified_concept_lifecycle_report"),
             self._first_dict(performance, "UNIFIED_CONCEPT_LIFECYCLE_REPORT", "unified_concept_lifecycle_report"),
         )
-        built = unified_concept_lifecycle_builder.build(
-            report_state,
-            performance,
-        )
         explicit_program_generation = self._merge_dicts(
             self._first_dict(report_state, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
             self._first_dict(performance, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
         )
-        if not explicit_program_generation:
-            explicit_program_generation = program_generation_layer.generate(built)
-        lifecycle_context = self._merge_dicts(
-            report_state,
-            {"program_generation_report": explicit_program_generation},
-        )
         built = unified_concept_lifecycle_builder.build(
-            lifecycle_context,
+            report_state,
             performance,
         )
+        if not explicit_program_generation:
+            explicit_program_generation = program_generation_layer.generate(built)
         lifecycle = self._merge_dicts(built, explicit)
+        if explicit_program_generation:
+            lifecycle["program_generation_report"] = explicit_program_generation
         rows = lifecycle.get("concept_lifecycles", [])
         rows = rows if isinstance(rows, list) else []
+        rows = self._merge_program_generation_state(rows, explicit_program_generation)
         status_counts = lifecycle.get("lifecycle_status_counts", {})
         status_counts = status_counts if isinstance(status_counts, dict) else {}
         summary = {
@@ -1098,6 +1338,53 @@ class CanonicalReportBindingEngine:
             **summary,
         }
 
+    def _merge_program_generation_state(
+        self,
+        rows: list[Any],
+        program_generation: dict[str, Any],
+    ) -> list[Any]:
+        if not isinstance(program_generation, dict):
+            return rows
+        blueprints = program_generation.get("program_blueprints", [])
+        if not isinstance(blueprints, list):
+            return rows
+        by_concept = {
+            str(item.get("concept_name")): item
+            for item in blueprints
+            if isinstance(item, dict) and item.get("concept_name") is not None
+        }
+        if not by_concept:
+            return rows
+        merged: list[Any] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                merged.append(row)
+                continue
+            concept = str(row.get("concept_name"))
+            blueprint = by_concept.get(concept)
+            if not blueprint:
+                merged.append(row)
+                continue
+            updated = dict(row)
+            updated["program_generation_attempted"] = blueprint.get(
+                "generation_attempted",
+                updated.get("program_generation_attempted", "FALSE"),
+            )
+            updated["program_generation_success"] = blueprint.get(
+                "generation_success",
+                updated.get("program_generation_success", "FALSE"),
+            )
+            updated["program_generated"] = blueprint.get(
+                "generation_success",
+                updated.get("program_generated", "FALSE"),
+            )
+            updated["program_generation_status"] = blueprint.get(
+                "generation_status",
+                updated.get("program_generation_status", "NOT_EVALUATED"),
+            )
+            merged.append(updated)
+        return merged
+
     def _build_program_generation_visibility(
         self,
         report_state: dict[str, Any],
@@ -1110,9 +1397,12 @@ class CanonicalReportBindingEngine:
         if explicit:
             report = explicit
         else:
-            lifecycle = unified_concept_lifecycle_builder.build(
-                report_state,
-                performance,
+            lifecycle = self._cached_visibility(
+                "unified_concept_lifecycle_report",
+                lambda: self._build_unified_concept_lifecycle_visibility(
+                    report_state,
+                    performance,
+                ),
             )
             report = program_generation_layer.generate(lifecycle)
         blueprints = report.get("program_blueprints", [])
@@ -1620,6 +1910,257 @@ class CanonicalReportBindingEngine:
             **summary,
         }
 
+    def _build_cognitive_capability_coverage_visibility(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        semantic = self._build_executable_semantic_coverage_visibility(
+            report_state,
+            performance,
+        ).get("executable_semantic_coverage_summary", {})
+        program_generation = self._build_program_generation_visibility(
+            report_state,
+            performance,
+        ).get("program_generation_summary", {})
+        program_lifecycle = self._build_cognitive_program_lifecycle_visibility(
+            report_state,
+            performance,
+        ).get("cognitive_program_lifecycle_summary", {})
+        proposal = self._build_candidate_proposal_visibility(
+            report_state,
+            performance,
+        ).get("candidate_proposal_summary", {})
+        arena = self._build_candidate_arena_visibility(
+            report_state,
+            performance,
+        ).get("candidate_arena_summary", {})
+        executable = self._merge_dicts(
+            self._first_dict(report_state, "EXECUTABLE_INTELLIGENCE_REPORT", "executable_intelligence_report"),
+            self._first_dict(performance, "EXECUTABLE_INTELLIGENCE_REPORT", "executable_intelligence_report"),
+        )
+
+        generated_concepts = int(self._first_number(
+            semantic.get("generated_concepts"),
+            semantic.get("measured_concepts"),
+            report_state.get("generated_concepts"),
+            performance.get("generated_concepts"),
+        ) or 0)
+        measured_concepts = int(self._first_number(
+            semantic.get("measured_concepts"),
+            generated_concepts,
+        ) or 0)
+        executable_concepts = int(self._first_number(
+            semantic.get("executable_concepts"),
+            executable.get("executable_concepts"),
+        ) or 0)
+        generated_programs = int(self._first_number(
+            program_generation.get("generated_programs"),
+            report_state.get("generated_programs"),
+            performance.get("generated_programs"),
+        ) or 0)
+        generated_blueprints = int(self._first_number(
+            program_generation.get("generated_blueprints"),
+            program_lifecycle.get("total_program_blueprints"),
+        ) or 0)
+        candidate_count = int(self._first_number(
+            proposal.get("proposal_count"),
+            arena.get("candidate_count"),
+        ) or 0)
+        arena_candidates = int(self._first_number(
+            arena.get("candidate_count"),
+            0,
+        ) or 0)
+        arena_sources = arena.get("competitor_sources") or []
+        arena_sources = arena_sources if isinstance(arena_sources, list) else [arena_sources]
+        compiled_programs = int(self._first_number(
+            executable.get("compiled_programs"),
+            executable.get("compiled_program_count"),
+        ) or 0)
+        validated_programs = int(self._first_number(
+            executable.get("validated_programs"),
+            executable.get("validated_program_count"),
+            executable.get("validated_programs_count"),
+        ) or 0)
+        operational_programs = int(self._first_number(
+            program_lifecycle.get("operational_program_count"),
+            validated_programs,
+        ) or 0)
+
+        semantic_coverage = self._bounded_ratio(measured_concepts, generated_concepts)
+        execution_package_coverage = semantic.get("executable_semantic_coverage")
+        if execution_package_coverage is None:
+            execution_package_coverage = self._bounded_ratio(
+                executable_concepts,
+                generated_concepts,
+            )
+        compiler_coverage = self._bounded_ratio(generated_programs, generated_concepts)
+        program_coverage = self._bounded_ratio(generated_blueprints, generated_concepts)
+        candidate_coverage = self._bounded_ratio(candidate_count, generated_programs)
+        arena_coverage = self._bounded_ratio(arena_candidates, candidate_count)
+        arena_source_coverage = self._bounded_ratio(len([
+            source for source in arena_sources if source
+        ]), max(int(proposal.get("eligible_source_count") or 0), 1))
+        operational_coverage = self._bounded_ratio(validated_programs, generated_concepts)
+        compiler_runtime_coverage = self._bounded_ratio(
+            compiled_programs,
+            max(generated_blueprints, generated_programs),
+        )
+
+        coverage_scores = {
+            "semantic_coverage": semantic_coverage,
+            "compiler_coverage": compiler_coverage,
+            "execution_package_coverage": execution_package_coverage,
+            "candidate_coverage": candidate_coverage,
+            "arena_coverage": arena_coverage,
+            "arena_source_coverage": arena_source_coverage,
+            "program_coverage": program_coverage,
+            "operational_capability_coverage": operational_coverage,
+            "compiler_runtime_coverage": compiler_runtime_coverage,
+        }
+        measured_scores = [
+            float(value)
+            for value in coverage_scores.values()
+            if isinstance(value, (int, float))
+        ]
+        overall = (
+            round(sum(measured_scores) / len(measured_scores), 4)
+            if measured_scores
+            else None
+        )
+        bottlenecks = [
+            {
+                "coverage_type": key,
+                "coverage": round(float(value), 4),
+                "status": self._coverage_status(float(value)),
+            }
+            for key, value in coverage_scores.items()
+            if isinstance(value, (int, float))
+        ]
+        bottlenecks.sort(key=lambda item: (item["coverage"], item["coverage_type"]))
+
+        candidate_lineage = self._candidate_source_lineage(proposal, arena)
+        missing_requirements = program_generation.get("missing_requirements") or []
+        if not isinstance(missing_requirements, list):
+            missing_requirements = [missing_requirements]
+
+        summary = {
+            "overall_cognitive_capability_coverage": overall,
+            "coverage_status": self._coverage_status(overall),
+            "semantic_coverage": semantic_coverage,
+            "compiler_coverage": compiler_coverage,
+            "execution_package_coverage": execution_package_coverage,
+            "candidate_coverage": candidate_coverage,
+            "arena_coverage": arena_coverage,
+            "arena_source_coverage": arena_source_coverage,
+            "program_coverage": program_coverage,
+            "operational_capability_coverage": operational_coverage,
+            "compiler_runtime_coverage": compiler_runtime_coverage,
+            "generated_concepts": generated_concepts,
+            "measured_concepts": measured_concepts,
+            "executable_concepts": executable_concepts,
+            "unsupported_concepts": semantic.get("unsupported_concepts"),
+            "generated_programs": generated_programs,
+            "generated_blueprints": generated_blueprints,
+            "candidate_count": candidate_count,
+            "arena_candidate_count": arena_candidates,
+            "arena_source_count": len([source for source in arena_sources if source]),
+            "compiled_programs": compiled_programs,
+            "validated_programs": validated_programs,
+            "operational_programs": operational_programs,
+            "missing_execution_packages": semantic.get("unsupported_operations") or [],
+            "missing_compiler_requirements": missing_requirements,
+            "candidate_source_lineage": candidate_lineage,
+            "lowest_coverage_bottlenecks": bottlenecks[:5],
+            "arena_decision_authority": "SANDBOX_ONLY"
+            if arena.get("selection_mode") == "EVIDENCE_BASED_ARENA"
+            else arena.get("selection_mode"),
+            "prediction_authority_preserved": self._build_prediction_provenance_visibility(
+                report_state,
+                performance,
+            ).get("prediction_provenance_summary", {}).get("prediction_source"),
+        }
+        return {
+            "cognitive_capability_coverage_summary": summary,
+            "cognitive_capability_coverage_diagnostics": {
+                "coverage_scores": coverage_scores,
+                "candidate_source_lineage": candidate_lineage,
+                "semantic_coverage_summary": semantic,
+                "program_generation_summary": program_generation,
+                "candidate_proposal_summary": proposal,
+                "candidate_arena_summary": arena,
+                "executable_intelligence_report": executable,
+            },
+            **summary,
+        }
+
+    def _bounded_ratio(self, numerator: Any, denominator: Any) -> float | None:
+        try:
+            denominator_value = float(denominator)
+            if denominator_value <= 0:
+                return None
+            ratio = float(numerator or 0) / denominator_value
+            return round(max(0.0, min(1.0, ratio)), 4)
+        except (TypeError, ValueError):
+            return None
+
+    def _candidate_source_lineage(
+        self,
+        proposal: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        proposals = proposal.get("candidate_proposals") or []
+        proposals = proposals if isinstance(proposals, list) else []
+        arena_rows = arena.get("candidate_rows") or []
+        arena_rows = arena_rows if isinstance(arena_rows, list) else []
+        rows: list[dict[str, Any]] = []
+        for item in proposals[:12]:
+            if not isinstance(item, dict):
+                continue
+            raw_source = item.get("source")
+            operation = item.get("operation")
+            match = next(
+                (
+                    row for row in arena_rows
+                    if isinstance(row, dict)
+                    and (
+                        row.get("operation") == operation
+                        or row.get("candidate_id") == item.get("proposal_id")
+                    )
+                ),
+                {},
+            )
+            rows.append({
+                "raw_source": raw_source,
+                "candidate_adapter": "candidate_proposal_runtime",
+                "normalized_source": match.get("source") or raw_source,
+                "arena_source": (
+                    match.get("source")
+                    or (
+                        raw_source
+                        if raw_source in (arena.get("competitor_sources") or [])
+                        else None
+                    )
+                ),
+                "proposal_status": item.get("proposal_status"),
+                "operation": operation or match.get("operation"),
+                "entered_arena": bool(match.get("entered_arena")),
+            })
+        if not rows and arena_rows:
+            for row in arena_rows[:12]:
+                if not isinstance(row, dict):
+                    continue
+                rows.append({
+                    "raw_source": row.get("source"),
+                    "candidate_adapter": "arena_observation",
+                    "normalized_source": row.get("source"),
+                    "arena_source": row.get("source"),
+                    "proposal_status": "OBSERVED",
+                    "operation": row.get("operation"),
+                    "entered_arena": bool(row.get("entered_arena")),
+                })
+        return rows
+
     def _semantic_concepts_for_coverage(
         self,
         report_state: dict[str, Any],
@@ -1842,7 +2383,16 @@ class CanonicalReportBindingEngine:
         report_state: dict[str, Any],
         performance: dict[str, Any],
     ) -> dict[str, Any]:
-        visible = deepcopy(report_state)
+        visible = {
+            key: self._bounded_copy(value, max_depth=2, max_list_items=20)
+            for key, value in report_state.items()
+            if not isinstance(value, (dict, list, tuple, set))
+            or key in {
+                "multi_task_results",
+                "evaluation_metrics",
+                "training_summary",
+            }
+        }
         synthesis = self._merge_dicts(
             self._first_dict(report_state, "TRANSFORMATION_SYNTHESIS_REPORT", "transformation_synthesis_report"),
             self._first_dict(performance, "TRANSFORMATION_SYNTHESIS_REPORT", "transformation_synthesis_report"),
@@ -1868,14 +2418,76 @@ class CanonicalReportBindingEngine:
             len(synthesis.get("generated_transformations", []) or []) if synthesis.get("generated_transformations") else None,
             compiler.get("candidate_count"),
         )
+        task_results = visible.get("multi_task_results")
+        if not isinstance(task_results, list):
+            task_results = []
+        total_executions = self._first_number(
+            visible.get("total_executions"),
+            visible.get("executions_total"),
+            visible.get("tasks_executed"),
+            performance.get("total_executions"),
+            performance.get("tasks_executed"),
+            len(task_results) if task_results else None,
+        )
+        completed_executions = self._first_number(
+            visible.get("completed_executions"),
+            visible.get("successful_tasks"),
+            performance.get("completed_executions"),
+            performance.get("successful_tasks"),
+            self._count_completed_tasks(task_results) if task_results else None,
+        )
+        execution_coverage = self._first_number(
+            visible.get("execution_coverage"),
+            performance.get("execution_coverage"),
+        )
         if generated_concepts is not None:
             visible.setdefault("generated_concepts", generated_concepts)
             visible.setdefault("concept_count", generated_concepts)
-        if generated_programs is not None:
-            visible.setdefault("generated_programs", generated_programs)
-            visible.setdefault("program_candidates", generated_programs)
-            visible.setdefault("candidate_count", generated_programs)
+        if generated_programs is None:
+            generated_programs = 0
+        visible.setdefault("generated_programs", generated_programs)
+        visible.setdefault("program_candidates", generated_programs)
+        visible.setdefault("candidate_count", generated_programs)
+        if total_executions is not None:
+            visible.setdefault("total_executions", total_executions)
+            visible.setdefault("executions_total", total_executions)
+            visible.setdefault("tasks_executed", total_executions)
+        if completed_executions is not None:
+            visible.setdefault("completed_executions", completed_executions)
+            visible.setdefault("successful_tasks", completed_executions)
+        if execution_coverage is None and total_executions:
+            execution_coverage = (completed_executions or 0) / total_executions
+        if execution_coverage is not None:
+            visible.setdefault("execution_coverage", execution_coverage)
+        if not visible.get("runtime_status") and not visible.get("status"):
+            visible["runtime_status"] = (
+                "COMPLETED"
+                if total_executions is not None
+                and completed_executions == total_executions
+                else "UNKNOWN"
+            )
         return visible
+
+    def _count_completed_tasks(self, task_results: list[Any]) -> int:
+        completed = 0
+        for item in task_results:
+            if not isinstance(item, dict):
+                continue
+            status = str(
+                item.get("status")
+                or item.get("evaluation_result")
+                or item.get("result")
+                or ""
+            ).upper()
+            if item.get("success") is True or status in {
+                "COMPLETED",
+                "CORRECT",
+                "PASS",
+                "PASSED",
+                "SUCCESS",
+            }:
+                completed += 1
+        return completed
 
     def _build_prediction_provenance_visibility(
         self,
@@ -2817,6 +3429,15 @@ class CanonicalReportBindingEngine:
             rows,
             key=lambda item: (-float(item["duration_seconds"]), item["stage_name"]),
         )
+        observed_active_compute = round(
+            sum(float(item.get("duration_seconds", 0.0) or 0.0) for item in rows),
+            6,
+        )
+        if observed_active_compute > 0.0:
+            if active_compute is None:
+                active_compute = observed_active_compute
+            elif observed_active_compute / max(float(active_compute), 0.000001) >= 0.70:
+                active_compute = observed_active_compute
         if rows or records or total_runtime:
             reconciliation = hierarchical_timing_reconciliation_engine.reconcile(
                 reconciled_records,
@@ -2921,7 +3542,7 @@ class CanonicalReportBindingEngine:
             "report_timing_taxonomy": reporting_timing["report_timing_taxonomy"],
             "runtime_timing_summary": {
                 "total_wall_time": total_runtime,
-                "active_compute_time": reconciliation.get("active_compute_time", active_compute),
+                "active_compute_time": active_compute,
                 "cognitive_runtime_time": self._first_number(timing_state.get("cognitive_runtime_time")),
                 "untracked_time": untracked,
                 "timing_coverage": coverage,
