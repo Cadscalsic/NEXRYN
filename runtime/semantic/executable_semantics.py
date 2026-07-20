@@ -21,6 +21,11 @@ EXECUTABLE_SEMANTICS = {
         "execution_path": "object_duplication",
         "primitive_family": "duplication_operations",
     },
+    "propagation": {
+        "required_primitives": ("duplicate_object",),
+        "execution_path": "pattern_propagation",
+        "primitive_family": "growth_operations",
+    },
     "color_preservation": {
         "required_primitives": ("preserve_colors",),
         "execution_path": "attribute_preservation",
@@ -65,6 +70,16 @@ EXECUTABLE_SEMANTICS = {
         "required_primitives": ("translate",),
         "execution_path": "object_translation",
         "primitive_family": "motion_operations",
+    },
+    "position_preservation": {
+        "required_primitives": ("preserve_grid",),
+        "execution_path": "position_preservation",
+        "primitive_family": "spatial_operations",
+    },
+    "object_identity_preservation": {
+        "required_primitives": ("preserve_grid",),
+        "execution_path": "identity_preservation",
+        "primitive_family": "identity_operations",
     },
     "object_translation": {
         "required_primitives": ("translate",),

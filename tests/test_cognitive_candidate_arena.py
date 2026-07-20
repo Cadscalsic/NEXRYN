@@ -80,6 +80,28 @@ def test_duplicate_candidates_are_collapsed_and_provenance_preserved():
     assert normalized["duplicate_candidates_collapsed"] == 1
     assert normalized["equivalent_candidate_groups"]
     assert sorted(candidate["sources"]) == ["rule_engine", "semantic_compiler"]
+    assert sorted(candidate["origin_sources"]) == ["rule_engine", "semantic_compiler"]
+    assert sorted(candidate["normalized_sources"]) == ["rule_engine", "semantic_compiler"]
+    assert len(candidate["provenance_history"]) == 2
+
+
+def test_normalized_candidates_preserve_original_proposal_sources():
+    gateway = CandidateProposalGateway().submit([
+        _proposal("program_generation", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
+        _proposal("semantic_to_transformation_compiler", "global_recolor", [{"operation": "global_recolor", "parameters": {"color_mapping": {1: 2}}}]),
+    ])
+
+    normalized = CandidateNormalizer().normalize(gateway["proposals"])
+    candidate = normalized["normalized_candidates"][0]
+
+    assert sorted(candidate["origin_sources"]) == [
+        "program_generation",
+        "semantic_to_transformation_compiler",
+    ]
+    assert sorted(candidate["normalized_sources"]) == [
+        "normalized_program_candidates",
+        "semantic_compiler",
+    ]
     assert len(candidate["provenance_history"]) == 2
 
 
@@ -160,6 +182,7 @@ def test_tie_produces_review_state():
 
     assert report["selection_state"] == "TIE_REQUIRES_REVIEW"
     assert report["arena_state"] == "TIE_REQUIRES_REVIEW"
+    assert report["winner_takes_all_detected"] is False
 
 
 def test_weak_candidates_produce_no_safe_winner():

@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 SUPPORTED_SOURCES = {
     "semantic_compiler",
+    "normalized_program_candidates",
     "program_synthesis",
     "adaptive_reuse",
     "transformation_matcher",
@@ -21,6 +22,7 @@ SUPPORTED_SOURCES = {
 }
 
 SOURCE_ALIASES = {
+    "program_generation": "normalized_program_candidates",
     "semantic_to_transformation_compiler": "semantic_compiler",
     "compiler": "semantic_compiler",
     "transformation_synthesis": "program_synthesis",
@@ -70,6 +72,7 @@ class CandidateProposalGateway:
         if not isinstance(proposal, Mapping):
             return self._rejected(index, "malformed_proposal_not_mapping", proposal)
         data = deepcopy(dict(proposal))
+        original_source = _normalize(str(data.get("source") or "unknown"))
         source = self._source(data.get("source"))
         reasons = []
         if source not in SUPPORTED_SOURCES:
@@ -92,6 +95,8 @@ class CandidateProposalGateway:
         return {
             "candidate_id": _normalize_id(candidate_id),
             "source": source,
+            "origin_source": original_source,
+            "normalized_source": source,
             "hypothesis_id": data.get("hypothesis_id"),
             "intent": data.get("intent"),
             "operation": _normalize_operation(operation),
@@ -111,6 +116,8 @@ class CandidateProposalGateway:
             "metadata": deepcopy(data.get("metadata", {})) if isinstance(data.get("metadata", {}), Mapping) else {},
             "provenance": {
                 "original_source": data.get("source"),
+                "origin_source": original_source,
+                "normalized_source": source,
                 "gateway_index": index,
                 "received_fields": sorted(str(key) for key in data),
             },

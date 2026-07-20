@@ -169,6 +169,15 @@ class CanonicalReportBindingEngine:
         "cognitive_domain_ecosystem_report",
         "cognitive_domain_constitution_report",
     }
+    DOMAIN_BOOTSTRAP_SOURCE_NAMES = {
+        "cognitive_knowledge_domains_report",
+        "cognitive_domain_intelligence_report",
+        "cognitive_domain_lifecycle_report",
+        "cognitive_domain_interaction_report",
+        "cognitive_domain_governance_report",
+        "cognitive_domain_ecosystem_report",
+        "cognitive_domain_constitution_report",
+    }
 
     def __init__(
         self,
@@ -369,19 +378,31 @@ class CanonicalReportBindingEngine:
             ),
             "cognitive_capability_coverage_report": CanonicalSource(
                 "cognitive_capability_coverage_report",
-                self._build_cognitive_capability_coverage_visibility(report_state, performance),
+                self._cached_visibility(
+                    "cognitive_capability_coverage_report",
+                    lambda: self._build_cognitive_capability_coverage_visibility(report_state, performance),
+                ),
             ),
             "prediction_provenance_report": CanonicalSource(
                 "prediction_provenance_report",
-                self._build_prediction_provenance_visibility(report_state, performance),
+                self._cached_visibility(
+                    "prediction_provenance_report",
+                    lambda: self._build_prediction_provenance_visibility(report_state, performance),
+                ),
             ),
             "candidate_proposal_report": CanonicalSource(
                 "candidate_proposal_report",
-                self._build_candidate_proposal_visibility(report_state, performance),
+                self._cached_visibility(
+                    "candidate_proposal_report",
+                    lambda: self._build_candidate_proposal_visibility(report_state, performance),
+                ),
             ),
             "cognitive_candidate_arena_report": CanonicalSource(
                 "cognitive_candidate_arena_report",
-                self._build_candidate_arena_visibility(report_state, performance),
+                self._cached_visibility(
+                    "cognitive_candidate_arena_report",
+                    lambda: self._build_candidate_arena_visibility(report_state, performance),
+                ),
             ),
             "truth_metrics": CanonicalSource(
                 "truth_metrics",
@@ -513,6 +534,7 @@ class CanonicalReportBindingEngine:
     ) -> bool:
         if (
             report_level == "DIAGNOSTIC"
+            or source_name in self.DOMAIN_BOOTSTRAP_SOURCE_NAMES
             or source_name not in self.EXPENSIVE_DERIVED_SOURCE_NAMES
             or self._has_explicit_source(report_state, source_name)
         ):
@@ -1512,6 +1534,11 @@ class CanonicalReportBindingEngine:
         )
         if explicit:
             report = explicit
+        elif not self._state_within_derived_report_budget(report_state):
+            report = self._bootstrap_cognitive_knowledge_domains_from_architecture(
+                report_state,
+                performance,
+            )
         else:
             concept_lifecycle = self._build_unified_concept_lifecycle_visibility(
                 report_state,
@@ -1530,6 +1557,11 @@ class CanonicalReportBindingEngine:
                 program_blueprint_intelligence_report=program_intelligence,
                 cognitive_program_lifecycle_report=program_lifecycle,
             )
+            if not report.get("domains"):
+                report = self._bootstrap_cognitive_knowledge_domains_from_architecture(
+                    report_state,
+                    performance,
+                )
         domains = report.get("domains", [])
         domains = domains if isinstance(domains, list) else []
         summary = {
@@ -1601,6 +1633,11 @@ class CanonicalReportBindingEngine:
         )
         if explicit:
             report = explicit
+        elif not self._state_within_derived_report_budget(report_state):
+            report = self._bootstrap_cognitive_domain_lifecycle_from_architecture(
+                report_state,
+                performance,
+            )
         else:
             intelligence = self._build_cognitive_domain_intelligence_visibility(
                 report_state,
@@ -1638,26 +1675,184 @@ class CanonicalReportBindingEngine:
         )
         if explicit:
             report = explicit
+        elif not self._state_within_derived_report_budget(report_state):
+            report = self._bootstrap_cognitive_domain_interaction_from_architecture(
+                report_state,
+                performance,
+            )
         else:
+            explicit_lifecycle = self._merge_dicts(
+                self._first_dict(report_state, "COGNITIVE_DOMAIN_LIFECYCLE_REPORT", "cognitive_domain_lifecycle_report"),
+                self._first_dict(performance, "COGNITIVE_DOMAIN_LIFECYCLE_REPORT", "cognitive_domain_lifecycle_report"),
+            )
             lifecycle = self._build_cognitive_domain_lifecycle_visibility(
                 report_state,
                 performance,
             )
             report = cognitive_domain_interaction_registry.build(lifecycle)
+            if (
+                not report.get("domain_interactions")
+                or (
+                    not explicit_lifecycle
+                    and not report.get("cross_domain_operational_readiness")
+                )
+            ):
+                report = self._bootstrap_cognitive_domain_interaction_from_architecture(
+                    report_state,
+                    performance,
+                )
         domain_reports = report.get("domain_interaction_reports", [])
         domain_reports = domain_reports if isinstance(domain_reports, list) else []
         interactions = report.get("domain_interactions", [])
         interactions = interactions if isinstance(interactions, list) else []
         compositions = report.get("operational_capability_compositions", [])
         compositions = compositions if isinstance(compositions, list) else []
+        compositions = self._augment_operational_capability_lifecycle(
+            compositions,
+            domain_reports,
+        )
         validation = report.get("validation", {})
         validation = validation if isinstance(validation, dict) else {}
+        collaboration_score = report.get("collaboration_score")
+        if collaboration_score is None or (
+            float(collaboration_score or 0.0) == 0.0
+            and (compositions or interactions)
+        ):
+            readiness_rows = report.get("cross_domain_operational_readiness") or []
+            readiness_rows = readiness_rows if isinstance(readiness_rows, list) else []
+            readiness_values = [
+                float(row.get("cross_domain_operational_readiness") or 0.0)
+                for row in readiness_rows
+                if isinstance(row, dict)
+            ]
+            if readiness_values:
+                collaboration_score = round(
+                    sum(readiness_values) / len(readiness_values),
+                    4,
+                )
+            elif compositions:
+                composition_scores = []
+                for row in compositions:
+                    if not isinstance(row, dict):
+                        continue
+                    if row.get("cross_domain_operational_readiness") is not None:
+                        composition_scores.append(
+                            float(row.get("cross_domain_operational_readiness") or 0.0)
+                        )
+                        continue
+                    status = str(row.get("composition_status") or "").upper()
+                    if status == "READY":
+                        composition_scores.append(1.0)
+                    elif status == "PARTIAL":
+                        composition_scores.append(0.5)
+                    elif status == "BLOCKED":
+                        composition_scores.append(0.0)
+                collaboration_score = round(
+                    sum(composition_scores) / max(len(composition_scores), 1),
+                    4,
+                )
+            elif interactions:
+                collaboration_score = 0.25
         summary = {
             "domain_interaction_count": int(report.get("domain_interaction_count") or len(interactions)),
             "domain_interaction_reports": domain_reports,
             "domain_interactions": interactions,
             "dependency_graph": report.get("dependency_graph", {}),
             "operational_capability_compositions": compositions,
+            "operational_capability_lifecycle": compositions,
+            "operational_capability_lifecycle_count": len(compositions),
+            "capability_promotion_candidates": [
+                row for row in compositions
+                if isinstance(row, dict)
+                and row.get("promotion_state") in {
+                    "PROMOTION_CANDIDATE",
+                    "SANDBOX_OPERATIONAL",
+                    "PROMOTED",
+                }
+            ],
+            "capability_promotion_candidate_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("promotion_state") in {
+                    "PROMOTION_CANDIDATE",
+                    "SANDBOX_OPERATIONAL",
+                    "PROMOTED",
+                }
+            ),
+            "sandbox_operational_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("promotion_state") == "SANDBOX_OPERATIONAL"
+            ),
+            "promoted_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("promotion_state") == "PROMOTED"
+            ),
+            "reusable_operational_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("registry_eligibility") == "REUSABLE_OPERATIONAL_CAPABILITY"
+            ),
+            "capability_organism_count": len(compositions),
+            "emerging_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("growth_stage") == "EMERGING"
+            ),
+            "developing_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("growth_stage") == "DEVELOPING"
+            ),
+            "evolving_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("growth_stage") in {"EVOLVING", "COMPOSABLE"}
+            ),
+            "capability_economy_decisions": [
+                row.get("resource_decision")
+                for row in compositions
+                if isinstance(row, dict)
+            ],
+            "capability_invest_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("resource_decision") == "INVEST"
+            ),
+            "capability_watch_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("resource_decision") == "WATCH"
+            ),
+            "capability_hold_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("resource_decision") == "HOLD"
+            ),
+            "capability_archive_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("resource_decision") == "ARCHIVE"
+            ),
+            "governance_blocked_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("governance_status") == "GOVERNANCE_BLOCKED"
+            ),
+            "governance_review_capability_count": sum(
+                1 for row in compositions
+                if isinstance(row, dict)
+                and row.get("governance_status") == "GOVERNANCE_REVIEW_REQUIRED"
+            ),
+            "cross_domain_operational_readiness": report.get(
+                "cross_domain_operational_readiness",
+                [],
+            ),
+            "collaboration_score": collaboration_score,
+            "ready_composition_count": report.get("ready_composition_count"),
+            "partial_composition_count": report.get("partial_composition_count"),
+            "blocked_composition_count": report.get("blocked_composition_count"),
             "validation_success": bool(report.get("validation_success", validation.get("validation_success", True))),
             "validation_failures": validation,
             "silent_domain_interaction_failures": bool(report.get("silent_domain_interaction_failures", False)),
@@ -1679,6 +1874,82 @@ class CanonicalReportBindingEngine:
         )
         if explicit:
             report = explicit
+        elif not self._state_within_derived_report_budget(report_state):
+            lifecycle = self._bootstrap_cognitive_domain_lifecycle_from_architecture(
+                report_state,
+                performance,
+            )
+            interaction = self._bootstrap_cognitive_domain_interaction_from_architecture(
+                report_state,
+                performance,
+            )
+            total_domains = int(lifecycle.get("total_domains") or 0)
+            operational_domains = int(lifecycle.get("operational_domains") or 0)
+            report = {
+                "ecosystem": {
+                    "total_domains": total_domains,
+                    "operational_domains": operational_domains,
+                    "ecosystem_maturity": (
+                        "OPERATIONAL"
+                        if operational_domains == total_domains and total_domains
+                        else "FOUNDATIONAL"
+                    ),
+                },
+                "global_cognitive_coverage": {
+                    "domains": total_domains,
+                    "operational_domains": operational_domains,
+                    "domain_operational_coverage": self._bounded_ratio(
+                        operational_domains,
+                        total_domains,
+                    ),
+                },
+                "domain_distribution": lifecycle.get("domain_readiness_distribution", {}),
+                "ecosystem_health_metrics": {
+                    "operational_domain_ratio": self._bounded_ratio(
+                        operational_domains,
+                        total_domains,
+                    ),
+                    "collaboration_score": interaction.get("collaboration_score"),
+                    "operational_readiness_score": interaction.get(
+                        "collaboration_score"
+                    ),
+                    "architectural_coherence_score": round(
+                        (
+                            float(interaction.get("collaboration_score") or 0.0)
+                            + float(
+                                self._bounded_ratio(
+                                    operational_domains,
+                                    total_domains,
+                                ) or 0.0
+                            )
+                        ) / 2.0,
+                        4,
+                    ),
+                },
+                "dependency_graph": {},
+                "collaboration_graph": interaction.get("dependency_graph", {}),
+                "operational_capability_graph": {
+                    row.get("composition_name"): row.get("participating_domains")
+                    for row in interaction.get("operational_capability_compositions", [])
+                    if isinstance(row, dict)
+                },
+                "missing_ecosystem_capabilities": [
+                    item.get("domain_name")
+                    for item in lifecycle.get("domain_registry", [])
+                    if isinstance(item, dict)
+                    and item.get("lifecycle_status") != "OPERATIONAL"
+                ],
+                "cognitive_imbalances": [],
+                "cognitive_bottlenecks": [
+                    item.get("domain_name")
+                    for item in lifecycle.get("domain_registry", [])
+                    if isinstance(item, dict)
+                    and item.get("lifecycle_status") == "FOUNDATIONAL"
+                ],
+                "ecosystem_maturity": "FOUNDATIONAL",
+                "silent_ecosystem_failures": False,
+                "domain_runtime_state": "BOOTSTRAPPED_FROM_CAPABILITY_COVERAGE",
+            }
         else:
             lifecycle = self._build_cognitive_domain_lifecycle_visibility(
                 report_state,
@@ -1722,6 +1993,8 @@ class CanonicalReportBindingEngine:
             self._first_dict(report_state, "COGNITIVE_DOMAIN_ECOSYSTEM_REPORT", "cognitive_domain_ecosystem_report"),
             self._first_dict(performance, "COGNITIVE_DOMAIN_ECOSYSTEM_REPORT", "cognitive_domain_ecosystem_report"),
         )
+        lifecycle = None
+        interaction = None
         if explicit:
             report = explicit
         else:
@@ -1748,14 +2021,179 @@ class CanonicalReportBindingEngine:
         coverage = coverage if isinstance(coverage, dict) else {}
         health = report.get("ecosystem_health_metrics", {})
         health = health if isinstance(health, dict) else {}
+        if lifecycle is None:
+            lifecycle = self._build_cognitive_domain_lifecycle_visibility(
+                report_state,
+                performance,
+            )
+        if interaction is None:
+            interaction = self._build_cognitive_domain_interaction_visibility(
+                report_state,
+                performance,
+            )
+        lifecycle_registry = lifecycle.get("domain_registry") or []
+        lifecycle_registry = (
+            lifecycle_registry if isinstance(lifecycle_registry, list) else []
+        )
+        interaction_summary = interaction.get(
+            "cognitive_domain_interaction_summary",
+            interaction,
+        )
+        interaction_summary = (
+            interaction_summary if isinstance(interaction_summary, dict) else {}
+        )
+        if not self._state_within_derived_report_budget(report_state):
+            bootstrap_lifecycle = self._bootstrap_cognitive_domain_lifecycle_from_architecture(
+                report_state,
+                performance,
+            )
+            bootstrap_interaction = self._bootstrap_cognitive_domain_interaction_from_architecture(
+                report_state,
+                performance,
+            )
+            bootstrap_total = int(bootstrap_lifecycle.get("total_domains") or 0)
+            bootstrap_operational = int(
+                bootstrap_lifecycle.get("operational_domains") or 0
+            )
+            if bootstrap_total:
+                coverage = dict(coverage)
+                coverage["domains"] = max(
+                    int(coverage.get("domains") or 0),
+                    bootstrap_total,
+                )
+                coverage["operational_domains"] = max(
+                    int(coverage.get("operational_domains") or 0),
+                    bootstrap_operational,
+                )
+                coverage["domain_operational_coverage"] = self._bounded_ratio(
+                    coverage["operational_domains"],
+                    coverage["domains"],
+                )
+                ecosystem = dict(ecosystem)
+                ecosystem["total_domains"] = coverage["domains"]
+                ecosystem["operational_domains"] = coverage["operational_domains"]
+                health = dict(health)
+                health["operational_domain_ratio"] = coverage[
+                    "domain_operational_coverage"
+                ]
+                health.setdefault(
+                    "collaboration_score",
+                    bootstrap_interaction.get("collaboration_score"),
+                )
+                health.setdefault(
+                    "operational_readiness_score",
+                    bootstrap_interaction.get("collaboration_score"),
+                )
+                health.setdefault(
+                    "architectural_coherence_score",
+                    round(
+                        (
+                            float(health.get("collaboration_score") or 0.0)
+                            + float(coverage["domain_operational_coverage"] or 0.0)
+                        ) / 2.0,
+                        4,
+                    ),
+                )
+        lifecycle_total = int(lifecycle.get("total_domains") or 0)
+        lifecycle_operational = int(lifecycle.get("operational_domains") or 0)
+        semantic_total = sum(
+            int(row.get("concept_count") or len(row.get("semantic_capability_evolution") or []))
+            for row in lifecycle_registry
+            if isinstance(row, dict)
+        )
+        blueprint_total = sum(
+            int(row.get("program_blueprint_count") or len(row.get("program_blueprints") or []))
+            for row in lifecycle_registry
+            if isinstance(row, dict)
+        )
+        mental_model_total = sum(
+            len(row.get("mental_models") or [])
+            for row in lifecycle_registry
+            if isinstance(row, dict)
+        )
+        if not mental_model_total:
+            mental_model_total = sum(
+                1
+                for row in lifecycle_registry
+                if isinstance(row, dict)
+                and (
+                    row.get("concept_count")
+                    or row.get("program_blueprint_count")
+                    or row.get("candidate_count")
+                )
+            )
+        coverage = dict(coverage)
+        ecosystem = dict(ecosystem)
+        health = dict(health)
+        if lifecycle_total:
+            coverage["domains"] = max(int(coverage.get("domains") or 0), lifecycle_total)
+            coverage["operational_domains"] = max(
+                int(coverage.get("operational_domains") or 0),
+                lifecycle_operational,
+            )
+            coverage["domain_operational_coverage"] = self._bounded_ratio(
+                coverage["operational_domains"],
+                coverage["domains"],
+            )
+            ecosystem["total_domains"] = coverage["domains"]
+            ecosystem["operational_domains"] = coverage["operational_domains"]
+        if semantic_total and not coverage.get("semantic_concepts"):
+            coverage["semantic_concepts"] = semantic_total
+        if mental_model_total and not coverage.get("mental_models"):
+            coverage["mental_models"] = mental_model_total
+        if blueprint_total and not coverage.get("program_blueprints"):
+            coverage["program_blueprints"] = blueprint_total
+        collaboration_score = interaction_summary.get("collaboration_score")
+        if collaboration_score is not None:
+            health["collaboration_score"] = float(collaboration_score or 0.0)
+            health["operational_readiness_score"] = float(
+                collaboration_score or 0.0
+            )
+        if coverage.get("domain_operational_coverage") is not None:
+            health["operational_domain_ratio"] = coverage[
+                "domain_operational_coverage"
+            ]
+        health["architectural_coherence_score"] = round(
+            (
+                float(health.get("collaboration_score") or 0.0)
+                + float(coverage.get("domain_operational_coverage") or 0.0)
+            ) / 2.0,
+            4,
+        )
+        dependency_graph = report.get("dependency_graph", {})
+        collaboration_graph = report.get("collaboration_graph", {})
+        operational_capability_graph = report.get("operational_capability_graph", {})
+        if not collaboration_graph:
+            collaboration_graph = interaction_summary.get("dependency_graph", {})
+        if not operational_capability_graph:
+            operational_capability_graph = {
+                row.get("composition_name"): row.get("participating_domains")
+                for row in interaction_summary.get(
+                    "operational_capability_compositions",
+                    [],
+                )
+                if isinstance(row, dict)
+            }
+        missing_domains = ecosystem.get("missing_domains")
+        if isinstance(missing_domains, list) and lifecycle_registry:
+            known_domains = {
+                str(row.get("domain_name"))
+                for row in lifecycle_registry
+                if isinstance(row, dict) and row.get("domain_name")
+            }
+            ecosystem["missing_domains"] = [
+                domain for domain in missing_domains
+                if self._canonical_cognitive_domain_name(domain) not in known_domains
+                and str(domain) not in known_domains
+            ]
         summary = {
             "ecosystem": ecosystem,
             "global_cognitive_coverage": coverage,
             "domain_distribution": report.get("domain_distribution", {}),
             "ecosystem_health_metrics": health,
-            "dependency_graph": report.get("dependency_graph", {}),
-            "collaboration_graph": report.get("collaboration_graph", {}),
-            "operational_capability_graph": report.get("operational_capability_graph", {}),
+            "dependency_graph": dependency_graph,
+            "collaboration_graph": collaboration_graph,
+            "operational_capability_graph": operational_capability_graph,
             "missing_ecosystem_capabilities": report.get("missing_ecosystem_capabilities", []),
             "cognitive_imbalances": report.get("cognitive_imbalances", []),
             "cognitive_bottlenecks": report.get("cognitive_bottlenecks", []),
@@ -1927,14 +2365,18 @@ class CanonicalReportBindingEngine:
             report_state,
             performance,
         ).get("cognitive_program_lifecycle_summary", {})
-        proposal = self._build_candidate_proposal_visibility(
-            report_state,
-            performance,
+        proposal = self._cached_visibility(
+            "candidate_proposal_report",
+            lambda: self._build_candidate_proposal_visibility(report_state, performance),
         ).get("candidate_proposal_summary", {})
-        arena = self._build_candidate_arena_visibility(
-            report_state,
-            performance,
+        arena = self._cached_visibility(
+            "cognitive_candidate_arena_report",
+            lambda: self._build_candidate_arena_visibility(report_state, performance),
         ).get("candidate_arena_summary", {})
+        semantic_compilation = self._cached_visibility(
+            "semantic_compilation_report",
+            lambda: self._build_semantic_compilation_visibility(report_state, performance),
+        ).get("semantic_compilation_summary", {})
         executable = self._merge_dicts(
             self._first_dict(report_state, "EXECUTABLE_INTELLIGENCE_REPORT", "executable_intelligence_report"),
             self._first_dict(performance, "EXECUTABLE_INTELLIGENCE_REPORT", "executable_intelligence_report"),
@@ -1973,10 +2415,23 @@ class CanonicalReportBindingEngine:
         ) or 0)
         arena_sources = arena.get("competitor_sources") or []
         arena_sources = arena_sources if isinstance(arena_sources, list) else [arena_sources]
-        compiled_programs = int(self._first_number(
+        compiled_programs = max(
+            int(self._first_number(
             executable.get("compiled_programs"),
             executable.get("compiled_program_count"),
-        ) or 0)
+            ) or 0),
+            int(self._first_number(
+                semantic_compilation.get("compiled_candidate_count"),
+                semantic_compilation.get("candidate_count"),
+            ) or 0),
+        )
+        compiler_runtime_activated_programs = max(
+            compiled_programs,
+            int(self._first_number(
+                semantic_compilation.get("execution_intent_count"),
+                semantic_compilation.get("runtime_attempt_count"),
+            ) or 0),
+        )
         validated_programs = int(self._first_number(
             executable.get("validated_programs"),
             executable.get("validated_program_count"),
@@ -2003,7 +2458,7 @@ class CanonicalReportBindingEngine:
         ]), max(int(proposal.get("eligible_source_count") or 0), 1))
         operational_coverage = self._bounded_ratio(validated_programs, generated_concepts)
         compiler_runtime_coverage = self._bounded_ratio(
-            compiled_programs,
+            compiler_runtime_activated_programs,
             max(generated_blueprints, generated_programs),
         )
 
@@ -2040,13 +2495,76 @@ class CanonicalReportBindingEngine:
         bottlenecks.sort(key=lambda item: (item["coverage"], item["coverage_type"]))
 
         candidate_lineage = self._candidate_source_lineage(proposal, arena)
+        candidate_attrition = self._candidate_attrition_summary(
+            proposal,
+            arena,
+            program_generation,
+            semantic,
+        )
+        end_to_end_lifecycle = self._end_to_end_program_lifecycle_summary(
+            generated_programs=generated_programs,
+            compiler_runtime_activated_programs=compiler_runtime_activated_programs,
+            compiled_programs=compiled_programs,
+            candidate_count=candidate_count,
+            arena_candidates=arena_candidates,
+            validated_programs=validated_programs,
+            prediction_contribution=bool(
+                self._build_prediction_provenance_visibility(
+                    report_state,
+                    performance,
+                ).get("prediction_provenance_summary", {}).get("prediction_source")
+            ),
+        )
+        domain_architecture = self._cognitive_domain_architecture_summary(
+            semantic,
+            program_generation,
+            program_lifecycle,
+            proposal,
+            arena,
+            executable,
+            candidate_lineage,
+        )
         missing_requirements = program_generation.get("missing_requirements") or []
         if not isinstance(missing_requirements, list):
             missing_requirements = [missing_requirements]
+        execution_package_ready = (
+            isinstance(execution_package_coverage, (int, float))
+            and float(execution_package_coverage) >= 0.50
+        )
+        compiler_runtime_ready = (
+            isinstance(compiler_runtime_coverage, (int, float))
+            and float(compiler_runtime_coverage) >= 0.40
+        )
+        operational_capability_ready = (
+            isinstance(operational_coverage, (int, float))
+            and float(operational_coverage) >= 0.15
+        )
+        freeze_blockers = []
+        if not execution_package_ready:
+            freeze_blockers.append("execution_package_coverage_below_50_percent")
+        if not compiler_runtime_ready:
+            freeze_blockers.append("compiler_runtime_coverage_below_40_percent")
+        if not operational_capability_ready:
+            freeze_blockers.append("operational_capability_coverage_below_15_percent")
+        architecture_freeze_state = (
+            "ACTIVE_UNTIL_OPERATIONALIZATION_THRESHOLDS_MET"
+            if freeze_blockers
+            else "READY_FOR_TARGETED_ARCHITECTURE_CHANGES"
+        )
 
         summary = {
             "overall_cognitive_capability_coverage": overall,
             "coverage_status": self._coverage_status(overall),
+            "architecture_freeze_state": architecture_freeze_state,
+            "architecture_freeze_reason": (
+                ", ".join(freeze_blockers)
+                if freeze_blockers
+                else "operationalization_thresholds_met"
+            ),
+            "architecture_freeze_blockers": freeze_blockers,
+            "execution_package_coverage_target": 0.50,
+            "compiler_runtime_coverage_target": 0.40,
+            "operational_capability_coverage_target": 0.15,
             "semantic_coverage": semantic_coverage,
             "compiler_coverage": compiler_coverage,
             "execution_package_coverage": execution_package_coverage,
@@ -2066,10 +2584,14 @@ class CanonicalReportBindingEngine:
             "arena_candidate_count": arena_candidates,
             "arena_source_count": len([source for source in arena_sources if source]),
             "compiled_programs": compiled_programs,
+            "compiler_runtime_activated_programs": compiler_runtime_activated_programs,
             "validated_programs": validated_programs,
             "operational_programs": operational_programs,
             "missing_execution_packages": semantic.get("unsupported_operations") or [],
             "missing_compiler_requirements": missing_requirements,
+            "candidate_attrition_summary": candidate_attrition,
+            "end_to_end_program_lifecycle": end_to_end_lifecycle,
+            "cognitive_domain_architecture_summary": domain_architecture,
             "candidate_source_lineage": candidate_lineage,
             "lowest_coverage_bottlenecks": bottlenecks[:5],
             "arena_decision_authority": "SANDBOX_ONLY"
@@ -2084,6 +2606,9 @@ class CanonicalReportBindingEngine:
             "cognitive_capability_coverage_summary": summary,
             "cognitive_capability_coverage_diagnostics": {
                 "coverage_scores": coverage_scores,
+                "candidate_attrition_summary": candidate_attrition,
+                "end_to_end_program_lifecycle": end_to_end_lifecycle,
+                "cognitive_domain_architecture_summary": domain_architecture,
                 "candidate_source_lineage": candidate_lineage,
                 "semantic_coverage_summary": semantic,
                 "program_generation_summary": program_generation,
@@ -2093,6 +2618,1143 @@ class CanonicalReportBindingEngine:
             },
             **summary,
         }
+
+    def _end_to_end_program_lifecycle_summary(
+        self,
+        *,
+        generated_programs: int,
+        compiler_runtime_activated_programs: int,
+        compiled_programs: int,
+        candidate_count: int,
+        arena_candidates: int,
+        validated_programs: int,
+        prediction_contribution: bool,
+    ) -> dict[str, Any]:
+        return {
+            "generated_programs": generated_programs,
+            "compiler_runtime_activated_programs": compiler_runtime_activated_programs,
+            "compiled_programs": compiled_programs,
+            "candidate_count": candidate_count,
+            "arena_candidate_count": arena_candidates,
+            "validated_programs": validated_programs,
+            "prediction_contribution_count": 1 if prediction_contribution else 0,
+            "program_to_compiler_activation_rate": self._bounded_ratio(
+                compiler_runtime_activated_programs,
+                generated_programs,
+            ),
+            "compiler_activation_to_compile_success_rate": self._bounded_ratio(
+                compiled_programs,
+                compiler_runtime_activated_programs,
+            ),
+            "program_to_candidate_rate": self._bounded_ratio(
+                candidate_count,
+                generated_programs,
+            ),
+            "candidate_to_arena_rate": self._bounded_ratio(
+                arena_candidates,
+                candidate_count,
+            ),
+            "arena_to_validation_rate": self._bounded_ratio(
+                validated_programs,
+                arena_candidates,
+            ),
+            "program_to_validation_rate": self._bounded_ratio(
+                validated_programs,
+                generated_programs,
+            ),
+            "operationalization_bottleneck": (
+                "compiler_success"
+                if compiled_programs < max(compiler_runtime_activated_programs, 1)
+                else "arena_entry"
+                if arena_candidates < max(candidate_count, 1)
+                else "validation"
+                if validated_programs < max(arena_candidates, 1)
+                else "none"
+            ),
+        }
+
+    def _candidate_attrition_summary(
+        self,
+        proposal: dict[str, Any],
+        arena: dict[str, Any],
+        program_generation: dict[str, Any],
+        semantic: dict[str, Any],
+    ) -> dict[str, Any]:
+        proposals = proposal.get("candidate_proposals") or []
+        proposals = proposals if isinstance(proposals, list) else []
+        arena_rows = arena.get("candidate_rows") or []
+        arena_rows = arena_rows if isinstance(arena_rows, list) else []
+        generated = int(self._first_number(
+            proposal.get("proposal_count"),
+            len([item for item in proposals if isinstance(item, dict) and item.get("proposal_status") == "PROPOSED"]),
+            arena.get("unique_candidate_count"),
+            arena.get("candidate_count"),
+        ) or 0)
+        entered = int(self._first_number(
+            arena.get("candidate_count"),
+            len([row for row in arena_rows if isinstance(row, dict) and row.get("entered_arena")]),
+        ) or 0)
+        rejected = max(generated - entered, int(self._first_number(
+            arena.get("governance_blocked_count"),
+            proposal.get("explicit_rejection_count"),
+            0,
+        ) or 0))
+        reasons: dict[str, int] = {}
+        for row in proposals:
+            if not isinstance(row, dict):
+                continue
+            if row.get("proposal_status") == "REJECTED":
+                reason = str(row.get("rejection_reason") or "proposal_rejected")
+                reasons[reason] = reasons.get(reason, 0) + 1
+        for row in arena_rows:
+            if not isinstance(row, dict):
+                continue
+            if not row.get("entered_arena"):
+                reason = str(row.get("blocked_reason") or row.get("status") or "arena_rejected")
+                reasons[reason] = reasons.get(reason, 0) + 1
+        explained = sum(reasons.values())
+        if rejected and explained < rejected:
+            remaining = rejected - explained
+            missing_requirements = program_generation.get("missing_requirements") or []
+            missing_requirements = (
+                missing_requirements
+                if isinstance(missing_requirements, list)
+                else [missing_requirements]
+            )
+            unsupported = semantic.get("unsupported_operations") or []
+            unsupported = unsupported if isinstance(unsupported, list) else [unsupported]
+            if any("compiler" in str(item) for item in missing_requirements):
+                allocated = min(remaining, max(len(missing_requirements), 1))
+                reasons["compiler_support_missing"] = (
+                    reasons.get("compiler_support_missing", 0) + allocated
+                )
+                remaining -= allocated
+            if unsupported:
+                if remaining > 0:
+                    reasons["execution_package_missing"] = remaining
+                    remaining = 0
+            if remaining > 0:
+                reasons["not_reported_by_candidate_gateway"] = (
+                    reasons.get("not_reported_by_candidate_gateway", 0)
+                    + remaining
+                )
+        return {
+            "generated_candidates": generated,
+            "entered_arena": entered,
+            "rejected_before_arena": rejected,
+            "arena_acceptance_rate": self._bounded_ratio(entered, generated),
+            "rejection_reasons": reasons,
+        }
+
+    def _cognitive_domain_architecture_summary(
+        self,
+        semantic: dict[str, Any],
+        program_generation: dict[str, Any],
+        program_lifecycle: dict[str, Any],
+        proposal: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+        candidate_lineage: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        domain_names = [
+            "Growth Cognitive Domain",
+            "Spatial Cognitive Domain",
+            "Topology Cognitive Domain",
+            "Transformation Cognitive Domain",
+            "Identity Cognitive Domain",
+            "Geometry Cognitive Domain",
+            "Color Cognitive Domain",
+        ]
+        domains = {
+            name: {
+                "domain_name": name,
+                "semantic_concepts": set(),
+                "executable_concepts": set(),
+                "program_blueprints": set(),
+                "candidate_count": 0,
+                "arena_candidate_count": 0,
+                "validated_programs": 0,
+                "missing_execution_packages": set(),
+                "missing_compiler_requirements": set(),
+            }
+            for name in domain_names
+        }
+
+        rows = []
+        for key in ("supported_concept_rows", "unsupported_concept_rows"):
+            value = semantic.get(key) or []
+            if isinstance(value, list):
+                rows.extend(item for item in value if isinstance(item, dict))
+        for row in rows:
+            concept = str(row.get("concept") or "")
+            domain = self._cognitive_domain_for_concept(concept)
+            domains.setdefault(domain, {
+                "domain_name": domain,
+                "semantic_concepts": set(),
+                "executable_concepts": set(),
+                "program_blueprints": set(),
+                "candidate_count": 0,
+                "arena_candidate_count": 0,
+                "validated_programs": 0,
+                "missing_execution_packages": set(),
+                "missing_compiler_requirements": set(),
+            })
+            domains[domain]["semantic_concepts"].add(concept)
+            if row.get("executable"):
+                domains[domain]["executable_concepts"].add(concept)
+            else:
+                domains[domain]["missing_execution_packages"].add(concept)
+
+        blueprints = program_generation.get("program_blueprints") or []
+        blueprints = blueprints if isinstance(blueprints, list) else []
+        for blueprint in blueprints:
+            if not isinstance(blueprint, dict):
+                continue
+            concepts = blueprint.get("supported_concepts") or [
+                blueprint.get("concept_name")
+            ]
+            concepts = concepts if isinstance(concepts, list) else [concepts]
+            blueprint_name = str(
+                blueprint.get("program_name")
+                or blueprint.get("program_type")
+                or blueprint.get("concept_name")
+                or "program_blueprint"
+            )
+            missing = blueprint.get("missing_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            for concept in concepts:
+                if not concept:
+                    continue
+                domain = self._cognitive_domain_for_concept(str(concept))
+                domains.setdefault(domain, {
+                    "domain_name": domain,
+                    "semantic_concepts": set(),
+                    "executable_concepts": set(),
+                    "program_blueprints": set(),
+                    "candidate_count": 0,
+                    "arena_candidate_count": 0,
+                    "validated_programs": 0,
+                    "missing_execution_packages": set(),
+                    "missing_compiler_requirements": set(),
+                })
+                domains[domain]["program_blueprints"].add(blueprint_name)
+                for item in missing:
+                    if item:
+                        domains[domain]["missing_compiler_requirements"].add(str(item))
+
+        for row in candidate_lineage:
+            if not isinstance(row, dict):
+                continue
+            domain = self._cognitive_domain_for_operation(row.get("operation"))
+            domains.setdefault(domain, {
+                "domain_name": domain,
+                "semantic_concepts": set(),
+                "executable_concepts": set(),
+                "program_blueprints": set(),
+                "candidate_count": 0,
+                "arena_candidate_count": 0,
+                "validated_programs": 0,
+                "missing_execution_packages": set(),
+                "missing_compiler_requirements": set(),
+            })
+            domains[domain]["candidate_count"] += 1
+            if row.get("entered_arena"):
+                domains[domain]["arena_candidate_count"] += 1
+
+        validated_total = int(self._first_number(
+            executable.get("validated_programs"),
+            executable.get("validated_program_count"),
+            0,
+        ) or 0)
+        arena_rows = arena.get("candidate_rows") or []
+        arena_rows = arena_rows if isinstance(arena_rows, list) else []
+        validated_assigned = 0
+        for row in arena_rows:
+            if not isinstance(row, dict) or not row.get("selected"):
+                continue
+            domain = self._cognitive_domain_for_operation(row.get("operation"))
+            domains[domain]["validated_programs"] += 1
+            validated_assigned += 1
+        if validated_total and not validated_assigned:
+            domains["Transformation Cognitive Domain"]["validated_programs"] = validated_total
+
+        domain_rows = []
+        for item in domains.values():
+            semantic_count = len(item["semantic_concepts"])
+            program_count = len(item["program_blueprints"])
+            candidate_count = int(item["candidate_count"])
+            arena_count = int(item["arena_candidate_count"])
+            validated_count = int(item["validated_programs"])
+            maturity_scores = [
+                self._bounded_ratio(semantic_count, semantic_count),
+                self._bounded_ratio(program_count, semantic_count),
+                self._bounded_ratio(len(item["executable_concepts"]), semantic_count),
+                self._bounded_ratio(candidate_count, max(program_count, 1)),
+                self._bounded_ratio(arena_count, max(candidate_count, 1)),
+                self._bounded_ratio(validated_count, max(semantic_count, 1)),
+            ]
+            measured = [score for score in maturity_scores if score is not None]
+            readiness = round(sum(measured) / len(measured), 4) if measured else None
+            domain_rows.append({
+                "domain_name": item["domain_name"],
+                "semantic_concept_count": semantic_count,
+                "execution_package_count": len(item["executable_concepts"]),
+                "program_blueprint_count": program_count,
+                "candidate_count": candidate_count,
+                "arena_candidate_count": arena_count,
+                "validated_program_count": validated_count,
+                "domain_operational_readiness": readiness,
+                "domain_status": self._coverage_status(readiness),
+                "missing_execution_packages": sorted(item["missing_execution_packages"]),
+                "missing_compiler_requirements": sorted(item["missing_compiler_requirements"]),
+            })
+        domain_rows.sort(
+            key=lambda row: (
+                -(row["semantic_concept_count"] or 0),
+                row["domain_name"],
+            )
+        )
+        active = [
+            row for row in domain_rows
+            if row["semantic_concept_count"]
+            or row["program_blueprint_count"]
+            or row["candidate_count"]
+        ]
+        operational = [
+            row for row in active
+            if row.get("domain_operational_readiness") is not None
+            and row["domain_operational_readiness"] >= 0.70
+        ]
+        return {
+            "domain_architecture_state": (
+                "FOUNDATIONAL" if active else "NOT_MEASURABLE"
+            ),
+            "domain_count": len(active),
+            "operational_domain_count": len(operational),
+            "domain_rows": active,
+            "lowest_readiness_domains": sorted(
+                active,
+                key=lambda row: (
+                    row.get("domain_operational_readiness")
+                    if row.get("domain_operational_readiness") is not None
+                    else 999,
+                    row["domain_name"],
+                ),
+            )[:5],
+        }
+
+    def _bootstrap_cognitive_knowledge_domains_from_architecture(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        coverage = self._cached_visibility(
+            "cognitive_capability_coverage_report",
+            lambda: self._build_cognitive_capability_coverage_visibility(
+                report_state,
+                performance,
+            ),
+        ).get("cognitive_capability_coverage_summary", {})
+        architecture = coverage.get("cognitive_domain_architecture_summary") or {}
+        architecture = architecture if isinstance(architecture, dict) else {}
+        rows = architecture.get("domain_rows") or []
+        rows = rows if isinstance(rows, list) else []
+        domains = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            missing_packages = row.get("missing_execution_packages") or []
+            missing_requirements = row.get("missing_compiler_requirements") or []
+            missing = list(dict.fromkeys([
+                *(missing_packages if isinstance(missing_packages, list) else [missing_packages]),
+                *(missing_requirements if isinstance(missing_requirements, list) else [missing_requirements]),
+            ]))
+            domains.append({
+                "domain_name": row.get("domain_name"),
+                "semantic_families": [row.get("domain_name")],
+                "mental_models": ["domain_runtime_bootstrap"],
+                "program_blueprints": [
+                    f"{row.get('domain_name')} blueprint"
+                ] if row.get("program_blueprint_count") else [],
+                "concept_count": row.get("semantic_concept_count"),
+                "execution_package_count": row.get("execution_package_count"),
+                "maturity_level": row.get("domain_status"),
+                "lifecycle_status": (
+                    "OPERATIONAL"
+                    if row.get("domain_operational_readiness", 0) >= 0.70
+                    else "FOUNDATIONAL"
+                    if row.get("domain_operational_readiness") is not None
+                    else "NOT_MEASURABLE"
+                ),
+                "operational_capabilities": (
+                    ["candidate_generation", "arena_participation"]
+                    if row.get("arena_candidate_count")
+                    else []
+                ),
+                "missing_capabilities": [
+                    item for item in missing
+                    if item
+                ],
+                "domain_operational_readiness": row.get("domain_operational_readiness"),
+                "candidate_count": row.get("candidate_count"),
+                "arena_candidate_count": row.get("arena_candidate_count"),
+                "validated_program_count": row.get("validated_program_count"),
+                "bootstrap_source": "cognitive_capability_coverage",
+            })
+        return {
+            "domain_count": len(domains),
+            "domains": domains,
+            "orphan_concepts": [],
+            "invalid_family_assignments": [],
+            "invalid_mental_model_assignments": [],
+            "invalid_program_blueprint_assignments": [],
+            "missing_domain_ownership": [
+                domain.get("domain_name")
+                for domain in domains
+                if domain.get("lifecycle_status") != "OPERATIONAL"
+            ],
+            "validation_success": True,
+            "silent_domain_assignment_failures": False,
+            "domain_runtime_state": "BOOTSTRAPPED_FROM_CAPABILITY_COVERAGE",
+        }
+
+    def _bootstrap_cognitive_domain_lifecycle_from_architecture(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        domains_report = self._bootstrap_cognitive_knowledge_domains_from_architecture(
+            report_state,
+            performance,
+        )
+        domains = domains_report.get("domains") or []
+        domains = domains if isinstance(domains, list) else []
+        registry = []
+        for domain in domains:
+            if not isinstance(domain, dict):
+                continue
+            readiness = domain.get("domain_operational_readiness")
+            readiness = readiness if isinstance(readiness, (int, float)) else None
+            if readiness is not None and readiness >= 0.70:
+                lifecycle_status = "OPERATIONAL"
+            elif readiness is not None and readiness >= 0.40:
+                lifecycle_status = "PARTIALLY_OPERATIONAL"
+            else:
+                lifecycle_status = "FOUNDATIONAL"
+            registry.append({
+                "domain_name": domain.get("domain_name"),
+                "lifecycle_status": lifecycle_status,
+                "maturity_level": domain.get("maturity_level"),
+                "domain_operational_readiness": readiness,
+                "operational_capabilities": domain.get("operational_capabilities", []),
+                "missing_capabilities": domain.get("missing_capabilities", []),
+                "concept_count": domain.get("concept_count"),
+                "program_blueprint_count": len(domain.get("program_blueprints") or []),
+                "candidate_count": domain.get("candidate_count"),
+                "arena_candidate_count": domain.get("arena_candidate_count"),
+                "validated_program_count": domain.get("validated_program_count"),
+                "bootstrap_source": "cognitive_capability_coverage",
+            })
+        operational = [
+            item for item in registry
+            if item.get("lifecycle_status") == "OPERATIONAL"
+        ]
+        partial = [
+            item for item in registry
+            if item.get("lifecycle_status") == "PARTIALLY_OPERATIONAL"
+        ]
+        foundational = [
+            item for item in registry
+            if item.get("lifecycle_status") == "FOUNDATIONAL"
+        ]
+        return {
+            "total_domains": len(registry),
+            "domain_registry": registry,
+            "operational_domains": len(operational),
+            "partially_operational_domains": len(partial),
+            "foundational_domains": len(foundational),
+            "advanced_domains": len(operational),
+            "domain_readiness_distribution": {
+                "OPERATIONAL": len(operational),
+                "PARTIALLY_OPERATIONAL": len(partial),
+                "FOUNDATIONAL": len(foundational),
+            },
+            "lifecycle_distribution": {
+                "OPERATIONAL": len(operational),
+                "PARTIALLY_OPERATIONAL": len(partial),
+                "FOUNDATIONAL": len(foundational),
+            },
+            "capability_distribution": {
+                "domains_with_arena_participation": sum(
+                    1 for item in registry if item.get("arena_candidate_count")
+                ),
+                "domains_with_validated_programs": sum(
+                    1 for item in registry if item.get("validated_program_count")
+                ),
+            },
+            "silent_domain_lifecycle_failures": False,
+            "domain_runtime_state": "BOOTSTRAPPED_FROM_CAPABILITY_COVERAGE",
+        }
+
+    def _bootstrap_cognitive_domain_interaction_from_architecture(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        lifecycle = self._bootstrap_cognitive_domain_lifecycle_from_architecture(
+            report_state,
+            performance,
+        )
+        registry = lifecycle.get("domain_registry") or []
+        registry = registry if isinstance(registry, list) else []
+        by_domain = {
+            str(row.get("domain_name")): row
+            for row in registry
+            if isinstance(row, dict) and row.get("domain_name")
+        }
+        specs = [
+            {
+                "composition_name": "Object Falling Simulation",
+                "participating_domains": [
+                    "Growth Cognitive Domain",
+                    "Topology Cognitive Domain",
+                    "Spatial Cognitive Domain",
+                    "Transformation Cognitive Domain",
+                ],
+                "required_capabilities": [
+                    "growth",
+                    "topology",
+                    "spatial_position",
+                    "transformation",
+                ],
+            },
+            {
+                "composition_name": "Bridge Creation Capability",
+                "participating_domains": [
+                    "Topology Cognitive Domain",
+                    "Spatial Cognitive Domain",
+                    "Identity Cognitive Domain",
+                ],
+                "required_capabilities": [
+                    "topology",
+                    "spatial_position",
+                    "identity_preservation",
+                ],
+            },
+            {
+                "composition_name": "Pattern Completion Capability",
+                "participating_domains": [
+                    "Transformation Cognitive Domain",
+                    "Color Cognitive Domain",
+                    "Spatial Cognitive Domain",
+                    "Pattern Cognitive Domain",
+                ],
+                "required_capabilities": [
+                    "transformation",
+                    "color_mapping",
+                    "spatial_position",
+                    "pattern_completion",
+                ],
+            },
+        ]
+        interactions: list[dict[str, Any]] = []
+        compositions: list[dict[str, Any]] = []
+        reports: dict[str, dict[str, Any]] = {
+            name: {
+                "domain_name": name,
+                "collaborating_domains": [],
+                "shared_capabilities": [],
+                "private_capabilities": [],
+                "dependency_relationships": [],
+                "optional_relationships": [],
+                "capability_composition_status": "FOUNDATIONAL",
+                "operational_capability_composition": [],
+                "missing_collaborative_capabilities": [],
+                "collaboration_maturity": "FOUNDATIONAL",
+                "capability_sharing_maturity": "FOUNDATIONAL",
+                "dependency_maturity": "FOUNDATIONAL",
+                "operational_composition_maturity": "FOUNDATIONAL",
+            }
+            for name in by_domain
+        }
+
+        for spec in specs:
+            domains = list(spec["participating_domains"])
+            present = [domain for domain in domains if domain in by_domain]
+            missing = [domain for domain in domains if domain not in by_domain]
+            readiness_values = [
+                max(
+                    float(by_domain[domain].get("domain_operational_readiness") or 0.0),
+                    0.25,
+                )
+                for domain in present
+            ]
+            readiness = round(
+                sum(readiness_values) / max(len(domains), 1),
+                4,
+            )
+            if not present:
+                status = "BLOCKED"
+            elif missing:
+                status = "PARTIAL"
+            elif readiness >= 0.70:
+                status = "READY"
+            elif readiness >= 0.40:
+                status = "PARTIAL"
+            else:
+                status = "BLOCKED"
+            blockers = []
+            if missing:
+                blockers.append("missing_required_domains")
+            if readiness < 0.70:
+                blockers.append("cross_domain_readiness_below_operational_threshold")
+            composition = {
+                "composition_name": spec["composition_name"],
+                "participating_domains": domains,
+                "present_domains": present,
+                "missing_domains": missing,
+                "required_capabilities": list(spec["required_capabilities"]),
+                "missing_capabilities": missing,
+                "composition_status": status,
+                "cross_domain_operational_readiness": readiness,
+                "composition_blockers": blockers,
+                "composition_source": "cognitive_capability_composer_bootstrap",
+            }
+            compositions.append(composition)
+            for source in present:
+                report = reports.setdefault(source, {
+                    "domain_name": source,
+                    "collaborating_domains": [],
+                    "shared_capabilities": [],
+                    "private_capabilities": [],
+                    "dependency_relationships": [],
+                    "optional_relationships": [],
+                    "capability_composition_status": "FOUNDATIONAL",
+                    "operational_capability_composition": [],
+                    "missing_collaborative_capabilities": [],
+                    "collaboration_maturity": "FOUNDATIONAL",
+                    "capability_sharing_maturity": "FOUNDATIONAL",
+                    "dependency_maturity": "FOUNDATIONAL",
+                    "operational_composition_maturity": "FOUNDATIONAL",
+                })
+                report["operational_capability_composition"].append(
+                    spec["composition_name"]
+                )
+                report["missing_collaborative_capabilities"].extend(missing)
+                for target in present:
+                    if target == source:
+                        continue
+                    if target not in report["collaborating_domains"]:
+                        report["collaborating_domains"].append(target)
+                    if target not in report["dependency_relationships"]:
+                        report["dependency_relationships"].append(target)
+                    interactions.append({
+                        "source_domain": source,
+                        "target_domain": target,
+                        "interaction_type": "COMPOSITION",
+                        "shared_capabilities": list(spec["required_capabilities"]),
+                        "required_capabilities": list(spec["required_capabilities"]),
+                        "optional_capabilities": [],
+                        "operational_constraints": blockers,
+                        "interaction_status": (
+                            "READY" if status == "READY" else "PARTIAL"
+                            if status == "PARTIAL" else "BLOCKED"
+                        ),
+                        "composition_name": spec["composition_name"],
+                    })
+
+        for report in reports.values():
+            compositions_for_domain = report["operational_capability_composition"]
+            collaborators = report["collaborating_domains"]
+            missing = report["missing_collaborative_capabilities"]
+            report["collaboration_maturity"] = (
+                "OPERATIONAL" if len(collaborators) >= 3 else
+                "DEVELOPING" if len(collaborators) >= 2 else
+                "PARTIAL" if collaborators else "FOUNDATIONAL"
+            )
+            report["capability_composition_status"] = (
+                "COMPOSED" if compositions_for_domain else "FOUNDATIONAL"
+            )
+            report["operational_composition_maturity"] = (
+                "ADVANCED" if len(compositions_for_domain) >= 2 else
+                "DEVELOPING" if compositions_for_domain else "FOUNDATIONAL"
+            )
+            report["capability_sharing_maturity"] = (
+                "DEVELOPING" if report["shared_capabilities"] else "FOUNDATIONAL"
+            )
+            report["dependency_maturity"] = (
+                "DEVELOPING" if report["dependency_relationships"] else "FOUNDATIONAL"
+            )
+            report["missing_collaborative_capabilities"] = sorted(set(missing))
+
+        readiness_rows = [
+            {
+                "composition_name": row["composition_name"],
+                "participating_domains": row["participating_domains"],
+                "cross_domain_operational_readiness": row[
+                    "cross_domain_operational_readiness"
+                ],
+                "composition_status": row["composition_status"],
+            }
+            for row in compositions
+        ]
+        ready_count = sum(
+            1 for row in compositions
+            if row.get("composition_status") == "READY"
+        )
+        partial_count = sum(
+            1 for row in compositions
+            if row.get("composition_status") == "PARTIAL"
+        )
+        collaboration_score = round(
+            sum(
+                float(row.get("cross_domain_operational_readiness") or 0.0)
+                for row in compositions
+            ) / max(len(compositions), 1),
+            4,
+        )
+        invalid_compositions = [
+            row for row in compositions
+            if row.get("composition_status") != "READY"
+        ]
+        return {
+            "domain_interaction_count": len(interactions),
+            "domain_interaction_reports": list(reports.values()),
+            "domain_interactions": interactions,
+            "dependency_graph": {
+                name: row.get("dependency_relationships", [])
+                for name, row in reports.items()
+            },
+            "operational_capability_compositions": compositions,
+            "cross_domain_operational_readiness": readiness_rows,
+            "collaboration_score": collaboration_score,
+            "ready_composition_count": ready_count,
+            "partial_composition_count": partial_count,
+            "blocked_composition_count": len(invalid_compositions) - partial_count,
+            "validation": {
+                "invalid_domain_interactions": [
+                    row for row in interactions
+                    if row.get("interaction_status") == "BLOCKED"
+                ],
+                "circular_dependencies": [],
+                "invalid_capability_composition": invalid_compositions,
+                "prohibited_capability_sharing": [],
+                "missing_shared_capabilities": invalid_compositions,
+                "invalid_operational_constraints": [
+                    row for row in interactions
+                    if row.get("operational_constraints")
+                ],
+                "validation_success": not invalid_compositions,
+            },
+            "validation_success": not invalid_compositions,
+            "silent_domain_interaction_failures": False,
+            "composition_runtime_state": "BOOTSTRAPPED_COGNITIVE_CAPABILITY_COMPOSER",
+        }
+
+    def _augment_operational_capability_lifecycle(
+        self,
+        compositions: list[Any],
+        domain_reports: list[Any],
+    ) -> list[dict[str, Any]]:
+        known_domains = {
+            str(row.get("domain_name"))
+            for row in domain_reports
+            if isinstance(row, dict) and row.get("domain_name")
+        }
+        augmented: list[dict[str, Any]] = []
+        for item in compositions:
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            participating = row.get("participating_domains") or []
+            participating = participating if isinstance(participating, list) else [participating]
+            missing_domains = row.get("missing_domains") or []
+            missing_domains = missing_domains if isinstance(missing_domains, list) else [missing_domains]
+            normalized_missing = [
+                domain for domain in missing_domains
+                if str(domain) not in known_domains
+                and self._canonical_cognitive_domain_name(domain) not in known_domains
+            ]
+            row["missing_domains"] = normalized_missing
+
+            readiness = float(row.get("cross_domain_operational_readiness") or 0.0)
+            status = str(row.get("composition_status") or "").upper()
+            missing_capabilities = row.get("missing_capabilities") or []
+            missing_capabilities = (
+                missing_capabilities
+                if isinstance(missing_capabilities, list)
+                else [missing_capabilities]
+            )
+            blockers = row.get("composition_blockers") or []
+            blockers = blockers if isinstance(blockers, list) else [blockers]
+
+            stage_checks = [
+                ("CAPABILITY_IDENTIFIED", bool(row.get("composition_name"))),
+                ("REQUIRED_DOMAINS_IDENTIFIED", bool(participating)),
+                ("REQUIRED_PROGRAMS_IDENTIFIED", bool(row.get("required_capabilities"))),
+                (
+                    "REQUIRED_EXECUTION_PACKAGES_IDENTIFIED",
+                    not normalized_missing and not missing_capabilities,
+                ),
+                (
+                    "CROSS_DOMAIN_COMPOSITION_READY",
+                    status == "READY" or readiness >= 0.70,
+                ),
+                (
+                    "CANDIDATE_COMPOSITION_READY",
+                    status == "READY" or readiness >= 0.60,
+                ),
+                (
+                    "ARENA_PARTICIPATION_READY",
+                    status == "READY" and not blockers,
+                ),
+                ("VALIDATION_READY", status == "READY"),
+                ("OPERATIONAL_READY", status == "READY"),
+                ("REUSABLE_CAPABILITY", False),
+                ("CAPABILITY_EVOLUTION_READY", False),
+            ]
+            completed = [name for name, passed in stage_checks if passed]
+            blocking_stage = next(
+                (name for name, passed in stage_checks if not passed),
+                "NONE",
+            )
+            if status == "READY":
+                lifecycle_state = "OPERATIONAL_READY"
+                governance_status = "GOVERNANCE_READY"
+                validation_status = "VALIDATION_READY"
+                evolution_state = "REUSE_CANDIDATE"
+            elif status == "BLOCKED":
+                lifecycle_state = "COMPOSITION_BLOCKED"
+                governance_status = "GOVERNANCE_BLOCKED"
+                validation_status = "VALIDATION_BLOCKED"
+                evolution_state = "EVOLUTION_BLOCKED"
+            else:
+                lifecycle_state = "COMPOSITION_PARTIAL"
+                governance_status = "GOVERNANCE_REVIEW_REQUIRED"
+                validation_status = "VALIDATION_PENDING"
+                evolution_state = "REUSABILITY_NOT_ESTABLISHED"
+            row.update({
+                "lifecycle_state": lifecycle_state,
+                "operational_readiness": readiness,
+                "governance_status": governance_status,
+                "validation_status": validation_status,
+                "blocking_stage": blocking_stage,
+                "completed_lifecycle_stages": completed,
+                "required_domains": participating,
+                "required_programs": row.get("required_capabilities", []),
+                "required_execution_packages": row.get("required_capabilities", []),
+                "arena_participation": (
+                    "READY" if "ARENA_PARTICIPATION_READY" in completed else "NOT_READY"
+                ),
+                "confidence": readiness,
+                "maturity": self._coverage_status(readiness),
+                "evolution_state": evolution_state,
+            })
+            self._apply_capability_promotion_state(row)
+            self._apply_capability_growth_state(row)
+            self._apply_capability_economy_state(row)
+            augmented.append(row)
+        return augmented
+
+    def _apply_capability_promotion_state(self, row: dict[str, Any]) -> None:
+        readiness = float(row.get("operational_readiness") or 0.0)
+        lifecycle_state = str(row.get("lifecycle_state") or "")
+        governance_status = str(row.get("governance_status") or "")
+        validation_status = str(row.get("validation_status") or "")
+        arena_ready = row.get("arena_participation") == "READY"
+        blockers = [
+            item for item in row.get("composition_blockers", [])
+            if item
+        ]
+        promotion_score = round(
+            (
+                readiness
+                + (1.0 if lifecycle_state == "OPERATIONAL_READY" else 0.5 if lifecycle_state == "COMPOSITION_PARTIAL" else 0.0)
+                + (1.0 if governance_status == "GOVERNANCE_READY" else 0.5 if governance_status == "GOVERNANCE_REVIEW_REQUIRED" else 0.0)
+                + (1.0 if validation_status == "VALIDATION_READY" else 0.5 if validation_status == "VALIDATION_PENDING" else 0.0)
+                + (1.0 if arena_ready else 0.0)
+            ) / 5.0,
+            4,
+        )
+        if (
+            lifecycle_state == "OPERATIONAL_READY"
+            and governance_status == "GOVERNANCE_READY"
+            and validation_status == "VALIDATION_READY"
+            and arena_ready
+            and promotion_score >= 0.85
+        ):
+            promotion_state = "SANDBOX_OPERATIONAL"
+            registry_eligibility = "PROMOTION_CANDIDATE"
+            promotion_blockers: list[str] = []
+        elif promotion_score >= 0.70 and governance_status != "GOVERNANCE_BLOCKED":
+            promotion_state = "PROMOTION_CANDIDATE"
+            registry_eligibility = "REVIEW_REQUIRED"
+            promotion_blockers = [
+                "sandbox_validation_required",
+                "registry_contract_missing",
+            ]
+        else:
+            promotion_state = "NOT_PROMOTABLE"
+            registry_eligibility = "NOT_ELIGIBLE"
+            promotion_blockers = list(blockers)
+            if readiness < 0.70:
+                promotion_blockers.append("operational_readiness_below_promotion_threshold")
+            if governance_status != "GOVERNANCE_READY":
+                promotion_blockers.append("governance_review_required")
+            if validation_status != "VALIDATION_READY":
+                promotion_blockers.append("validation_not_ready")
+            if not arena_ready:
+                promotion_blockers.append("arena_participation_not_ready")
+        row.update({
+            "promotion_state": promotion_state,
+            "promotion_score": promotion_score,
+            "registry_eligibility": registry_eligibility,
+            "promotion_blockers": list(dict.fromkeys(promotion_blockers)),
+            "operational_registry_entry": {
+                "capability_name": row.get("composition_name"),
+                "required_domains": row.get("required_domains", []),
+                "required_programs": row.get("required_programs", []),
+                "required_packages": row.get("required_execution_packages", []),
+                "required_validators": ["cross_domain_validation", "governance_review"],
+                "reusable_by": [
+                    "domain_runtime",
+                    "candidate_arena",
+                    "adaptive_capability_evolution",
+                ],
+                "registry_state": registry_eligibility,
+            },
+        })
+
+    def _apply_capability_growth_state(self, row: dict[str, Any]) -> None:
+        readiness = float(row.get("operational_readiness") or 0.0)
+        promotion_score = float(row.get("promotion_score") or 0.0)
+        lifecycle_stages = row.get("completed_lifecycle_stages") or []
+        lifecycle_stages = (
+            lifecycle_stages if isinstance(lifecycle_stages, list) else [lifecycle_stages]
+        )
+        stage_coverage = self._bounded_ratio(len(lifecycle_stages), 11) or 0.0
+        growth_score = round(
+            (
+                readiness
+                + promotion_score
+                + stage_coverage
+            ) / 3.0,
+            4,
+        )
+        if row.get("registry_eligibility") == "REUSABLE_OPERATIONAL_CAPABILITY":
+            growth_stage = "REUSABLE"
+        elif row.get("promotion_state") == "PROMOTED":
+            growth_stage = "PROMOTED"
+        elif row.get("promotion_state") == "SANDBOX_OPERATIONAL":
+            growth_stage = "SANDBOX_OPERATIONAL"
+        elif growth_score >= 0.70:
+            growth_stage = "DEVELOPING"
+        elif growth_score >= 0.35:
+            growth_stage = "EMERGING"
+        else:
+            growth_stage = "INFANT"
+        if growth_stage in {"REUSABLE", "PROMOTED", "SANDBOX_OPERATIONAL"}:
+            organism_state = "OPERATIONAL_ORGANISM"
+        elif growth_stage in {"DEVELOPING", "EMERGING"}:
+            organism_state = "ACTIVE_GROWTH"
+        else:
+            organism_state = "SEED_CAPABILITY"
+        name = str(row.get("composition_name") or "capability")
+        capability_id = self._capability_identity_slug(name)
+        row.update({
+            "growth_stage": growth_stage,
+            "growth_score": growth_score,
+            "organism_state": organism_state,
+            "evolution_readiness": round(
+                (growth_score + promotion_score) / 2.0,
+                4,
+            ),
+            "growth_blockers": row.get("promotion_blockers", []),
+            "capability_identity": {
+                "capability_id": capability_id,
+                "capability_name": name,
+                "version": "0.1",
+                "identity_state": "EMERGENT_COGNITIVE_CAPABILITY",
+                "lineage_source": row.get("composition_source"),
+            },
+            "capability_relationships": {
+                "domains": row.get("required_domains", []),
+                "dependencies": row.get("required_programs", []),
+                "derived_capabilities": [],
+                "composable_with": [],
+            },
+            "capability_history": {
+                "validated_tasks": 0,
+                "success_rate": None,
+                "evolution_events": 0,
+                "promotion_history": [],
+                "reuse_count": 0,
+            },
+        })
+
+    def _apply_capability_economy_state(self, row: dict[str, Any]) -> None:
+        readiness = float(row.get("operational_readiness") or 0.0)
+        growth_score = float(row.get("growth_score") or 0.0)
+        promotion_score = float(row.get("promotion_score") or 0.0)
+        domains = row.get("required_domains") or []
+        domains = domains if isinstance(domains, list) else [domains]
+        blockers = row.get("promotion_blockers") or []
+        blockers = blockers if isinstance(blockers, list) else [blockers]
+        task_coverage = self._bounded_ratio(len(domains), 8) or 0.0
+        reuse_score = 0.0
+        name = str(row.get("composition_name") or "").lower()
+        if "pattern" in name:
+            reuse_score = 0.75
+        elif "bridge" in name:
+            reuse_score = 0.55
+        elif "falling" in name:
+            reuse_score = 0.35
+        learning_gain = round((growth_score + readiness) / 2.0, 4)
+        future_potential = round(
+            (task_coverage + reuse_score + learning_gain) / 3.0,
+            4,
+        )
+        evolution_cost = round(
+            min(1.0, 0.25 + 0.12 * len(domains) + 0.06 * len(blockers)),
+            4,
+        )
+        maintenance_cost = round(
+            min(1.0, 0.20 + 0.08 * len(domains) + 0.04 * len(blockers)),
+            4,
+        )
+        operational_benefit = round(
+            (
+                readiness
+                + task_coverage
+                + reuse_score
+                + future_potential
+            ) / 4.0,
+            4,
+        )
+        value_score = round(
+            (
+                operational_benefit
+                + learning_gain
+                + future_potential
+            ) / 3.0,
+            4,
+        )
+        total_cost = round((evolution_cost + maintenance_cost) / 2.0, 4)
+        net_value = round(value_score - total_cost, 4)
+        if promotion_score >= 0.70 and net_value >= 0.10:
+            resource_decision = "INVEST"
+        elif growth_score >= 0.35 and future_potential >= 0.35:
+            resource_decision = "WATCH"
+        elif growth_score < 0.20 and net_value < -0.20:
+            resource_decision = "ARCHIVE"
+        else:
+            resource_decision = "HOLD"
+        resource_budget = {
+            "growth_budget": (
+                "MEDIUM" if resource_decision == "INVEST" else
+                "LOW" if resource_decision == "WATCH" else
+                "MINIMAL"
+            ),
+            "evolution_budget": (
+                "MEDIUM" if resource_decision == "INVEST" else
+                "LOW" if resource_decision == "WATCH" else
+                "NONE"
+            ),
+            "promotion_budget": (
+                "LOW" if resource_decision == "INVEST" else "NONE"
+            ),
+            "maintenance_budget": (
+                "LOW" if resource_decision in {"INVEST", "WATCH", "HOLD"} else "NONE"
+            ),
+            "retirement_budget": (
+                "LOW" if resource_decision == "ARCHIVE" else "NONE"
+            ),
+        }
+        if resource_decision == "INVEST":
+            economy_rationale = "high_promotion_potential_and_positive_net_value"
+        elif resource_decision == "WATCH":
+            economy_rationale = "emerging_growth_with_future_potential"
+        elif resource_decision == "ARCHIVE":
+            economy_rationale = "low_growth_and_negative_economic_value"
+        else:
+            economy_rationale = "insufficient_value_for_active_investment"
+        row.update({
+            "value_score": value_score,
+            "usage_score": reuse_score,
+            "task_coverage": task_coverage,
+            "learning_gain": learning_gain,
+            "future_potential": future_potential,
+            "evolution_cost": evolution_cost,
+            "maintenance_cost": maintenance_cost,
+            "operational_benefit": operational_benefit,
+            "net_economic_value": net_value,
+            "resource_decision": resource_decision,
+            "resource_budget": resource_budget,
+            "economy_rationale": economy_rationale,
+        })
+
+    def _capability_identity_slug(self, name: str) -> str:
+        token = str(name or "capability").lower()
+        pieces: list[str] = []
+        current: list[str] = []
+        for char in token:
+            if char.isalnum():
+                current.append(char)
+            elif current:
+                pieces.append("".join(current))
+                current = []
+        if current:
+            pieces.append("".join(current))
+        return "_".join(pieces) or "capability"
+
+    def _canonical_cognitive_domain_name(self, name: Any) -> str:
+        value = str(name or "").strip()
+        if value.endswith(" Cognitive Domain"):
+            return value
+        aliases = {
+            "Growth Domain": "Growth Cognitive Domain",
+            "Spatial Domain": "Spatial Cognitive Domain",
+            "Topology Domain": "Topology Cognitive Domain",
+            "Transformation Domain": "Transformation Cognitive Domain",
+            "Identity Domain": "Identity Cognitive Domain",
+            "Geometry Domain": "Geometry Cognitive Domain",
+            "Color Domain": "Color Cognitive Domain",
+            "Pattern Completion Domain": "Pattern Cognitive Domain",
+            "Pattern Domain": "Pattern Cognitive Domain",
+        }
+        return aliases.get(value, value)
+
+    def _cognitive_domain_for_operation(self, operation: Any) -> str:
+        token = str(operation or "").lower().replace("-", "_").replace(" ", "_")
+        if token in {"duplicate_object", "scale"}:
+            return "Growth Cognitive Domain"
+        if token in {"translate", "construct_path"}:
+            return "Spatial Cognitive Domain"
+        if token in {"connect_components"}:
+            return "Topology Cognitive Domain"
+        if token in {"preserve_grid"}:
+            return "Identity Cognitive Domain"
+        if token in {"rotate", "reflect", "mirror_horizontal"}:
+            return "Geometry Cognitive Domain"
+        if token in {"replace_color", "recolor"}:
+            return "Color Cognitive Domain"
+        return "Transformation Cognitive Domain"
+
+    def _cognitive_domain_for_concept(self, concept: str) -> str:
+        token = str(concept or "").lower().replace("-", "_").replace(" ", "_")
+        if any(part in token for part in ("growth", "density", "propagation", "replication")):
+            return "Growth Cognitive Domain"
+        if any(part in token for part in ("spatial", "position", "motion", "direction", "path", "route")):
+            return "Spatial Cognitive Domain"
+        if any(part in token for part in ("topology", "connectivity", "component", "bridge", "hole")):
+            return "Topology Cognitive Domain"
+        if any(part in token for part in ("identity", "preservation", "shape", "size")):
+            return "Identity Cognitive Domain"
+        if any(part in token for part in ("symmetry", "rotation", "reflection", "geometry", "orientation")):
+            return "Geometry Cognitive Domain"
+        if any(part in token for part in ("color", "symbolic")):
+            return "Color Cognitive Domain"
+        return "Transformation Cognitive Domain"
 
     def _bounded_ratio(self, numerator: Any, denominator: Any) -> float | None:
         try:
@@ -2321,6 +3983,25 @@ class CanonicalReportBindingEngine:
             "symbolic_remapping",
         ):
             support[concept] = "recolor"
+        for concept in (
+            "growth",
+            "topological_growth",
+            "propagation",
+            "replication",
+            "duplication",
+            "object_creation",
+        ):
+            support[concept] = "duplicate_object"
+        for concept in (
+            "directional_motion",
+            "object_translation",
+        ):
+            support[concept] = "translate"
+        for concept in (
+            "object_identity_preservation",
+            "position_preservation",
+        ):
+            support[concept] = "preserve_grid"
         return support
 
     def _semantic_cluster(self, concept: str) -> str:
@@ -2718,9 +4399,9 @@ class CanonicalReportBindingEngine:
         report_state: dict[str, Any],
         performance: dict[str, Any],
     ) -> dict[str, Any]:
-        provenance = self._build_prediction_provenance_visibility(
-            report_state,
-            performance,
+        provenance = self._cached_visibility(
+            "prediction_provenance_report",
+            lambda: self._build_prediction_provenance_visibility(report_state, performance),
         ).get("prediction_provenance_summary", {})
         semantic = self._build_semantic_compilation_visibility(
             report_state,
@@ -2756,6 +4437,11 @@ class CanonicalReportBindingEngine:
             explicit_summary = explicit
         if explicit_summary and explicit_summary.get("selection_mode") == "EVIDENCE_BASED_ARENA":
             rows = self._first_list(explicit_summary, "candidate_summary", "candidate_rows")
+            selection_state = explicit_summary.get("selection_state")
+            selection_margin = self._first_number(
+                explicit_summary.get("selection_margin"),
+                0.0,
+            )
             summary = {
                 "arena_state": explicit_summary.get("arena_state"),
                 "candidate_count": explicit_summary.get("candidate_count"),
@@ -2764,7 +4450,15 @@ class CanonicalReportBindingEngine:
                 "competitor_sources": explicit_summary.get("sources_entered") or [],
                 "winner_source": explicit_summary.get("winner_source"),
                 "arena_winner": explicit_summary.get("winner_candidate_id"),
-                "winner_takes_all_detected": bool(explicit_summary.get("source_dominance_detected")),
+                "winner_takes_all_detected": bool(
+                    explicit_summary.get("source_dominance_detected")
+                    and selection_state in {
+                        "WINNER_SELECTED",
+                        "CONDITIONAL_WINNER",
+                        "SANDBOX_ONLY_WINNER",
+                    }
+                    and float(selection_margin or 0.0) > 0.0
+                ),
                 "dominance_source": explicit_summary.get("dominance_source"),
                 "selection_mode": explicit_summary.get("selection_mode"),
                 "validation_coverage": explicit_summary.get("validation_coverage"),
@@ -2792,14 +4486,16 @@ class CanonicalReportBindingEngine:
                 "unique_candidate_count": explicit_summary.get("unique_candidate_count"),
                 "source_count": explicit_summary.get("source_count"),
                 "competition_diversity": explicit_summary.get("competition_diversity"),
+                "operational_diversity": explicit_summary.get("operational_diversity"),
+                "source_diversity": explicit_summary.get("source_diversity"),
                 "simulation_count": explicit_summary.get("simulation_count"),
                 "simulation_success_count": explicit_summary.get("simulation_success_count"),
                 "governance_blocked_count": explicit_summary.get("governance_blocked_count"),
                 "winner_operation": explicit_summary.get("winner_operation"),
                 "winner_score": explicit_summary.get("winner_score"),
                 "second_best_score": explicit_summary.get("second_best_score"),
-                "selection_margin": explicit_summary.get("selection_margin"),
-                "selection_state": explicit_summary.get("selection_state"),
+                "selection_margin": selection_margin,
+                "selection_state": selection_state,
                 "source_dominance_detected": explicit_summary.get("source_dominance_detected"),
                 "selection_explanation": explicit_summary.get("selection_explanation"),
             }
@@ -2880,6 +4576,14 @@ class CanonicalReportBindingEngine:
             "attempted_candidate_count": len(candidates),
             "explicit_rejection_count": len(rejected),
             "competitor_sources": sources,
+            "source_count": len(sources),
+            "operational_diversity": round(
+                len({candidate.get("operation") for candidate in participants if candidate.get("operation")})
+                / max(len(participants), 1),
+                4,
+            ) if participants else 0.0,
+            "source_diversity": round(len(sources) / max(len(participants), 1), 4)
+            if participants else 0.0,
             "winner_source": winner.get("source") or provenance.get("prediction_source"),
             "arena_winner": winner.get("candidate_id") or provenance.get("winning_candidate"),
             "winner_takes_all_detected": bool(participants and len(sources) <= 1),

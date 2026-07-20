@@ -1100,20 +1100,137 @@ class DeterministicFinalReportRenderer:
         ]
         compositions = summary.get("operational_capability_compositions") or []
         compositions = compositions if isinstance(compositions, list) else []
+        readiness_rows = summary.get("cross_domain_operational_readiness") or []
+        readiness_rows = readiness_rows if isinstance(readiness_rows, list) else []
         lines = [
             f"Domain Interactions: {self._value(summary.get('domain_interaction_count'))}",
+            "Operational Capability Lifecycle Count: "
+            f"{self._value(summary.get('operational_capability_lifecycle_count'))}",
+            "Capability Promotion Candidates: "
+            f"{self._value(summary.get('capability_promotion_candidate_count'))}",
+            "Sandbox Operational Capabilities: "
+            f"{self._value(summary.get('sandbox_operational_capability_count'))}",
+            "Promoted Capabilities: "
+            f"{self._value(summary.get('promoted_capability_count'))}",
+            "Reusable Operational Capabilities: "
+            f"{self._value(summary.get('reusable_operational_capability_count'))}",
+            "Capability Organisms: "
+            f"{self._value(summary.get('capability_organism_count'))}",
+            "Emerging Capabilities: "
+            f"{self._value(summary.get('emerging_capability_count'))}",
+            "Developing Capabilities: "
+            f"{self._value(summary.get('developing_capability_count'))}",
+            "Evolving Capabilities: "
+            f"{self._value(summary.get('evolving_capability_count'))}",
+            "Capability Economy Invest: "
+            f"{self._value(summary.get('capability_invest_count'))}",
+            "Capability Economy Watch: "
+            f"{self._value(summary.get('capability_watch_count'))}",
+            "Capability Economy Hold: "
+            f"{self._value(summary.get('capability_hold_count'))}",
+            "Capability Economy Archive: "
+            f"{self._value(summary.get('capability_archive_count'))}",
+            "Governance Review Capabilities: "
+            f"{self._value(summary.get('governance_review_capability_count'))}",
+            "Governance Blocked Capabilities: "
+            f"{self._value(summary.get('governance_blocked_capability_count'))}",
             f"Validation Success: {self._value(summary.get('validation_success'))}",
-            "Silent Interaction Failures: "
-            f"{self._value(summary.get('silent_domain_interaction_failures'))}",
             "Dependency Graph: "
             f"{self._inline_map(summary.get('dependency_graph'))}",
         ]
-        for composition in compositions[:3]:
+        if canonical["report_level"] == "diagnostic":
+            lines.insert(
+                1,
+                f"Collaboration Score: {self._percent(summary.get('collaboration_score'))}",
+            )
+            lines.insert(
+                3,
+                "Silent Interaction Failures: "
+                f"{self._value(summary.get('silent_domain_interaction_failures'))}",
+            )
+        for index, composition in enumerate(compositions[:3]):
             if isinstance(composition, dict):
                 lines.append(
                     "Operational Capability Composition: "
                     f"{self._value(composition.get('composition_name'))} "
                     f"[{self._value(composition.get('composition_status'))}]"
+                )
+                if canonical["report_level"] == "diagnostic" or index == 0:
+                    lines.append(
+                    "  Cross-Domain Readiness: "
+                    f"{self._percent(composition.get('cross_domain_operational_readiness'))}"
+                    )
+                lines.append(
+                    "  Capability Lifecycle: "
+                    f"{self._value(composition.get('lifecycle_state'))}; "
+                    f"Blocking Stage: {self._value(composition.get('blocking_stage'))}; "
+                    f"Governance: {self._value(composition.get('governance_status'))}; "
+                    f"Validation: {self._value(composition.get('validation_status'))}"
+                )
+                lines.append(
+                    "  Capability Promotion: "
+                    f"{self._value(composition.get('promotion_state'))}; "
+                    f"Score: {self._percent(composition.get('promotion_score'))}; "
+                    f"Registry: {self._value(composition.get('registry_eligibility'))}"
+                )
+                identity = composition.get("capability_identity") or {}
+                identity = identity if isinstance(identity, dict) else {}
+                lines.append(
+                    "  Capability Growth: "
+                    f"{self._value(composition.get('growth_stage'))}; "
+                    f"Organism: {self._value(composition.get('organism_state'))}; "
+                    f"Growth Score: {self._percent(composition.get('growth_score'))}; "
+                    f"Evolution: {self._percent(composition.get('evolution_readiness'))}"
+                )
+                if canonical["report_level"] == "diagnostic" or index == 0:
+                    lines.append(
+                        "  Capability Identity: "
+                        f"{self._value(identity.get('capability_id'))} "
+                        f"v{self._value(identity.get('version'))}"
+                    )
+                lines.append(
+                    "  Capability Economy: "
+                    f"{self._value(composition.get('resource_decision'))}; "
+                    f"Value: {self._percent(composition.get('value_score'))}; "
+                    f"Benefit: {self._percent(composition.get('operational_benefit'))}; "
+                    f"Net: {self._percent(composition.get('net_economic_value'))}"
+                )
+                if canonical["report_level"] == "diagnostic" or index == 0:
+                    budget = composition.get("resource_budget") or {}
+                    budget = budget if isinstance(budget, dict) else {}
+                    lines.append(
+                        "  Capability Resource Budget: "
+                        f"growth={self._value(budget.get('growth_budget'))}, "
+                        f"evolution={self._value(budget.get('evolution_budget'))}, "
+                        f"promotion={self._value(budget.get('promotion_budget'))}, "
+                        f"maintenance={self._value(budget.get('maintenance_budget'))}, "
+                        f"retirement={self._value(budget.get('retirement_budget'))}"
+                    )
+                    lines.append(
+                        "  Economy Rationale: "
+                        f"{self._value(composition.get('economy_rationale'))}"
+                    )
+                blockers = composition.get("promotion_blockers") or []
+                blockers = blockers if isinstance(blockers, list) else [blockers]
+                if blockers and (canonical["report_level"] == "diagnostic" or index == 0):
+                    lines.append(
+                        "  Promotion Blockers: "
+                        + ", ".join(str(item) for item in blockers[:5])
+                    )
+        readiness_limit = 3 if canonical["report_level"] == "diagnostic" else 0
+        for row in readiness_rows[:readiness_limit]:
+            if isinstance(row, dict):
+                domains = row.get("participating_domains") or []
+                domains = domains if isinstance(domains, list) else [domains]
+                short_domains = [
+                    str(item).replace(" Cognitive Domain", "")
+                    for item in domains
+                ]
+                lines.append(
+                    "Cross-Domain Operational Readiness: "
+                    f"{' + '.join(short_domains)} = "
+                    f"{self._percent(row.get('cross_domain_operational_readiness'))} "
+                    f"[{self._value(row.get('composition_status'))}]"
                 )
         for row in active_reports[:6]:
             collaborators = row.get("collaborating_domains") or []
@@ -1425,6 +1542,14 @@ class DeterministicFinalReportRenderer:
         summary = summary if isinstance(summary, dict) else {}
         bottlenecks = summary.get("lowest_coverage_bottlenecks") or []
         bottlenecks = bottlenecks if isinstance(bottlenecks, list) else []
+        attrition = summary.get("candidate_attrition_summary") or {}
+        attrition = attrition if isinstance(attrition, dict) else {}
+        lifecycle = summary.get("end_to_end_program_lifecycle") or {}
+        lifecycle = lifecycle if isinstance(lifecycle, dict) else {}
+        domain_architecture = summary.get("cognitive_domain_architecture_summary") or {}
+        domain_architecture = (
+            domain_architecture if isinstance(domain_architecture, dict) else {}
+        )
         lineage = summary.get("candidate_source_lineage") or []
         lineage = lineage if isinstance(lineage, list) else []
         missing_packages = summary.get("missing_execution_packages") or []
@@ -1441,6 +1566,16 @@ class DeterministicFinalReportRenderer:
             "Overall Cognitive Capability Coverage: "
             f"{self._percent(summary.get('overall_cognitive_capability_coverage'))}",
             f"Coverage Status: {self._value(summary.get('coverage_status'))}",
+            "Architecture Freeze State: "
+            f"{self._value(summary.get('architecture_freeze_state'))}",
+            "Architecture Freeze Reason: "
+            f"{self._value(summary.get('architecture_freeze_reason'))}",
+            "Execution Package Coverage Target: "
+            f"{self._percent(summary.get('execution_package_coverage_target'))}",
+            "Compiler Runtime Coverage Target: "
+            f"{self._percent(summary.get('compiler_runtime_coverage_target'))}",
+            "Operational Capability Coverage Target: "
+            f"{self._percent(summary.get('operational_capability_coverage_target'))}",
             f"Semantic Coverage: {self._percent(summary.get('semantic_coverage'))}",
             f"Compiler Coverage: {self._percent(summary.get('compiler_coverage'))}",
             "Execution Package Coverage: "
@@ -1460,15 +1595,68 @@ class DeterministicFinalReportRenderer:
             f"Candidate Count: {self._value(summary.get('candidate_count'))}",
             f"Arena Candidate Count: {self._value(summary.get('arena_candidate_count'))}",
             f"Arena Source Count: {self._value(summary.get('arena_source_count'))}",
+            "Candidate Attrition Coverage: "
+            f"{self._percent(attrition.get('arena_acceptance_rate'))}",
+            "Rejected Before Arena: "
+            f"{self._value(attrition.get('rejected_before_arena'))}",
             f"Compiled Programs: {self._value(summary.get('compiled_programs'))}",
+            "Compiler Runtime Activated Programs: "
+            f"{self._value(summary.get('compiler_runtime_activated_programs'))}",
             f"Validated Programs: {self._value(summary.get('validated_programs'))}",
+            "Domain Architecture State: "
+            f"{self._value(domain_architecture.get('domain_architecture_state'))}",
+            f"Cognitive Domain Count: {self._value(domain_architecture.get('domain_count'))}",
+            "Operational Domain Count: "
+            f"{self._value(domain_architecture.get('operational_domain_count'))}",
             f"Decision Authority: {self._value(summary.get('arena_decision_authority'))}",
             "Prediction Authority Preserved: "
             f"{self._value(summary.get('prediction_authority_preserved'))}",
+            "End-To-End Program Lifecycle: "
+            f"programs={self._value(lifecycle.get('generated_programs'))} "
+            f"compiler={self._value(lifecycle.get('compiler_runtime_activated_programs'))} "
+            f"compiled={self._value(lifecycle.get('compiled_programs'))} "
+            f"candidates={self._value(lifecycle.get('candidate_count'))} "
+            f"arena={self._value(lifecycle.get('arena_candidate_count'))} "
+            f"validated={self._value(lifecycle.get('validated_programs'))} "
+            f"prediction={self._value(lifecycle.get('prediction_contribution_count'))}",
+            "Operationalization Bottleneck: "
+            f"{self._value(lifecycle.get('operationalization_bottleneck'))}",
+            "Compiler Success Rate: "
+            f"{self._percent(lifecycle.get('compiler_activation_to_compile_success_rate'))}",
+            "Validation Success Rate: "
+            f"{self._percent(lifecycle.get('arena_to_validation_rate'))}",
         ]
+        rejection_reasons = attrition.get("rejection_reasons") or {}
+        if isinstance(rejection_reasons, dict) and rejection_reasons:
+            lines.append(
+                "Candidate Attrition Reasons: "
+                + "; ".join(
+                    f"{self._value(reason)}={self._value(count)}"
+                    for reason, count in sorted(rejection_reasons.items())
+                )
+            )
+        domain_rows = domain_architecture.get("domain_rows") or []
+        domain_rows = domain_rows if isinstance(domain_rows, list) else []
+        if domain_rows:
+            lines.append("Cognitive Domain Architecture:")
+            for row in domain_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"semantic={self._value(row.get('semantic_concept_count'))} "
+                    f"packages={self._value(row.get('execution_package_count'))} "
+                    f"programs={self._value(row.get('program_blueprint_count'))} "
+                    f"candidates={self._value(row.get('candidate_count'))} "
+                    f"arena={self._value(row.get('arena_candidate_count'))} "
+                    f"validated={self._value(row.get('validated_program_count'))} "
+                    f"readiness={self._percent(row.get('domain_operational_readiness'))} "
+                    f"status={self._value(row.get('domain_status'))}"
+                )
         if bottlenecks:
             lines.append("Lowest Coverage Bottlenecks:")
-            for item in bottlenecks[:5]:
+            for item in bottlenecks[:3]:
                 if not isinstance(item, dict):
                     continue
                 lines.append(
@@ -1480,16 +1668,17 @@ class DeterministicFinalReportRenderer:
         if missing_packages:
             lines.append(
                 "Missing Execution Packages: "
-                + ", ".join(str(item) for item in missing_packages[:12])
+                + ", ".join(str(item) for item in missing_packages[:8])
             )
         if missing_requirements:
             lines.append(
                 "Missing Compiler Requirements: "
-                + ", ".join(str(item) for item in missing_requirements[:12])
+                + ", ".join(str(item) for item in missing_requirements[:8])
             )
         if lineage:
             lines.append("Candidate Source Lineage:")
-            for row in lineage[:6]:
+            lineage_limit = 3 if canonical["report_level"] == "diagnostic" else 1
+            for row in lineage[:lineage_limit]:
                 if not isinstance(row, dict):
                     continue
                 lines.append(
@@ -1526,6 +1715,8 @@ class DeterministicFinalReportRenderer:
             f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
             f"Competitor Sources: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
             f"Competition Diversity: {self._value(summary.get('competition_diversity'))}",
+            f"Operational Diversity: {self._value(summary.get('operational_diversity'))}",
+            f"Source Diversity: {self._value(summary.get('source_diversity'))}",
             f"Simulation Count: {self._value(summary.get('simulation_count'))}",
             f"Simulation Success Count: {self._value(summary.get('simulation_success_count'))}",
             f"Governance Blocked Count: {self._value(summary.get('governance_blocked_count'))}",
@@ -1550,6 +1741,8 @@ class DeterministicFinalReportRenderer:
                 if not isinstance(row, dict):
                     continue
                 marker = "selected" if row.get("selected") else "candidate"
+                origin_sources = self._source_names(row, "origin_source", "origin_sources")
+                normalized_sources = self._source_names(row, "normalized_source", "normalized_sources")
                 lines.append(
                     "  "
                     f"{index}. {self._value(row.get('source'))}: "
@@ -1560,6 +1753,8 @@ class DeterministicFinalReportRenderer:
                     f"status={self._value(row.get('validation_status'))} "
                     f"{marker}"
                 )
+                lines.append(f"     Origin Sources: {origin_sources}")
+                lines.append(f"     Normalized Sources: {normalized_sources}")
         if source_outcomes:
             lines.append("Cognitive Source Outcomes:")
             for outcome in source_outcomes[:6]:
@@ -2223,6 +2418,17 @@ class DeterministicFinalReportRenderer:
                 for key, item in list(value.items())[:8]
             )
         return str(value)
+
+    def _source_names(self, row: dict[str, Any], singular_key: str, plural_key: str) -> str:
+        plural = row.get(plural_key)
+        if isinstance(plural, list) and all(not isinstance(item, (dict, list, tuple, set)) for item in plural):
+            return ", ".join(str(item) for item in plural) if plural else "Not Available"
+        singular = row.get(singular_key)
+        if isinstance(singular, str) and singular:
+            return singular
+        if singular is not None:
+            return self._value(singular)
+        return self._value(plural)
 
     def _compact_value(self, value: Any) -> str:
         if isinstance(value, list):

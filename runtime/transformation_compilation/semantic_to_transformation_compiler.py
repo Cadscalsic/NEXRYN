@@ -71,6 +71,15 @@ class SemanticToTransformationCompiler:
         "duplication",
         "object_creation",
         "duplicate_object",
+        "growth",
+        "topological_growth",
+        "propagation",
+    }
+    GRID_PRESERVATION_CONCEPTS = {
+        "object_identity_preservation",
+        "position_preservation",
+        "shape_preservation",
+        "size_preservation",
     }
     TOPOLOGY_PRESERVATION_CONCEPTS = {
         "topology_preservation",
@@ -137,6 +146,10 @@ class SemanticToTransformationCompiler:
                 candidates.append(candidate)
         if concepts.intersection(self.TOPOLOGY_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_topology"}):
             candidate = self._compile_preservation(source, target, "topology_preservation", "preserve_topology")
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.GRID_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_grid", "object_identity_preservation"}):
+            candidate = self._compile_preservation(source, target, "grid_preservation", "preserve_grid")
             if candidate:
                 candidates.append(candidate)
         if concepts.intersection(self.COLOR_REMAP_CONCEPTS) or self._has_intent(execution_intents, {"replace_color_mapping", "remap_symbols"}):

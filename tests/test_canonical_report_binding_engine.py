@@ -528,6 +528,109 @@ def test_cognitive_domain_interaction_binding_builds_collaboration_graph():
     )
 
 
+def test_domain_interaction_bootstrap_composes_cognitive_domains_when_large_state():
+    state = _state()
+    state["large_payload"] = {
+        f"section_{index}": list(range(50))
+        for index in range(80)
+    }
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": [
+            "growth",
+            "topology_change",
+            "relative_position",
+            "object_identity_preservation",
+            "color_mapping",
+            "transformation_sequence",
+        ],
+    }
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 4,
+        "generated_blueprints": 4,
+        "program_blueprints": [
+            {
+                "concept_name": "growth",
+                "program_type": "growth_program",
+                "supported_concepts": ["growth"],
+            },
+            {
+                "concept_name": "topology_change",
+                "program_type": "topology_program",
+                "supported_concepts": ["topology_change"],
+            },
+            {
+                "concept_name": "relative_position",
+                "program_type": "spatial_program",
+                "supported_concepts": ["relative_position"],
+            },
+            {
+                "concept_name": "color_mapping",
+                "program_type": "color_program",
+                "supported_concepts": ["color_mapping"],
+            },
+        ],
+    }
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_phase_entered": True,
+        "eligible_source_count": 1,
+        "proposal_count": 3,
+        "candidate_proposals": [
+            {"source": "program_generation", "proposal_status": "PROPOSED", "operation": "duplicate_object"},
+            {"source": "program_generation", "proposal_status": "PROPOSED", "operation": "connect_components"},
+            {"source": "program_generation", "proposal_status": "PROPOSED", "operation": "replace_color"},
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "arena_state": "SINGLE_SOURCE_ONLY",
+            "candidate_count": 3,
+            "source_count": 1,
+            "sources_entered": ["normalized_program_candidates"],
+            "candidate_summary": [
+                {"source": "normalized_program_candidates", "operation": "duplicate_object", "entered_arena": True},
+                {"source": "normalized_program_candidates", "operation": "connect_components", "entered_arena": True},
+                {"source": "normalized_program_candidates", "operation": "replace_color", "entered_arena": True},
+            ],
+        }
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    interaction = result["field_bindings"][
+        "cognitive_domain_interaction_summary"
+    ]["value"]
+
+    assert interaction["domain_interaction_count"] > 0
+    assert interaction["collaboration_score"] > 0.0
+    assert interaction["cross_domain_operational_readiness"]
+    assert interaction["operational_capability_lifecycle_count"] >= 3
+    assert "capability_promotion_candidate_count" in interaction
+    assert interaction["capability_organism_count"] >= 3
+    assert interaction["emerging_capability_count"] >= 1
+    assert interaction["capability_watch_count"] >= 1
+    assert any(
+        row["composition_name"] == "Bridge Creation Capability"
+        and row["lifecycle_state"] in {"COMPOSITION_PARTIAL", "OPERATIONAL_READY"}
+        and row["blocking_stage"]
+        and row["governance_status"]
+        and row["promotion_state"]
+        and row["registry_eligibility"]
+        and isinstance(row["promotion_score"], float)
+        and row["growth_stage"] in {"EMERGING", "DEVELOPING", "SANDBOX_OPERATIONAL", "PROMOTED", "REUSABLE"}
+        and row["organism_state"]
+        and row["capability_identity"]["capability_id"]
+        and isinstance(row["evolution_readiness"], float)
+        and row["resource_decision"] in {"INVEST", "WATCH", "HOLD", "ARCHIVE"}
+        and row["resource_budget"]["growth_budget"]
+        and isinstance(row["value_score"], float)
+        for row in interaction["operational_capability_compositions"]
+    )
+
+
 def test_cognitive_domain_governance_binding_detects_invalid_ownership():
     state = _state()
     state["COGNITIVE_DOMAIN_LIFECYCLE_REPORT"] = {
@@ -1031,12 +1134,13 @@ def test_executable_semantic_coverage_identifies_unsupported_clusters():
     ]["value"]
 
     assert coverage["generated_concepts"] == 18
-    assert coverage["executable_concepts"] == 7
-    assert coverage["unsupported_concepts"] == 11
-    assert coverage["coverage_status"] == "LOW"
-    assert "Spatial And Motion" in coverage["missing_cluster_counts"]
+    assert coverage["executable_concepts"] == 12
+    assert coverage["unsupported_concepts"] == 6
+    assert coverage["coverage_status"] == "MEDIUM"
     assert "density_modulation" in coverage["unsupported_operations"]
     assert "connect_components" in coverage["supported_operations"]
+    assert "duplicate_object" in coverage["supported_operations"]
+    assert "preserve_grid" in coverage["supported_operations"]
 
 
 def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
@@ -1074,10 +1178,10 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
             "candidate_count": 1,
             "unique_candidate_count": 1,
             "source_count": 1,
-            "sources_entered": ["semantic_compiler"],
+            "sources_entered": ["normalized_program_candidates"],
             "candidate_summary": [
                 {
-                    "source": "semantic_compiler",
+                    "source": "normalized_program_candidates",
                     "candidate_id": "semantic_program:path_finding",
                     "operation": "construct_path",
                     "entered_arena": True,
@@ -1105,11 +1209,20 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
     assert coverage["candidate_coverage"] == 0.5
     assert coverage["operational_capability_coverage"] == 0.25
     assert coverage["missing_compiler_requirements"] == ["compiler_support"]
+    assert coverage["candidate_attrition_summary"]["generated_candidates"] == 1
+    assert coverage["candidate_attrition_summary"]["entered_arena"] == 1
+    assert coverage["candidate_attrition_summary"]["arena_acceptance_rate"] == 1.0
+    domain_summary = coverage["cognitive_domain_architecture_summary"]
+    assert domain_summary["domain_count"] >= 1
+    assert any(
+        row["domain_name"] == "Spatial Cognitive Domain"
+        for row in domain_summary["domain_rows"]
+    )
     assert coverage["candidate_source_lineage"][0]["raw_source"] == (
         "program_generation"
     )
     assert coverage["candidate_source_lineage"][0]["arena_source"] == (
-        "semantic_compiler"
+        "normalized_program_candidates"
     )
 
 

@@ -116,6 +116,8 @@ class CognitiveCandidateArena:
             "sources_entered": sources_entered,
             "sources_rejected": sources_rejected,
             "competition_diversity": diversity.get("competition_diversity", 0.0),
+            "operational_diversity": diversity.get("operational_diversity", 0.0),
+            "source_diversity": diversity.get("source_diversity", 0.0),
             "simulation_count": len(simulations),
             "simulation_success_count": sum(1 for item in simulations.values() if item.get("simulation_success")),
             "governance_blocked_count": len(blocked),
@@ -135,7 +137,15 @@ class CognitiveCandidateArena:
             "direct_source_to_executor_access": False,
             "arena_memory_operational": True,
             "candidate_summary": rows,
-            "winner_takes_all_detected": dominance.get("dominance_detected"),
+            "winner_takes_all_detected": bool(
+                dominance.get("dominance_detected")
+                and selection.get("selection_state") in {
+                    "WINNER_SELECTED",
+                    "CONDITIONAL_WINNER",
+                    "SANDBOX_ONLY_WINNER",
+                }
+                and float(selection.get("selection_margin") or 0.0) > 0.0
+            ),
             "dominance_source": dominance.get("dominant_source"),
             "selection_mode": "EVIDENCE_BASED_ARENA",
             "validation_coverage": round(len(scores) / max(len(eligible), 1), 4) if eligible else 0.0,
@@ -262,6 +272,11 @@ class CognitiveCandidateArena:
                 "candidate_id": candidate_id,
                 "source": candidate.get("source"),
                 "sources": candidate.get("sources", []),
+                "origin_source": candidate.get("origin_source"),
+                "origin_sources": candidate.get("origin_sources", []),
+                "normalized_source": candidate.get("normalized_source"),
+                "normalized_sources": candidate.get("normalized_sources", []),
+                "provenance_history": candidate.get("provenance_history", []),
                 "operation": candidate.get("operation"),
                 "score": score.get("final_score"),
                 "accuracy": simulation.get("prediction_accuracy"),

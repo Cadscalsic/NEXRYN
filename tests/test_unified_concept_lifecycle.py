@@ -102,3 +102,35 @@ def test_unified_concept_lifecycle_tracks_operational_rotation():
     assert rotation["candidate_selected"] == "TRUE"
     assert rotation["prediction_contribution"] == "PRIMARY"
     assert rotation["lifecycle_status"] == "OPERATIONAL"
+
+
+def test_unified_concept_lifecycle_expands_execution_package_support_without_physics():
+    report = UnifiedConceptLifecycleBuilder().build({
+        "TRANSFORMATION_SYNTHESIS_REPORT": {
+            "detected_concepts": [
+                "growth",
+                "replication",
+                "bridge_creation",
+                "directional_motion",
+                "object_identity_preservation",
+                "gravity",
+            ],
+        },
+    })
+
+    rows = {
+        item["concept_name"]: item
+        for item in report["concept_lifecycles"]
+    }
+
+    for concept in (
+        "growth",
+        "replication",
+        "bridge_creation",
+        "directional_motion",
+        "object_identity_preservation",
+    ):
+        assert rows[concept]["execution_package_available"] == "TRUE"
+        assert rows[concept]["compiler_supported"] == "TRUE"
+
+    assert rows["gravity"]["execution_package_available"] == "FALSE"

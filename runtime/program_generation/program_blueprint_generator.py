@@ -16,6 +16,7 @@ PROGRAM_TYPE_BY_CONCEPT = {
     "color_preservation": "color_mapping_program",
     "growth": "growth_program",
     "topological_growth": "growth_program",
+    "propagation": "growth_program",
     "topology_preservation": "topology_program",
     "topology_change": "topology_program",
     "topology_repair": "topology_program",
@@ -35,6 +36,8 @@ PROGRAM_TYPE_BY_CONCEPT = {
     "component_connection": "component_merging_program",
     "connectivity_change": "component_merging_program",
     "object_identity_preservation": "object_identity_program",
+    "position_preservation": "spatial_program",
+    "directional_motion": "spatial_program",
 }
 
 PROGRAM_TYPE_BY_CLUSTER = {

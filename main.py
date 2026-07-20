@@ -718,7 +718,7 @@ def build_executable_candidate_proposals(
             continue
         seen.add(concept)
         proposals.append({
-            "source": "semantic_compiler",
+            "source": "program_generation",
             "candidate_id": f"semantic_program:{concept}",
             "hypothesis_id": f"concept:{concept}",
             "intent": concept,
@@ -754,6 +754,30 @@ def build_executable_candidate_proposals(
         if len(proposals) >= max_candidates:
             break
     return proposals
+
+
+def build_semantic_compiler_execution_intents(candidate_proposals):
+    intents = []
+    seen = set()
+    proposals = candidate_proposals if isinstance(candidate_proposals, list) else []
+    for proposal in proposals:
+        if not isinstance(proposal, dict):
+            continue
+        intent = _runtime_token(proposal.get("intent"))
+        operation = _runtime_token(proposal.get("operation"))
+        if not intent or not operation:
+            continue
+        key = (intent, operation)
+        if key in seen:
+            continue
+        seen.add(key)
+        intents.append({
+            "intent": intent,
+            "operation": operation,
+            "matched_concepts": [intent],
+            "source": "program_generation_activation_bridge",
+        })
+    return intents
 
 
 def _blueprint_can_enter_arena(blueprint):
@@ -3731,6 +3755,9 @@ try:
     )
     from runtime.arena import cognitive_candidate_arena
     from runtime.execution import executable_intelligence_engine
+    from runtime.transformation_compilation import (
+        semantic_to_transformation_compiler,
+    )
 
     cognitive_runtime_execution_engine.clear()
     shared_cognitive_state = SharedCognitiveState.create(
@@ -4031,6 +4058,29 @@ try:
             input_grid=executable_task_io.get("input_grid"),
             target_grid=executable_task_io.get("target_grid"),
         )
+        semantic_compiler_execution_intents = (
+            build_semantic_compiler_execution_intents(
+                executable_candidate_proposals,
+            )
+        )
+        semantic_compiler_runtime_report = (
+            semantic_to_transformation_compiler.compile(
+                input_grid=executable_task_io.get("input_grid"),
+                output_grid=executable_task_io.get("target_grid"),
+                detected_concepts=[
+                    intent["intent"]
+                    for intent in semantic_compiler_execution_intents
+                ],
+                execution_intents=semantic_compiler_execution_intents,
+                runtime_context={
+                    "input_grid": executable_task_io.get("input_grid"),
+                    "target_grid": executable_task_io.get("target_grid"),
+                    "execution_intents": semantic_compiler_execution_intents,
+                },
+            )
+            if semantic_compiler_execution_intents
+            else {}
+        )
         if executable_candidate_proposals:
             activated_candidate_count = len(executable_candidate_proposals)
             program_generation_report["generated_programs"] = max(
@@ -4064,10 +4114,7 @@ try:
             candidate_sources={
                 "program_generation": executable_candidate_proposals,
                 "semantic_to_transformation_compiler": (
-                    program_synthesis_report.get(
-                        "semantic_to_transformation_compilation_report",
-                        {},
-                    )
+                    semantic_compiler_runtime_report
                 ),
             },
         )
@@ -4077,7 +4124,7 @@ try:
             target_grid=executable_task_io.get("target_grid"),
             runtime_context={
                 "expected_candidate_sources": [
-                    "semantic_compiler",
+                    "normalized_program_candidates",
                     "program_generation",
                     "adaptive_search",
                 ],
@@ -4136,6 +4183,17 @@ try:
             "executable_intelligence_entered": bool(
                 executable_intelligence_result
             ),
+            "semantic_compiler_runtime_triggered": bool(
+                semantic_compiler_execution_intents
+            ),
+            "semantic_compiler_runtime_success": bool(
+                semantic_compiler_runtime_report.get(
+                    "semantic_to_transformation_compilation_success",
+                )
+            ),
+            "semantic_compiler_runtime_candidate_count": int(
+                semantic_compiler_runtime_report.get("candidate_count", 0) or 0
+            ),
             "selected_candidate_source": executable_candidate.get("source"),
             "selected_candidate_operation": executable_candidate.get("operation"),
             "prediction_authority_preserved": "adaptive_search",
@@ -4155,6 +4213,12 @@ try:
                 "CANDIDATE_PROPOSAL_REPORT": candidate_proposal_report,
                 "COGNITIVE_CANDIDATE_ARENA_REPORT": (
                     cognitive_candidate_arena_report
+                ),
+                "SEMANTIC_COMPILATION_REPORT": (
+                    semantic_compiler_runtime_report
+                ),
+                "semantic_to_transformation_compilation_report": (
+                    semantic_compiler_runtime_report
                 ),
                 "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT": (
                     executable_intelligence_result
@@ -4181,6 +4245,23 @@ try:
     performance_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
         cognitive_candidate_arena_report
     )
+    if semantic_compiler_runtime_report:
+        program_synthesis_report[
+            "semantic_to_transformation_compilation_report"
+        ] = semantic_compiler_runtime_report
+        performance_report["SEMANTIC_COMPILATION_REPORT"] = (
+            semantic_compiler_runtime_report
+        )
+        performance_report[
+            "semantic_to_transformation_compilation_report"
+        ] = semantic_compiler_runtime_report
+        performance_report[
+            "TRANSFORMATION_SYNTHESIS_REPORT"
+        ] = performance_report.get("TRANSFORMATION_SYNTHESIS_REPORT", {})
+        if isinstance(performance_report["TRANSFORMATION_SYNTHESIS_REPORT"], dict):
+            performance_report["TRANSFORMATION_SYNTHESIS_REPORT"][
+                "semantic_to_transformation_compilation_report"
+            ] = semantic_compiler_runtime_report
     performance_report["EXECUTABLE_INTELLIGENCE_ENGINE_REPORT"] = (
         executable_intelligence_result
     )

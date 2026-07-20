@@ -51,8 +51,10 @@ class CandidateDiversityAnalyzer:
             "unique_program_count": unique_program_count,
             "source_count": len(sources),
             "operation_diversity": round(operation_diversity, 4),
+            "operational_diversity": round(operation_diversity, 4),
             "program_diversity": round(program_diversity, 4),
             "semantic_diversity": round(semantic_diversity, 4),
+            "source_diversity": round(source_diversity, 4),
             "competition_diversity": competition_diversity,
             "diversity_sufficient": candidate_count >= 2 and len(sources) >= 2 and unique_program_count >= 2,
         }

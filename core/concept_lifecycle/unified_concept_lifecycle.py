@@ -38,7 +38,20 @@ MENTAL_MODEL_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Color Mapping Mental Model", ("color", "symbolic", "mapping", "remapping")),
 )
 
+NON_PACKAGE_EXECUTABLE_CONCEPTS = {
+    "gravity",
+    "falling",
+    "support",
+    "collision",
+    "rest_state",
+}
+
 EXECUTION_PACKAGE_SUPPORT = {
+    concept: "TRUE"
+    for concept in EXECUTABLE_SEMANTICS
+    if concept not in NON_PACKAGE_EXECUTABLE_CONCEPTS
+}
+EXECUTION_PACKAGE_SUPPORT.update({
     "rotation": "TRUE",
     "orientation_change": "TRUE",
     "reflection": "TRUE",
@@ -52,8 +65,7 @@ EXECUTION_PACKAGE_SUPPORT = {
     "collision": "FALSE",
     "rest_state": "FALSE",
     "component_splitting": "FALSE",
-    "bridge_creation": "FALSE",
-}
+})
 
 PROGRAM_REJECTION_NO_EXECUTION_PACKAGE = "NO_EXECUTION_PACKAGE"
 PROGRAM_REJECTION_NO_COMPILER_SUPPORT = "NO_COMPILER_SUPPORT"

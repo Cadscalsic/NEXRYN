@@ -248,10 +248,14 @@ def test_render_includes_cognitive_capability_coverage_map():
             "arena_state": "SINGLE_SOURCE_ONLY",
             "candidate_count": 1,
             "source_count": 1,
-            "sources_entered": ["semantic_compiler"],
+            "sources_entered": ["normalized_program_candidates"],
             "candidate_summary": [
                 {
-                    "source": "semantic_compiler",
+                    "source": "normalized_program_candidates",
+                    "origin_source": "program_generation",
+                    "origin_sources": ["program_generation"],
+                    "normalized_source": "normalized_program_candidates",
+                    "normalized_sources": ["normalized_program_candidates"],
                     "candidate_id": "semantic_program:path_finding",
                     "operation": "construct_path",
                     "entered_arena": True,
@@ -269,11 +273,25 @@ def test_render_includes_cognitive_capability_coverage_map():
 
     assert "COGNITIVE CAPABILITY COVERAGE" in report
     assert "Overall Cognitive Capability Coverage:" in report
+    assert "Architecture Freeze State:" in report
+    assert "Execution Package Coverage Target:" in report
+    assert "Compiler Runtime Coverage Target:" in report
+    assert "Operational Capability Coverage Target:" in report
+    assert "Compiler Runtime Activated Programs:" in report
     assert "Execution Package Coverage:" in report
+    assert "Candidate Attrition Coverage:" in report
+    assert "End-To-End Program Lifecycle:" in report
+    assert "Operationalization Bottleneck:" in report
+    assert "Compiler Success Rate:" in report
+    assert "Validation Success Rate:" in report
+    assert "Domain Architecture State:" in report
+    assert "Cognitive Domain Architecture:" in report
     assert "Missing Compiler Requirements: compiler_support" in report
+    assert "Origin Sources: program_generation" in report
+    assert "Normalized Sources: normalized_program_candidates" in report
     assert (
         "raw=program_generation -> adapter=candidate_proposal_runtime -> "
-        "normalized=semantic_compiler -> arena=semantic_compiler"
+        "normalized=normalized_program_candidates -> arena=normalized_program_candidates"
     ) in report
 
 
@@ -774,6 +792,22 @@ def test_normal_report_exposes_cognitive_domain_interaction():
     assert "Private Capabilities: collision_simulation" in report
     assert "Dependency Relationships: Spatial Domain, Geometry Domain" in report
     assert "Operational Capability Composition: Object Falling Simulation" in report
+    assert "Cross-Domain Readiness:" in report
+    assert "Operational Capability Lifecycle Count:" in report
+    assert "Capability Promotion Candidates:" in report
+    assert "Sandbox Operational Capabilities:" in report
+    assert "Reusable Operational Capabilities:" in report
+    assert "Capability Organisms:" in report
+    assert "Emerging Capabilities:" in report
+    assert "Capability Economy Watch:" in report
+    assert "Capability Lifecycle:" in report
+    assert "Capability Promotion:" in report
+    assert "Capability Growth:" in report
+    assert "Capability Identity:" in report
+    assert "Capability Economy:" in report
+    assert "Capability Resource Budget:" in report
+    assert "Blocking Stage:" in report
+    assert "Governance:" in report
     assert "Missing Collaborative Capabilities: Not Available" in report
 
 
@@ -1021,9 +1055,9 @@ def test_report_exposes_executable_semantic_coverage():
     assert "EXECUTABLE SEMANTIC COVERAGE" in report
     assert report.index("EXECUTABLE SEMANTIC COVERAGE") < report.index("TRANSFORMATION DECISION")
     assert "Generated Concepts: 18" in report
-    assert "Executable Concepts: 7" in report
-    assert "Unsupported Concepts: 11" in report
-    assert "Coverage Status: LOW" in report
+    assert "Executable Concepts: 12" in report
+    assert "Unsupported Concepts: 6" in report
+    assert "Coverage Status: MEDIUM" in report
     assert "Unsupported Operations:" in report
     assert "density_modulation" in report
 

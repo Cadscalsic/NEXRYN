@@ -52,11 +52,21 @@ class CandidateNormalizer:
             "steps": normalized_steps,
         }
         source = _normalize(proposal.get("source"))
+        origin_source = _normalize(
+            proposal.get("origin_source")
+            or (proposal.get("provenance") or {}).get("origin_source")
+            or (proposal.get("provenance") or {}).get("original_source")
+            or source
+        )
         candidate = deepcopy(dict(proposal))
         candidate.update({
             "candidate_id": str(proposal.get("candidate_id") or f"candidate:{source}:unknown"),
             "source": source,
             "sources": [source] if source else [],
+            "origin_source": origin_source,
+            "origin_sources": [origin_source] if origin_source else [],
+            "normalized_source": source,
+            "normalized_sources": [source] if source else [],
             "operation": operation,
             "program": program,
             "source_confidence": _score(proposal.get("source_confidence", 0.0)),
@@ -88,6 +98,16 @@ class CandidateNormalizer:
     def _merge_group(self, group: list[dict[str, Any]]) -> dict[str, Any]:
         base = deepcopy(group[0])
         sources = sorted({source for item in group for source in item.get("sources", [])})
+        origin_sources = sorted({
+            source for item in group
+            for source in item.get("origin_sources", [item.get("origin_source")])
+            if source
+        })
+        normalized_sources = sorted({
+            source for item in group
+            for source in item.get("normalized_sources", [item.get("normalized_source")])
+            if source
+        })
         hypotheses = sorted({
             hypothesis for item in group
             for hypothesis in item.get("supporting_hypotheses", [])
@@ -96,6 +116,10 @@ class CandidateNormalizer:
         base["candidate_id"] = "merged:" + base["program_signature"][:16]
         base["sources"] = sources
         base["source"] = sources[0] if sources else base.get("source")
+        base["origin_sources"] = origin_sources
+        base["origin_source"] = origin_sources[0] if origin_sources else base.get("origin_source")
+        base["normalized_sources"] = normalized_sources
+        base["normalized_source"] = normalized_sources[0] if normalized_sources else base.get("normalized_source")
         base["supporting_hypotheses"] = hypotheses
         base["source_confidence"] = max(_score(item.get("source_confidence")) for item in group)
         for field in (
