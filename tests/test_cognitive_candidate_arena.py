@@ -11,6 +11,7 @@ from runtime.arena import (
     SourceDominanceGuard,
     WinnerSelectionPolicy,
 )
+from runtime.reasoning.candidate_proposal_runtime import CandidateProposalRuntime
 from runtime.reporting.final_report_renderer import DeterministicFinalReportRenderer
 
 
@@ -103,6 +104,37 @@ def test_normalized_candidates_preserve_original_proposal_sources():
         "semantic_compiler",
     ]
     assert len(candidate["provenance_history"]) == 2
+
+
+def test_candidate_proposal_runtime_preserves_operational_investment_signal():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "program_generation": [
+                _proposal(
+                    "program_generation",
+                    "replace_color",
+                    [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+                    operational_value_score=0.86,
+                    investment_tier="HIGH_VALUE",
+                    investment_reason="compiler_supported, high_reuse_arc_operation",
+                ),
+                _proposal(
+                    "program_generation",
+                    "construct_path",
+                    [{"operation": "construct_path", "parameters": {}}],
+                    operational_value_score=0.41,
+                    investment_tier="LOW_VALUE",
+                    investment_reason="missing_requirements_penalty",
+                ),
+            ]
+        }
+    )
+
+    assert report["high_value_knowledge_items"] == 1
+    assert report["low_value_knowledge_items"] == 1
+    assert report["deprioritized_knowledge_items"] == 1
+    assert report["candidate_proposals"][0]["operational_value_score"] == 0.86
+    assert report["candidate_proposals"][0]["investment_tier"] == "HIGH_VALUE"
 
 
 def test_adaptive_reuse_does_not_win_automatically_when_simulation_is_worse():

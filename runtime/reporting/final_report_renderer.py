@@ -1428,6 +1428,10 @@ class DeterministicFinalReportRenderer:
         lines = [
             f"Detected Concepts: {', '.join(str(item) for item in concepts[:12]) if concepts else 'Not Available'}",
             f"Semantic Intent Router Success: {self._value(summary.get('semantic_intent_routing_success'))}",
+            "Semantic Intent Router Integration: "
+            f"{self._value(summary.get('semantic_intent_router_integration_status'))}",
+            "Compiler Activation Source: "
+            f"{self._value(summary.get('compiler_activation_source'))}",
             f"Execution Intents: {self._value(summary.get('execution_intent_count'))}",
             f"Compiler Triggered: {self._value(summary.get('compiler_triggered'))}",
             f"Compiled Candidates: {self._value(summary.get('compiled_candidate_count'))}",
@@ -1435,6 +1439,7 @@ class DeterministicFinalReportRenderer:
             f"Compiled Operation: {self._value(summary.get('compiled_operation'))}",
             f"Selected Operation: {self._value(summary.get('selected_operation'))}",
             f"Selected From Compiler: {self._value(summary.get('selected_from_compiler'))}",
+            f"Compiler Advisory State: {self._value(summary.get('compiler_advisory_state'))}",
             f"Compilation Confidence: {self._value(summary.get('compilation_confidence'))}",
             f"Prediction Accuracy: {self._value(summary.get('prediction_accuracy'))}",
             f"Compilation Status: {self._value(summary.get('compilation_status'))}",
@@ -1552,6 +1557,16 @@ class DeterministicFinalReportRenderer:
         )
         lineage = summary.get("candidate_source_lineage") or []
         lineage = lineage if isinstance(lineage, list) else []
+        survival_distribution = (
+            summary.get("capability_survival_state_distribution") or {}
+        )
+        survival_distribution = (
+            survival_distribution
+            if isinstance(survival_distribution, dict)
+            else {}
+        )
+        top_incubating = summary.get("top_incubating_capabilities") or []
+        top_incubating = top_incubating if isinstance(top_incubating, list) else []
         missing_packages = summary.get("missing_execution_packages") or []
         missing_packages = (
             missing_packages if isinstance(missing_packages, list) else [missing_packages]
@@ -1587,8 +1602,116 @@ class DeterministicFinalReportRenderer:
             f"Program Coverage: {self._percent(summary.get('program_coverage'))}",
             "Compiler Runtime Coverage: "
             f"{self._percent(summary.get('compiler_runtime_coverage'))}",
+            "Validated Executable Coverage: "
+            f"{self._percent(summary.get('validated_executable_coverage'))}",
             "Operational Capability Coverage: "
             f"{self._percent(summary.get('operational_capability_coverage'))}",
+            "Operational Capability Materialization Rate: "
+            f"{self._percent(summary.get('operational_capability_materialization_rate'))}",
+            "Operational Yield From Concepts: "
+            f"{self._percent(summary.get('operational_yield_from_concepts'))}",
+            "Operational Yield From Programs: "
+            f"{self._percent(summary.get('operational_yield_from_programs'))}",
+            "Operational Yield From Candidates: "
+            f"{self._percent(summary.get('operational_yield_from_candidates'))}",
+            "Operational Yield From Arena: "
+            f"{self._percent(summary.get('operational_yield_from_arena'))}",
+            "Knowledge Production Efficiency: "
+            f"{self._percent(summary.get('knowledge_production_efficiency'))}",
+            "Knowledge Operationalization Efficiency: "
+            f"{self._percent(summary.get('knowledge_operationalization_efficiency'))}",
+            "Operational Knowledge Waste: "
+            f"{self._percent(summary.get('operational_knowledge_waste'))}",
+            "Operational Yield Stability: "
+            f"{self._percent(summary.get('operational_yield_stability'))}",
+            "Operational Yield Stability Basis: "
+            f"{self._value(summary.get('operational_yield_stability_basis'))}",
+            "Operational Yield Health State: "
+            f"{self._value(summary.get('operational_yield_health_state'))}",
+            "Knowledge Investment Policy: "
+            f"{self._value(summary.get('knowledge_investment_policy'))}",
+            "Knowledge Investment Authority: "
+            f"{self._value(summary.get('knowledge_investment_authority'))}",
+            "High Value Knowledge Items: "
+            f"{self._value(summary.get('high_value_knowledge_items'))}",
+            "Medium Value Knowledge Items: "
+            f"{self._value(summary.get('medium_value_knowledge_items'))}",
+            "Low Value Knowledge Items: "
+            f"{self._value(summary.get('low_value_knowledge_items'))}",
+            "Deprioritized Knowledge Items: "
+            f"{self._value(summary.get('deprioritized_knowledge_items'))}",
+            "Operational Investment Accuracy: "
+            f"{self._percent(summary.get('operational_investment_accuracy'))}",
+            "Operational Investment Accuracy State: "
+            f"{self._value(summary.get('operational_investment_accuracy_state'))}",
+            "High Value Operational False Positives: "
+            f"{self._value(summary.get('high_value_operational_false_positives'))}",
+            "Validation Efficiency: "
+            f"{self._percent(summary.get('validation_efficiency'))}",
+            "Validation Bottleneck Inflation: "
+            f"{self._percent(summary.get('validation_bottleneck_inflation'))}",
+            "Validation Bottleneck State: "
+            f"{self._value(summary.get('validation_bottleneck_state'))}",
+            "High Value Validation Yield: "
+            f"{self._percent(summary.get('high_value_validation_yield'))}",
+            "Operational Capability Acquisition Rate: "
+            f"{self._percent(summary.get('operational_capability_acquisition_rate'))}",
+            "Capability Acquisition Rate Per 100 Tasks: "
+            f"{self._value(summary.get('operational_capability_acquisition_rate_per_100_tasks'))}",
+            "Capability Survival Rate: "
+            f"{self._percent(summary.get('capability_survival_rate'))}",
+            "Materialization Survival Rate: "
+            f"{self._percent(summary.get('materialization_survival_rate'))}",
+            "Candidate Retention Rate: "
+            f"{self._percent(summary.get('candidate_retention_rate'))}",
+            "Incubation Conversion Rate: "
+            f"{self._percent(summary.get('incubation_conversion_rate'))}",
+            "Surviving Capability Conversion Rate: "
+            f"{self._percent(summary.get('surviving_capability_conversion_rate'))}",
+            "Operational Citizen Conversion Rate: "
+            f"{self._percent(summary.get('operational_citizen_conversion_rate'))}",
+            "Generated Survival Candidates: "
+            f"{self._value(summary.get('generated_survival_candidate_count'))}",
+            "Arena-Simulated Survival Candidates: "
+            f"{self._value(summary.get('arena_simulated_survival_candidate_count'))}",
+            "Arena-Quality Survival Candidates: "
+            f"{self._value(summary.get('arena_quality_survival_candidate_count'))}",
+            "Incubating Operational Capabilities: "
+            f"{self._value(summary.get('incubating_operational_capability_count'))}",
+            "Operational Citizens: "
+            f"{self._value(summary.get('operational_citizen_count'))}",
+            "Current Run Operational Citizens: "
+            f"{self._value(summary.get('current_run_operational_citizen_count'))}",
+            "Historical Operational Citizens: "
+            f"{self._value(summary.get('historical_operational_citizen_count'))}",
+            "Operational Domain Citizenship Coverage: "
+            f"{self._percent(summary.get('operational_domain_citizenship_coverage'))}",
+            "Historical Operational Domain Citizens: "
+            f"{self._value(summary.get('historical_operational_domain_citizen_count'))}",
+            "Expected Operational Domain Citizens: "
+            f"{self._value(summary.get('expected_operational_domain_citizen_count'))}",
+            "Surviving Capability Domain Count: "
+            f"{self._value(summary.get('surviving_capability_domain_count'))}",
+            "Missing Operational Citizen Domains: "
+            f"{self._value(summary.get('missing_operational_citizen_domains'))}",
+            "Surviving Capabilities: "
+            f"{self._value(summary.get('surviving_capability_count'))}",
+            "Validation Gap Candidate Count: "
+            f"{self._value(summary.get('validation_gap_candidate_count'))}",
+            "Capability Population Evolution Speed: "
+            f"{self._percent(summary.get('capability_population_evolution_speed'))}",
+            "Operational Experience Growth Speed: "
+            f"{self._percent(summary.get('operational_experience_growth_speed'))}",
+            "Capability Population Evolution Lag: "
+            f"{self._percent(summary.get('capability_population_evolution_lag'))}",
+            "Capability Population Evolution State: "
+            f"{self._value(summary.get('capability_population_evolution_state'))}",
+            "Expected Operational Capability Count: "
+            f"{self._value(summary.get('expected_operational_capability_count'))}",
+            "Capability Population Evolution Gap: "
+            f"{self._value(summary.get('capability_population_evolution_gap'))}",
+            "Target Experience Per Capability: "
+            f"{self._value(summary.get('target_experience_per_capability'))}",
             f"Generated Concepts: {self._value(summary.get('generated_concepts'))}",
             f"Generated Programs: {self._value(summary.get('generated_programs'))}",
             f"Generated Blueprints: {self._value(summary.get('generated_blueprints'))}",
@@ -1603,6 +1726,70 @@ class DeterministicFinalReportRenderer:
             "Compiler Runtime Activated Programs: "
             f"{self._value(summary.get('compiler_runtime_activated_programs'))}",
             f"Validated Programs: {self._value(summary.get('validated_programs'))}",
+            "Materialized Operational Capabilities: "
+            f"{self._value(summary.get('materialized_operational_capabilities'))}",
+            "Operational Confidence State: "
+            f"{self._value(summary.get('operational_confidence_state'))}",
+            "Authority Transfer State: "
+            f"{self._value(summary.get('authority_transfer_state'))}",
+            "Decision Trust State: "
+            f"{self._value(summary.get('decision_trust_state'))}",
+            "Trusted For Decision: "
+            f"{self._value(summary.get('trusted_for_decision_count'))}",
+            "Operational Experience Count: "
+            f"{self._value(summary.get('operational_experience_count'))}",
+            "Operational Experience Task Count: "
+            f"{self._value(summary.get('operational_experience_task_count'))}",
+            "Operational Experience Per Capability: "
+            f"{self._value(summary.get('operational_experience_per_capability'))}",
+            "Operational Specialization Pressure: "
+            f"{self._value(summary.get('operational_specialization_pressure'))}",
+            "Current Operational Exploration Rate: "
+            f"{self._percent(summary.get('current_operational_exploration_rate'))}",
+            "Current Operational Exploitation Rate: "
+            f"{self._percent(summary.get('current_operational_exploitation_rate'))}",
+            "Known Operational Candidate Count: "
+            f"{self._value(summary.get('known_operational_candidate_count'))}",
+            "Novel Operational Candidate Count: "
+            f"{self._value(summary.get('novel_operational_candidate_count'))}",
+            "Operational Exploration Target: "
+            f"{self._percent(summary.get('operational_exploration_target'))}",
+            "Historical Exploitation Bias: "
+            f"{self._percent(summary.get('historical_exploitation_bias'))}",
+            "Exploration Exploitation Balance State: "
+            f"{self._value(summary.get('exploration_exploitation_balance_state'))}",
+            "Capability Monopoly Share: "
+            f"{self._percent(summary.get('capability_monopoly_share'))}",
+            "Capability Monopoly Pressure: "
+            f"{self._value(summary.get('capability_monopoly_pressure'))}",
+            "Dominant Operational Capability: "
+            f"{self._value(summary.get('dominant_operational_capability'))}",
+            "Dominant Capability Experience Count: "
+            f"{self._value(summary.get('dominant_capability_experience_count'))}",
+            "Experienced Capability Count: "
+            f"{self._value(summary.get('experienced_capability_count'))}",
+            "Independent Reuse Capability Count: "
+            f"{self._value(summary.get('independent_reuse_capability_count'))}",
+            "Known Operational Capabilities: "
+            f"{self._value(summary.get('known_operational_capability_count'))}",
+            "Operational Capability Population Target: "
+            f"{self._value(summary.get('operational_capability_population_target'))}",
+            "Known Operational Operations: "
+            f"{self._value(summary.get('known_operational_operations'))}",
+            "Known Operational Domains: "
+            f"{self._value(summary.get('known_operational_domains'))}",
+            "Operational Domain Population Target: "
+            f"{self._value(summary.get('operational_domain_population_target'))}",
+            "Capability Population Diversification: "
+            f"{self._percent(summary.get('capability_population_diversification'))}",
+            "Reuse Evidence Count: "
+            f"{self._value(summary.get('reuse_evidence_count'))}",
+            "Independent Reuse Successes: "
+            f"{self._value(summary.get('independent_reuse_success_count'))}",
+            "Operational Experience Store: "
+            f"{self._value(summary.get('operational_experience_store_path'))}",
+            "Capability Survival Store: "
+            f"{self._value(summary.get('capability_survival_store_path'))}",
             "Domain Architecture State: "
             f"{self._value(domain_architecture.get('domain_architecture_state'))}",
             f"Cognitive Domain Count: {self._value(domain_architecture.get('domain_count'))}",
@@ -1618,13 +1805,21 @@ class DeterministicFinalReportRenderer:
             f"candidates={self._value(lifecycle.get('candidate_count'))} "
             f"arena={self._value(lifecycle.get('arena_candidate_count'))} "
             f"validated={self._value(lifecycle.get('validated_programs'))} "
-            f"prediction={self._value(lifecycle.get('prediction_contribution_count'))}",
+            f"prediction={self._value(lifecycle.get('prediction_contribution_count'))} "
+            f"operational={self._value(lifecycle.get('materialized_operational_capabilities'))} "
+            f"known={self._value(lifecycle.get('known_operational_capabilities'))}",
             "Operationalization Bottleneck: "
             f"{self._value(lifecycle.get('operationalization_bottleneck'))}",
+            "Secondary Operationalization Bottleneck: "
+            f"{self._value(lifecycle.get('secondary_operationalization_bottleneck'))}",
+            "Current Run Materialization Gap: "
+            f"{self._value(lifecycle.get('current_run_materialization_gap'))}",
             "Compiler Success Rate: "
             f"{self._percent(lifecycle.get('compiler_activation_to_compile_success_rate'))}",
             "Validation Success Rate: "
             f"{self._percent(lifecycle.get('arena_to_validation_rate'))}",
+            "Capability Materialization Rate: "
+            f"{self._percent(lifecycle.get('validation_to_operational_capability_rate'))}",
         ]
         rejection_reasons = attrition.get("rejection_reasons") or {}
         if isinstance(rejection_reasons, dict) and rejection_reasons:
@@ -1635,6 +1830,51 @@ class DeterministicFinalReportRenderer:
                     for reason, count in sorted(rejection_reasons.items())
                 )
             )
+        capability_distribution = summary.get("capability_experience_distribution") or []
+        capability_distribution = (
+            capability_distribution
+            if isinstance(capability_distribution, list)
+            else []
+        )
+        if capability_distribution:
+            lines.append("Capability Experience Distribution:")
+            for row in capability_distribution[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"experience={self._value(row.get('experience_count'))} "
+                    f"reuse={self._value(row.get('independent_reuse_success_count'))}"
+                )
+        if survival_distribution:
+            lines.append(
+                "Capability Survival State Distribution: "
+                + "; ".join(
+                    f"{self._value(state)}={self._value(count)}"
+                    for state, count in sorted(survival_distribution.items())
+                )
+            )
+        if top_incubating:
+            lines.append("Top Incubating Capabilities:")
+            for row in top_incubating[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"arena={self._value(row.get('arena_simulated_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"validation_attempts={self._value(row.get('validation_attempts'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    f"next={self._value(row.get('next_required_evidence'))}"
+                )
         domain_rows = domain_architecture.get("domain_rows") or []
         domain_rows = domain_rows if isinstance(domain_rows, list) else []
         if domain_rows:
@@ -1652,7 +1892,24 @@ class DeterministicFinalReportRenderer:
                     f"arena={self._value(row.get('arena_candidate_count'))} "
                     f"validated={self._value(row.get('validated_program_count'))} "
                     f"readiness={self._percent(row.get('domain_operational_readiness'))} "
-                    f"status={self._value(row.get('domain_status'))}"
+                    f"status={self._value(row.get('domain_status'))} "
+                    f"gap={self._value(row.get('operationalization_gap'))}"
+                )
+        domain_gaps = domain_architecture.get("domain_operationalization_gaps") or []
+        domain_gaps = domain_gaps if isinstance(domain_gaps, list) else []
+        if domain_gaps:
+            lines.append("Domain Operationalization Gaps:")
+            for row in domain_gaps[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"{self._value(row.get('operationalization_gap'))} "
+                    f"programs={self._value(row.get('program_blueprint_count'))} "
+                    f"packages={self._value(row.get('execution_package_count'))} "
+                    f"candidates={self._value(row.get('candidate_count'))} "
+                    f"arena={self._value(row.get('arena_candidate_count'))}"
                 )
         if bottlenecks:
             lines.append("Lowest Coverage Bottlenecks:")
@@ -1706,6 +1963,18 @@ class DeterministicFinalReportRenderer:
         source_status = source_status if isinstance(source_status, dict) else {}
         source_outcomes = summary.get("source_outcomes") or []
         source_outcomes = source_outcomes if isinstance(source_outcomes, list) else []
+        source_diversity = summary.get("source_diversity")
+        operational_diversity = summary.get("operational_diversity")
+        source_diversity_bottleneck = (
+            "LOW_SOURCE_DIVERSITY"
+            if (
+                isinstance(source_diversity, (int, float))
+                and source_diversity < 0.25
+                and isinstance(operational_diversity, (int, float))
+                and operational_diversity >= 0.75
+            )
+            else "none"
+        )
         lines = [
             f"Arena State: {self._value(summary.get('arena_state'))}",
             f"Candidate Count: {self._value(summary.get('candidate_count'))}",
@@ -1717,6 +1986,7 @@ class DeterministicFinalReportRenderer:
             f"Competition Diversity: {self._value(summary.get('competition_diversity'))}",
             f"Operational Diversity: {self._value(summary.get('operational_diversity'))}",
             f"Source Diversity: {self._value(summary.get('source_diversity'))}",
+            f"Source Diversity Bottleneck: {source_diversity_bottleneck}",
             f"Simulation Count: {self._value(summary.get('simulation_count'))}",
             f"Simulation Success Count: {self._value(summary.get('simulation_success_count'))}",
             f"Governance Blocked Count: {self._value(summary.get('governance_blocked_count'))}",
@@ -1850,6 +2120,18 @@ class DeterministicFinalReportRenderer:
             f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
             f"Sources With Proposals: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
             f"Sources Rejected: {', '.join(str(item) for item in rejected) if rejected else 'Not Available'}",
+            "Knowledge Investment Policy: "
+            f"{self._value(summary.get('knowledge_investment_policy'))}",
+            "Knowledge Investment Authority: "
+            f"{self._value(summary.get('knowledge_investment_authority'))}",
+            "High Value Knowledge Items: "
+            f"{self._value(summary.get('high_value_knowledge_items'))}",
+            "Medium Value Knowledge Items: "
+            f"{self._value(summary.get('medium_value_knowledge_items'))}",
+            "Low Value Knowledge Items: "
+            f"{self._value(summary.get('low_value_knowledge_items'))}",
+            "Deprioritized Knowledge Items: "
+            f"{self._value(summary.get('deprioritized_knowledge_items'))}",
         ]
         if proposals:
             lines.append("Proposal Ledger:")
@@ -1861,7 +2143,9 @@ class DeterministicFinalReportRenderer:
                     f"{self._value(proposal.get('source'))}: "
                     f"{self._value(proposal.get('proposal_status'))} "
                     f"op={self._value(proposal.get('operation'))} "
-                    f"reason={self._value(proposal.get('rejection_reason'))}"
+                    f"value={self._value(proposal.get('operational_value_score'))} "
+                    f"tier={self._value(proposal.get('investment_tier'))} "
+                    f"reason={self._value(proposal.get('investment_reason') or proposal.get('rejection_reason'))}"
                 )
         return self._section("CANDIDATE PROPOSAL PHASE", lines)
 

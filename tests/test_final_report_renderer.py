@@ -234,11 +234,20 @@ def test_render_includes_cognitive_capability_coverage_map():
         "proposal_phase_entered": True,
         "eligible_source_count": 1,
         "proposal_count": 1,
+        "knowledge_investment_policy": "OPERATIONAL_VALUE_PRIORITIZED",
+        "knowledge_investment_authority": "candidate_proposal_runtime",
+        "high_value_knowledge_items": 1,
+        "medium_value_knowledge_items": 0,
+        "low_value_knowledge_items": 0,
+        "deprioritized_knowledge_items": 0,
         "candidate_proposals": [
             {
                 "source": "program_generation",
                 "proposal_status": "PROPOSED",
                 "operation": "construct_path",
+                "operational_value_score": 0.82,
+                "investment_tier": "HIGH_VALUE",
+                "investment_reason": "concrete_task_execution_signal",
             }
         ],
         "sources_with_proposals": ["program_generation"],
@@ -264,6 +273,48 @@ def test_render_includes_cognitive_capability_coverage_map():
             "selection_mode": "EVIDENCE_BASED_ARENA",
         }
     }
+    state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {
+        "materialized_operational_capabilities": 0,
+        "known_operational_capability_count": 1,
+        "known_operational_operations": ["replace_color"],
+        "known_operational_domain_count": 1,
+        "operational_experience_count": 4,
+        "operational_experience_task_count": 4,
+        "reuse_evidence_count": 3,
+        "independent_reuse_success_count": 3,
+        "capability_survival_rate": 0.0,
+        "materialization_survival_rate": 0.0,
+        "generated_survival_candidate_count": 3,
+        "arena_simulated_survival_candidate_count": 2,
+        "arena_quality_survival_candidate_count": 1,
+        "incubating_operational_capability_count": 1,
+        "operational_citizen_count": 0,
+        "validation_bottleneck_inflation": 0.5,
+        "validation_bottleneck_state": "VALIDATION_BOTTLENECK",
+        "capability_survival_store_path": "runtime/test_survival.json",
+        "capability_survival_state_distribution": {
+            "GENERATED_CANDIDATE": 1,
+            "ARENA_SIMULATED": 1,
+            "INCUBATING_VALIDATION_GAP": 1,
+            "SURVIVING_CAPABILITY": 0,
+            "OPERATIONAL_CITIZEN": 0,
+        },
+        "top_incubating_capabilities": [
+            {
+                "capability_id": "operational_capability:topology:construct_path:path",
+                "operation": "construct_path",
+                "domain": "Topology",
+                "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                "distinct_task_count": 2,
+                "arena_simulated_count": 2,
+                "best_accuracy": 0.61,
+                "average_accuracy": 0.55,
+                "validation_attempts": 1,
+                "improvement_trend": "IMPROVING",
+                "next_required_evidence": "repeatable_validation_across_independent_task",
+            }
+        ],
+    }
 
     report = DeterministicFinalReportRenderer().render(
         state,
@@ -282,13 +333,103 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Candidate Attrition Coverage:" in report
     assert "End-To-End Program Lifecycle:" in report
     assert "Operationalization Bottleneck:" in report
+    assert "Secondary Operationalization Bottleneck:" in report
+    assert "Current Run Materialization Gap:" in report
     assert "Compiler Success Rate:" in report
     assert "Validation Success Rate:" in report
+    assert "Capability Materialization Rate:" in report
+    assert "Operational Yield From Concepts:" in report
+    assert "Operational Yield From Programs:" in report
+    assert "Operational Yield From Candidates:" in report
+    assert "Operational Yield From Arena:" in report
+    assert "Knowledge Production Efficiency:" in report
+    assert "Knowledge Operationalization Efficiency:" in report
+    assert "Operational Knowledge Waste:" in report
+    assert "Operational Yield Stability:" in report
+    assert "Operational Yield Stability Basis:" in report
+    assert "Operational Yield Health State:" in report
+    assert "Knowledge Investment Policy:" in report
+    assert "Knowledge Investment Authority:" in report
+    assert "High Value Knowledge Items:" in report
+    assert "Medium Value Knowledge Items:" in report
+    assert "Low Value Knowledge Items:" in report
+    assert "Deprioritized Knowledge Items:" in report
+    assert "Operational Investment Accuracy:" in report
+    assert "Operational Investment Accuracy State:" in report
+    assert "High Value Operational False Positives:" in report
+    assert "Validation Efficiency:" in report
+    assert "Validation Bottleneck Inflation:" in report
+    assert "Validation Bottleneck State:" in report
+    assert "High Value Validation Yield:" in report
+    assert "Operational Capability Acquisition Rate:" in report
+    assert "Capability Acquisition Rate Per 100 Tasks:" in report
+    assert "Capability Survival Rate:" in report
+    assert "Materialization Survival Rate:" in report
+    assert "Candidate Retention Rate:" in report
+    assert "Incubation Conversion Rate:" in report
+    assert "Surviving Capability Conversion Rate:" in report
+    assert "Operational Citizen Conversion Rate:" in report
+    assert "Generated Survival Candidates:" in report
+    assert "Arena-Simulated Survival Candidates:" in report
+    assert "Arena-Quality Survival Candidates:" in report
+    assert "Incubating Operational Capabilities:" in report
+    assert "Operational Citizens:" in report
+    assert "Current Run Operational Citizens:" in report
+    assert "Historical Operational Citizens:" in report
+    assert "Operational Domain Citizenship Coverage:" in report
+    assert "Historical Operational Domain Citizens:" in report
+    assert "Expected Operational Domain Citizens:" in report
+    assert "Surviving Capability Domain Count:" in report
+    assert "Missing Operational Citizen Domains:" in report
+    assert "Surviving Capabilities:" in report
+    assert "Validation Gap Candidate Count:" in report
+    assert "Capability Population Evolution Speed:" in report
+    assert "Operational Experience Growth Speed:" in report
+    assert "Capability Population Evolution Lag:" in report
+    assert "Capability Population Evolution State:" in report
+    assert "Expected Operational Capability Count:" in report
+    assert "Capability Population Evolution Gap:" in report
+    assert "Target Experience Per Capability:" in report
+    assert "Materialized Operational Capabilities:" in report
+    assert "Operational Confidence State:" in report
+    assert "Authority Transfer State:" in report
+    assert "Decision Trust State:" in report
+    assert "Trusted For Decision:" in report
+    assert "Known Operational Capabilities:" in report
+    assert "Operational Capability Population Target:" in report
+    assert "Known Operational Operations:" in report
+    assert "Known Operational Domains:" in report
+    assert "Operational Domain Population Target:" in report
+    assert "Capability Population Diversification:" in report
+    assert "Reuse Evidence Count:" in report
+    assert "Operational Experience Store:" in report
+    assert "Capability Survival Store:" in report
+    assert "Capability Survival State Distribution:" in report
+    assert "Top Incubating Capabilities:" in report
+    assert "Operational Experience Task Count:" in report
+    assert "Operational Experience Per Capability:" in report
+    assert "Operational Specialization Pressure:" in report
+    assert "Current Operational Exploration Rate:" in report
+    assert "Current Operational Exploitation Rate:" in report
+    assert "Known Operational Candidate Count:" in report
+    assert "Novel Operational Candidate Count:" in report
+    assert "Operational Exploration Target:" in report
+    assert "Historical Exploitation Bias:" in report
+    assert "Exploration Exploitation Balance State:" in report
+    assert "Capability Monopoly Share:" in report
+    assert "Capability Monopoly Pressure:" in report
+    assert "Dominant Operational Capability:" in report
+    assert "Dominant Capability Experience Count:" in report
+    assert "Experienced Capability Count:" in report
+    assert "Independent Reuse Capability Count:" in report
     assert "Domain Architecture State:" in report
     assert "Cognitive Domain Architecture:" in report
+    assert "gap=" in report
     assert "Missing Compiler Requirements: compiler_support" in report
     assert "Origin Sources: program_generation" in report
     assert "Normalized Sources: normalized_program_candidates" in report
+    assert "value=0.82 tier=HIGH_VALUE" in report
+    assert "reason=concrete_task_execution_signal" in report
     assert (
         "raw=program_generation -> adapter=candidate_proposal_runtime -> "
         "normalized=normalized_program_candidates -> arena=normalized_program_candidates"
@@ -380,7 +521,7 @@ def test_console_budget_writes_full_text_artifact(tmp_path):
 
 
 def test_text_artifact_matches_rendered_report(tmp_path):
-    renderer = DeterministicFinalReportRenderer()
+    renderer = DeterministicFinalReportRenderer(console_budget_chars=100_000)
     report = renderer.render(
         _report_state(),
         runtime_metadata=_metadata(),
@@ -437,14 +578,63 @@ def test_normal_report_exposes_semantic_compilation_observability():
 
     assert "SEMANTIC COMPILATION" in report
     assert "Semantic Intent Router Success: TRUE" in report
+    assert "Semantic Intent Router Integration: ROUTER_DRIVEN" in report
+    assert "Compiler Activation Source: semantic_intent_router" in report
     assert "Execution Intents: 1" in report
     assert "Compiler Triggered: TRUE" in report
     assert "Compiled Candidates: 1" in report
     assert "Selected Intent: path_construction" in report
     assert "Compiled Operation: construct_path" in report
     assert "Selected From Compiler: TRUE" in report
+    assert "Compiler Advisory State: SELECTED_EXECUTABLE" in report
     assert "Compilation Status: SUCCESS" in report
     assert "Execution Status: SUCCESS" in report
+
+
+def test_semantic_compilation_reports_fallback_bridge_when_router_fails():
+    state = _report_state()
+    compiler_report = state["TRANSFORMATION_SYNTHESIS_REPORT"][
+        "semantic_to_transformation_compilation_report"
+    ]
+    compiler_report["semantic_intent_routing_report"] = {
+        "semantic_intent_routing_success": False,
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Semantic Intent Router Success: FALSE" in report
+    assert "Semantic Intent Router Integration: FALLBACK_BRIDGE_ACTIVE" in report
+    assert "Compiler Activation Source: program_generation_activation_bridge" in report
+
+
+def test_semantic_compilation_reports_exact_match_advisory_not_selected():
+    state = _report_state()
+    compiler_report = state["TRANSFORMATION_SYNTHESIS_REPORT"][
+        "semantic_to_transformation_compilation_report"
+    ]
+    state["TRANSFORMATION_SYNTHESIS_REPORT"]["selected_program"] = {
+        "steps": [{"operation": "preserve_grid", "parameters": {}}],
+        "step_count": 1,
+    }
+    compiler_report["validation"] = {
+        "accuracy": 1.0,
+        "exact_match": True,
+        "shape_match": True,
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Selected From Compiler: FALSE" in report
+    assert "Compiler Advisory State: ADVISORY_EXACT_MATCH_NOT_SELECTED" in report
+    assert "Execution Status: NOT_SELECTED" in report
 
 
 def test_normal_report_exposes_unified_concept_lifecycle():
@@ -968,6 +1158,7 @@ def test_candidate_arena_reports_adaptive_reuse_single_source_dominance():
     assert "Attempted Candidates: 2" in report
     assert "Explicit Rejections: 1" in report
     assert "Competitor Sources: adaptive_reuse" in report
+    assert "Source Diversity Bottleneck:" in report
     assert "Winner Takes All Detected: TRUE" in report
     assert "Dominance Source: adaptive_reuse" in report
     assert "Compiler Attempted: TRUE" in report
@@ -1055,10 +1246,11 @@ def test_report_exposes_executable_semantic_coverage():
     assert "EXECUTABLE SEMANTIC COVERAGE" in report
     assert report.index("EXECUTABLE SEMANTIC COVERAGE") < report.index("TRANSFORMATION DECISION")
     assert "Generated Concepts: 18" in report
-    assert "Executable Concepts: 12" in report
-    assert "Unsupported Concepts: 6" in report
-    assert "Coverage Status: MEDIUM" in report
+    assert "Executable Concepts: 13" in report
+    assert "Unsupported Concepts: 5" in report
+    assert "Coverage Status: HIGH" in report
     assert "Unsupported Operations:" in report
+    assert "preserve_shape" in report
     assert "density_modulation" in report
 
 

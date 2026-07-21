@@ -727,6 +727,9 @@ def test_cognitive_domain_ecosystem_binding_summarizes_global_state():
             },
         ],
     }
+    state["TRANSFORMATION_SYNTHESIS_REPORT"] = {
+        "detected_concepts": ["bridge_creation", "color_preservation"],
+    }
 
     result = CanonicalReportBindingEngine().bind(
         state,
@@ -736,6 +739,7 @@ def test_cognitive_domain_ecosystem_binding_summarizes_global_state():
     ecosystem = result["field_bindings"]["cognitive_domain_ecosystem_summary"]["value"]
 
     assert ecosystem["global_cognitive_coverage"]["domains"] == 2
+    assert ecosystem["global_cognitive_coverage"]["execution_packages"] >= 2
     assert ecosystem["dependency_graph"]["Physics Domain"] == [
         "Spatial Domain",
         "Geometry Domain",
@@ -1134,13 +1138,14 @@ def test_executable_semantic_coverage_identifies_unsupported_clusters():
     ]["value"]
 
     assert coverage["generated_concepts"] == 18
-    assert coverage["executable_concepts"] == 12
-    assert coverage["unsupported_concepts"] == 6
-    assert coverage["coverage_status"] == "MEDIUM"
+    assert coverage["executable_concepts"] == 13
+    assert coverage["unsupported_concepts"] == 5
+    assert coverage["coverage_status"] == "HIGH"
     assert "density_modulation" in coverage["unsupported_operations"]
     assert "connect_components" in coverage["supported_operations"]
     assert "duplicate_object" in coverage["supported_operations"]
     assert "preserve_grid" in coverage["supported_operations"]
+    assert "preserve_shape" in coverage["supported_operations"]
 
 
 def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
@@ -1194,6 +1199,31 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
         "compiled_programs": 1,
         "validated_programs": 1,
     }
+    state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {
+        "materialized_operational_capabilities": 0,
+        "known_operational_capability_count": 2,
+        "known_operational_operations": ["replace_color", "duplicate_object"],
+        "known_operational_domain_count": 2,
+        "known_operational_domains": ["Color", "Growth"],
+        "operational_experience_count": 10,
+        "operational_experience_task_count": 10,
+        "reuse_evidence_count": 8,
+        "independent_reuse_success_count": 8,
+        "operational_capability_experience_distribution": [
+            {
+                "operation": "replace_color",
+                "domain": "Color",
+                "experience_count": 8,
+                "independent_reuse_success_count": 7,
+            },
+            {
+                "operation": "duplicate_object",
+                "domain": "Growth",
+                "experience_count": 2,
+                "independent_reuse_success_count": 1,
+            },
+        ],
+    }
 
     result = CanonicalReportBindingEngine().bind(
         state,
@@ -1207,7 +1237,61 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
     assert coverage["generated_concepts"] == 4
     assert coverage["compiler_coverage"] == 0.5
     assert coverage["candidate_coverage"] == 0.5
-    assert coverage["operational_capability_coverage"] == 0.25
+    assert coverage["validated_executable_coverage"] == 0.25
+    assert coverage["operational_capability_coverage"] == 0.0
+    assert coverage["operational_capability_materialization_rate"] == 0.0
+    assert coverage["knowledge_production_efficiency"] == 0.25
+    assert coverage["knowledge_operationalization_efficiency"] == 0.0
+    assert coverage["operational_knowledge_waste"] == 1.0
+    assert coverage["operational_yield_stability"] == 0.8
+    assert coverage["operational_yield_stability_basis"] == "experience_reuse_proxy"
+    assert coverage["operational_yield_health_state"] == "LOW"
+    assert coverage["operational_investment_accuracy"] is None
+    assert coverage["operational_investment_accuracy_state"] == "NOT_MEASURABLE"
+    assert coverage["high_value_operational_false_positives"] == 0
+    assert coverage["validation_efficiency"] == 1.0
+    assert coverage["high_value_validation_yield"] is None
+    assert coverage["validation_bottleneck_inflation"] is None
+    assert coverage["validation_bottleneck_state"] == "NOT_MEASURABLE"
+    assert coverage["operational_capability_acquisition_rate"] == 0.2
+    assert coverage["capability_survival_rate"] is None
+    assert coverage["incubating_operational_capability_count"] == 0
+    assert coverage["operational_citizen_count"] == 0
+    assert coverage["target_experience_per_capability"] == 3
+    assert coverage["expected_operational_capability_count"] == 4
+    assert coverage["capability_population_evolution_gap"] == 2
+    assert coverage["capability_population_evolution_speed"] == 0.5
+    assert coverage["operational_experience_growth_speed"] == 1.0
+    assert coverage["capability_population_evolution_lag"] == 0.5
+    assert coverage["capability_population_evolution_state"] == "EVOLUTION_LAG"
+    assert coverage["operational_specialization_pressure"] == "HIGH"
+    assert coverage["current_operational_exploration_rate"] == 1.0
+    assert coverage["current_operational_exploitation_rate"] == 0.0
+    assert coverage["known_operational_candidate_count"] == 0
+    assert coverage["novel_operational_candidate_count"] == 1
+    assert coverage["historical_exploitation_bias"] == 0.8
+    assert (
+        coverage["exploration_exploitation_balance_state"]
+        == "HISTORICAL_EXPLOITATION_BIAS_WITH_ACTIVE_EXPLORATION"
+    )
+    assert coverage["capability_monopoly_share"] == 0.8
+    assert coverage["capability_monopoly_pressure"] == "HIGH"
+    assert coverage["dominant_operational_capability"] == "replace_color"
+    assert coverage["experienced_capability_count"] == 2
+    assert coverage["independent_reuse_capability_count"] == 2
+    assert coverage["materialized_operational_capabilities"] == 0
+    assert (
+        coverage["end_to_end_program_lifecycle"][
+            "secondary_operationalization_bottleneck"
+        ]
+        == "capability_population_diversification"
+    )
+    assert (
+        coverage["end_to_end_program_lifecycle"][
+            "current_run_materialization_gap"
+        ]
+        == "capability_materialization"
+    )
     assert coverage["missing_compiler_requirements"] == ["compiler_support"]
     assert coverage["candidate_attrition_summary"]["generated_candidates"] == 1
     assert coverage["candidate_attrition_summary"]["entered_arena"] == 1
@@ -1218,11 +1302,144 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
         row["domain_name"] == "Spatial Cognitive Domain"
         for row in domain_summary["domain_rows"]
     )
+    assert "domain_operationalization_gaps" in domain_summary
     assert coverage["candidate_source_lineage"][0]["raw_source"] == (
         "program_generation"
     )
     assert coverage["candidate_source_lineage"][0]["arena_source"] == (
         "normalized_program_candidates"
+    )
+
+
+def test_capability_survival_metrics_are_bound_from_materialization_report():
+    state = _state()
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 3,
+        "generated_blueprints": 3,
+        "knowledge_investment_summary": {
+            "high_value_knowledge_items": 2,
+        },
+    }
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_count": 3,
+        "candidate_proposals": [
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "construct_path",
+            },
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "preserve_topology",
+            },
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "replace_color",
+            },
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "candidate_count": 3,
+            "unique_candidate_count": 3,
+            "sources_entered": ["normalized_program_candidates"],
+            "candidate_summary": [],
+        },
+    }
+    state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {
+        "materialized_operational_capabilities": 0,
+        "known_operational_capability_count": 1,
+        "known_operational_operations": ["replace_color"],
+        "known_operational_domain_count": 1,
+        "operational_experience_count": 6,
+        "operational_experience_task_count": 6,
+        "reuse_evidence_count": 5,
+        "independent_reuse_success_count": 5,
+        "capability_survival_rate": 0.125,
+        "materialization_survival_rate": 0.25,
+        "incubating_operational_capability_count": 3,
+        "operational_citizen_count": 1,
+        "validation_bottleneck_inflation": 0.75,
+        "validation_bottleneck_state": "SEVERE_VALIDATION_BOTTLENECK",
+        "generated_survival_candidate_count": 8,
+        "arena_simulated_survival_candidate_count": 7,
+        "arena_quality_survival_candidate_count": 2,
+        "capability_survival_store_path": "runtime/test_survival.json",
+        "capability_survival_state_distribution": {
+            "GENERATED_CANDIDATE": 1,
+            "ARENA_SIMULATED": 5,
+            "INCUBATING_VALIDATION_GAP": 2,
+            "SURVIVING_CAPABILITY": 0,
+            "OPERATIONAL_CITIZEN": 1,
+        },
+        "top_incubating_capabilities": [
+            {
+                "capability_id": "operational_capability:topology:construct_path:path",
+                "operation": "construct_path",
+                "domain": "Topology",
+                "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                "distinct_task_count": 2,
+                "arena_simulated_count": 3,
+                "best_accuracy": 0.67,
+                "average_accuracy": 0.52,
+                "validation_attempts": 2,
+                "improvement_trend": "IMPROVING",
+                "next_required_evidence": "repeatable_validation_across_independent_task",
+            }
+        ],
+        "capability_survival_report": {
+            "validation_gap_candidate_count": 6,
+            "capability_survival_rows": [
+                {
+                    "operation": "construct_path",
+                    "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                },
+            ],
+        },
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "cognitive_capability_coverage_summary"
+    ]["value"]
+
+    assert coverage["capability_survival_rate"] == 0.125
+    assert coverage["materialization_survival_rate"] == 0.25
+    assert coverage["candidate_retention_rate"] == 0.875
+    assert coverage["incubation_conversion_rate"] == 0.375
+    assert coverage["surviving_capability_conversion_rate"] == 0.0
+    assert coverage["operational_citizen_conversion_rate"] == 0.125
+    assert coverage["current_run_operational_citizen_count"] == 1
+    assert coverage["historical_operational_citizen_count"] == 1
+    assert coverage["expected_operational_domain_citizen_count"] == 7
+    assert coverage["historical_operational_domain_citizen_count"] == 1
+    assert coverage["operational_domain_citizenship_coverage"] == 0.1429
+    assert coverage["surviving_capability_domain_count"] == 0
+    assert coverage["generated_survival_candidate_count"] == 8
+    assert coverage["arena_simulated_survival_candidate_count"] == 7
+    assert coverage["arena_quality_survival_candidate_count"] == 2
+    assert coverage["incubating_operational_capability_count"] == 3
+    assert coverage["operational_citizen_count"] == 1
+    assert coverage["validation_bottleneck_inflation"] == 0.75
+    assert coverage["validation_bottleneck_state"] == (
+        "SEVERE_VALIDATION_BOTTLENECK"
+    )
+    assert coverage["validation_gap_candidate_count"] == 6
+    assert coverage["capability_survival_store_path"] == (
+        "runtime/test_survival.json"
+    )
+    assert coverage["capability_survival_state_distribution"][
+        "ARENA_SIMULATED"
+    ] == 5
+    assert coverage["top_incubating_capabilities"][0]["operation"] == (
+        "construct_path"
     )
 
 

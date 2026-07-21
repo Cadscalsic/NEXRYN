@@ -188,6 +188,8 @@ def _normalize_operation(value: Any) -> str | None:
         "global_recolor": "replace_color",
         "preserve_input": "preserve_grid",
         "identity": "preserve_grid",
+        "preserve_color": "preserve_colors",
+        "preserve_color_mapping": "preserve_colors",
         "duplicate": "duplicate_object",
         "replicate": "duplicate_object",
         "translate_object": "translate",

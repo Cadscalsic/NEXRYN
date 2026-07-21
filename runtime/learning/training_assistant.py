@@ -23,6 +23,7 @@ class TrainingAssistant:
         selection_mode="weighted_random",
         random_seed=None,
         task_cooldown_runs=TASK_COOLDOWN_RUNS,
+        survival_store_path="runtime/artifacts/runtime_data/operational_capability_survival.json",
     ):
         self.state_path = Path(state_path)
         self.batch_size = max(int(batch_size), 1)
@@ -31,6 +32,7 @@ class TrainingAssistant:
         self.selection_mode = self._selection_mode(selection_mode)
         self.random_seed = random_seed
         self.task_cooldown_runs = max(int(task_cooldown_runs), 0)
+        self.survival_store_path = Path(survival_store_path)
         self.state = self._load()
         self.selection_memory = self._load_selection_memory()
 
@@ -38,13 +40,16 @@ class TrainingAssistant:
         return {
             "schema_version": self.SCHEMA_VERSION,
             "next_task_index": 0,
+            "next_elite_task_index": 0,
             "completed_cycles": 0,
             "active_batch": [],
             "pending_next_task_index": None,
+            "pending_next_elite_task_index": None,
             "prioritized_concepts": [],
             "selected_concepts": [],
             "curriculum_report": {},
             "selection_diversity_report": {},
+            "elite_selection_report": {},
             "history": [],
         }
 
@@ -156,6 +161,313 @@ class TrainingAssistant:
             for task_file in active_batch
             )
         )
+
+    def _task_metadata(self, task_file, task_directory=None):
+        return self.curriculum_manager._task_metadata(
+            task_file,
+            task_directory,
+        )
+
+    def _is_elite_task(self, task_file, task_directory=None):
+        if str(task_file).startswith("elite_cognitive_task_"):
+            return True
+        metadata = self._task_metadata(task_file, task_directory)
+        return bool(
+            metadata.get("elite_cognitive_task")
+            or str(metadata.get("curriculum", "")).startswith(
+                "nexryn_elite_cognitive_training"
+            )
+        )
+
+    def _partition_elite_tasks(self, task_files, task_directory=None):
+        elite = []
+        normal = []
+        for task_file in task_files:
+            if self._is_elite_task(task_file, task_directory):
+                elite.append(task_file)
+            else:
+                normal.append(task_file)
+        return elite, normal
+
+    def _active_batch_matches_elite_policy(
+        self,
+        task_files,
+        elite_task_files,
+    ):
+        if not elite_task_files:
+            return True
+        active_batch = list(self.state.get("active_batch", []))
+        elite_set = set(elite_task_files)
+        return sum(1 for task_file in active_batch if task_file in elite_set) == 1
+
+    def _core_knowledge_concepts(self, core_knowledge=None):
+        concepts = set()
+        for item in core_knowledge or []:
+            if not isinstance(item, dict):
+                continue
+            concept = item.get("concept")
+            if concept:
+                concepts.add(str(concept))
+        return concepts
+
+    def _load_survival_store(self):
+        if not self.survival_store_path.exists():
+            return {}
+        try:
+            with self.survival_store_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            return data if isinstance(data, dict) else {}
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    def _survival_reappearance_targets(self):
+        rows = [
+            row for row in self._load_survival_store().values()
+            if isinstance(row, dict)
+        ]
+        targets = []
+        for row in rows:
+            lifecycle_state = str(row.get("lifecycle_state") or "")
+            next_evidence = str(row.get("next_required_evidence") or "")
+            if lifecycle_state not in {
+                "ARENA_SIMULATED",
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }:
+                continue
+            if next_evidence not in {
+                "independent_task_reappearance",
+                "repeatable_validation_across_independent_task",
+                "prediction_quality_improvement",
+                "validator_acceptance",
+            }:
+                continue
+            if int(row.get("distinct_task_count", 0) or 0) >= 3:
+                continue
+            best_accuracy = row.get("best_accuracy")
+            try:
+                best_accuracy = float(best_accuracy)
+            except (TypeError, ValueError):
+                best_accuracy = 0.0
+            priority = (
+                100
+                + int(row.get("validation_attempts", 0) or 0) * 8
+                + int(row.get("arena_simulated_count", 0) or 0) * 5
+                + best_accuracy * 40
+            )
+            if lifecycle_state == "INCUBATING_VALIDATION_GAP":
+                priority += 35
+            elif lifecycle_state == "SURVIVING_CAPABILITY":
+                priority += 20
+            targets.append({
+                "capability_id": row.get("capability_id"),
+                "operation": str(row.get("operation") or ""),
+                "domain": str(row.get("domain") or ""),
+                "semantic_intent": str(row.get("semantic_intent") or ""),
+                "lifecycle_state": lifecycle_state,
+                "next_required_evidence": next_evidence,
+                "best_accuracy": best_accuracy,
+                "distinct_task_count": int(row.get("distinct_task_count", 0) or 0),
+                "priority": round(priority, 4),
+            })
+        targets.sort(
+            key=lambda item: (
+                -float(item.get("priority") or 0.0),
+                str(item.get("capability_id") or ""),
+            )
+        )
+        return targets[:10]
+
+    def _survival_terms_for(self, target):
+        operation = str(target.get("operation") or "").lower()
+        domain = str(target.get("domain") or "").lower()
+        semantic_intent = str(target.get("semantic_intent") or "").lower()
+        terms = {
+            operation,
+            domain,
+            semantic_intent,
+            operation.replace("preserve_", ""),
+            semantic_intent.replace("_preservation", ""),
+        }
+        if "topolog" in operation or "topolog" in domain or "topolog" in semantic_intent:
+            terms.update({"topology", "topological_reasoning", "topological_growth"})
+        if "color" in operation or "color" in domain or "color" in semantic_intent:
+            terms.update({"color", "color_transformation", "color_mapping"})
+        if "growth" in operation or "growth" in domain or operation == "duplicate_object":
+            terms.update({"growth", "topological_growth", "object_evolution"})
+        if "spatial" in domain or "grid" in operation or "translate" in operation:
+            terms.update({"spatial", "spatial_reasoning", "translation"})
+        if "identity" in operation or "identity" in domain or "identity" in semantic_intent:
+            terms.update({"identity", "identity_preservation"})
+        return {term for term in terms if term}
+
+    def _survival_reappearance_priority(self, task_terms, targets):
+        task_terms = {str(term).lower() for term in task_terms if term}
+        matches = []
+        priority = 0.0
+        for target in targets:
+            survival_terms = self._survival_terms_for(target)
+            overlap = task_terms & survival_terms
+            if not overlap:
+                continue
+            contribution = float(target.get("priority") or 0.0) * (
+                len(overlap) / max(len(survival_terms), 1)
+            )
+            priority += contribution
+            matches.append({
+                "capability_id": target.get("capability_id"),
+                "operation": target.get("operation"),
+                "lifecycle_state": target.get("lifecycle_state"),
+                "next_required_evidence": target.get("next_required_evidence"),
+                "matched_terms": sorted(overlap),
+                "priority": round(contribution, 4),
+            })
+        matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
+        return round(priority, 4), matches[:3]
+
+    def _elite_priority_for(
+        self,
+        task_file,
+        order,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+        survival_targets=None,
+    ):
+        metadata = self._task_metadata(task_file, task_directory)
+        concepts = [
+            str(concept)
+            for concept in metadata.get("target_concepts", [])
+            if concept
+        ]
+        deficiencies = [
+            str(item)
+            for item in metadata.get("deficiency_targets", [])
+            if item
+        ]
+        capabilities = [
+            str(item)
+            for item in metadata.get("required_operational_capabilities", [])
+            if item
+        ]
+        task_terms = set(concepts) | set(deficiencies) | set(capabilities)
+        concept_counts = concept_counts or {}
+        concept_states = self.curriculum_manager._concept_states(
+            concept_states
+        )
+        priority = 0
+        reasons = []
+        for concept in concepts:
+            count = int(concept_counts.get(concept, 0))
+            if count <= 0:
+                priority += 60
+                reasons.append(f"unobserved_target:{concept}")
+            elif count < 5:
+                priority += (5 - count) * 10
+                reasons.append(f"low_target_coverage:{concept}")
+            state = concept_states.get(concept)
+            if state in {"DISCOVERING", "BOUNDARY_REFINEMENT", "UNKNOWN"}:
+                priority += 15
+                reasons.append(f"active_lifecycle_gap:{concept}")
+        core_concepts = self._core_knowledge_concepts(core_knowledge)
+        if "replace_color" in core_concepts and not any(
+            "color" in concept for concept in concepts
+        ):
+            priority += 80
+            reasons.append("capability_monopoly_pressure:replace_color")
+        if "topological_reasoning" in concepts or "topological_change" in concepts:
+            priority += 25
+            reasons.append("topology_domain_operationalization_pressure")
+        if any("composition" in concept for concept in concepts + capabilities):
+            priority += 20
+            reasons.append("low_operational_yield_composition_probe")
+        if any("unknown" in concept for concept in concepts + capabilities):
+            priority += 20
+            reasons.append("novel_capability_discovery_probe")
+        survival_priority, survival_matches = (
+            self._survival_reappearance_priority(
+                task_terms,
+                survival_targets or [],
+            )
+        )
+        if survival_priority:
+            priority += survival_priority
+            reasons.append("survival_store_independent_reappearance_probe")
+        priority += max(0, 20 - order) * 0.01
+        return {
+            "task_file": task_file,
+            "original_order": order,
+            "target_concepts": concepts,
+            "deficiency_targets": deficiencies,
+            "required_operational_capabilities": capabilities,
+            "priority": round(priority, 4),
+            "priority_reasons": reasons,
+            "survival_reappearance_matches": survival_matches,
+        }
+
+    def _select_elite_task(
+        self,
+        elite_task_files,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+    ):
+        if not elite_task_files:
+            return None, {
+                "system": "elite_task_selection",
+                "elite_task_available": False,
+            }
+        start = int(self.state.get("next_elite_task_index", 0))
+        start %= len(elite_task_files)
+        rotated = [
+            elite_task_files[(start + offset) % len(elite_task_files)]
+            for offset in range(len(elite_task_files))
+        ]
+        survival_targets = self._survival_reappearance_targets()
+        priorities = [
+            self._elite_priority_for(
+                task_file,
+                order,
+                concept_counts=concept_counts,
+                concept_states=concept_states,
+                task_directory=task_directory,
+                core_knowledge=core_knowledge,
+                survival_targets=survival_targets,
+            )
+            for order, task_file in enumerate(rotated)
+        ]
+        priorities.sort(
+            key=lambda item: (
+                -item["priority"],
+                item["original_order"],
+            )
+        )
+        selected = priorities[0]["task_file"]
+        selected_rotated_index = rotated.index(selected)
+        return selected, {
+            "system": "elite_task_selection",
+            "elite_task_available": True,
+            "policy": "exactly_one_elite_task_per_cycle",
+            "selected_elite_task_file": selected,
+            "elite_task_count": len(elite_task_files),
+            "normal_task_slots": max(self.batch_size - 1, 0),
+            "prioritized_deficiencies": priorities[0].get(
+                "deficiency_targets",
+                [],
+            ),
+            "priority_reasons": priorities[0].get("priority_reasons", []),
+            "survival_reappearance_targets": survival_targets,
+            "survival_reappearance_matches": priorities[0].get(
+                "survival_reappearance_matches",
+                [],
+            ),
+            "elite_task_priorities": priorities,
+            "next_elite_task_index_after_completion": (
+                start + selected_rotated_index + 1
+            ) % len(elite_task_files),
+        }
 
     def _prioritized_tasks(
         self,
@@ -430,6 +742,15 @@ class TrainingAssistant:
         task_files = self._normalized_tasks(task_files)
         if not task_files:
             raise ValueError("at least one JSON training task is required")
+        elite_task_files, normal_task_files = self._partition_elite_tasks(
+            task_files,
+            task_directory,
+        )
+        normal_selection_files = (
+            normal_task_files
+            if elite_task_files
+            else task_files
+        )
         selection_mode = self._selection_mode(
             selection_mode or self.selection_mode
         )
@@ -441,6 +762,11 @@ class TrainingAssistant:
             selection_mode == "curriculum"
             and
             self._active_batch_is_valid(task_files)
+            and
+            self._active_batch_matches_elite_policy(
+                task_files,
+                elite_task_files,
+            )
             and (
                 task_directory is None
                 or
@@ -455,6 +781,9 @@ class TrainingAssistant:
         selection_report = dict(
             self.state.get("selection_diversity_report", {})
         )
+        elite_selection_report = dict(
+            self.state.get("elite_selection_report", {})
+        )
         if resumed:
             selected = list(self.state["active_batch"])
             prioritized_concepts = list(
@@ -466,26 +795,74 @@ class TrainingAssistant:
             curriculum_report = dict(
                 self.state.get("curriculum_report", {})
             )
+            elite_selection_report = dict(
+                self.state.get("elite_selection_report", {})
+            )
         else:
             start = int(self.state.get("next_task_index", 0))
-            start %= len(task_files)
-            ranked_tasks, curriculum_report = self._prioritized_tasks(
-                task_files,
-                start,
+            if normal_selection_files:
+                start %= len(normal_selection_files)
+            else:
+                start = 0
+            elite_task, elite_selection_report = self._select_elite_task(
+                elite_task_files,
                 concept_counts=concept_counts,
                 concept_states=concept_states,
                 task_directory=task_directory,
-                observed_task_ids=observed_task_ids,
-                history=self.state.get("history", []),
                 core_knowledge=core_knowledge,
             )
+            normal_batch_size = min(
+                self.batch_size - (1 if elite_task else 0),
+                len(normal_selection_files),
+            )
+            if normal_selection_files:
+                ranked_tasks, curriculum_report = self._prioritized_tasks(
+                    normal_selection_files,
+                    start,
+                    concept_counts=concept_counts,
+                    concept_states=concept_states,
+                    task_directory=task_directory,
+                    observed_task_ids=observed_task_ids,
+                    history=self.state.get("history", []),
+                    core_knowledge=core_knowledge,
+                )
+            else:
+                ranked_tasks = []
+                curriculum_report = {
+                    "system": "training_curriculum_manager",
+                    "training_mode": "elite_only_batch",
+                    "prioritized_concepts": [],
+                    "ranked_task_files": [],
+                    "task_priorities": [],
+                    "training_diversity_report": {},
+                }
             prioritized_concepts = curriculum_report[
                 "prioritized_concepts"
             ]
-            if selection_mode == "curriculum":
+            if normal_batch_size <= 0:
+                selected = []
+                selection_report = {
+                    "system": "training_selection_diversity",
+                    "total_available_tasks": len(normal_selection_files),
+                    "selected_tasks": [],
+                    "selection_mode": selection_mode,
+                    "random_seed": effective_seed,
+                    "run_id": run_id,
+                    "previous_batch_overlap_count": 0,
+                    "unseen_tasks_selected": 0,
+                    "cooldown_filtered_tasks": 0,
+                    "cooldown_filtered_task_ids": [],
+                    "average_task_selection_frequency": 0.0,
+                    "repeated_task_penalty_applied": False,
+                    "diversity_score": 0.0,
+                    "cooldown_window_runs": self.task_cooldown_runs,
+                    "cooldown_relaxed": False,
+                    "dataset_large": False,
+                }
+            elif selection_mode == "curriculum":
                 selected = self.curriculum_manager.select_batch_tasks(
                     curriculum_report,
-                    min(self.batch_size, len(task_files)),
+                    normal_batch_size,
                 )
                 previous_batch = set(
                     self.selection_memory.get("previous_batch", [])
@@ -534,31 +911,59 @@ class TrainingAssistant:
                     "cooldown_window_runs": self.task_cooldown_runs,
                     "cooldown_relaxed": False,
                     "dataset_large": len(task_files)
-                    > min(self.batch_size, len(task_files)) * 5,
+                    > normal_batch_size * 5,
                 }
             else:
                 selected, selection_report = self._randomized_select(
                     list(ranked_tasks or task_files),
-                    min(self.batch_size, len(task_files)),
+                    normal_batch_size,
                     selection_mode,
                     rng,
                 )
                 selection_report["random_seed"] = effective_seed
                 selection_report["run_id"] = run_id
+            if elite_task:
+                selected = [elite_task, *[
+                    task_file
+                    for task_file in selected
+                    if task_file != elite_task
+                ]]
             selected_concepts = sorted({
                 concept
                 for report in curriculum_report.get("task_priorities", [])
                 if report.get("task_file") in selected
                 for concept in report.get("target_concepts", [])
             })
+            if elite_task:
+                elite_metadata = self._task_metadata(
+                    elite_task,
+                    task_directory,
+                )
+                selected_concepts = sorted(set(selected_concepts) | {
+                    str(concept)
+                    for concept in elite_metadata.get("target_concepts", [])
+                    if concept
+                })
             self.state["active_batch"] = selected
             self.state["prioritized_concepts"] = prioritized_concepts
             self.state["selected_concepts"] = selected_concepts
             self.state["curriculum_report"] = curriculum_report
             self.state["selection_diversity_report"] = selection_report
+            self.state["elite_selection_report"] = elite_selection_report
             self.state["pending_next_task_index"] = (
-                start + len(selected)
-            ) % len(task_files)
+                (start + len([
+                    task_file
+                    for task_file in selected
+                    if task_file not in set(elite_task_files)
+                ])) % len(normal_selection_files)
+                if normal_selection_files
+                else 0
+            )
+            self.state["pending_next_elite_task_index"] = (
+                elite_selection_report.get(
+                    "next_elite_task_index_after_completion"
+                )
+            )
             self._persist()
             self._record_selection(selected, run_id)
 
@@ -594,10 +999,18 @@ class TrainingAssistant:
             "curriculum_report": curriculum_report,
             "training_diversity_report": training_diversity_report,
             "selection_diversity_report": selection_report,
+            "elite_selection_report": elite_selection_report,
             "batch_size": self.batch_size,
             "available_task_count": len(task_files),
+            "available_elite_task_count": len(elite_task_files),
+            "available_normal_task_count": len(normal_task_files),
             "selected_task_count": len(selected),
             "selected_task_files": selected,
+            "selected_elite_task_files": [
+                task_file
+                for task_file in selected
+                if task_file in set(elite_task_files)
+            ],
             "resumed_active_batch": resumed,
             "completed_cycles": self.state.get("completed_cycles", 0),
             "next_task_index_after_completion":
@@ -621,14 +1034,19 @@ class TrainingAssistant:
         self.state["next_task_index"] = int(
             self.state.get("pending_next_task_index", 0)
         )
+        pending_elite_index = self.state.get("pending_next_elite_task_index")
+        if pending_elite_index is not None:
+            self.state["next_elite_task_index"] = int(pending_elite_index)
         self.state["completed_cycles"] = completed_cycles
         self.state["active_batch"] = []
         self.state["pending_next_task_index"] = None
+        self.state["pending_next_elite_task_index"] = None
         self.state["prioritized_concepts"] = []
         selected_concepts = list(self.state.get("selected_concepts", []))
         self.state["selected_concepts"] = []
         self.state["curriculum_report"] = {}
         self.state["selection_diversity_report"] = {}
+        self.state["elite_selection_report"] = {}
         self.state["history"] = [
             *list(self.state.get("history", []))[-31:],
             {
@@ -654,6 +1072,10 @@ class TrainingAssistant:
             "training_mode": "bounded_round_robin_batch",
             "batch_size": self.batch_size,
             "next_task_index": self.state.get("next_task_index", 0),
+            "next_elite_task_index": self.state.get(
+                "next_elite_task_index",
+                0,
+            ),
             "completed_cycles": self.state.get("completed_cycles", 0),
             "active_batch": list(self.state.get("active_batch", [])),
             "prioritized_concepts":
@@ -663,8 +1085,12 @@ class TrainingAssistant:
             "selection_diversity_report": dict(
                 self.state.get("selection_diversity_report", {})
             ),
+            "elite_selection_report": dict(
+                self.state.get("elite_selection_report", {})
+            ),
             "selection_memory_path": str(self.selection_memory_path),
             "selection_mode": self.selection_mode,
+            "survival_store_path": str(self.survival_store_path),
             "history_size": len(self.state.get("history", [])),
             "state_path": str(self.state_path),
         }

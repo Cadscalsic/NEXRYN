@@ -38,6 +38,10 @@ ARC_CONCEPT_TASKS = [
     for family in ARC_CONCEPT_FAMILIES
     for sequence in range(1, 16)
 ]
+ELITE_COGNITIVE_TASKS = [
+    TRAINING_DIRECTORY / f"elite_cognitive_task_{sequence:02d}.json"
+    for sequence in range(1, 21)
+]
 
 
 def test_phase_7_prelude_curriculum_contains_30_valid_arc_tasks():
@@ -134,3 +138,70 @@ def test_phase_7_scarcity_curriculum_closes_runtime_target_gaps():
     assert report["targeted_concept_coverage"]["topological_change"] >= 20
     assert report["targeted_concept_coverage"]["topological_reasoning"] >= 20
     assert report["targeted_concept_coverage"]["density_modulation"] >= 20
+
+
+def test_elite_cognitive_curriculum_contains_20_operational_tasks():
+    assert all(path.exists() for path in ELITE_COGNITIVE_TASKS)
+
+    categories = set()
+    for path in ELITE_COGNITIVE_TASKS:
+        task = json.loads(path.read_text(encoding="utf-8"))
+        metadata = task["nexryn_metadata"]
+
+        assert metadata["curriculum"] == (
+            "nexryn_elite_cognitive_training_phase_01"
+        )
+        assert metadata["elite_cognitive_task"] is True
+        assert metadata["multiple_valid_solution_strategies"] is True
+        assert metadata["failure_is_training_signal"] is True
+        assert len(metadata["target_concepts"]) >= 3
+        assert len(metadata["required_operational_capabilities"]) >= 6
+        assert len(metadata["deficiency_targets"]) >= 7
+        assert len(task["train"]) == 2
+        assert len(task["test"]) == 1
+        assert all(
+            example["input"] != example["output"]
+            for example in task["train"]
+        )
+        categories.add(metadata["elite_category"])
+        with redirect_stdout(StringIO()):
+            assert ARCJSONLoader(str(path)).load() is True
+
+    assert categories == {
+        "cross_domain_reasoning",
+        "capability_composition",
+        "novel_capability_discovery",
+        "world_modeling",
+        "collaborative_intelligence",
+        "grand_boss",
+    }
+
+
+def test_elite_boss_task_requires_multi_domain_operational_collaboration():
+    task = json.loads(
+        (TRAINING_DIRECTORY / "elite_cognitive_task_20.json").read_text(
+            encoding="utf-8",
+        )
+    )
+    metadata = task["nexryn_metadata"]
+
+    assert metadata["task_title"] == "THE GRAND COGNITIVE BOSS TASK"
+    assert len([
+        cell
+        for row in task["train"][0]["input"]
+        for cell in row
+        if cell
+    ]) >= 10
+    assert {
+        "growth",
+        "spatial_reasoning",
+        "topological_reasoning",
+        "identity_preservation",
+        "world_model",
+        "capability_composition",
+        "knowledge_investment",
+        "candidate_arena",
+        "compiler_runtime_activation",
+        "validation_pipeline",
+    }.issubset(set(metadata["target_concepts"]))
+    assert "replace_color" in metadata["forbidden_simple_solution_classes"]

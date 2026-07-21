@@ -40,6 +40,7 @@ class CandidateProposalRuntime:
         proposed = [item for item in proposals if item["proposal_status"] == "PROPOSED"]
         rejected = [item for item in proposals if item["proposal_status"] == "REJECTED"]
         sources_with_proposals = sorted({item["source"] for item in proposed})
+        investment_tiers = self._investment_tier_counts(proposed)
         return {
             "system": self.system_name,
             "proposal_phase_entered": True,
@@ -49,6 +50,12 @@ class CandidateProposalRuntime:
             "candidate_proposals": proposals,
             "sources_with_proposals": sources_with_proposals,
             "sources_rejected": sorted({item["source"] for item in rejected}),
+            "knowledge_investment_policy": "OPERATIONAL_VALUE_PRIORITIZED",
+            "knowledge_investment_authority": self.system_name,
+            "high_value_knowledge_items": investment_tiers["HIGH_VALUE"],
+            "medium_value_knowledge_items": investment_tiers["MEDIUM_VALUE"],
+            "low_value_knowledge_items": investment_tiers["LOW_VALUE"],
+            "deprioritized_knowledge_items": investment_tiers["LOW_VALUE"],
             "proposal_phase_status": (
                 "COMPETITIVE"
                 if len(sources_with_proposals) > 1
@@ -129,6 +136,15 @@ class CandidateProposalRuntime:
             "proposal_id": proposal_id,
             "proposal_status": status,
             "operation": operation,
+            "operational_value_score": self._candidate_field(
+                candidate,
+                "operational_value_score",
+            ),
+            "investment_tier": self._candidate_field(candidate, "investment_tier"),
+            "investment_reason": self._candidate_field(
+                candidate,
+                "investment_reason",
+            ),
             "candidate_available": status == "PROPOSED",
             "rejection_reason": rejection_reason,
         }
@@ -142,6 +158,23 @@ class CandidateProposalRuntime:
             if steps and isinstance(steps[0], Mapping):
                 return steps[0].get("operation")
         return candidate.get("operation")
+
+    def _candidate_field(self, candidate: Any, key: str) -> Any:
+        if not isinstance(candidate, Mapping):
+            return None
+        metadata = candidate.get("metadata")
+        if key in candidate:
+            return candidate.get(key)
+        if isinstance(metadata, Mapping):
+            return metadata.get(key)
+        return None
+
+    def _investment_tier_counts(self, proposals: list[dict[str, Any]]) -> dict[str, int]:
+        counts = {"HIGH_VALUE": 0, "MEDIUM_VALUE": 0, "LOW_VALUE": 0}
+        for proposal in proposals:
+            tier = str(proposal.get("investment_tier") or "LOW_VALUE")
+            counts[tier if tier in counts else "LOW_VALUE"] += 1
+        return counts
 
 
 candidate_proposal_runtime = CandidateProposalRuntime()

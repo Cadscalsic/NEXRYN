@@ -496,6 +496,20 @@ def print_training_batch_summary(
             output_governor.max_visible_tasks,
         ),
     )
+    elite_report = training_batch.get("elite_selection_report", {})
+    if elite_report.get("elite_task_available"):
+        print(
+            "elite_task:",
+            elite_report.get("selected_elite_task_file"),
+        )
+        if report_level != "minimal":
+            print(
+                "elite_priority_reasons:",
+                output_governor.limit(
+                    elite_report.get("priority_reasons", []),
+                    output_governor.max_visible_candidates,
+                ),
+            )
     if report_level != "minimal":
         print(
             "prioritized_concepts:",
@@ -716,6 +730,16 @@ def build_executable_candidate_proposals(
         operation = _operation_for_blueprint(blueprint)
         if not operation:
             continue
+        parameters = _parameters_for_operation(
+            operation,
+            input_grid,
+            target_grid,
+        )
+        investment = _operational_investment_assessment(
+            blueprint,
+            operation,
+            parameters,
+        )
         seen.add(concept)
         proposals.append({
             "source": "program_generation",
@@ -723,15 +747,14 @@ def build_executable_candidate_proposals(
             "hypothesis_id": f"concept:{concept}",
             "intent": concept,
             "operation": operation,
+            "operational_value_score": investment["operational_value_score"],
+            "investment_tier": investment["investment_tier"],
+            "investment_reason": investment["investment_reason"],
             "program": {
                 "step_count": 1,
                 "steps": [{
                     "operation": operation,
-                    "parameters": _parameters_for_operation(
-                        operation,
-                        input_grid,
-                        target_grid,
-                    ),
+                    "parameters": parameters,
                 }],
             },
             "source_confidence": 0.74,
@@ -748,12 +771,125 @@ def build_executable_candidate_proposals(
                 "execution_package_available": blueprint.get(
                     "execution_package_available"
                 ),
+                "operational_value_score": investment["operational_value_score"],
+                "investment_tier": investment["investment_tier"],
+                "investment_reason": investment["investment_reason"],
                 "analysis_only": True,
             },
         })
-        if len(proposals) >= max_candidates:
-            break
-    return proposals
+    proposals.sort(
+        key=lambda item: (
+            -float(item.get("operational_value_score") or 0.0),
+            str(item.get("intent") or ""),
+        )
+    )
+    return proposals[:max_candidates]
+
+
+def _operational_investment_assessment(blueprint, operation, parameters=None):
+    concept = _runtime_token(blueprint.get("concept_name"))
+    program_type = _runtime_token(blueprint.get("program_type"))
+    generation_status = str(blueprint.get("generation_status") or "").upper()
+    compiler_supported = str(blueprint.get("compiler_supported") or "").upper()
+    package_available = str(
+        blueprint.get("execution_package_available") or ""
+    ).upper()
+    missing_requirements = blueprint.get("missing_requirements") or []
+    missing_count = len(missing_requirements) if isinstance(missing_requirements, list) else 1
+    parameters = parameters if isinstance(parameters, dict) else {}
+    score = 0.1
+    reasons = []
+    if compiler_supported == "TRUE":
+        score += 0.18
+        reasons.append("compiler_supported")
+    if package_available == "TRUE":
+        score += 0.18
+        reasons.append("execution_package_available")
+    if generation_status == "GENERATED":
+        score += 0.12
+        reasons.append("program_generated")
+    if operation in {
+        "replace_color",
+        "preserve_colors",
+        "duplicate_object",
+        "preserve_shape",
+        "preserve_size",
+        "preserve_density",
+        "preserve_topology",
+        "translate",
+    }:
+        score += 0.1
+        reasons.append("high_reuse_arc_operation")
+    if operation.startswith("preserve_"):
+        score += 0.04
+        reasons.append("low_risk_preservation_operation")
+    parameter_quality = _operation_parameter_quality(operation, parameters)
+    score += parameter_quality
+    if parameter_quality >= 0.14:
+        reasons.append("concrete_task_execution_signal")
+    elif parameter_quality >= 0.06:
+        reasons.append("weak_task_execution_signal")
+    else:
+        reasons.append("insufficient_task_execution_signal")
+    if any(part in concept for part in ("spatial", "topology", "identity")):
+        score += 0.04
+        reasons.append("domain_diversification_value")
+    if "growth" in program_type or "spatial" in program_type:
+        score += 0.03
+        reasons.append("cross_domain_composition_value")
+    if missing_count:
+        score -= min(0.25, 0.08 * missing_count)
+        reasons.append("missing_requirements_penalty")
+    score = round(max(0.0, min(1.0, score)), 4)
+    tier = "HIGH_VALUE" if score >= 0.8 else "MEDIUM_VALUE" if score >= 0.5 else "LOW_VALUE"
+    return {
+        "operational_value_score": score,
+        "investment_tier": tier,
+        "investment_reason": ", ".join(reasons) if reasons else "low_operational_signal",
+    }
+
+
+def _operation_parameter_quality(operation, parameters):
+    if not isinstance(parameters, dict):
+        return 0.0
+    if operation == "replace_color":
+        return 0.2 if parameters.get("color_mapping") else 0.0
+    if operation == "duplicate_object":
+        return 0.18 if parameters.get("cells_to_write") else 0.02
+    if operation in {"construct_path", "connect_components"}:
+        return 0.16 if parameters.get("path_cells") else 0.03
+    if operation == "translate":
+        if parameters.get("delta_row") or parameters.get("delta_col"):
+            return 0.1
+        return 0.02
+    if operation == "rotate":
+        return 0.04
+    if str(operation or "").startswith("preserve_"):
+        return 0.08
+    return 0.03
+
+
+def _knowledge_investment_summary(proposals):
+    rows = proposals if isinstance(proposals, list) else []
+    tier_counts = {"HIGH_VALUE": 0, "MEDIUM_VALUE": 0, "LOW_VALUE": 0}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        tier = str(row.get("investment_tier") or "LOW_VALUE")
+        tier_counts[tier if tier in tier_counts else "LOW_VALUE"] += 1
+    return {
+        "knowledge_investment_policy": "OPERATIONAL_VALUE_PRIORITIZED",
+        "knowledge_investment_authority": "existing_candidate_activation_bridge",
+        "high_value_knowledge_items": tier_counts["HIGH_VALUE"],
+        "medium_value_knowledge_items": tier_counts["MEDIUM_VALUE"],
+        "low_value_knowledge_items": tier_counts["LOW_VALUE"],
+        "deprioritized_knowledge_items": tier_counts["LOW_VALUE"],
+        "knowledge_overproduction_control": (
+            "VALUE_RANKED_CANDIDATE_ACTIVATION"
+            if rows
+            else "NO_CANDIDATES"
+        ),
+    }
 
 
 def build_semantic_compiler_execution_intents(candidate_proposals):
@@ -776,8 +912,780 @@ def build_semantic_compiler_execution_intents(candidate_proposals):
             "operation": operation,
             "matched_concepts": [intent],
             "source": "program_generation_activation_bridge",
+            "operational_value_score": proposal.get("operational_value_score"),
+            "investment_tier": proposal.get("investment_tier"),
+            "investment_reason": proposal.get("investment_reason"),
         })
     return intents
+
+
+def build_operational_capability_materialization_report(
+    semantic_compiler_report,
+    *,
+    prediction_authority="adaptive_search",
+    task_signature=None,
+    experience_store_path="runtime/artifacts/runtime_data/operational_capability_experience.json",
+    candidate_arena_report=None,
+    survival_store_path="runtime/artifacts/runtime_data/operational_capability_survival.json",
+):
+    report = (
+        semantic_compiler_report
+        if isinstance(semantic_compiler_report, dict)
+        else {}
+    )
+    validation = report.get("validation") if isinstance(report.get("validation"), dict) else {}
+    program = (
+        report.get("compiled_program")
+        if isinstance(report.get("compiled_program"), dict)
+        else {}
+    )
+    steps = program.get("steps") if isinstance(program.get("steps"), list) else []
+    operation = str(steps[0].get("operation")) if steps and isinstance(steps[0], dict) else None
+    exact = bool(validation.get("exact_match"))
+    compilation_success = bool(
+        report.get("semantic_to_transformation_compilation_success")
+    )
+    materialized = bool(compilation_success and exact and operation)
+    capability_id = f"operational_capability:{operation}" if materialized else None
+    aggregate_experience = _aggregate_operational_capability_experience(
+        experience_store_path,
+    )
+    experience = {}
+    if materialized and capability_id:
+        experience = _record_operational_capability_experience(
+            capability_id,
+            operation=operation,
+            task_signature=task_signature,
+            accuracy=validation.get("accuracy", 1.0),
+            store_path=experience_store_path,
+        )
+        aggregate_experience = _aggregate_operational_capability_experience(
+            experience_store_path,
+        )
+    survival_report = _record_operational_capability_survival(
+        candidate_arena_report,
+        task_signature=task_signature,
+        materialized_operation=operation if materialized else None,
+        store_path=survival_store_path,
+    )
+    operational_experience_count = int(
+        aggregate_experience.get("experience_count", 0) or 0
+    )
+    reuse_evidence_count = int(
+        aggregate_experience.get("reuse_evidence_count", 0) or 0
+    )
+    independent_reuse_success_count = int(
+        aggregate_experience.get("independent_reuse_success_count", 0) or 0
+    )
+    confidence_state = _operational_confidence_state(
+        operational_experience_count,
+        independent_reuse_success_count,
+        materialized=materialized or operational_experience_count > 0,
+    )
+    authority_state = _authority_transfer_state(
+        operational_experience_count,
+        independent_reuse_success_count,
+        materialized=materialized or operational_experience_count > 0,
+    )
+    capabilities = []
+    if materialized:
+        capabilities.append({
+            "capability_id": capability_id,
+            "capability_name": f"{operation}_capability",
+            "source": "semantic_to_transformation_compiler",
+            "operation": operation,
+            "materialization_state": "SANDBOX_REUSABLE",
+            "operational_confidence_state": confidence_state,
+            "authority_transfer_state": authority_state,
+            "trusted_for_decision": False,
+            "operational_experience_count": int(
+                experience.get("experience_count", 0) or 0
+            ),
+            "reuse_evidence_count": int(
+                experience.get("reuse_evidence_count", 0) or 0
+            ),
+            "independent_reuse_successes": int(
+                experience.get("independent_reuse_success_count", 0) or 0
+            ),
+            "reusable": True,
+            "decision_authority": "SANDBOX_ONLY",
+            "prediction_authority_preserved": prediction_authority,
+            "validation_status": "EXACT_MATCH_VALIDATED",
+            "confidence": validation.get("accuracy", 1.0),
+            "experience_store_key": capability_id,
+            "compiled_program": program,
+        })
+    return {
+        "system": "operational_capability_materialization",
+        "materialization_attempted": bool(report),
+        "materialization_status": (
+            "MATERIALIZED_SANDBOX_REUSABLE"
+            if materialized
+            else "NOT_MATERIALIZED"
+        ),
+        "materialized_operational_capabilities": len(capabilities),
+        "reusable_operational_capabilities": len(capabilities),
+        "operational_confidence_state": confidence_state,
+        "authority_transfer_state": authority_state,
+        "decision_trust_state": "NOT_TRUSTED_FOR_DECISION_REVIEW_REQUIRED",
+        "trusted_for_decision_count": 0,
+        "operational_experience_count": operational_experience_count,
+        "reuse_evidence_count": reuse_evidence_count,
+        "independent_reuse_success_count": independent_reuse_success_count,
+        "experience_store_path": experience_store_path,
+        "known_operational_capability_count": aggregate_experience.get(
+            "known_operational_capability_count",
+            0,
+        ),
+        "known_operational_operations": aggregate_experience.get(
+            "known_operational_operations",
+            [],
+        ),
+        "known_operational_domain_count": aggregate_experience.get(
+            "known_operational_domain_count",
+            0,
+        ),
+        "known_operational_domains": aggregate_experience.get(
+            "known_operational_domains",
+            [],
+        ),
+        "operational_capability_experience_distribution": aggregate_experience.get(
+            "operational_capability_experience_distribution",
+            [],
+        ),
+        "operational_experience_task_count": aggregate_experience.get(
+            "operational_experience_task_count",
+            0,
+        ),
+        "operational_capabilities": capabilities,
+        "capability_survival_report": survival_report,
+        "generated_survival_candidate_count": survival_report.get(
+            "generated_operational_candidate_count",
+            0,
+        ),
+        "arena_simulated_survival_candidate_count": survival_report.get(
+            "arena_simulated_candidate_count",
+            0,
+        ),
+        "arena_quality_survival_candidate_count": survival_report.get(
+            "arena_quality_candidate_count",
+            0,
+        ),
+        "capability_survival_rate": survival_report.get(
+            "capability_survival_rate"
+        ),
+        "materialization_survival_rate": survival_report.get(
+            "materialization_survival_rate"
+        ),
+        "incubating_operational_capability_count": survival_report.get(
+            "incubating_operational_capability_count",
+            0,
+        ),
+        "operational_citizen_count": survival_report.get(
+            "operational_citizen_count",
+            0,
+        ),
+        "validation_bottleneck_inflation": survival_report.get(
+            "validation_bottleneck_inflation",
+            0.0,
+        ),
+        "validation_bottleneck_state": survival_report.get(
+            "validation_bottleneck_state",
+            "NOT_MEASURABLE",
+        ),
+        "capability_survival_state_distribution": survival_report.get(
+            "capability_survival_state_distribution",
+            {},
+        ),
+        "top_incubating_capabilities": survival_report.get(
+            "top_incubating_capabilities",
+            [],
+        ),
+        "capability_survival_store_path": survival_store_path,
+        "blocking_reason": (
+            "Not Available"
+            if materialized
+            else "compiled_program_not_exact_match"
+            if compilation_success and operation
+            else "no_validated_compiled_program"
+        ),
+        "decision_authority": "SANDBOX_ONLY",
+        "prediction_authority_preserved": prediction_authority,
+    }
+
+
+def _record_operational_capability_survival(
+    candidate_arena_report,
+    *,
+    task_signature,
+    materialized_operation,
+    store_path,
+):
+    store = _load_operational_capability_survival(store_path)
+    rows = _candidate_survival_rows(candidate_arena_report)
+    task = str(task_signature or "unknown")
+    now = datetime.utcnow().isoformat() + "Z"
+    materialized_operation = _runtime_token(materialized_operation)
+    run_rows = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        capability_id = _survival_capability_id(row)
+        if not capability_id:
+            continue
+        current = run_rows.get(capability_id)
+        accuracy = _candidate_accuracy(row)
+        if (
+            current is None
+            or (accuracy if accuracy is not None else -1.0)
+            > (current.get("_accuracy") if current.get("_accuracy") is not None else -1.0)
+        ):
+            enriched = dict(row)
+            enriched["_accuracy"] = accuracy
+            run_rows[capability_id] = enriched
+    for capability_id, row in run_rows.items():
+        operation = _runtime_token(row.get("operation"))
+        if not operation:
+            continue
+        record = store.get(capability_id, {})
+        attempts = int(record.get("generated_candidate_count", 0) or 0) + 1
+        arena_simulated_count = int(record.get("arena_simulated_count", 0) or 0)
+        arena_quality_count = int(record.get("arena_quality_count", 0) or 0)
+        validation_gap_count = int(record.get("validation_gap_count", 0) or 0)
+        materialized_count = int(record.get("materialized_count", 0) or 0)
+        survived_tasks = {
+            str(item)
+            for item in record.get("survived_task_signatures", [])
+            if item
+        }
+        seen_tasks = {
+            str(item)
+            for item in record.get("seen_task_signatures", [])
+            if item
+        }
+        accuracies = [
+            float(item)
+            for item in record.get("accuracies", [])
+            if isinstance(item, (int, float))
+        ]
+        failure_reasons = list(record.get("failure_reasons", []) or [])
+        arena_status = str(row.get("status") or "")
+        entered = bool(row.get("entered_arena")) and not arena_status.startswith(
+            "BLOCKED"
+        )
+        simulated = bool(row.get("simulation_success")) or entered
+        accuracy = row.get("_accuracy")
+        quality_success = bool(
+            accuracy is not None
+            and float(accuracy) >= _survival_quality_threshold(operation)
+        )
+        if entered:
+            arena_simulated_count += 1
+            seen_tasks.add(task)
+        if quality_success:
+            arena_quality_count += 1
+        if accuracy is not None:
+            accuracies.append(float(accuracy))
+        best_accuracy = max(accuracies) if accuracies else None
+        average_accuracy = (
+            round(sum(accuracies) / len(accuracies), 4)
+            if accuracies
+            else None
+        )
+        materialized = bool(materialized_operation and operation == materialized_operation)
+        if materialized:
+            materialized_count += 1
+            survived_tasks.add(task)
+        elif entered and quality_success:
+            validation_gap_count += 1
+            failure_reasons.append("quality_candidate_waiting_for_validation")
+        elif entered:
+            failure_reasons.append("simulation_executed_low_prediction_quality")
+        improvement_trend = _accuracy_trend(accuracies)
+        lifecycle_state = _capability_survival_lifecycle_state(
+            generated_candidate_count=attempts,
+            arena_simulated_count=arena_simulated_count,
+            arena_quality_count=arena_quality_count,
+            validation_gap_count=validation_gap_count,
+            materialized_count=materialized_count,
+            survived_task_count=len(survived_tasks),
+            distinct_task_count=len(seen_tasks),
+            best_accuracy=best_accuracy,
+            average_accuracy=average_accuracy,
+            improvement_trend=improvement_trend,
+        )
+        store[capability_id] = {
+            "capability_id": capability_id,
+            "operation": operation,
+            "domain": _operational_capability_domain(operation),
+            "semantic_intent": _runtime_token(row.get("semantic_intent")),
+            "program_signature": row.get("program_signature"),
+            "generated_candidate_count": attempts,
+            "entered_arena_count": arena_simulated_count,
+            "arena_simulated_count": arena_simulated_count,
+            "arena_quality_count": arena_quality_count,
+            "validation_gap_count": validation_gap_count,
+            "materialized_count": materialized_count,
+            "survived_task_count": len(survived_tasks),
+            "distinct_task_count": len(seen_tasks),
+            "seen_task_signatures": sorted(seen_tasks),
+            "survived_task_signatures": sorted(survived_tasks),
+            "first_seen_at": record.get("first_seen_at") or now,
+            "first_seen_task": record.get("first_seen_task") or task,
+            "last_seen_task": task,
+            "last_candidate_status": arena_status or "UNKNOWN",
+            "last_accuracy": accuracy,
+            "best_accuracy": best_accuracy,
+            "average_accuracy": average_accuracy,
+            "accuracies": accuracies[-25:],
+            "validation_attempts": arena_quality_count + materialized_count,
+            "validation_failures": validation_gap_count,
+            "failure_reasons": sorted(set(failure_reasons))[-10:],
+            "improvement_trend": improvement_trend,
+            "next_required_evidence": _next_required_survival_evidence(
+                lifecycle_state,
+                distinct_task_count=len(seen_tasks),
+                best_accuracy=best_accuracy,
+            ),
+            "simulation_executed_successfully": simulated,
+            "prediction_quality_success": quality_success,
+            "last_seen_task_signature": task,
+            "last_seen_at": now,
+            "lifecycle_state": lifecycle_state,
+            "trusted_for_decision": False,
+            "survival_is_not_truth": True,
+        }
+    _save_operational_capability_survival(store_path, store)
+    return _aggregate_operational_capability_survival(store_path)
+
+
+def _candidate_survival_rows(candidate_arena_report):
+    report = candidate_arena_report if isinstance(candidate_arena_report, dict) else {}
+    summary = report.get("candidate_arena_summary")
+    if not isinstance(summary, dict):
+        summary = report
+    rows = summary.get("candidate_summary") or summary.get("candidate_rows") or []
+    return rows if isinstance(rows, list) else []
+
+
+def _capability_survival_lifecycle_state(
+    *,
+    generated_candidate_count,
+    arena_simulated_count,
+    arena_quality_count,
+    validation_gap_count,
+    materialized_count,
+    survived_task_count,
+    distinct_task_count,
+    best_accuracy,
+    average_accuracy,
+    improvement_trend,
+):
+    if survived_task_count >= 3 and materialized_count >= 3:
+        return "OPERATIONAL_CITIZEN"
+    if (
+        arena_quality_count >= 3
+        and distinct_task_count >= 3
+        and best_accuracy is not None
+        and best_accuracy >= 0.90
+        and average_accuracy is not None
+        and average_accuracy >= 0.80
+        and improvement_trend in {"IMPROVING", "STABLE"}
+    ):
+        return "SURVIVING_CAPABILITY"
+    if (
+        survived_task_count >= 1
+        and materialized_count >= 1
+        and distinct_task_count >= 2
+    ):
+        return "SURVIVING_CAPABILITY"
+    if (
+        arena_quality_count >= 2
+        and distinct_task_count >= 2
+        and best_accuracy is not None
+        and best_accuracy >= 0.50
+        and improvement_trend in {"IMPROVING", "STABLE"}
+    ):
+        return "INCUBATING_VALIDATION_GAP"
+    if arena_simulated_count > 0:
+        return "ARENA_SIMULATED"
+    if generated_candidate_count > 0:
+        return "GENERATED_CANDIDATE"
+    return "UNKNOWN"
+
+
+def _survival_capability_id(row):
+    if not isinstance(row, dict):
+        return None
+    operation = _runtime_token(row.get("operation"))
+    if not operation:
+        return None
+    semantic_intent = _runtime_token(row.get("semantic_intent"))
+    domain = _runtime_token(_operational_capability_domain(operation))
+    identity = semantic_intent or operation
+    return f"operational_capability:{domain}:{operation}:{identity}"
+
+
+def _candidate_accuracy(row):
+    try:
+        value = row.get("accuracy")
+        if value is None:
+            return None
+        return round(float(value), 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def _survival_quality_threshold(operation):
+    operation = _runtime_token(operation)
+    if operation.startswith("preserve_"):
+        return 0.50
+    if operation in {"replace_color", "translate"}:
+        return 0.60
+    return 0.40
+
+
+def _accuracy_trend(accuracies):
+    if len(accuracies) < 2:
+        return "INSUFFICIENT_HISTORY"
+    previous = float(accuracies[-2])
+    current = float(accuracies[-1])
+    if current > previous + 0.05:
+        return "IMPROVING"
+    if current < previous - 0.05:
+        return "DECLINING"
+    return "STABLE"
+
+
+def _next_required_survival_evidence(
+    lifecycle_state,
+    *,
+    distinct_task_count,
+    best_accuracy,
+):
+    if lifecycle_state == "OPERATIONAL_CITIZEN":
+        return "separate_trust_review_required"
+    if lifecycle_state == "SURVIVING_CAPABILITY":
+        return "exact_or_governed_validation_success"
+    if lifecycle_state == "INCUBATING_VALIDATION_GAP":
+        return "repeatable_validation_across_independent_task"
+    if distinct_task_count < 2:
+        return "independent_task_reappearance"
+    if best_accuracy is None or best_accuracy < 0.50:
+        return "prediction_quality_improvement"
+    return "validator_acceptance"
+
+
+def _load_operational_capability_survival(store_path):
+    try:
+        if not os.path.exists(store_path):
+            return {}
+        with open(store_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_operational_capability_survival(store_path, store):
+    try:
+        os.makedirs(os.path.dirname(store_path), exist_ok=True)
+        with open(store_path, "w", encoding="utf-8") as handle:
+            json.dump(store, handle, indent=2, sort_keys=True)
+    except OSError:
+        pass
+
+
+def _aggregate_operational_capability_survival(store_path):
+    store = _load_operational_capability_survival(store_path)
+    records = [item for item in store.values() if isinstance(item, dict)]
+    generated = sum(
+        int(item.get("generated_candidate_count", 0) or 0)
+        for item in records
+    )
+    entered = sum(
+        int(
+            item.get(
+                "arena_simulated_count",
+                item.get("entered_arena_count", 0),
+            )
+            or 0
+        )
+        for item in records
+    )
+    quality = sum(
+        int(item.get("arena_quality_count", 0) or 0)
+        for item in records
+    )
+    validation_gaps = sum(
+        int(item.get("validation_gap_count", 0) or 0)
+        for item in records
+    )
+    materialized = sum(
+        int(item.get("materialized_count", 0) or 0)
+        for item in records
+    )
+    citizens = [
+        item for item in records
+        if item.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+    ]
+    incubating = [
+        item for item in records
+        if item.get("lifecycle_state") in {
+            "INCUBATING_VALIDATION_GAP",
+            "ARENA_SIMULATED",
+            "SURVIVING_CAPABILITY",
+        }
+    ]
+    state_distribution = {}
+    for item in records:
+        state = str(item.get("lifecycle_state") or "UNKNOWN")
+        state_distribution[state] = state_distribution.get(state, 0) + 1
+    for state in (
+        "GENERATED_CANDIDATE",
+        "ARENA_SIMULATED",
+        "INCUBATING_VALIDATION_GAP",
+        "SURVIVING_CAPABILITY",
+        "OPERATIONAL_CITIZEN",
+    ):
+        state_distribution.setdefault(state, 0)
+    top_incubating = sorted(
+        [
+            item for item in records
+            if item.get("lifecycle_state") in {
+                "ARENA_SIMULATED",
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }
+        ],
+        key=lambda item: (
+            -float(item.get("best_accuracy") or 0.0),
+            -int(item.get("distinct_task_count", 0) or 0),
+            -int(item.get("arena_simulated_count", 0) or 0),
+            str(item.get("operation") or ""),
+        ),
+    )[:5]
+    survival_rate = _safe_ratio(len(citizens), generated)
+    materialization_survival_rate = _safe_ratio(materialized, generated)
+    validation_bottleneck_inflation = _safe_ratio(validation_gaps, entered)
+    return {
+        "system": "operational_capability_survival_tracker",
+        "generated_operational_candidate_count": generated,
+        "arena_entered_candidate_count": entered,
+        "arena_simulated_candidate_count": entered,
+        "arena_quality_candidate_count": quality,
+        "validation_gap_candidate_count": validation_gaps,
+        "materialized_candidate_count": materialized,
+        "incubating_operational_capability_count": len(incubating),
+        "operational_citizen_count": len(citizens),
+        "capability_survival_state_distribution": dict(
+            sorted(state_distribution.items())
+        ),
+        "top_incubating_capabilities": top_incubating,
+        "capability_survival_rate": survival_rate,
+        "materialization_survival_rate": materialization_survival_rate,
+        "validation_bottleneck_inflation": validation_bottleneck_inflation,
+        "validation_bottleneck_state": (
+            "SEVERE_VALIDATION_BOTTLENECK"
+            if isinstance(validation_bottleneck_inflation, (int, float))
+            and validation_bottleneck_inflation >= 0.60
+            else "VALIDATION_BOTTLENECK"
+            if isinstance(validation_bottleneck_inflation, (int, float))
+            and validation_bottleneck_inflation >= 0.30
+            else "CONTROLLED"
+            if entered
+            else "NOT_MEASURABLE"
+        ),
+        "capability_survival_rows": sorted(
+            records,
+            key=lambda item: (
+                str(item.get("lifecycle_state") or ""),
+                str(item.get("operation") or ""),
+            ),
+        )[:25],
+        "survival_is_not_truth": True,
+        "store_path": store_path,
+    }
+
+
+def _safe_ratio(numerator, denominator):
+    try:
+        denominator = float(denominator)
+        if denominator <= 0:
+            return None
+        return round(max(0.0, min(1.0, float(numerator) / denominator)), 4)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _record_operational_capability_experience(
+    capability_id,
+    *,
+    operation,
+    task_signature,
+    accuracy,
+    store_path,
+):
+    store = _load_operational_capability_experience(store_path)
+    record = store.get(capability_id, {})
+    tasks = {
+        str(item)
+        for item in record.get("task_signatures", [])
+        if item is not None
+    }
+    task = str(task_signature or "unknown")
+    previous_successes = int(record.get("experience_count", 0) or 0)
+    tasks.add(task)
+    experience_count = previous_successes + 1
+    accuracies = [
+        float(item)
+        for item in record.get("accuracies", [])
+        if isinstance(item, (int, float))
+    ]
+    try:
+        accuracies.append(float(accuracy))
+    except (TypeError, ValueError):
+        accuracies.append(1.0)
+    updated = {
+        "capability_id": capability_id,
+        "operation": operation,
+        "experience_count": experience_count,
+        "reuse_evidence_count": max(experience_count - 1, 0),
+        "independent_reuse_success_count": max(len(tasks) - 1, 0),
+        "task_signatures": sorted(tasks),
+        "accuracies": accuracies[-25:],
+        "last_accuracy": round(accuracies[-1], 4),
+        "average_accuracy": round(sum(accuracies) / max(len(accuracies), 1), 4),
+        "last_updated": datetime.utcnow().isoformat() + "Z",
+    }
+    store[capability_id] = updated
+    _save_operational_capability_experience(store_path, store)
+    return updated
+
+
+def _load_operational_capability_experience(store_path):
+    try:
+        if not os.path.exists(store_path):
+            return {}
+        with open(store_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_operational_capability_experience(store_path, store):
+    try:
+        os.makedirs(os.path.dirname(store_path), exist_ok=True)
+        with open(store_path, "w", encoding="utf-8") as handle:
+            json.dump(store, handle, indent=2, sort_keys=True)
+    except OSError:
+        pass
+
+
+def _aggregate_operational_capability_experience(store_path):
+    store = _load_operational_capability_experience(store_path)
+    records = [item for item in store.values() if isinstance(item, dict)]
+    operations = sorted({
+        str(item.get("operation"))
+        for item in records
+        if item.get("operation")
+    })
+    domains = sorted({
+        _operational_capability_domain(item.get("operation"))
+        for item in records
+        if item.get("operation")
+    })
+    task_signatures = sorted({
+        str(signature)
+        for item in records
+        for signature in (item.get("task_signatures") or [])
+        if signature
+    })
+    experience_distribution = sorted(
+        [
+            {
+                "capability_id": item.get("capability_id"),
+                "operation": item.get("operation"),
+                "domain": _operational_capability_domain(item.get("operation")),
+                "experience_count": int(item.get("experience_count", 0) or 0),
+                "reuse_evidence_count": int(item.get("reuse_evidence_count", 0) or 0),
+                "independent_reuse_success_count": int(
+                    item.get("independent_reuse_success_count", 0) or 0
+                ),
+            }
+            for item in records
+        ],
+        key=lambda item: (
+            -item["experience_count"],
+            str(item.get("operation") or ""),
+        ),
+    )
+    return {
+        "known_operational_capability_count": len(records),
+        "known_operational_operations": operations,
+        "known_operational_domain_count": len(domains),
+        "known_operational_domains": domains,
+        "operational_capability_experience_distribution": experience_distribution,
+        "operational_experience_task_count": len(task_signatures),
+        "experience_count": sum(
+            int(item.get("experience_count", 0) or 0)
+            for item in records
+        ),
+        "reuse_evidence_count": sum(
+            int(item.get("reuse_evidence_count", 0) or 0)
+            for item in records
+        ),
+        "independent_reuse_success_count": sum(
+            int(item.get("independent_reuse_success_count", 0) or 0)
+            for item in records
+        ),
+    }
+
+
+def _operational_capability_domain(operation):
+    operation = _runtime_token(operation)
+    if operation in {"replace_color", "preserve_colors"}:
+        return "Color"
+    if operation in {"translate", "preserve_grid", "preserve_size", "preserve_shape"}:
+        return "Spatial"
+    if operation in {"connect_components", "construct_path", "preserve_topology"}:
+        return "Topology"
+    if operation in {"duplicate_object", "preserve_density"}:
+        return "Growth"
+    if operation in {"mirror_horizontal", "mirror_vertical", "preserve_symmetry"}:
+        return "Symmetry"
+    return "Transformation"
+
+
+def _operational_confidence_state(
+    experience_count,
+    independent_reuse_success_count,
+    *,
+    materialized,
+):
+    if not materialized:
+        return "NO_OPERATIONAL_EVIDENCE"
+    if independent_reuse_success_count >= 3 and experience_count >= 5:
+        return "HIGH_CONFIDENCE_OPERATIONAL"
+    if independent_reuse_success_count >= 1 or experience_count >= 2:
+        return "DEVELOPING_OPERATIONAL_CONFIDENCE"
+    return "SANDBOX_EVIDENCE_ONLY"
+
+
+def _authority_transfer_state(
+    experience_count,
+    independent_reuse_success_count,
+    *,
+    materialized,
+):
+    if not materialized:
+        return "NOT_ELIGIBLE_NO_MATERIALIZED_CAPABILITY"
+    if independent_reuse_success_count >= 3 and experience_count >= 5:
+        return "ELIGIBLE_FOR_REVIEW"
+    if experience_count >= 2:
+        return "NOT_ELIGIBLE_REUSE_EVIDENCE_INSUFFICIENT"
+    return "NOT_ELIGIBLE_SINGLE_SANDBOX_SUCCESS"
 
 
 def _blueprint_can_enter_arena(blueprint):
@@ -796,7 +1704,19 @@ def _operation_for_blueprint(blueprint):
         "symbolic_remapping",
         "color_preservation",
     }:
-        return "replace_color"
+        return "preserve_colors" if concept == "color_preservation" else "replace_color"
+    preservation_operations = {
+        "shape_preservation": "preserve_shape",
+        "size_preservation": "preserve_size",
+        "density_preservation": "preserve_density",
+        "symmetry_preservation": "preserve_symmetry",
+        "symmetry_reasoning": "preserve_symmetry",
+        "topology_preservation": "preserve_topology",
+        "position_preservation": "preserve_grid",
+        "object_identity_preservation": "preserve_grid",
+    }
+    if concept in preservation_operations:
+        return preservation_operations[concept]
     if "rotation" in program_type or concept in {"rotation", "orientation_change"}:
         return "rotate"
     if "reflection" in program_type or "symmetry" in concept:
@@ -4058,6 +4978,9 @@ try:
             input_grid=executable_task_io.get("input_grid"),
             target_grid=executable_task_io.get("target_grid"),
         )
+        program_generation_report["knowledge_investment_summary"] = (
+            _knowledge_investment_summary(executable_candidate_proposals)
+        )
         semantic_compiler_execution_intents = (
             build_semantic_compiler_execution_intents(
                 executable_candidate_proposals,
@@ -4081,6 +5004,7 @@ try:
             if semantic_compiler_execution_intents
             else {}
         )
+        operational_capability_materialization_report = {}
         if executable_candidate_proposals:
             activated_candidate_count = len(executable_candidate_proposals)
             program_generation_report["generated_programs"] = max(
@@ -4099,6 +5023,9 @@ try:
             )
             program_generation_report["generation_authority"] = (
                 "executable_intelligence_activation_bridge"
+            )
+            program_generation_report["knowledge_investment_summary"] = (
+                _knowledge_investment_summary(executable_candidate_proposals)
             )
             program_blueprint_intelligence_report = (
                 program_blueprint_intelligence_layer.analyze(
@@ -4132,6 +5059,14 @@ try:
             },
             analysis_only=True,
             task_signature=str(executable_task_io.get("task") or "unknown"),
+        )
+        operational_capability_materialization_report = (
+            build_operational_capability_materialization_report(
+                semantic_compiler_runtime_report,
+                prediction_authority="adaptive_search",
+                task_signature=str(executable_task_io.get("task") or "unknown"),
+                candidate_arena_report=cognitive_candidate_arena_report,
+            )
         )
         executable_candidate = (
             (
@@ -4226,6 +5161,9 @@ try:
                 "EXECUTABLE_ACTIVATION_REPORT": (
                     executable_activation_report
                 ),
+                "OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT": (
+                    operational_capability_materialization_report
+                ),
             },
             owner="executable_intelligence_runtime",
             stage_name="executable_intelligence",
@@ -4273,6 +5211,9 @@ try:
     performance_report["EXECUTABLE_ACTIVATION_REPORT"] = (
         executable_activation_report
     )
+    performance_report["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = (
+        operational_capability_materialization_report
+    )
     activated_program_count = max(
         int(program_synthesis_report.get("generated_programs", 0) or 0),
         int(program_generation_report.get("generated_programs", 0) or 0),
@@ -4318,6 +5259,9 @@ try:
     )
     training_report["EXECUTABLE_INTELLIGENCE_REPORT"] = (
         performance_report["EXECUTABLE_INTELLIGENCE_REPORT"]
+    )
+    training_report["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = (
+        operational_capability_materialization_report
     )
     training_report["EXECUTABLE_ACTIVATION_REPORT"] = (
         executable_activation_report

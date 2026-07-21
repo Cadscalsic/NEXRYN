@@ -1261,6 +1261,42 @@ class CanonicalReportBindingEngine:
         elif not failure_cause and execution_status == "FAILED":
             failure_cause = "Compiled program did not match target output."
 
+        semantic_intent_success = bool(
+            self._first_dict(compiler, "semantic_intent_routing_report").get(
+                "semantic_intent_routing_success"
+            )
+        )
+        execution_intents = compiler.get("execution_intents") or []
+        compiler_activation_source = (
+            "semantic_intent_router"
+            if semantic_intent_success
+            else "program_generation_activation_bridge"
+            if execution_intents
+            else "none"
+        )
+        router_integration_status = (
+            "ROUTER_DRIVEN"
+            if semantic_intent_success and triggered
+            else "FALLBACK_BRIDGE_ACTIVE"
+            if triggered and execution_intents
+            else "NOT_INTEGRATED"
+            if triggered
+            else "NOT_TRIGGERED"
+        )
+        compiler_advisory_state = (
+            "ADVISORY_EXACT_MATCH_NOT_SELECTED"
+            if (
+                compilation_success
+                and validation.get("exact_match")
+                and not selected_from_compiler
+            )
+            else "SELECTED_EXECUTABLE"
+            if selected_from_compiler and validation.get("exact_match")
+            else "ADVISORY_NEEDS_REVIEW"
+            if compilation_success and not selected_from_compiler
+            else "NOT_AVAILABLE"
+        )
+
         summary = {
             "compiler_triggered": triggered,
             "compiler_selected": compiler_selected,
@@ -1283,13 +1319,12 @@ class CanonicalReportBindingEngine:
                 len(synthesis.get("generated_transformations", []) or []) if synthesis.get("generated_transformations") else None,
                 compiler.get("candidate_count"),
             ),
-            "execution_intents": compiler.get("execution_intents") or [],
-            "execution_intent_count": len(compiler.get("execution_intents") or []),
-            "semantic_intent_routing_success": bool(
-                self._first_dict(compiler, "semantic_intent_routing_report").get(
-                    "semantic_intent_routing_success"
-                )
-            ),
+            "execution_intents": execution_intents,
+            "execution_intent_count": len(execution_intents),
+            "semantic_intent_routing_success": semantic_intent_success,
+            "compiler_activation_source": compiler_activation_source,
+            "semantic_intent_router_integration_status": router_integration_status,
+            "compiler_advisory_state": compiler_advisory_state,
             "selected_intent": compiler.get("selected_intent"),
             "compiled_candidate_count": compiler.get("candidate_count", 0),
             "compiled_operation": compiler_operation,
@@ -2143,6 +2178,33 @@ class CanonicalReportBindingEngine:
             coverage["mental_models"] = mental_model_total
         if blueprint_total and not coverage.get("program_blueprints"):
             coverage["program_blueprints"] = blueprint_total
+        executable_semantic_summary = (
+            self._build_executable_semantic_coverage_visibility(
+                report_state,
+                performance,
+            ).get("executable_semantic_coverage_summary", {})
+        )
+        supported_operations = (
+            executable_semantic_summary.get("supported_operations") or []
+        )
+        if supported_operations:
+            coverage["execution_packages"] = max(
+                int(coverage.get("execution_packages") or 0),
+                len(set(supported_operations)),
+            )
+        materialized_operational = self._materialized_operational_capability_count(
+            report_state,
+            performance,
+        )
+        if materialized_operational:
+            coverage["operational_capabilities"] = max(
+                int(coverage.get("operational_capabilities") or 0),
+                materialized_operational,
+            )
+            ecosystem["total_operational_capabilities"] = max(
+                int(ecosystem.get("total_operational_capabilities") or 0),
+                materialized_operational,
+            )
         collaboration_score = interaction_summary.get("collaboration_score")
         if collaboration_score is not None:
             health["collaboration_score"] = float(collaboration_score or 0.0)
@@ -2441,6 +2503,13 @@ class CanonicalReportBindingEngine:
             program_lifecycle.get("operational_program_count"),
             validated_programs,
         ) or 0)
+        materialized_operational_capabilities = (
+            self._materialized_operational_capability_count(report_state, performance)
+        )
+        materialization = self._operational_capability_materialization_summary(
+            report_state,
+            performance,
+        )
 
         semantic_coverage = self._bounded_ratio(measured_concepts, generated_concepts)
         execution_package_coverage = semantic.get("executable_semantic_coverage")
@@ -2456,10 +2525,430 @@ class CanonicalReportBindingEngine:
         arena_source_coverage = self._bounded_ratio(len([
             source for source in arena_sources if source
         ]), max(int(proposal.get("eligible_source_count") or 0), 1))
-        operational_coverage = self._bounded_ratio(validated_programs, generated_concepts)
+        validated_executable_coverage = self._bounded_ratio(
+            validated_programs,
+            generated_concepts,
+        )
+        operational_coverage = self._bounded_ratio(
+            materialized_operational_capabilities,
+            generated_concepts,
+        )
+        operational_materialization_rate = self._bounded_ratio(
+            materialized_operational_capabilities,
+            validated_programs,
+        )
         compiler_runtime_coverage = self._bounded_ratio(
             compiler_runtime_activated_programs,
             max(generated_blueprints, generated_programs),
+        )
+        known_operational_capabilities = int(
+            self._first_number(
+                materialization.get("known_operational_capability_count"),
+                materialized_operational_capabilities,
+            )
+            or 0
+        )
+        known_operational_domain_count = int(
+            self._first_number(
+                materialization.get("known_operational_domain_count"),
+                0,
+            )
+            or 0
+        )
+        operational_yield_from_concepts = self._bounded_ratio(
+            materialized_operational_capabilities,
+            generated_concepts,
+        )
+        operational_yield_from_programs = self._bounded_ratio(
+            materialized_operational_capabilities,
+            generated_programs,
+        )
+        operational_yield_from_candidates = self._bounded_ratio(
+            materialized_operational_capabilities,
+            candidate_count,
+        )
+        operational_yield_from_arena = self._bounded_ratio(
+            materialized_operational_capabilities,
+            arena_candidates,
+        )
+        population_diversification = self._bounded_ratio(
+            known_operational_domain_count,
+            5,
+        )
+        operational_experience_count = int(
+            self._first_number(
+                materialization.get("operational_experience_count"),
+                0,
+            )
+            or 0
+        )
+        operational_experience_task_count = int(
+            self._first_number(
+                materialization.get("operational_experience_task_count"),
+                operational_experience_count,
+            )
+            or 0
+        )
+        reuse_evidence_count = int(
+            self._first_number(
+                materialization.get("reuse_evidence_count"),
+                0,
+            )
+            or 0
+        )
+        independent_reuse_success_count = int(
+            self._first_number(
+                materialization.get("independent_reuse_success_count"),
+                0,
+            )
+            or 0
+        )
+        survival = materialization.get("capability_survival_report")
+        survival = survival if isinstance(survival, dict) else {}
+        capability_survival_rate = self._first_number(
+            materialization.get("capability_survival_rate"),
+            survival.get("capability_survival_rate"),
+        )
+        materialization_survival_rate = self._first_number(
+            materialization.get("materialization_survival_rate"),
+            survival.get("materialization_survival_rate"),
+        )
+        validation_bottleneck_inflation = self._first_number(
+            materialization.get("validation_bottleneck_inflation"),
+            survival.get("validation_bottleneck_inflation"),
+        )
+        validation_bottleneck_state = (
+            materialization.get("validation_bottleneck_state")
+            or survival.get("validation_bottleneck_state")
+            or "NOT_MEASURABLE"
+        )
+        incubating_operational_capability_count = int(
+            self._first_number(
+                materialization.get("incubating_operational_capability_count"),
+                survival.get("incubating_operational_capability_count"),
+                0,
+            )
+            or 0
+        )
+        operational_citizen_count = int(
+            self._first_number(
+                materialization.get("operational_citizen_count"),
+                survival.get("operational_citizen_count"),
+                0,
+            )
+            or 0
+        )
+        validation_gap_candidate_count = int(
+            self._first_number(
+                survival.get("validation_gap_candidate_count"),
+                0,
+            )
+            or 0
+        )
+        generated_survival_candidate_count = int(
+            self._first_number(
+                materialization.get("generated_survival_candidate_count"),
+                survival.get("generated_operational_candidate_count"),
+                0,
+            )
+            or 0
+        )
+        arena_simulated_survival_candidate_count = int(
+            self._first_number(
+                materialization.get("arena_simulated_survival_candidate_count"),
+                survival.get("arena_simulated_candidate_count"),
+                survival.get("arena_entered_candidate_count"),
+                0,
+            )
+            or 0
+        )
+        arena_quality_survival_candidate_count = int(
+            self._first_number(
+                materialization.get("arena_quality_survival_candidate_count"),
+                survival.get("arena_quality_candidate_count"),
+                0,
+            )
+            or 0
+        )
+        survival_state_distribution = (
+            materialization.get("capability_survival_state_distribution")
+            or survival.get("capability_survival_state_distribution")
+            or {}
+        )
+        survival_state_distribution = (
+            survival_state_distribution
+            if isinstance(survival_state_distribution, dict)
+            else {}
+        )
+        top_incubating_capabilities = (
+            materialization.get("top_incubating_capabilities")
+            or survival.get("top_incubating_capabilities")
+            or []
+        )
+        top_incubating_capabilities = (
+            top_incubating_capabilities
+            if isinstance(top_incubating_capabilities, list)
+            else []
+        )
+        capability_survival_rows = survival.get("capability_survival_rows") or []
+        capability_survival_rows = (
+            capability_survival_rows
+            if isinstance(capability_survival_rows, list)
+            else []
+        )
+        candidate_retention_rate = self._bounded_ratio(
+            arena_simulated_survival_candidate_count,
+            generated_survival_candidate_count,
+        )
+        incubation_conversion_rate = self._bounded_ratio(
+            incubating_operational_capability_count,
+            generated_survival_candidate_count,
+        )
+        surviving_capability_count = int(
+            self._first_number(
+                survival_state_distribution.get("SURVIVING_CAPABILITY"),
+                0,
+            )
+            or 0
+        )
+        surviving_capability_conversion_rate = self._bounded_ratio(
+            surviving_capability_count,
+            generated_survival_candidate_count,
+        )
+        operational_citizen_conversion_rate = self._bounded_ratio(
+            operational_citizen_count,
+            generated_survival_candidate_count,
+        )
+        historical_operational_citizen_count = known_operational_capabilities
+        knowledge_production_efficiency = self._bounded_ratio(
+            candidate_count,
+            generated_concepts,
+        )
+        knowledge_operationalization_efficiency = operational_yield_from_concepts
+        operational_knowledge_waste = (
+            round(1.0 - operational_yield_from_concepts, 4)
+            if isinstance(operational_yield_from_concepts, (int, float))
+            else None
+        )
+        operational_yield_stability = self._bounded_ratio(
+            independent_reuse_success_count,
+            operational_experience_count,
+        )
+        operational_yield_health_state = self._coverage_status(
+            knowledge_operationalization_efficiency
+        )
+        high_value_knowledge_items = int(
+            self._first_number(proposal.get("high_value_knowledge_items"), 0)
+            or 0
+        )
+        medium_value_knowledge_items = int(
+            self._first_number(proposal.get("medium_value_knowledge_items"), 0)
+            or 0
+        )
+        low_value_knowledge_items = int(
+            self._first_number(proposal.get("low_value_knowledge_items"), 0)
+            or 0
+        )
+        deprioritized_knowledge_items = int(
+            self._first_number(proposal.get("deprioritized_knowledge_items"), 0)
+            or 0
+        )
+        operational_investment_accuracy = self._bounded_ratio(
+            materialized_operational_capabilities,
+            high_value_knowledge_items,
+        )
+        high_value_operational_false_positives = max(
+            high_value_knowledge_items - materialized_operational_capabilities,
+            0,
+        )
+        operational_investment_accuracy_state = self._coverage_status(
+            operational_investment_accuracy
+        )
+        validation_efficiency = self._bounded_ratio(
+            validated_programs,
+            arena_candidates,
+        )
+        high_value_validation_yield = self._bounded_ratio(
+            validated_programs,
+            high_value_knowledge_items,
+        )
+        operational_capability_acquisition_rate = self._bounded_ratio(
+            known_operational_capabilities,
+            operational_experience_task_count,
+        )
+        operational_capability_acquisition_rate_per_100_tasks = (
+            round(operational_capability_acquisition_rate * 100, 2)
+            if isinstance(operational_capability_acquisition_rate, (int, float))
+            else None
+        )
+        target_experience_per_capability = 3
+        expected_operational_capability_count = (
+            max(1, int((operational_experience_count + target_experience_per_capability - 1) / target_experience_per_capability))
+            if operational_experience_count > 0
+            else 0
+        )
+        capability_population_evolution_gap = max(
+            expected_operational_capability_count - known_operational_capabilities,
+            0,
+        )
+        capability_population_evolution_speed = self._bounded_ratio(
+            known_operational_capabilities,
+            expected_operational_capability_count,
+        )
+        operational_experience_growth_speed = self._bounded_ratio(
+            operational_experience_count,
+            operational_experience_task_count,
+        )
+        capability_population_evolution_lag = self._bounded_ratio(
+            capability_population_evolution_gap,
+            expected_operational_capability_count,
+        )
+        capability_population_evolution_state = (
+            "NOT_MEASURABLE"
+            if expected_operational_capability_count <= 0
+            else "SEVERE_EVOLUTION_LAG"
+            if (
+                isinstance(capability_population_evolution_lag, (int, float))
+                and capability_population_evolution_lag >= 0.60
+            )
+            else "EVOLUTION_LAG"
+            if (
+                isinstance(capability_population_evolution_lag, (int, float))
+                and capability_population_evolution_lag >= 0.30
+            )
+            else "EVOLVING"
+        )
+        operational_experience_per_capability = (
+            round(operational_experience_count / known_operational_capabilities, 4)
+            if known_operational_capabilities > 0
+            else None
+        )
+        operational_specialization_pressure = (
+            "HIGH"
+            if (
+                isinstance(operational_experience_per_capability, (int, float))
+                and operational_experience_per_capability >= 5
+                and known_operational_capabilities < 5
+            )
+            else "MEDIUM"
+            if (
+                isinstance(operational_experience_per_capability, (int, float))
+                and operational_experience_per_capability >= 3
+                and known_operational_capabilities < 5
+            )
+            else "LOW"
+            if known_operational_capabilities
+            else "NOT_MEASURABLE"
+        )
+        known_operation_set = {
+            str(operation or "").strip().lower()
+            for operation in (materialization.get("known_operational_operations") or [])
+            if operation
+        }
+        proposal_rows = proposal.get("candidate_proposals") or []
+        proposal_rows = proposal_rows if isinstance(proposal_rows, list) else []
+        proposed_candidate_operations = [
+            str(row.get("operation") or "").strip().lower()
+            for row in proposal_rows
+            if isinstance(row, dict)
+            and row.get("proposal_status") == "PROPOSED"
+            and row.get("operation")
+        ]
+        known_operational_candidate_count = len([
+            operation for operation in proposed_candidate_operations
+            if operation in known_operation_set
+        ])
+        novel_operational_candidate_count = len(proposed_candidate_operations) - (
+            known_operational_candidate_count
+        )
+        current_operational_exploitation_rate = self._bounded_ratio(
+            known_operational_candidate_count,
+            len(proposed_candidate_operations),
+        )
+        current_operational_exploration_rate = self._bounded_ratio(
+            novel_operational_candidate_count,
+            len(proposed_candidate_operations),
+        )
+        capability_experience_distribution = (
+            materialization.get("operational_capability_experience_distribution")
+            or []
+        )
+        if not isinstance(capability_experience_distribution, list):
+            capability_experience_distribution = []
+        valid_distribution = [
+            row for row in capability_experience_distribution
+            if isinstance(row, dict)
+        ]
+        dominant_capability = valid_distribution[0] if valid_distribution else {}
+        dominant_capability_experience_count = int(
+            self._first_number(
+                dominant_capability.get("experience_count"),
+                0,
+            )
+            or 0
+        )
+        capability_monopoly_share = self._bounded_ratio(
+            dominant_capability_experience_count,
+            operational_experience_count,
+        )
+        experienced_capability_count = len([
+            row for row in valid_distribution
+            if int(self._first_number(row.get("experience_count"), 0) or 0) > 0
+        ])
+        independent_reuse_capability_count = len([
+            row for row in valid_distribution
+            if int(
+                self._first_number(
+                    row.get("independent_reuse_success_count"),
+                    0,
+                )
+                or 0
+            ) > 0
+        ])
+        capability_monopoly_pressure = (
+            "HIGH"
+            if (
+                isinstance(capability_monopoly_share, (int, float))
+                and capability_monopoly_share >= 0.60
+                and known_operational_capabilities < 5
+            )
+            else "MEDIUM"
+            if (
+                isinstance(capability_monopoly_share, (int, float))
+                and capability_monopoly_share >= 0.45
+                and known_operational_capabilities < 5
+            )
+            else "LOW"
+            if known_operational_capabilities
+            else "NOT_MEASURABLE"
+        )
+        exploration_target = 0.30
+        historical_exploitation_bias = capability_monopoly_share
+        exploration_exploitation_balance_state = (
+            "NOT_MEASURABLE"
+            if not proposed_candidate_operations
+            else "EXPLOITATION_BIASED"
+            if (
+                isinstance(current_operational_exploration_rate, (int, float))
+                and current_operational_exploration_rate < 0.20
+            )
+            else "HISTORICAL_EXPLOITATION_BIAS_WITH_ACTIVE_EXPLORATION"
+            if (
+                capability_monopoly_pressure == "HIGH"
+                and isinstance(current_operational_exploration_rate, (int, float))
+                and current_operational_exploration_rate >= exploration_target
+            )
+            else "EXPLORATION_HEAVY"
+            if (
+                isinstance(current_operational_exploration_rate, (int, float))
+                and current_operational_exploration_rate > 0.60
+            )
+            else "BALANCED"
+            if (
+                isinstance(current_operational_exploration_rate, (int, float))
+                and current_operational_exploration_rate >= exploration_target
+            )
+            else "EXPLOITATION_LEANING"
         )
 
         coverage_scores = {
@@ -2508,6 +2997,9 @@ class CanonicalReportBindingEngine:
             candidate_count=candidate_count,
             arena_candidates=arena_candidates,
             validated_programs=validated_programs,
+            materialized_operational_capabilities=materialized_operational_capabilities,
+            known_operational_capabilities=known_operational_capabilities,
+            known_operational_domain_count=known_operational_domain_count,
             prediction_contribution=bool(
                 self._build_prediction_provenance_visibility(
                     report_state,
@@ -2523,6 +3015,72 @@ class CanonicalReportBindingEngine:
             arena,
             executable,
             candidate_lineage,
+        )
+        known_operational_domains = materialization.get("known_operational_domains") or []
+        known_operational_domains = (
+            known_operational_domains
+            if isinstance(known_operational_domains, list)
+            else []
+        )
+        known_operational_operations = (
+            materialization.get("known_operational_operations") or []
+        )
+        known_operational_operations = (
+            known_operational_operations
+            if isinstance(known_operational_operations, list)
+            else []
+        )
+        known_operational_domain_labels = {
+            self._cognitive_domain_label(domain)
+            for domain in known_operational_domains
+            if domain
+        }
+        known_operational_domain_labels.update(
+            self._cognitive_domain_label(
+                self._cognitive_domain_for_operation(operation)
+            )
+            for operation in known_operational_operations
+            if operation
+        )
+        surviving_capability_domain_labels = {
+            self._cognitive_domain_label(
+                row.get("domain")
+                or self._cognitive_domain_for_operation(row.get("operation"))
+            )
+            for row in capability_survival_rows
+            if isinstance(row, dict)
+            and row.get("lifecycle_state")
+            in {"SURVIVING_CAPABILITY", "OPERATIONAL_CITIZEN"}
+        }
+        domain_rows_for_citizenship = domain_architecture.get("domain_rows") or []
+        domain_rows_for_citizenship = (
+            domain_rows_for_citizenship
+            if isinstance(domain_rows_for_citizenship, list)
+            else []
+        )
+        expected_operational_domain_citizen_count = max(
+            int(self._first_number(domain_architecture.get("domain_count"), 0) or 0),
+            7,
+        )
+        historical_operational_domain_citizen_count = len(
+            known_operational_domain_labels
+        )
+        operational_domain_citizenship_coverage = self._bounded_ratio(
+            historical_operational_domain_citizen_count,
+            expected_operational_domain_citizen_count,
+        )
+        surviving_capability_domain_count = len(surviving_capability_domain_labels)
+        missing_operational_citizen_domains = [
+            self._cognitive_domain_label(row.get("domain_name"))
+            for row in domain_rows_for_citizenship
+            if isinstance(row, dict)
+            and self._cognitive_domain_label(row.get("domain_name"))
+            not in known_operational_domain_labels
+            and isinstance(row.get("domain_operational_readiness"), (int, float))
+            and float(row.get("domain_operational_readiness")) >= 0.60
+        ]
+        missing_operational_citizen_domains = sorted(
+            set(missing_operational_citizen_domains)
         )
         missing_requirements = program_generation.get("missing_requirements") or []
         if not isinstance(missing_requirements, list):
@@ -2572,7 +3130,95 @@ class CanonicalReportBindingEngine:
             "arena_coverage": arena_coverage,
             "arena_source_coverage": arena_source_coverage,
             "program_coverage": program_coverage,
+            "validated_executable_coverage": validated_executable_coverage,
             "operational_capability_coverage": operational_coverage,
+            "operational_capability_materialization_rate": operational_materialization_rate,
+            "operational_yield_from_concepts": operational_yield_from_concepts,
+            "operational_yield_from_programs": operational_yield_from_programs,
+            "operational_yield_from_candidates": operational_yield_from_candidates,
+            "operational_yield_from_arena": operational_yield_from_arena,
+            "knowledge_production_efficiency": knowledge_production_efficiency,
+            "knowledge_operationalization_efficiency": knowledge_operationalization_efficiency,
+            "operational_knowledge_waste": operational_knowledge_waste,
+            "operational_yield_stability": operational_yield_stability,
+            "operational_yield_stability_basis": "experience_reuse_proxy",
+            "operational_yield_health_state": operational_yield_health_state,
+            "knowledge_investment_policy": proposal.get(
+                "knowledge_investment_policy"
+            ),
+            "knowledge_investment_authority": proposal.get(
+                "knowledge_investment_authority"
+            ),
+            "high_value_knowledge_items": high_value_knowledge_items,
+            "medium_value_knowledge_items": medium_value_knowledge_items,
+            "low_value_knowledge_items": low_value_knowledge_items,
+            "deprioritized_knowledge_items": deprioritized_knowledge_items,
+            "operational_investment_accuracy": operational_investment_accuracy,
+            "operational_investment_accuracy_state": operational_investment_accuracy_state,
+            "high_value_operational_false_positives": high_value_operational_false_positives,
+            "validation_efficiency": validation_efficiency,
+            "validation_bottleneck_inflation": validation_bottleneck_inflation,
+            "validation_bottleneck_state": validation_bottleneck_state,
+            "high_value_validation_yield": high_value_validation_yield,
+            "operational_capability_acquisition_rate": operational_capability_acquisition_rate,
+            "operational_capability_acquisition_rate_per_100_tasks": operational_capability_acquisition_rate_per_100_tasks,
+            "capability_survival_rate": capability_survival_rate,
+            "materialization_survival_rate": materialization_survival_rate,
+            "candidate_retention_rate": candidate_retention_rate,
+            "incubation_conversion_rate": incubation_conversion_rate,
+            "surviving_capability_count": surviving_capability_count,
+            "surviving_capability_conversion_rate": surviving_capability_conversion_rate,
+            "operational_citizen_conversion_rate": operational_citizen_conversion_rate,
+            "current_run_operational_citizen_count": operational_citizen_count,
+            "historical_operational_citizen_count": historical_operational_citizen_count,
+            "expected_operational_domain_citizen_count": (
+                expected_operational_domain_citizen_count
+            ),
+            "historical_operational_domain_citizen_count": (
+                historical_operational_domain_citizen_count
+            ),
+            "operational_domain_citizenship_coverage": (
+                operational_domain_citizenship_coverage
+            ),
+            "surviving_capability_domain_count": surviving_capability_domain_count,
+            "missing_operational_citizen_domains": (
+                missing_operational_citizen_domains
+            ),
+            "generated_survival_candidate_count": generated_survival_candidate_count,
+            "arena_simulated_survival_candidate_count": arena_simulated_survival_candidate_count,
+            "arena_quality_survival_candidate_count": arena_quality_survival_candidate_count,
+            "incubating_operational_capability_count": incubating_operational_capability_count,
+            "operational_citizen_count": operational_citizen_count,
+            "validation_gap_candidate_count": validation_gap_candidate_count,
+            "capability_survival_state_distribution": survival_state_distribution,
+            "top_incubating_capabilities": top_incubating_capabilities[:5],
+            "capability_survival_rows": capability_survival_rows,
+            "capability_survival_store_path": materialization.get(
+                "capability_survival_store_path"
+            ) or survival.get("store_path"),
+            "target_experience_per_capability": target_experience_per_capability,
+            "expected_operational_capability_count": expected_operational_capability_count,
+            "capability_population_evolution_gap": capability_population_evolution_gap,
+            "capability_population_evolution_speed": capability_population_evolution_speed,
+            "operational_experience_growth_speed": operational_experience_growth_speed,
+            "capability_population_evolution_lag": capability_population_evolution_lag,
+            "capability_population_evolution_state": capability_population_evolution_state,
+            "operational_experience_per_capability": operational_experience_per_capability,
+            "operational_specialization_pressure": operational_specialization_pressure,
+            "current_operational_exploration_rate": current_operational_exploration_rate,
+            "current_operational_exploitation_rate": current_operational_exploitation_rate,
+            "known_operational_candidate_count": known_operational_candidate_count,
+            "novel_operational_candidate_count": novel_operational_candidate_count,
+            "operational_exploration_target": exploration_target,
+            "historical_exploitation_bias": historical_exploitation_bias,
+            "exploration_exploitation_balance_state": exploration_exploitation_balance_state,
+            "capability_monopoly_share": capability_monopoly_share,
+            "capability_monopoly_pressure": capability_monopoly_pressure,
+            "dominant_operational_capability": dominant_capability.get("operation"),
+            "dominant_capability_experience_count": dominant_capability_experience_count,
+            "experienced_capability_count": experienced_capability_count,
+            "independent_reuse_capability_count": independent_reuse_capability_count,
+            "capability_experience_distribution": valid_distribution[:5],
             "compiler_runtime_coverage": compiler_runtime_coverage,
             "generated_concepts": generated_concepts,
             "measured_concepts": measured_concepts,
@@ -2586,6 +3232,37 @@ class CanonicalReportBindingEngine:
             "compiled_programs": compiled_programs,
             "compiler_runtime_activated_programs": compiler_runtime_activated_programs,
             "validated_programs": validated_programs,
+            "materialized_operational_capabilities": materialized_operational_capabilities,
+            "operational_confidence_state": materialization.get(
+                "operational_confidence_state"
+            ),
+            "authority_transfer_state": materialization.get(
+                "authority_transfer_state"
+            ),
+            "trusted_for_decision_count": materialization.get(
+                "trusted_for_decision_count"
+            ),
+            "decision_trust_state": materialization.get(
+                "decision_trust_state"
+            ),
+            "operational_experience_count": operational_experience_count,
+            "operational_experience_task_count": operational_experience_task_count,
+            "reuse_evidence_count": reuse_evidence_count,
+            "independent_reuse_success_count": independent_reuse_success_count,
+            "operational_experience_store_path": materialization.get(
+                "experience_store_path"
+            ),
+            "known_operational_capability_count": materialization.get(
+                "known_operational_capability_count"
+            ),
+            "known_operational_operations": materialization.get(
+                "known_operational_operations"
+            ) or [],
+            "known_operational_domain_count": known_operational_domain_count,
+            "known_operational_domains": known_operational_domains,
+            "operational_capability_population_target": 5,
+            "operational_domain_population_target": 5,
+            "capability_population_diversification": population_diversification,
             "operational_programs": operational_programs,
             "missing_execution_packages": semantic.get("unsupported_operations") or [],
             "missing_compiler_requirements": missing_requirements,
@@ -2619,6 +3296,60 @@ class CanonicalReportBindingEngine:
             **summary,
         }
 
+    def _materialized_operational_capability_count(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> int:
+        materialization = self._operational_capability_materialization_summary(
+            report_state,
+            performance,
+        )
+        materialized = self._first_number(
+            materialization.get("materialized_operational_capabilities"),
+            materialization.get("reusable_operational_capabilities"),
+        )
+        if materialized is not None:
+            return int(materialized or 0)
+
+        explicit_ecosystem = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_ECOSYSTEM_REPORT", "cognitive_domain_ecosystem_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_ECOSYSTEM_REPORT", "cognitive_domain_ecosystem_report"),
+        )
+        coverage = self._first_dict(explicit_ecosystem, "global_cognitive_coverage")
+        ecosystem = self._first_dict(explicit_ecosystem, "ecosystem")
+        direct = self._first_number(
+            coverage.get("operational_capabilities"),
+            ecosystem.get("operational_capabilities"),
+            explicit_ecosystem.get("operational_capabilities"),
+            explicit_ecosystem.get("total_operational_capabilities"),
+        )
+        if direct is not None:
+            return int(direct or 0)
+
+        explicit_lifecycle = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_DOMAIN_LIFECYCLE_REPORT", "cognitive_domain_lifecycle_report"),
+            self._first_dict(performance, "COGNITIVE_DOMAIN_LIFECYCLE_REPORT", "cognitive_domain_lifecycle_report"),
+        )
+        registry = explicit_lifecycle.get("domain_registry") or []
+        if isinstance(registry, list):
+            return sum(
+                len(row.get("operational_capabilities") or [])
+                for row in registry
+                if isinstance(row, dict)
+            )
+        return 0
+
+    def _operational_capability_materialization_summary(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        return self._merge_dicts(
+            self._first_dict(report_state, "OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT", "operational_capability_materialization_report"),
+            self._first_dict(performance, "OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT", "operational_capability_materialization_report"),
+        )
+
     def _end_to_end_program_lifecycle_summary(
         self,
         *,
@@ -2628,6 +3359,9 @@ class CanonicalReportBindingEngine:
         candidate_count: int,
         arena_candidates: int,
         validated_programs: int,
+        materialized_operational_capabilities: int,
+        known_operational_capabilities: int,
+        known_operational_domain_count: int,
         prediction_contribution: bool,
     ) -> dict[str, Any]:
         return {
@@ -2638,6 +3372,9 @@ class CanonicalReportBindingEngine:
             "arena_candidate_count": arena_candidates,
             "validated_programs": validated_programs,
             "prediction_contribution_count": 1 if prediction_contribution else 0,
+            "materialized_operational_capabilities": materialized_operational_capabilities,
+            "known_operational_capabilities": known_operational_capabilities,
+            "known_operational_domain_count": known_operational_domain_count,
             "program_to_compiler_activation_rate": self._bounded_ratio(
                 compiler_runtime_activated_programs,
                 generated_programs,
@@ -2662,6 +3399,10 @@ class CanonicalReportBindingEngine:
                 validated_programs,
                 generated_programs,
             ),
+            "validation_to_operational_capability_rate": self._bounded_ratio(
+                materialized_operational_capabilities,
+                validated_programs,
+            ),
             "operationalization_bottleneck": (
                 "compiler_success"
                 if compiled_programs < max(compiler_runtime_activated_programs, 1)
@@ -2669,6 +3410,28 @@ class CanonicalReportBindingEngine:
                 if arena_candidates < max(candidate_count, 1)
                 else "validation"
                 if validated_programs < max(arena_candidates, 1)
+                else "capability_materialization"
+                if materialized_operational_capabilities < max(validated_programs, 1)
+                else "none"
+            ),
+            "secondary_operationalization_bottleneck": (
+                "capability_population_diversification"
+                if known_operational_domain_count < 5
+                else "capability_population_growth"
+                if known_operational_capabilities < 5
+                else "capability_materialization"
+                if (
+                    validated_programs > 0
+                    and materialized_operational_capabilities < validated_programs
+                )
+                else "none"
+            ),
+            "current_run_materialization_gap": (
+                "capability_materialization"
+                if (
+                    validated_programs > 0
+                    and materialized_operational_capabilities < validated_programs
+                )
                 else "none"
             ),
         }
@@ -2885,6 +3648,16 @@ class CanonicalReportBindingEngine:
             candidate_count = int(item["candidate_count"])
             arena_count = int(item["arena_candidate_count"])
             validated_count = int(item["validated_programs"])
+            if program_count and not candidate_count:
+                operationalization_gap = "candidate_generation_gap"
+            elif candidate_count and not arena_count:
+                operationalization_gap = "arena_entry_gap"
+            elif arena_count and not validated_count:
+                operationalization_gap = "validation_gap"
+            elif len(item["executable_concepts"]) and not validated_count:
+                operationalization_gap = "operational_validation_gap"
+            else:
+                operationalization_gap = "none"
             maturity_scores = [
                 self._bounded_ratio(semantic_count, semantic_count),
                 self._bounded_ratio(program_count, semantic_count),
@@ -2905,6 +3678,7 @@ class CanonicalReportBindingEngine:
                 "validated_program_count": validated_count,
                 "domain_operational_readiness": readiness,
                 "domain_status": self._coverage_status(readiness),
+                "operationalization_gap": operationalization_gap,
                 "missing_execution_packages": sorted(item["missing_execution_packages"]),
                 "missing_compiler_requirements": sorted(item["missing_compiler_requirements"]),
             })
@@ -2925,6 +3699,10 @@ class CanonicalReportBindingEngine:
             if row.get("domain_operational_readiness") is not None
             and row["domain_operational_readiness"] >= 0.70
         ]
+        domain_operationalization_gaps = [
+            row for row in active
+            if row.get("operationalization_gap") not in {None, "none"}
+        ]
         return {
             "domain_architecture_state": (
                 "FOUNDATIONAL" if active else "NOT_MEASURABLE"
@@ -2932,6 +3710,14 @@ class CanonicalReportBindingEngine:
             "domain_count": len(active),
             "operational_domain_count": len(operational),
             "domain_rows": active,
+            "domain_operationalization_gaps": sorted(
+                domain_operationalization_gaps,
+                key=lambda row: (
+                    row.get("candidate_count") or 0,
+                    row.get("arena_candidate_count") or 0,
+                    row["domain_name"],
+                ),
+            )[:5],
             "lowest_readiness_domains": sorted(
                 active,
                 key=lambda row: (
@@ -3740,6 +4526,15 @@ class CanonicalReportBindingEngine:
             return "Color Cognitive Domain"
         return "Transformation Cognitive Domain"
 
+    def _cognitive_domain_label(self, domain: Any) -> str:
+        label = str(domain or "").strip()
+        if not label:
+            return "Unknown"
+        for suffix in (" Cognitive Domain", " Domain"):
+            if label.endswith(suffix):
+                label = label[: -len(suffix)]
+        return label.strip().title()
+
     def _cognitive_domain_for_concept(self, concept: str) -> str:
         token = str(concept or "").lower().replace("-", "_").replace(" ", "_")
         if any(part in token for part in ("growth", "density", "propagation", "replication")):
@@ -3983,6 +4778,16 @@ class CanonicalReportBindingEngine:
             "symbolic_remapping",
         ):
             support[concept] = "recolor"
+        preservation_support = {
+            "color_preservation": "preserve_colors",
+            "topology_preservation": "preserve_topology",
+            "shape_preservation": "preserve_shape",
+            "size_preservation": "preserve_size",
+            "density_preservation": "preserve_density",
+            "symmetry_preservation": "preserve_symmetry",
+            "symmetry_reasoning": "preserve_symmetry",
+        }
+        support.update(preservation_support)
         for concept in (
             "growth",
             "topological_growth",
@@ -4648,6 +5453,22 @@ class CanonicalReportBindingEngine:
                 "explicit_rejection_count": rejection_count,
                 "sources_with_proposals": explicit.get("sources_with_proposals") or [],
                 "sources_rejected": explicit.get("sources_rejected") or [],
+                "knowledge_investment_policy": explicit.get("knowledge_investment_policy"),
+                "knowledge_investment_authority": explicit.get(
+                    "knowledge_investment_authority"
+                ),
+                "high_value_knowledge_items": explicit.get(
+                    "high_value_knowledge_items"
+                ),
+                "medium_value_knowledge_items": explicit.get(
+                    "medium_value_knowledge_items"
+                ),
+                "low_value_knowledge_items": explicit.get(
+                    "low_value_knowledge_items"
+                ),
+                "deprioritized_knowledge_items": explicit.get(
+                    "deprioritized_knowledge_items"
+                ),
                 "candidate_proposals": proposals,
             }
         else:
@@ -4686,6 +5507,12 @@ class CanonicalReportBindingEngine:
                     for row in outcomes
                     if isinstance(row, dict) and row.get("status") == "REJECTED"
                 }),
+                "knowledge_investment_policy": "Not Available",
+                "knowledge_investment_authority": "Not Available",
+                "high_value_knowledge_items": None,
+                "medium_value_knowledge_items": None,
+                "low_value_knowledge_items": None,
+                "deprioritized_knowledge_items": None,
                 "candidate_proposals": proposals,
             }
         return {

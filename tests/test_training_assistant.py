@@ -270,3 +270,134 @@ def test_training_assistant_persists_task_selection_memory(tmp_path):
     for task_file in selected["selected_task_files"]:
         assert memory["tasks"][task_file]["times_selected"] == 1
         assert memory["tasks"][task_file]["last_run_id"]
+
+
+def test_training_assistant_selects_one_elite_and_two_normal_tasks(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["topological_reasoning"],
+            "deficiency_targets": ["candidate_generation_gap"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_transformation"],
+            "deficiency_targets": ["color_pressure"],
+        },
+        "normal_001.json": {"target_concepts": ["spatial_reasoning"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+        "normal_003.json": {"target_concepts": ["object_counting"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+            "normal_003.json",
+        ],
+        concept_counts={"topological_reasoning": 1},
+        task_directory=tasks_directory,
+        core_knowledge=[{"concept": "replace_color"}],
+    )
+
+    assert selected["selected_task_count"] == 3
+    assert len(selected["selected_elite_task_files"]) == 1
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_01.json",
+    ]
+    assert len([
+        task_file
+        for task_file in selected["selected_task_files"]
+        if not task_file.startswith("elite_cognitive_task_")
+    ]) == 2
+    assert selected["elite_selection_report"]["policy"] == (
+        "exactly_one_elite_task_per_cycle"
+    )
+
+
+def test_training_assistant_uses_survival_store_for_elite_reappearance(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:topology:preserve_topology:topological_reasoning": {
+                "capability_id": "operational_capability:topology:preserve_topology:topological_reasoning",
+                "operation": "preserve_topology",
+                "domain": "Topology",
+                "semantic_intent": "topological_reasoning",
+                "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                "next_required_evidence": "independent_task_reappearance",
+                "best_accuracy": 0.84,
+                "distinct_task_count": 1,
+                "arena_simulated_count": 1,
+                "validation_attempts": 1,
+            }
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_transformation"],
+            "deficiency_targets": ["color_pressure"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["topological_reasoning", "identity_preservation"],
+            "deficiency_targets": ["validation_gap"],
+        },
+        "normal_001.json": {"target_concepts": ["spatial_reasoning"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        concept_counts={
+            "color_transformation": 20,
+            "topological_reasoning": 20,
+            "identity_preservation": 20,
+        },
+        task_directory=tasks_directory,
+    )
+
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    assert "survival_store_independent_reappearance_probe" in (
+        selected["elite_selection_report"]["priority_reasons"]
+    )
+    assert selected["elite_selection_report"][
+        "survival_reappearance_matches"
+    ][0]["operation"] == "preserve_topology"

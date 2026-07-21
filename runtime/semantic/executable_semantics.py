@@ -46,6 +46,21 @@ EXECUTABLE_SEMANTICS = {
         "execution_path": "topology_preservation",
         "primitive_family": "topology_operations",
     },
+    "shape_preservation": {
+        "required_primitives": ("preserve_shape",),
+        "execution_path": "shape_preservation",
+        "primitive_family": "geometry_operations",
+    },
+    "size_preservation": {
+        "required_primitives": ("preserve_size",),
+        "execution_path": "size_preservation",
+        "primitive_family": "geometry_operations",
+    },
+    "density_preservation": {
+        "required_primitives": ("preserve_density",),
+        "execution_path": "density_preservation",
+        "primitive_family": "growth_operations",
+    },
     "topological_growth": {
         "required_primitives": ("grow_topology", "expand_pattern"),
         "execution_path": "topology_growth",
@@ -59,6 +74,11 @@ EXECUTABLE_SEMANTICS = {
     "symmetry_preservation": {
         "required_primitives": ("preserve_symmetry", "mirror_object"),
         "execution_path": "symmetry_preservation",
+        "primitive_family": "symmetry_operations",
+    },
+    "symmetry_reasoning": {
+        "required_primitives": ("preserve_symmetry",),
+        "execution_path": "symmetry_reasoning",
         "primitive_family": "symmetry_operations",
     },
     "symmetry_creation": {
@@ -194,9 +214,6 @@ NON_EXECUTABLE_CONCEPTS = {
     "truth_support",
     "causal_support",
     "identity_context",
-    "density_preservation",
-    "size_preservation",
-    "position_preservation",
 }
 
 

@@ -60,6 +60,18 @@ class SemanticToTransformationCompiler:
         "color_preservation",
         "preserve_color_mapping",
     }
+    SHAPE_PRESERVATION_CONCEPTS = {
+        "shape_preservation",
+        "preserve_shape",
+    }
+    SIZE_PRESERVATION_CONCEPTS = {
+        "size_preservation",
+        "preserve_size",
+    }
+    DENSITY_PRESERVATION_CONCEPTS = {
+        "density_preservation",
+        "preserve_density",
+    }
     COLOR_REMAP_CONCEPTS = {
         "color_mapping",
         "symbolic_remapping",
@@ -78,12 +90,15 @@ class SemanticToTransformationCompiler:
     GRID_PRESERVATION_CONCEPTS = {
         "object_identity_preservation",
         "position_preservation",
-        "shape_preservation",
-        "size_preservation",
     }
     TOPOLOGY_PRESERVATION_CONCEPTS = {
         "topology_preservation",
         "preserve_topology",
+    }
+    SYMMETRY_PRESERVATION_CONCEPTS = {
+        "symmetry_preservation",
+        "symmetry_reasoning",
+        "preserve_symmetry",
     }
 
     def compile(
@@ -144,8 +159,24 @@ class SemanticToTransformationCompiler:
             candidate = self._compile_preservation(source, target, "color_preservation", "preserve_colors")
             if candidate:
                 candidates.append(candidate)
+        if concepts.intersection(self.SHAPE_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_shape"}):
+            candidate = self._compile_preservation(source, target, "shape_preservation", "preserve_shape")
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.SIZE_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_size"}):
+            candidate = self._compile_preservation(source, target, "size_preservation", "preserve_size")
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.DENSITY_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_density"}):
+            candidate = self._compile_preservation(source, target, "density_preservation", "preserve_density")
+            if candidate:
+                candidates.append(candidate)
         if concepts.intersection(self.TOPOLOGY_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_topology"}):
             candidate = self._compile_preservation(source, target, "topology_preservation", "preserve_topology")
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.SYMMETRY_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_symmetry"}):
+            candidate = self._compile_preservation(source, target, "symmetry_preservation", "preserve_symmetry")
             if candidate:
                 candidates.append(candidate)
         if concepts.intersection(self.GRID_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_grid", "object_identity_preservation"}):
@@ -223,7 +254,15 @@ class SemanticToTransformationCompiler:
                 output = self._execute_filter(output, parameters)
             elif operation == "replace_color":
                 output = self._execute_color_remap(output, parameters)
-            elif operation in {"preserve_grid", "preserve_colors", "preserve_topology"}:
+            elif operation in {
+                "preserve_grid",
+                "preserve_colors",
+                "preserve_topology",
+                "preserve_shape",
+                "preserve_size",
+                "preserve_density",
+                "preserve_symmetry",
+            }:
                 output = output.copy()
             elif operation == "duplicate_object":
                 output = self._execute_cell_writes(output, parameters)

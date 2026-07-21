@@ -65,7 +65,16 @@ class CandidateSimulator:
 
     def _execute(self, grid: np.ndarray, operation: str, parameters: Mapping[str, Any]) -> tuple[np.ndarray, bool]:
         output = grid.copy()
-        if operation in {"preserve_grid", "preserve_colors", "preserve_topology", "noop"}:
+        if operation in {
+            "preserve_grid",
+            "preserve_colors",
+            "preserve_topology",
+            "preserve_shape",
+            "preserve_size",
+            "preserve_density",
+            "preserve_symmetry",
+            "noop",
+        }:
             return output, True
         if operation in {"replace_color", "recolor"}:
             mapping = parameters.get("color_mapping") or {}

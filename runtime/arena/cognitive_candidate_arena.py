@@ -280,11 +280,14 @@ class CognitiveCandidateArena:
                 "operation": candidate.get("operation"),
                 "score": score.get("final_score"),
                 "accuracy": simulation.get("prediction_accuracy"),
+                "simulation_success": simulation.get("simulation_success"),
                 "status": status,
                 "entered_arena": status != "BLOCKED_BY_GOVERNANCE",
                 "selected": status == "WINNER",
                 "validation_status": governance[candidate_id]["decision"],
                 "blocked_reason": ";".join(governance[candidate_id].get("reasons", [])) or None,
+                "semantic_intent": candidate.get("intent"),
+                "program_signature": candidate.get("program_signature"),
             })
         return rows
 
