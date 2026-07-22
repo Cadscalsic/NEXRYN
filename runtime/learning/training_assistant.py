@@ -9,9 +9,19 @@ from runtime.training.curriculum_manager import CurriculumManager
 
 class TrainingAssistant:
     SCHEMA_VERSION = 1
+    DOMAIN_OPERATIONALIZATION_ORDER = {
+        "Spatial": 0,
+        "Identity": 1,
+        "Transformation": 2,
+        "Color": 3,
+        "Geometry": 4,
+        "Topology": 5,
+        "Growth": 6,
+    }
     TASK_COOLDOWN_RUNS = 20
     UNSEEN_TASK_BOOST = 3.0
     RECENT_TASK_PENALTY = 0.1
+    TARGET_EXPERIENCE_PER_CAPABILITY = 3
     SELECTION_MODES = {"random", "weighted_random", "curriculum"}
 
     def __init__(
@@ -225,6 +235,7 @@ class TrainingAssistant:
             row for row in self._load_survival_store().values()
             if isinstance(row, dict)
         ]
+        population_policy = self._capability_population_evolution_policy(rows)
         targets = []
         for row in rows:
             lifecycle_state = str(row.get("lifecycle_state") or "")
@@ -240,15 +251,38 @@ class TrainingAssistant:
                 "repeatable_validation_across_independent_task",
                 "prediction_quality_improvement",
                 "validator_acceptance",
+                "stability_recovery_evidence",
+                "exact_or_governed_validation_success",
             }:
                 continue
-            if int(row.get("distinct_task_count", 0) or 0) >= 3:
-                continue
-            best_accuracy = row.get("best_accuracy")
+            improvement_trend = str(row.get("improvement_trend") or "")
             try:
-                best_accuracy = float(best_accuracy)
+                best_accuracy = float(row.get("best_accuracy"))
             except (TypeError, ValueError):
                 best_accuracy = 0.0
+            try:
+                average_accuracy = float(row.get("average_accuracy"))
+            except (TypeError, ValueError):
+                average_accuracy = 0.0
+            arena_quality_count = int(row.get("arena_quality_count", 0) or 0)
+            distinct_task_count = int(row.get("distinct_task_count", 0) or 0)
+            crystallization_candidate = (
+                lifecycle_state in {
+                    "INCUBATING_VALIDATION_GAP",
+                    "SURVIVING_CAPABILITY",
+                }
+                and arena_quality_count >= 3
+                and distinct_task_count >= 3
+                and best_accuracy >= 0.90
+                and average_accuracy >= 0.75
+                and improvement_trend not in {"DECLINING", "DECLINING_CRITICAL"}
+            )
+            if (
+                distinct_task_count >= 3
+                and improvement_trend not in {"DECLINING", "DECLINING_CRITICAL"}
+                and not crystallization_candidate
+            ):
+                continue
             priority = (
                 100
                 + int(row.get("validation_attempts", 0) or 0) * 8
@@ -259,6 +293,20 @@ class TrainingAssistant:
                 priority += 35
             elif lifecycle_state == "SURVIVING_CAPABILITY":
                 priority += 20
+            if improvement_trend in {"DECLINING", "DECLINING_CRITICAL"}:
+                priority += 90
+            if crystallization_candidate:
+                priority += 120
+            if population_policy.get("policy_state") in {
+                "POPULATION_EVOLUTION_SPRINT",
+                "SEVERE_POPULATION_EVOLUTION_SPRINT",
+            }:
+                if lifecycle_state == "SURVIVING_CAPABILITY":
+                    priority += 160
+                elif crystallization_candidate:
+                    priority += 110
+                elif lifecycle_state == "INCUBATING_VALIDATION_GAP":
+                    priority += 50
             targets.append({
                 "capability_id": row.get("capability_id"),
                 "operation": str(row.get("operation") or ""),
@@ -266,8 +314,28 @@ class TrainingAssistant:
                 "semantic_intent": str(row.get("semantic_intent") or ""),
                 "lifecycle_state": lifecycle_state,
                 "next_required_evidence": next_evidence,
+                "improvement_trend": improvement_trend,
                 "best_accuracy": best_accuracy,
-                "distinct_task_count": int(row.get("distinct_task_count", 0) or 0),
+                "average_accuracy": average_accuracy,
+                "arena_quality_count": arena_quality_count,
+                "distinct_task_count": distinct_task_count,
+                "crystallization_candidate": crystallization_candidate,
+                "maturation_no_progress": (
+                    lifecycle_state == "SURVIVING_CAPABILITY"
+                    and next_evidence == "exact_or_governed_validation_success"
+                    and distinct_task_count >= 8
+                    and int(row.get("validation_attempts", 0) or 0) >= 6
+                    and average_accuracy < 0.80
+                ),
+                "required_task_property": self._required_task_property_for_evidence(
+                    row,
+                    next_evidence,
+                ),
+                "population_evolution_target": bool(
+                    row.get("capability_id") in set(
+                        population_policy.get("target_capability_ids", [])
+                    )
+                ),
                 "priority": round(priority, 4),
             })
         targets.sort(
@@ -277,6 +345,159 @@ class TrainingAssistant:
             )
         )
         return targets[:10]
+
+    def _capability_population_evolution_policy(self, rows=None):
+        rows = [
+            row for row in (rows if rows is not None else self._load_survival_store().values())
+            if isinstance(row, dict)
+        ]
+        citizen_rows = [
+            row for row in rows
+            if row.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+        ]
+        maturation_rows = []
+        graduation_rows = []
+        operational_experience_count = 0
+        for row in rows:
+            experience_count = self._row_int(
+                row,
+                "operational_experience_count",
+                "experience_count",
+                "reuse_count",
+            )
+            if experience_count <= 0:
+                experience_count = max(
+                    self._row_int(row, "arena_simulated_count"),
+                    self._row_int(row, "distinct_task_count"),
+                )
+            operational_experience_count += experience_count
+            lifecycle_state = str(row.get("lifecycle_state") or "")
+            if lifecycle_state not in {
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }:
+                continue
+            best_accuracy = self._row_float(row, "best_accuracy")
+            average_accuracy = self._row_float(row, "average_accuracy")
+            distinct_task_count = self._row_int(row, "distinct_task_count")
+            arena_quality_count = self._row_int(row, "arena_quality_count")
+            arena_simulated_count = self._row_int(row, "arena_simulated_count")
+            trend = str(row.get("improvement_trend") or "")
+            if (
+                distinct_task_count >= 3
+                and max(arena_quality_count, arena_simulated_count) >= 3
+                and best_accuracy >= 0.85
+                and average_accuracy >= 0.70
+                and trend not in {"DECLINING_CRITICAL"}
+            ):
+                maturation_rows.append(row)
+            if (
+                lifecycle_state == "SURVIVING_CAPABILITY"
+                and distinct_task_count >= 15
+                and max(arena_quality_count, arena_simulated_count) >= 15
+                and best_accuracy >= 0.90
+                and average_accuracy >= 0.70
+                and trend in {
+                    "IMPROVING",
+                    "STABLE",
+                    "STABLE_HIGH_PERFORMANCE",
+                    "DECLINING_MINOR",
+                }
+            ):
+                graduation_rows.append(row)
+        citizen_count = len(citizen_rows)
+        expected_population = max(
+            citizen_count + len(maturation_rows),
+            int(
+                (operational_experience_count + self.TARGET_EXPERIENCE_PER_CAPABILITY - 1)
+                / self.TARGET_EXPERIENCE_PER_CAPABILITY
+            )
+            if operational_experience_count > 0
+            else 0,
+        )
+        evolution_gap = max(expected_population - citizen_count, 0)
+        evolution_lag = (
+            round(evolution_gap / expected_population, 4)
+            if expected_population > 0
+            else None
+        )
+        experience_per_citizen = (
+            round(operational_experience_count / citizen_count, 4)
+            if citizen_count > 0
+            else None
+        )
+        policy_state = (
+            "NOT_MEASURABLE"
+            if expected_population <= 0
+            else "SEVERE_POPULATION_EVOLUTION_SPRINT"
+            if evolution_lag is not None and evolution_lag >= 0.60
+            else "POPULATION_EVOLUTION_SPRINT"
+            if evolution_lag is not None and evolution_lag >= 0.30
+            else "POPULATION_EVOLVING"
+        )
+        maturation_rows.sort(
+            key=lambda row: (
+                str(row.get("lifecycle_state") or "") != "SURVIVING_CAPABILITY",
+                -self._row_float(row, "best_accuracy"),
+                -self._row_float(row, "average_accuracy"),
+                str(row.get("capability_id") or ""),
+            )
+        )
+        return {
+            "system": "capability_population_evolution_policy",
+            "policy_state": policy_state,
+            "target_experience_per_capability": self.TARGET_EXPERIENCE_PER_CAPABILITY,
+            "operational_experience_count": operational_experience_count,
+            "operational_citizen_count": citizen_count,
+            "maturation_backlog_count": len(maturation_rows),
+            "graduation_queue_count": len(graduation_rows),
+            "expected_operational_population": expected_population,
+            "capability_population_evolution_gap": evolution_gap,
+            "capability_population_evolution_lag": evolution_lag,
+            "operational_experience_per_citizen": experience_per_citizen,
+            "target_capability_ids": [
+                str(row.get("capability_id"))
+                for row in maturation_rows[:10]
+                if row.get("capability_id")
+            ],
+            "target_operations": list(dict.fromkeys(
+                str(row.get("operation"))
+                for row in maturation_rows[:10]
+                if row.get("operation")
+            )),
+            "graduation_target_operations": list(dict.fromkeys(
+                str(row.get("operation"))
+                for row in graduation_rows[:10]
+                if row.get("operation")
+            )),
+            "governance_action": (
+                "graduation_sprint_required"
+                if graduation_rows
+                else
+                "prioritize_maturation_reappearance"
+                if policy_state in {
+                    "POPULATION_EVOLUTION_SPRINT",
+                    "SEVERE_POPULATION_EVOLUTION_SPRINT",
+                }
+                else "monitor_population_evolution"
+            ),
+        }
+
+    def _row_int(self, row, *keys):
+        for key in keys:
+            try:
+                value = row.get(key)
+                if value is not None:
+                    return int(value or 0)
+            except (TypeError, ValueError):
+                continue
+        return 0
+
+    def _row_float(self, row, key):
+        try:
+            return float(row.get(key) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
 
     def _survival_terms_for(self, target):
         operation = str(target.get("operation") or "").lower()
@@ -301,8 +522,184 @@ class TrainingAssistant:
             terms.update({"identity", "identity_preservation"})
         return {term for term in terms if term}
 
-    def _survival_reappearance_priority(self, task_terms, targets):
+    def _required_task_property_for_evidence(self, row, next_evidence):
+        operation = str(row.get("operation") or "").lower()
+        if next_evidence == "exact_or_governed_validation_success":
+            if operation == "translate":
+                return "unambiguous_directional_translation_ground_truth"
+            return "exact_or_governed_validation_ground_truth"
+        if next_evidence == "stability_recovery_evidence":
+            return "stability_recovery_probe"
+        if next_evidence in {
+            "independent_task_reappearance",
+            "repeatable_validation_across_independent_task",
+        }:
+            return "independent_task_signature"
+        if next_evidence == "prediction_quality_improvement":
+            return "quality_improvement_probe"
+        if next_evidence == "validator_acceptance":
+            return "validator_acceptance_probe"
+        return "independent_task_signature"
+
+    def _task_evidence_terms(self, metadata):
+        values = []
+        for key in (
+            "required_evidence",
+            "evidence_targets",
+            "validation_evidence",
+            "task_properties",
+            "transformation_contract",
+            "operation_contract",
+            "primary_operation",
+            "ground_truth_type",
+        ):
+            values.extend(self._flatten_metadata_values(metadata.get(key)))
+        normalized = {
+            str(value).strip().lower()
+            for value in values
+            if str(value).strip()
+        }
+        if "translate" in normalized or "translation" in normalized:
+            normalized.add("directional_translation")
+        if "directional_translation" in normalized:
+            normalized.add("unambiguous_directional_translation_ground_truth")
+        if "exact_validation" in normalized or "exact_match" in normalized:
+            normalized.add("exact_or_governed_validation_success")
+        if "governed_validation" in normalized:
+            normalized.add("exact_or_governed_validation_success")
+        return normalized
+
+    def _flatten_metadata_values(self, value):
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            flattened = []
+            for item in value.values():
+                flattened.extend(self._flatten_metadata_values(item))
+            return flattened
+        if isinstance(value, (list, tuple, set)):
+            flattened = []
+            for item in value:
+                flattened.extend(self._flatten_metadata_values(item))
+            return flattened
+        return [value]
+
+    def _domain_label(self, domain):
+        label = str(domain or "").strip()
+        for suffix in (" Cognitive Domain", " Domain"):
+            if label.endswith(suffix):
+                label = label[: -len(suffix)]
+        return label.strip().title()
+
+    def _domain_citizenship_gaps(self):
+        expected_domains = {
+            "Color",
+            "Geometry",
+            "Growth",
+            "Identity",
+            "Spatial",
+            "Topology",
+            "Transformation",
+        }
+        rows = [
+            row for row in self._load_survival_store().values()
+            if isinstance(row, dict)
+        ]
+        citizen_domains = {
+            self._domain_label(row.get("domain"))
+            for row in rows
+            if row.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+            and row.get("domain")
+        }
+        candidate_domains = {
+            self._domain_label(row.get("domain"))
+            for row in rows
+            if row.get("domain")
+            and row.get("lifecycle_state") in {
+                "ARENA_SIMULATED",
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }
+        }
+        regression_domains = {
+            self._domain_label(row.get("domain"))
+            for row in rows
+            if row.get("domain")
+            and row.get("improvement_trend") in {"DECLINING", "DECLINING_CRITICAL"}
+        }
+        missing = sorted(expected_domains - citizen_domains)
+        active_missing = sorted(candidate_domains - citizen_domains)
+        return {
+            "expected_domains": sorted(expected_domains),
+            "citizen_domains": sorted(citizen_domains),
+            "missing_citizen_domains": missing,
+            "active_missing_citizen_domains": active_missing,
+            "regression_domains": sorted(regression_domains),
+        }
+
+    def _domain_terms_for(self, domain):
+        domain = self._domain_label(domain).lower()
+        terms = {domain}
+        if domain == "spatial":
+            terms.update({"spatial_reasoning", "translation", "path_finding"})
+        elif domain == "identity":
+            terms.update({"identity_preservation", "preserve_grid", "preserve_shape"})
+        elif domain == "transformation":
+            terms.update({"transformation", "program_composition", "unknown_transformation"})
+        elif domain == "topology":
+            terms.update({"topological_reasoning", "topological_change", "bridge_creation"})
+        elif domain == "geometry":
+            terms.update({"geometry", "symmetry", "reflection", "rotation"})
+        elif domain == "growth":
+            terms.update({"growth", "object_evolution", "duplicate_object"})
+        elif domain == "color":
+            terms.update({"color", "color_transformation", "preserve_colors"})
+        return terms
+
+    def _domain_citizenship_priority(self, task_terms, domain_gaps):
         task_terms = {str(term).lower() for term in task_terms if term}
+        active_missing = domain_gaps.get("active_missing_citizen_domains") or []
+        missing = domain_gaps.get("missing_citizen_domains") or []
+        priority = 0.0
+        matches = []
+        for domain in missing:
+            domain_terms = self._domain_terms_for(domain)
+            overlap = task_terms & domain_terms
+            if not overlap:
+                continue
+            rank_bonus = max(
+                0,
+                6 - self.DOMAIN_OPERATIONALIZATION_ORDER.get(domain, 6),
+            ) * 12.0
+            contribution = (110.0 if domain in active_missing else 55.0) + rank_bonus
+            priority += contribution
+            matches.append({
+                "domain": domain,
+                "matched_terms": sorted(overlap),
+                "priority": contribution,
+                "gap_type": (
+                    "active_capability_without_citizen"
+                    if domain in active_missing
+                    else "missing_domain_citizen"
+                ),
+            })
+        matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
+        return round(priority, 4), matches[:3]
+
+    def _survival_reappearance_priority(
+        self,
+        task_terms,
+        evidence_terms,
+        targets,
+        population_policy=None,
+    ):
+        task_terms = {str(term).lower() for term in task_terms if term}
+        evidence_terms = {str(term).lower() for term in evidence_terms if term}
+        population_policy = population_policy or {}
+        sprint_active = population_policy.get("policy_state") in {
+            "POPULATION_EVOLUTION_SPRINT",
+            "SEVERE_POPULATION_EVOLUTION_SPRINT",
+        }
         matches = []
         priority = 0.0
         for target in targets:
@@ -313,17 +710,62 @@ class TrainingAssistant:
             contribution = float(target.get("priority") or 0.0) * (
                 len(overlap) / max(len(survival_terms), 1)
             )
+            evidence_aligned = self._evidence_gap_aligned(
+                target,
+                evidence_terms,
+            )
+            if evidence_aligned:
+                contribution += 220.0
+            if sprint_active and target.get("population_evolution_target"):
+                contribution += 90.0 if evidence_aligned else 15.0
             priority += contribution
             matches.append({
                 "capability_id": target.get("capability_id"),
                 "operation": target.get("operation"),
                 "lifecycle_state": target.get("lifecycle_state"),
                 "next_required_evidence": target.get("next_required_evidence"),
+                "crystallization_candidate": bool(
+                    target.get("crystallization_candidate")
+                ),
+                "population_evolution_target": bool(
+                    target.get("population_evolution_target")
+                ),
+                "maturation_no_progress": bool(
+                    target.get("maturation_no_progress")
+                ),
+                "required_task_property": target.get("required_task_property"),
+                "evidence_gap_aligned": bool(evidence_aligned),
                 "matched_terms": sorted(overlap),
                 "priority": round(contribution, 4),
             })
         matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
         return round(priority, 4), matches[:3]
+
+    def _evidence_gap_aligned(self, target, evidence_terms):
+        next_evidence = str(target.get("next_required_evidence") or "")
+        required = str(target.get("required_task_property") or "").lower()
+        operation = str(target.get("operation") or "").lower()
+        if next_evidence == "exact_or_governed_validation_success":
+            if required and required in evidence_terms:
+                return True
+            if operation == "translate":
+                return (
+                    "directional_translation" in evidence_terms
+                    and (
+                        "exact_or_governed_validation_success" in evidence_terms
+                        or "exact_validation" in evidence_terms
+                        or "governed_validation" in evidence_terms
+                        or "unambiguous_ground_truth" in evidence_terms
+                    )
+                )
+            return (
+                "exact_or_governed_validation_success" in evidence_terms
+                or "exact_validation" in evidence_terms
+                or "governed_validation" in evidence_terms
+            )
+        if next_evidence == "stability_recovery_evidence":
+            return "stability_recovery_probe" in evidence_terms
+        return False
 
     def _elite_priority_for(
         self,
@@ -334,6 +776,8 @@ class TrainingAssistant:
         task_directory=None,
         core_knowledge=None,
         survival_targets=None,
+        domain_gaps=None,
+        population_policy=None,
     ):
         metadata = self._task_metadata(task_file, task_directory)
         concepts = [
@@ -352,6 +796,7 @@ class TrainingAssistant:
             if item
         ]
         task_terms = set(concepts) | set(deficiencies) | set(capabilities)
+        evidence_terms = self._task_evidence_terms(metadata)
         concept_counts = concept_counts or {}
         concept_states = self.curriculum_manager._concept_states(
             concept_states
@@ -388,12 +833,54 @@ class TrainingAssistant:
         survival_priority, survival_matches = (
             self._survival_reappearance_priority(
                 task_terms,
+                evidence_terms,
                 survival_targets or [],
+                population_policy=population_policy,
             )
         )
         if survival_priority:
             priority += survival_priority
             reasons.append("survival_store_independent_reappearance_probe")
+            if any(
+                match.get("crystallization_candidate")
+                for match in survival_matches
+            ):
+                reasons.append("capability_crystallization_probe")
+            if (
+                population_policy
+                and population_policy.get("policy_state") in {
+                    "POPULATION_EVOLUTION_SPRINT",
+                    "SEVERE_POPULATION_EVOLUTION_SPRINT",
+                }
+                and any(
+                    match.get("population_evolution_target")
+                    for match in survival_matches
+                )
+            ):
+                reasons.append("capability_population_evolution_sprint")
+            if population_policy and any(
+                match.get("operation")
+                in set(population_policy.get("graduation_target_operations", []))
+                for match in survival_matches
+            ):
+                reasons.append("capability_graduation_sprint_required")
+            if any(
+                match.get("evidence_gap_aligned")
+                for match in survival_matches
+            ):
+                reasons.append("evidence_gap_aligned_maturation_probe")
+            if any(
+                match.get("maturation_no_progress")
+                for match in survival_matches
+            ):
+                reasons.append("maturation_no_progress_repair_probe")
+        domain_priority, domain_matches = self._domain_citizenship_priority(
+            task_terms,
+            domain_gaps or {},
+        )
+        if domain_priority:
+            priority += domain_priority
+            reasons.append("domain_citizenship_gap_probe")
         priority += max(0, 20 - order) * 0.01
         return {
             "task_file": task_file,
@@ -401,9 +888,11 @@ class TrainingAssistant:
             "target_concepts": concepts,
             "deficiency_targets": deficiencies,
             "required_operational_capabilities": capabilities,
+            "evidence_terms": sorted(evidence_terms),
             "priority": round(priority, 4),
             "priority_reasons": reasons,
             "survival_reappearance_matches": survival_matches,
+            "domain_citizenship_matches": domain_matches,
         }
 
     def _select_elite_task(
@@ -426,6 +915,8 @@ class TrainingAssistant:
             for offset in range(len(elite_task_files))
         ]
         survival_targets = self._survival_reappearance_targets()
+        domain_gaps = self._domain_citizenship_gaps()
+        population_policy = self._capability_population_evolution_policy()
         priorities = [
             self._elite_priority_for(
                 task_file,
@@ -435,6 +926,8 @@ class TrainingAssistant:
                 task_directory=task_directory,
                 core_knowledge=core_knowledge,
                 survival_targets=survival_targets,
+                domain_gaps=domain_gaps,
+                population_policy=population_policy,
             )
             for order, task_file in enumerate(rotated)
         ]
@@ -463,6 +956,12 @@ class TrainingAssistant:
                 "survival_reappearance_matches",
                 [],
             ),
+            "domain_citizenship_gaps": domain_gaps,
+            "domain_citizenship_matches": priorities[0].get(
+                "domain_citizenship_matches",
+                [],
+            ),
+            "capability_population_evolution_policy": population_policy,
             "elite_task_priorities": priorities,
             "next_elite_task_index_after_completion": (
                 start + selected_rotated_index + 1

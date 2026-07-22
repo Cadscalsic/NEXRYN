@@ -19,6 +19,10 @@ from runtime.state.shared_cognitive_state import (
     CognitiveKnowledgeBus,
     SharedCognitiveState,
 )
+from runtime.world_governance.capability_promotion_policy import (
+    EXPECTED_OPERATIONAL_DOMAINS,
+    capability_promotion_policy_engine,
+)
 
 
 # ============================================
@@ -1101,6 +1105,17 @@ def build_operational_capability_materialization_report(
             "top_incubating_capabilities",
             [],
         ),
+        "world_governance_promotion_policy": survival_report.get(
+            "world_governance_promotion_policy",
+            {},
+        ),
+        "world_governance_promotion_policy_state": survival_report.get(
+            "world_governance_promotion_policy_state",
+        ),
+        "sandbox_citizenship_thresholds": survival_report.get(
+            "sandbox_citizenship_thresholds",
+            {},
+        ),
         "capability_survival_store_path": survival_store_path,
         "blocking_reason": (
             "Not Available"
@@ -1122,6 +1137,7 @@ def _record_operational_capability_survival(
     store_path,
 ):
     store = _load_operational_capability_survival(store_path)
+    promotion_policy = _capability_promotion_policy_for_store(store)
     rows = _candidate_survival_rows(candidate_arena_report)
     task = str(task_signature or "unknown")
     now = datetime.utcnow().isoformat() + "Z"
@@ -1202,6 +1218,7 @@ def _record_operational_capability_survival(
         elif entered:
             failure_reasons.append("simulation_executed_low_prediction_quality")
         improvement_trend = _accuracy_trend(accuracies)
+        previous_lifecycle_state = str(record.get("lifecycle_state") or "")
         lifecycle_state = _capability_survival_lifecycle_state(
             generated_candidate_count=attempts,
             arena_simulated_count=arena_simulated_count,
@@ -1213,7 +1230,24 @@ def _record_operational_capability_survival(
             best_accuracy=best_accuracy,
             average_accuracy=average_accuracy,
             improvement_trend=improvement_trend,
+            previous_lifecycle_state=previous_lifecycle_state,
+            promotion_policy=promotion_policy,
         )
+        stability_state = _capability_stability_state(
+            improvement_trend,
+            lifecycle_state=lifecycle_state,
+            previous_lifecycle_state=previous_lifecycle_state,
+        )
+        citizenship_basis = _survival_citizenship_basis(
+            lifecycle_state,
+            materialized_count=materialized_count,
+            arena_quality_count=arena_quality_count,
+            distinct_task_count=len(seen_tasks),
+            best_accuracy=best_accuracy,
+            average_accuracy=average_accuracy,
+            promotion_policy=promotion_policy,
+        )
+        promotion_policy_report = promotion_policy.as_dict()
         store[capability_id] = {
             "capability_id": capability_id,
             "operation": operation,
@@ -1242,18 +1276,32 @@ def _record_operational_capability_survival(
             "validation_failures": validation_gap_count,
             "failure_reasons": sorted(set(failure_reasons))[-10:],
             "improvement_trend": improvement_trend,
-            "next_required_evidence": _next_required_survival_evidence(
-                lifecycle_state,
-                distinct_task_count=len(seen_tasks),
-                best_accuracy=best_accuracy,
+            "stability_state": stability_state,
+            "next_required_evidence": (
+                "stability_recovery_evidence"
+                if stability_state in {
+                    "STABILITY_REGRESSION",
+                    "CITIZEN_UNDER_REGRESSION_REVIEW",
+                }
+                else _next_required_survival_evidence(
+                    lifecycle_state,
+                    distinct_task_count=len(seen_tasks),
+                    best_accuracy=best_accuracy,
+                )
             ),
             "simulation_executed_successfully": simulated,
             "prediction_quality_success": quality_success,
             "last_seen_task_signature": task,
             "last_seen_at": now,
             "lifecycle_state": lifecycle_state,
+            "citizenship_basis": citizenship_basis,
+            "citizenship_authority": "SANDBOX_ONLY",
             "trusted_for_decision": False,
             "survival_is_not_truth": True,
+            "world_governance_promotion_policy_state": (
+                promotion_policy_report.get("policy_state")
+            ),
+            "world_governance_promotion_policy": promotion_policy_report,
         }
     _save_operational_capability_survival(store_path, store)
     return _aggregate_operational_capability_survival(store_path)
@@ -1268,6 +1316,82 @@ def _candidate_survival_rows(candidate_arena_report):
     return rows if isinstance(rows, list) else []
 
 
+def _capability_promotion_policy_for_store(store):
+    records = [item for item in store.values() if isinstance(item, dict)]
+    generated = sum(
+        int(item.get("generated_candidate_count", 0) or 0)
+        for item in records
+    )
+    citizens = [
+        item for item in records
+        if item.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+    ]
+    citizen_domain_counts = {}
+    for item in citizens:
+        domain = str(item.get("domain") or "").strip()
+        if not domain:
+            domain = _operational_capability_domain(item.get("operation"))
+        if domain:
+            citizen_domain_counts[domain] = citizen_domain_counts.get(domain, 0) + 1
+    expected_domains = len(EXPECTED_OPERATIONAL_DOMAINS)
+    domain_coverage = _safe_ratio(len(citizen_domain_counts), expected_domains) or 0.0
+    dominant_domain_count = max(citizen_domain_counts.values(), default=0)
+    domain_monopoly_share = _safe_ratio(dominant_domain_count, len(citizens)) or 0.0
+    pressure = (
+        round(float(generated) / max(len(citizens), 1), 4)
+        if generated
+        else 0.0
+    )
+    return capability_promotion_policy_engine.decide({
+        "generated_survival_candidate_count": generated,
+        "operational_citizen_count": len(citizens),
+        "operational_domain_citizenship_coverage": domain_coverage,
+        "domain_monopoly_share": domain_monopoly_share,
+        "generated_to_citizen_pressure_ratio": pressure,
+        "capability_crystallization_state": (
+            "SEVERE_CRYSTALLIZATION_FAILURE"
+            if generated and pressure > 5.0
+            else "CRYSTALLIZING"
+            if citizens
+            else "NO_OPERATIONAL_CITIZENS"
+        ),
+    })
+
+
+def _sandbox_citizenship_thresholds(promotion_policy):
+    if promotion_policy is not None and hasattr(promotion_policy, "as_dict"):
+        policy = promotion_policy.as_dict()
+    elif isinstance(promotion_policy, dict):
+        policy = promotion_policy
+    else:
+        policy = {}
+    thresholds = policy.get("sandbox_citizenship_thresholds")
+    thresholds = thresholds if isinstance(thresholds, dict) else {}
+    return {
+        "min_distinct_tasks": int(thresholds.get("min_distinct_tasks", 3) or 3),
+        "min_arena_quality_count": int(
+            thresholds.get("min_arena_quality_count", 3) or 3
+        ),
+        "min_average_accuracy": float(
+            thresholds.get("min_average_accuracy", 0.80) or 0.80
+        ),
+        "min_best_accuracy": float(thresholds.get("min_best_accuracy", 0.0) or 0.0),
+        "allowed_trends": tuple(
+            thresholds.get("allowed_trends")
+            or ("STABLE", "IMPROVING", "STABLE_HIGH_PERFORMANCE")
+        ),
+    }
+
+
+def _capability_positive_trends():
+    return {
+        "IMPROVING",
+        "STABLE",
+        "STABLE_HIGH_PERFORMANCE",
+        "DECLINING_MINOR",
+    }
+
+
 def _capability_survival_lifecycle_state(
     *,
     generated_candidate_count,
@@ -1280,17 +1404,40 @@ def _capability_survival_lifecycle_state(
     best_accuracy,
     average_accuracy,
     improvement_trend,
+    previous_lifecycle_state=None,
+    promotion_policy=None,
 ):
+    thresholds = _sandbox_citizenship_thresholds(promotion_policy)
     if survived_task_count >= 3 and materialized_count >= 3:
+        return "OPERATIONAL_CITIZEN"
+    if (
+        previous_lifecycle_state == "OPERATIONAL_CITIZEN"
+        and arena_quality_count >= 3
+        and distinct_task_count >= 3
+        and best_accuracy is not None
+        and best_accuracy >= 0.90
+        and average_accuracy is not None
+        and average_accuracy >= 0.75
+    ):
+        return "OPERATIONAL_CITIZEN"
+    if (
+        arena_quality_count >= thresholds["min_arena_quality_count"]
+        and distinct_task_count >= thresholds["min_distinct_tasks"]
+        and best_accuracy is not None
+        and best_accuracy >= thresholds["min_best_accuracy"]
+        and average_accuracy is not None
+        and average_accuracy >= thresholds["min_average_accuracy"]
+        and improvement_trend in set(thresholds["allowed_trends"])
+    ):
         return "OPERATIONAL_CITIZEN"
     if (
         arena_quality_count >= 3
         and distinct_task_count >= 3
         and best_accuracy is not None
-        and best_accuracy >= 0.90
+        and best_accuracy >= 0.75
         and average_accuracy is not None
-        and average_accuracy >= 0.80
-        and improvement_trend in {"IMPROVING", "STABLE"}
+        and average_accuracy >= 0.65
+        and improvement_trend in _capability_positive_trends()
     ):
         return "SURVIVING_CAPABILITY"
     if (
@@ -1304,7 +1451,7 @@ def _capability_survival_lifecycle_state(
         and distinct_task_count >= 2
         and best_accuracy is not None
         and best_accuracy >= 0.50
-        and improvement_trend in {"IMPROVING", "STABLE"}
+        and improvement_trend in _capability_positive_trends()
     ):
         return "INCUBATING_VALIDATION_GAP"
     if arena_simulated_count > 0:
@@ -1312,6 +1459,56 @@ def _capability_survival_lifecycle_state(
     if generated_candidate_count > 0:
         return "GENERATED_CANDIDATE"
     return "UNKNOWN"
+
+
+def _capability_stability_state(
+    improvement_trend,
+    *,
+    lifecycle_state,
+    previous_lifecycle_state=None,
+):
+    if improvement_trend == "DECLINING_CRITICAL":
+        if lifecycle_state == "OPERATIONAL_CITIZEN" or (
+            previous_lifecycle_state == "OPERATIONAL_CITIZEN"
+        ):
+            return "CITIZEN_UNDER_REGRESSION_REVIEW"
+        return "STABILITY_REGRESSION"
+    if improvement_trend == "DECLINING_MINOR":
+        return "HIGH_PERFORMANCE_REGRESSION_REVIEW"
+    if improvement_trend == "IMPROVING":
+        return "RECOVERING_OR_IMPROVING"
+    if improvement_trend == "STABLE_HIGH_PERFORMANCE":
+        return "STABLE_HIGH_PERFORMANCE"
+    if improvement_trend == "STABLE":
+        return "STABLE"
+    return "INSUFFICIENT_HISTORY"
+
+
+def _survival_citizenship_basis(
+    lifecycle_state,
+    *,
+    materialized_count,
+    arena_quality_count,
+    distinct_task_count,
+    best_accuracy,
+    average_accuracy,
+    promotion_policy=None,
+):
+    if lifecycle_state != "OPERATIONAL_CITIZEN":
+        return None
+    if materialized_count >= 3:
+        return "repeated_materialized_validation"
+    thresholds = _sandbox_citizenship_thresholds(promotion_policy)
+    if (
+        arena_quality_count >= thresholds["min_arena_quality_count"]
+        and distinct_task_count >= thresholds["min_distinct_tasks"]
+        and best_accuracy is not None
+        and best_accuracy >= thresholds["min_best_accuracy"]
+        and average_accuracy is not None
+        and average_accuracy >= thresholds["min_average_accuracy"]
+    ):
+        return "sandbox_governed_survival_evidence"
+    return "governed_operational_evidence"
 
 
 def _survival_capability_id(row):
@@ -1348,12 +1545,28 @@ def _survival_quality_threshold(operation):
 def _accuracy_trend(accuracies):
     if len(accuracies) < 2:
         return "INSUFFICIENT_HISTORY"
+    values = [float(item) for item in accuracies if isinstance(item, (int, float))]
+    if len(values) < 2:
+        return "INSUFFICIENT_HISTORY"
+    average = sum(values) / len(values)
+    best = max(values)
+    worst = min(values)
+    if best >= 0.90 and average >= 0.80 and values[-1] >= 0.75:
+        if values[-1] >= values[0] - 0.20:
+            return "STABLE_HIGH_PERFORMANCE"
+        return "DECLINING_MINOR"
+    if best - worst >= 0.35 and average < 0.75:
+        return "VOLATILE"
     previous = float(accuracies[-2])
     current = float(accuracies[-1])
     if current > previous + 0.05:
         return "IMPROVING"
     if current < previous - 0.05:
-        return "DECLINING"
+        if current >= 0.65 and average >= 0.65:
+            return "DECLINING_MINOR"
+        return "DECLINING_CRITICAL"
+    if best >= 0.90 and average >= 0.80:
+        return "STABLE_HIGH_PERFORMANCE"
     return "STABLE"
 
 
@@ -1374,6 +1587,78 @@ def _next_required_survival_evidence(
     if best_accuracy is None or best_accuracy < 0.50:
         return "prediction_quality_improvement"
     return "validator_acceptance"
+
+
+def _is_capability_graduation_candidate(item):
+    if not isinstance(item, dict):
+        return False
+    if item.get("lifecycle_state") == "OPERATIONAL_CITIZEN":
+        return False
+    if item.get("lifecycle_state") not in {
+        "SURVIVING_CAPABILITY",
+        "INCUBATING_VALIDATION_GAP",
+    }:
+        return False
+    try:
+        distinct_tasks = int(item.get("distinct_task_count", 0) or 0)
+        arena_quality = int(item.get("arena_quality_count", 0) or 0)
+        best_accuracy = float(item.get("best_accuracy") or 0.0)
+        average_accuracy = float(item.get("average_accuracy") or 0.0)
+    except (TypeError, ValueError):
+        return False
+    return (
+        distinct_tasks >= 8
+        and arena_quality >= 8
+        and best_accuracy >= 0.90
+        and average_accuracy >= 0.70
+        and item.get("improvement_trend") in _capability_positive_trends()
+        and str(item.get("next_required_evidence") or "") in {
+            "exact_or_governed_validation_success",
+            "repeatable_validation_across_independent_task",
+            "validator_acceptance",
+        }
+    )
+
+
+def _capability_graduation_score(item):
+    try:
+        distinct_tasks = int(item.get("distinct_task_count", 0) or 0)
+        arena_quality = int(item.get("arena_quality_count", 0) or 0)
+        best_accuracy = float(item.get("best_accuracy") or 0.0)
+        average_accuracy = float(item.get("average_accuracy") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    task_score = min(distinct_tasks / 15.0, 1.0)
+    quality_score = min(arena_quality / 15.0, 1.0)
+    best_score = min(best_accuracy / 0.90, 1.0)
+    average_score = min(average_accuracy / 0.80, 1.0)
+    trend_bonus = (
+        0.06
+        if item.get("improvement_trend") == "IMPROVING"
+        else 0.03
+        if item.get("improvement_trend") in {
+            "STABLE_HIGH_PERFORMANCE",
+            "DECLINING_MINOR",
+        }
+        else 0.0
+    )
+    score = (
+        task_score * 0.25
+        + quality_score * 0.25
+        + best_score * 0.25
+        + average_score * 0.25
+        + trend_bonus
+    )
+    return round(min(score, 1.0), 4)
+
+
+def _capability_graduation_pressure_state(item):
+    score = _capability_graduation_score(item)
+    if score >= 0.85:
+        return "HIGH"
+    if score >= 0.70:
+        return "MEDIUM"
+    return "LOW"
 
 
 def _load_operational_capability_survival(store_path):
@@ -1398,6 +1683,8 @@ def _save_operational_capability_survival(store_path, store):
 
 def _aggregate_operational_capability_survival(store_path):
     store = _load_operational_capability_survival(store_path)
+    promotion_policy = _capability_promotion_policy_for_store(store)
+    promotion_policy_report = promotion_policy.as_dict()
     records = [item for item in store.values() if isinstance(item, dict)]
     generated = sum(
         int(item.get("generated_candidate_count", 0) or 0)
@@ -1421,6 +1708,15 @@ def _aggregate_operational_capability_survival(store_path):
         int(item.get("validation_gap_count", 0) or 0)
         for item in records
     )
+    unresolved_validation_gaps = sum(
+        int(item.get("validation_gap_count", 0) or 0)
+        for item in records
+        if item.get("lifecycle_state") in {
+            "GENERATED_CANDIDATE",
+            "ARENA_SIMULATED",
+            "INCUBATING_VALIDATION_GAP",
+        }
+    )
     materialized = sum(
         int(item.get("materialized_count", 0) or 0)
         for item in records
@@ -1429,6 +1725,13 @@ def _aggregate_operational_capability_survival(store_path):
         item for item in records
         if item.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
     ]
+    citizen_domain_counts = {}
+    for item in citizens:
+        domain = str(item.get("domain") or "").strip()
+        if not domain:
+            domain = _operational_capability_domain(item.get("operation"))
+        domain = domain or "Unknown"
+        citizen_domain_counts[domain] = citizen_domain_counts.get(domain, 0) + 1
     incubating = [
         item for item in records
         if item.get("lifecycle_state") in {
@@ -1465,9 +1768,127 @@ def _aggregate_operational_capability_survival(store_path):
             str(item.get("operation") or ""),
         ),
     )[:5]
+    top_operational_citizens = sorted(
+        citizens,
+        key=lambda item: (
+            -float(item.get("best_accuracy") or 0.0),
+            -float(item.get("average_accuracy") or 0.0),
+            -int(item.get("distinct_task_count", 0) or 0),
+            str(item.get("operation") or ""),
+        ),
+    )[:5]
+    crystallization_candidates = [
+        item for item in records
+        if item.get("lifecycle_state") in {
+            "INCUBATING_VALIDATION_GAP",
+            "SURVIVING_CAPABILITY",
+            "ARENA_SIMULATED",
+        }
+        and int(item.get("arena_quality_count", 0) or 0) >= 3
+        and int(item.get("distinct_task_count", 0) or 0) >= 3
+        and float(item.get("best_accuracy") or 0.0) >= 0.90
+        and float(item.get("average_accuracy") or 0.0) >= 0.75
+        and item.get("improvement_trend") in _capability_positive_trends()
+    ]
+    cognitive_citizens = [
+        item for item in records
+        if int(item.get("arena_quality_count", 0) or 0) >= 3
+        and int(item.get("distinct_task_count", 0) or 0) >= 3
+        and float(item.get("best_accuracy") or 0.0) >= 0.90
+        and float(item.get("average_accuracy") or 0.0) >= 0.75
+        and item.get("improvement_trend") in _capability_positive_trends()
+    ]
+    top_cognitive_citizens = sorted(
+        cognitive_citizens,
+        key=lambda item: (
+            -float(item.get("average_accuracy") or 0.0),
+            -float(item.get("best_accuracy") or 0.0),
+            -int(item.get("distinct_task_count", 0) or 0),
+            str(item.get("operation") or ""),
+        ),
+    )[:5]
+    top_crystallization_candidates = sorted(
+        crystallization_candidates,
+        key=lambda item: (
+            -float(item.get("best_accuracy") or 0.0),
+            -float(item.get("average_accuracy") or 0.0),
+            -int(item.get("arena_quality_count", 0) or 0),
+            str(item.get("operation") or ""),
+        ),
+    )[:5]
+    graduation_candidates = [
+        {
+            **item,
+            "graduation_score": _capability_graduation_score(item),
+            "graduation_pressure_state": _capability_graduation_pressure_state(item),
+            "graduation_waiting_tasks": int(item.get("distinct_task_count", 0) or 0),
+            "missing_graduation_evidence": item.get("next_required_evidence"),
+            "world_governance_graduation_action": (
+                "GRADUATION_SPRINT_REQUIRED"
+            ),
+        }
+        for item in records
+        if _is_capability_graduation_candidate(item)
+    ]
+    top_graduation_candidates = sorted(
+        graduation_candidates,
+        key=lambda item: (
+            -float(item.get("graduation_score") or 0.0),
+            -int(item.get("arena_quality_count", 0) or 0),
+            -int(item.get("distinct_task_count", 0) or 0),
+            str(item.get("operation") or ""),
+        ),
+    )[:5]
+    graduation_pressure = (
+        round(
+            sum(float(item.get("graduation_score") or 0.0) for item in graduation_candidates)
+            / max(len(graduation_candidates), 1),
+            4,
+        )
+        if graduation_candidates
+        else 0.0
+    )
+    stability_regressions = [
+        item for item in records
+        if item.get("stability_state") in {
+            "STABILITY_REGRESSION",
+            "CITIZEN_UNDER_REGRESSION_REVIEW",
+        }
+    ]
+    top_stability_regressions = sorted(
+        stability_regressions,
+        key=lambda item: (
+            -int(item.get("distinct_task_count", 0) or 0),
+            float(item.get("average_accuracy") or 0.0),
+            str(item.get("operation") or ""),
+        ),
+    )[:5]
     survival_rate = _safe_ratio(len(citizens), generated)
     materialization_survival_rate = _safe_ratio(materialized, generated)
-    validation_bottleneck_inflation = _safe_ratio(validation_gaps, entered)
+    quality_to_citizen_crystallization_rate = _safe_ratio(len(citizens), quality)
+    candidate_to_citizen_crystallization_rate = _safe_ratio(len(citizens), generated)
+    crystallization_pressure = (
+        round(float(generated) / max(len(citizens), 1), 4)
+        if generated
+        else None
+    )
+    dominant_domain_count = max(citizen_domain_counts.values(), default=0)
+    domain_monopoly_share = _safe_ratio(dominant_domain_count, len(citizens))
+    dominant_operational_domain = next(
+        (
+            domain
+            for domain, count in sorted(
+                citizen_domain_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+            if count == dominant_domain_count
+        ),
+        None,
+    )
+    validation_bottleneck_inflation = _safe_ratio(
+        unresolved_validation_gaps,
+        entered,
+    )
     return {
         "system": "operational_capability_survival_tracker",
         "generated_operational_candidate_count": generated,
@@ -1475,6 +1896,7 @@ def _aggregate_operational_capability_survival(store_path):
         "arena_simulated_candidate_count": entered,
         "arena_quality_candidate_count": quality,
         "validation_gap_candidate_count": validation_gaps,
+        "unresolved_validation_gap_candidate_count": unresolved_validation_gaps,
         "materialized_candidate_count": materialized,
         "incubating_operational_capability_count": len(incubating),
         "operational_citizen_count": len(citizens),
@@ -1482,6 +1904,83 @@ def _aggregate_operational_capability_survival(store_path):
             sorted(state_distribution.items())
         ),
         "top_incubating_capabilities": top_incubating,
+        "top_operational_citizens": top_operational_citizens,
+        "top_crystallization_candidates": top_crystallization_candidates,
+        "crystallization_candidate_count": len(crystallization_candidates),
+        "capability_graduation_candidate_count": len(graduation_candidates),
+        "capability_graduation_pressure": graduation_pressure,
+        "capability_graduation_pressure_state": (
+            "HIGH"
+            if graduation_pressure >= 0.80
+            else "MEDIUM"
+            if graduation_pressure >= 0.60
+            else "LOW"
+            if graduation_candidates
+            else "NONE"
+        ),
+        "capability_graduation_queue": top_graduation_candidates,
+        "top_graduation_candidates": top_graduation_candidates,
+        "world_governance_graduation_action": (
+            "GRADUATION_SPRINT_REQUIRED"
+            if graduation_pressure >= 0.80
+            else "MONITOR_GRADUATION_QUEUE"
+            if graduation_candidates
+            else "NO_GRADUATION_QUEUE"
+        ),
+        "cognitive_citizen_count": len(cognitive_citizens),
+        "top_cognitive_citizens": top_cognitive_citizens,
+        "cognitive_citizenship_definition": (
+            "independent_high_quality_sandbox_evidence_without_decision_authority"
+        ),
+        "world_governance_promotion_policy": promotion_policy_report,
+        "world_governance_promotion_policy_state": (
+            promotion_policy_report.get("policy_state")
+        ),
+        "sandbox_citizenship_thresholds": promotion_policy_report.get(
+            "sandbox_citizenship_thresholds",
+            {},
+        ),
+        "trusted_capability_policy": promotion_policy_report.get(
+            "trusted_capability_policy",
+            {},
+        ),
+        "decision_authority_policy": promotion_policy_report.get(
+            "decision_authority_policy",
+            {},
+        ),
+        "quality_to_citizen_crystallization_rate": (
+            quality_to_citizen_crystallization_rate
+        ),
+        "candidate_to_citizen_crystallization_rate": (
+            candidate_to_citizen_crystallization_rate
+        ),
+        "generated_to_citizen_pressure_ratio": crystallization_pressure,
+        "capability_crystallization_state": (
+            "SEVERE_CRYSTALLIZATION_FAILURE"
+            if isinstance(crystallization_pressure, (int, float))
+            and crystallization_pressure > 5.0
+            else "CRYSTALLIZING"
+            if citizens
+            else "NO_OPERATIONAL_CITIZENS"
+        ),
+        "operational_citizen_domain_distribution": dict(
+            sorted(citizen_domain_counts.items())
+        ),
+        "dominant_operational_domain": dominant_operational_domain,
+        "domain_monopoly_share": domain_monopoly_share,
+        "domain_operational_imbalance_state": (
+            "DOMAIN_MONOPOLY"
+            if isinstance(domain_monopoly_share, (int, float))
+            and domain_monopoly_share >= 0.60
+            else "DOMAIN_IMBALANCE"
+            if isinstance(domain_monopoly_share, (int, float))
+            and domain_monopoly_share >= 0.40
+            else "BALANCED"
+            if citizens
+            else "NOT_MEASURABLE"
+        ),
+        "capability_stability_regression_count": len(stability_regressions),
+        "top_stability_regressions": top_stability_regressions,
         "capability_survival_rate": survival_rate,
         "materialization_survival_rate": materialization_survival_rate,
         "validation_bottleneck_inflation": validation_bottleneck_inflation,

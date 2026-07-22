@@ -401,3 +401,442 @@ def test_training_assistant_uses_survival_store_for_elite_reappearance(tmp_path)
     assert selected["elite_selection_report"][
         "survival_reappearance_matches"
     ][0]["operation"] == "preserve_topology"
+
+
+def test_training_assistant_prioritizes_elite_domain_citizenship_gaps(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:color:replace_color:color_mapping": {
+                "capability_id": "operational_capability:color:replace_color:color_mapping",
+                "operation": "replace_color",
+                "domain": "Color",
+                "lifecycle_state": "OPERATIONAL_CITIZEN",
+            },
+            "operational_capability:spatial:translate:spatial_reasoning": {
+                "capability_id": "operational_capability:spatial:translate:spatial_reasoning",
+                "operation": "translate",
+                "domain": "Spatial",
+                "semantic_intent": "spatial_reasoning",
+                "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                "next_required_evidence": "repeatable_validation_across_independent_task",
+                "best_accuracy": 0.88,
+                "distinct_task_count": 2,
+                "arena_simulated_count": 2,
+                "validation_attempts": 2,
+            },
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_transformation"],
+            "deficiency_targets": ["color_pressure"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["spatial_reasoning", "translation"],
+            "deficiency_targets": ["domain_operationalization_gap"],
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        concept_counts={
+            "color_transformation": 20,
+            "spatial_reasoning": 20,
+            "translation": 20,
+        },
+        task_directory=tasks_directory,
+    )
+
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    assert "domain_citizenship_gap_probe" in (
+        selected["elite_selection_report"]["priority_reasons"]
+    )
+    assert selected["elite_selection_report"]["domain_citizenship_matches"][0][
+        "domain"
+    ] == "Spatial"
+
+
+def test_training_assistant_targets_declining_capability_recovery(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:spatial:preserve_grid:object_identity_preservation": {
+                "capability_id": "operational_capability:spatial:preserve_grid:object_identity_preservation",
+                "operation": "preserve_grid",
+                "domain": "Spatial",
+                "semantic_intent": "object_identity_preservation",
+                "lifecycle_state": "SURVIVING_CAPABILITY",
+                "next_required_evidence": "stability_recovery_evidence",
+                "best_accuracy": 0.9722,
+                "average_accuracy": 0.7763,
+                "improvement_trend": "DECLINING",
+                "distinct_task_count": 6,
+                "arena_simulated_count": 6,
+                "validation_attempts": 6,
+            }
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_transformation"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["spatial_reasoning", "identity_preservation"],
+            "required_operational_capabilities": ["preserve_grid"],
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        concept_counts={
+            "color_transformation": 20,
+            "spatial_reasoning": 20,
+            "identity_preservation": 20,
+        },
+        task_directory=tasks_directory,
+    )
+
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    assert selected["elite_selection_report"][
+        "survival_reappearance_matches"
+    ][0]["next_required_evidence"] == "stability_recovery_evidence"
+
+
+def test_training_assistant_targets_crystallization_ready_capabilities(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:spatial:preserve_grid:object_identity_preservation": {
+                "capability_id": "operational_capability:spatial:preserve_grid:object_identity_preservation",
+                "operation": "preserve_grid",
+                "domain": "Spatial",
+                "semantic_intent": "object_identity_preservation",
+                "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                "next_required_evidence": "repeatable_validation_across_independent_task",
+                "best_accuracy": 0.9722,
+                "average_accuracy": 0.8841,
+                "improvement_trend": "STABLE",
+                "distinct_task_count": 4,
+                "arena_simulated_count": 4,
+                "arena_quality_count": 4,
+                "validation_attempts": 4,
+            }
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_transformation"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["spatial_reasoning", "identity_preservation"],
+            "required_operational_capabilities": ["preserve_grid"],
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        concept_counts={
+            "color_transformation": 20,
+            "spatial_reasoning": 20,
+            "identity_preservation": 20,
+        },
+        task_directory=tasks_directory,
+    )
+
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    assert "capability_crystallization_probe" in (
+        selected["elite_selection_report"]["priority_reasons"]
+    )
+    match = selected["elite_selection_report"][
+        "survival_reappearance_matches"
+    ][0]
+    assert match["operation"] == "preserve_grid"
+    assert match["crystallization_candidate"] is True
+
+
+def test_training_assistant_enters_population_evolution_sprint(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:color:replace_color:color_mapping": {
+                "capability_id": "operational_capability:color:replace_color:color_mapping",
+                "operation": "replace_color",
+                "domain": "Color",
+                "lifecycle_state": "OPERATIONAL_CITIZEN",
+                "operational_experience_count": 19,
+            },
+            "operational_capability:growth:duplicate_object:growth": {
+                "capability_id": "operational_capability:growth:duplicate_object:growth",
+                "operation": "duplicate_object",
+                "domain": "Growth",
+                "lifecycle_state": "OPERATIONAL_CITIZEN",
+                "operational_experience_count": 7,
+            },
+            "operational_capability:spatial:translate:spatial_reasoning": {
+                "capability_id": "operational_capability:spatial:translate:spatial_reasoning",
+                "operation": "translate",
+                "domain": "Spatial",
+                "semantic_intent": "spatial_reasoning",
+                "lifecycle_state": "SURVIVING_CAPABILITY",
+                "next_required_evidence": "repeatable_validation_across_independent_task",
+                "best_accuracy": 0.9444,
+                "average_accuracy": 0.7647,
+                "improvement_trend": "STABLE",
+                "distinct_task_count": 15,
+                "arena_simulated_count": 15,
+                "arena_quality_count": 15,
+                "validation_attempts": 10,
+            },
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_transformation"],
+            "required_operational_capabilities": ["replace_color"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["spatial_reasoning", "translation"],
+            "required_operational_capabilities": ["translate"],
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        concept_counts={
+            "color_transformation": 20,
+            "spatial_reasoning": 20,
+            "translation": 20,
+        },
+        task_directory=tasks_directory,
+    )
+
+    report = selected["elite_selection_report"]
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    assert report["capability_population_evolution_policy"]["policy_state"] == (
+        "SEVERE_POPULATION_EVOLUTION_SPRINT"
+    )
+    assert report["capability_population_evolution_policy"][
+        "operational_experience_count"
+    ] == 41
+    assert report["capability_population_evolution_policy"][
+        "governance_action"
+    ] == "graduation_sprint_required"
+    assert "translate" in report["capability_population_evolution_policy"][
+        "graduation_target_operations"
+    ]
+    assert "translate" in report["capability_population_evolution_policy"][
+        "target_operations"
+    ]
+    assert "capability_population_evolution_sprint" in report[
+        "priority_reasons"
+    ]
+    assert "capability_graduation_sprint_required" in report[
+        "priority_reasons"
+    ]
+    assert report["survival_reappearance_matches"][0][
+        "population_evolution_target"
+    ] is True
+
+
+def test_training_assistant_targets_exact_evidence_gap_not_generic_reappearance(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:spatial:translate:spatial_reasoning": {
+                "capability_id": "operational_capability:spatial:translate:spatial_reasoning",
+                "operation": "translate",
+                "domain": "Spatial",
+                "semantic_intent": "spatial_reasoning",
+                "lifecycle_state": "SURVIVING_CAPABILITY",
+                "next_required_evidence": "exact_or_governed_validation_success",
+                "best_accuracy": 0.9444,
+                "average_accuracy": 0.7668,
+                "improvement_trend": "DECLINING_MINOR",
+                "distinct_task_count": 16,
+                "arena_simulated_count": 16,
+                "arena_quality_count": 15,
+                "validation_attempts": 10,
+            },
+            "operational_capability:color:replace_color:color_mapping": {
+                "capability_id": "operational_capability:color:replace_color:color_mapping",
+                "operation": "replace_color",
+                "domain": "Color",
+                "lifecycle_state": "OPERATIONAL_CITIZEN",
+                "operational_experience_count": 19,
+            },
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["spatial_reasoning", "translation"],
+            "required_operational_capabilities": ["translate"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["spatial_reasoning", "translation"],
+            "required_operational_capabilities": ["translate"],
+            "required_evidence": ["exact_or_governed_validation_success"],
+            "task_properties": [
+                "unambiguous_directional_translation_ground_truth",
+                "exact_validation",
+            ],
+            "transformation_contract": "directional_translation",
+            "primary_operation": "translate",
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        concept_counts={
+            "spatial_reasoning": 20,
+            "translation": 20,
+        },
+        task_directory=tasks_directory,
+    )
+
+    report = selected["elite_selection_report"]
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    assert "evidence_gap_aligned_maturation_probe" in report[
+        "priority_reasons"
+    ]
+    assert "maturation_no_progress_repair_probe" in report[
+        "priority_reasons"
+    ]
+    match = report["survival_reappearance_matches"][0]
+    assert match["operation"] == "translate"
+    assert match["next_required_evidence"] == "exact_or_governed_validation_success"
+    assert match["required_task_property"] == (
+        "unambiguous_directional_translation_ground_truth"
+    )
+    assert match["evidence_gap_aligned"] is True
+    assert match["maturation_no_progress"] is True

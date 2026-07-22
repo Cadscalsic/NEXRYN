@@ -1,6 +1,7 @@
 import pytest
 
 from runtime.world_governance import (
+    CapabilityPromotionPolicyEngine,
     CONSTITUTIONAL_IDENTITY,
     WorldKernel,
 )
@@ -94,3 +95,36 @@ def test_report_contains_required_world_governance_fields():
     assert "allowed_actions" in report
     assert "blocked_actions" in report
     assert report["protected_core_touched"] is False
+
+
+def test_world_governance_relaxes_only_sandbox_citizenship_policy():
+    policy = CapabilityPromotionPolicyEngine().decide({
+        "generated_survival_candidate_count": 79,
+        "operational_citizen_count": 1,
+        "operational_domain_citizenship_coverage": 0.1429,
+        "domain_monopoly_share": 1.0,
+        "generated_to_citizen_pressure_ratio": 79.0,
+        "capability_crystallization_state": "SEVERE_CRYSTALLIZATION_FAILURE",
+    }).as_dict()
+
+    assert policy["policy_state"] == "RELAX_SANDBOX_CITIZENSHIP"
+    assert policy["sandbox_citizenship_thresholds"] == {
+        "min_distinct_tasks": 3,
+        "min_arena_quality_count": 3,
+        "min_average_accuracy": 0.8,
+        "min_best_accuracy": 0.0,
+        "allowed_trends": [
+            "STABLE",
+            "IMPROVING",
+            "STABLE_HIGH_PERFORMANCE",
+            "DECLINING_MINOR",
+        ],
+    }
+    assert policy["authority_boundary"]["citizenship_authority"] == "SANDBOX_ONLY"
+    assert policy["authority_boundary"]["trusted_for_decision"] is False
+    assert policy["trusted_capability_policy"]["policy_state"] == (
+        "STRICT_REVIEW_REQUIRED"
+    )
+    assert policy["decision_authority_policy"][
+        "automatic_authority_transfer"
+    ] is False

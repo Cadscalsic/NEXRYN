@@ -100,6 +100,25 @@ class SemanticToTransformationCompiler:
         "symmetry_reasoning",
         "preserve_symmetry",
     }
+    COMPILER_RULES = {
+        "scale_up": "RULE_SCALING_CELL_REPEAT_01",
+        "scale_down": "RULE_SCALING_CELL_REPEAT_01",
+        "rotate": "RULE_ROTATION_ALIGNMENT_01",
+        "mirror_horizontal": "RULE_REFLECTION_ALIGNMENT_01",
+        "mirror_vertical": "RULE_REFLECTION_ALIGNMENT_01",
+        "construct_path": "RULE_PATH_CONSTRUCTION_01",
+        "connect_components": "RULE_CONNECTIVITY_BRIDGE_01",
+        "remove_object": "RULE_ARTIFACT_FILTERING_01",
+        "replace_color": "RULE_SYMBOLIC_REMAP_01",
+        "duplicate_object": "RULE_GROWTH_DUPLICATION_01",
+        "preserve_grid": "RULE_GRID_PRESERVATION_01",
+        "preserve_colors": "RULE_COLOR_PRESERVATION_01",
+        "preserve_topology": "RULE_TOPOLOGY_PRESERVATION_01",
+        "preserve_shape": "RULE_SHAPE_PRESERVATION_01",
+        "preserve_size": "RULE_SIZE_PRESERVATION_01",
+        "preserve_density": "RULE_DENSITY_PRESERVATION_01",
+        "preserve_symmetry": "RULE_SYMMETRY_PRESERVATION_01",
+    }
 
     def compile(
         self,
@@ -132,6 +151,8 @@ class SemanticToTransformationCompiler:
                 "missing_grid_pair",
                 execution_intents=execution_intents,
                 semantic_intent_report=semantic_intent_report,
+                source=source,
+                target=target,
             )
 
         candidates = []
@@ -203,12 +224,19 @@ class SemanticToTransformationCompiler:
                 reason,
                 execution_intents=execution_intents,
                 semantic_intent_report=semantic_intent_report,
+                source=source,
+                target=target,
             )
 
         for candidate in candidates:
             predicted = self.execute_program(source, candidate["compiled_program"])
             candidate["candidate_output_grid"] = predicted.tolist()
             candidate["validation"] = self._validation(predicted, target)
+            candidate["failure_diagnostics"] = self._candidate_failure_diagnostics(
+                candidate,
+                source,
+                target,
+            )
 
         candidates.sort(
             key=lambda item: (
@@ -234,6 +262,13 @@ class SemanticToTransformationCompiler:
             "validation": selected["validation"],
             "candidate_count": len(candidates),
             "compiler_candidates": candidates,
+            "compiler_failure_diagnostics": self._compiler_failure_diagnostics(
+                concepts,
+                execution_intents,
+                source,
+                target,
+                candidates,
+            ),
             "timestamp": str(datetime.utcnow()),
         }
 
@@ -650,6 +685,8 @@ class SemanticToTransformationCompiler:
         *,
         execution_intents: list[Mapping[str, Any]] | None = None,
         semantic_intent_report: Mapping[str, Any] | None = None,
+        source: np.ndarray | None = None,
+        target: np.ndarray | None = None,
     ) -> dict[str, Any]:
         return {
             "system": self.system_name,
@@ -667,8 +704,397 @@ class SemanticToTransformationCompiler:
             "candidate_count": 0,
             "compiler_candidates": [],
             "failure_reason": reason,
+            "compiler_failure_diagnostics": self._compiler_failure_diagnostics(
+                concepts,
+                execution_intents or [],
+                source,
+                target,
+                [],
+                failure_reason=reason,
+            ),
             "timestamp": str(datetime.utcnow()),
         }
+
+    def _compiler_failure_diagnostics(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+        source: np.ndarray | None,
+        target: np.ndarray | None,
+        candidates: list[dict[str, Any]],
+        *,
+        failure_reason: str | None = None,
+    ) -> dict[str, Any]:
+        trace_events = self._expected_operation_traces(concepts, execution_intents)
+        expected_operations = sorted(
+            dict.fromkeys(
+                str(event.get("expected_operation"))
+                for event in trace_events
+                if event.get("expected_operation")
+            )
+        )
+        domain_counts = Counter(
+            str(event.get("domain") or self._domain_for_operation(str(event.get("expected_operation"))))
+            for event in trace_events
+        )
+        reason_counts = Counter()
+        rows = []
+        if failure_reason:
+            reason_counts[failure_reason] += 1
+        if not trace_events:
+            reason_counts["operation_ambiguity"] += 1
+            rows.append({
+                "trace_id": "compiler_trace:unknown:unknown:unknown",
+                "program": "semantic_program_unknown",
+                "semantic_intent": "unknown",
+                "operation": "unknown",
+                "expected_operation": "unknown",
+                "resolved_operation": "unknown",
+                "domain": "Transformation",
+                "failure_stage": "semantic_operation_resolution",
+                "reason": "operation_ambiguity",
+                "detail": "no_supported_semantic_operation_detected",
+                "compiler_rule": "RULE_NOT_RESOLVED",
+                "diagnostic_row_source": "semantic_to_transformation_compiler",
+            })
+        for event in trace_events:
+            operation = str(event.get("expected_operation") or "unknown")
+            resolved_operation = str(event.get("resolved_operation") or operation)
+            domain = str(event.get("domain") or self._domain_for_operation(operation))
+            reason = None
+            detail = ""
+            failure_stage = "program_candidate_generation"
+            if source is None or target is None or source.size == 0 or target.size == 0:
+                reason = "missing_grid_pair"
+                detail = "input_or_target_grid_missing"
+                failure_stage = "compiler_input_binding"
+            elif resolved_operation != operation:
+                reason = "operation_semantics_mismatch"
+                detail = (
+                    f"expected_operation={operation}; "
+                    f"resolved_operation={resolved_operation}"
+                )
+                failure_stage = "semantic_operation_resolution"
+            elif not self._operation_has_primitive(operation):
+                reason = "missing_primitive"
+                detail = f"primitive_not_registered:{operation}"
+                failure_stage = "primitive_resolution"
+            elif source.shape != target.shape and operation not in {
+                "scale_up",
+                "scale_down",
+                "rotate",
+                "mirror_horizontal",
+                "mirror_vertical",
+            }:
+                reason = "shape_contract_mismatch"
+                detail = f"source_shape={source.shape}; target_shape={target.shape}"
+                failure_stage = "execution_contract_validation"
+            else:
+                matching = [
+                    candidate for candidate in candidates
+                    if self._candidate_operation(candidate) == operation
+                ]
+                if not matching:
+                    reason = self._missing_candidate_reason(
+                        operation,
+                        source,
+                        target,
+                    )
+                    detail = f"candidate_not_emitted:{operation}"
+                    failure_stage = (
+                        "semantic_operation_resolution"
+                        if reason == "operation_semantics_mismatch"
+                        else "program_candidate_generation"
+                    )
+                else:
+                    best = max(
+                        matching,
+                        key=lambda item: float(
+                            item.get("validation", {}).get("accuracy", 0.0)
+                        ),
+                    )
+                    validation = best.get("validation", {})
+                    if not validation.get("exact_match"):
+                        reason = "execution_mismatch"
+                        detail = (
+                            "best_accuracy="
+                            f"{validation.get('accuracy', 0.0)}"
+                        )
+                        failure_stage = "program_execution_validation"
+            if reason:
+                reason_counts[reason] += 1
+                rows.append({
+                    "trace_id": event.get("trace_id"),
+                    "program": event.get("program"),
+                    "semantic_intent": event.get("semantic_intent"),
+                    "operation": operation,
+                    "expected_operation": operation,
+                    "resolved_operation": resolved_operation,
+                    "domain": domain,
+                    "failure_stage": failure_stage,
+                    "reason": reason,
+                    "detail": detail,
+                    "compiler_rule": event.get("compiler_rule"),
+                    "diagnostic_row_source": "semantic_to_transformation_compiler",
+                })
+        return {
+            "failure_reason_counts": dict(sorted(reason_counts.items())),
+            "failure_domain_distribution": dict(sorted(domain_counts.items())),
+            "failure_rows": rows[:25],
+            "expected_operations": expected_operations,
+            "compiler_trace_events": trace_events[:25],
+            "candidate_count": len(candidates),
+        }
+
+    def _candidate_failure_diagnostics(
+        self,
+        candidate: Mapping[str, Any],
+        source: np.ndarray,
+        target: np.ndarray,
+    ) -> dict[str, Any]:
+        operation = self._candidate_operation(candidate)
+        validation = candidate.get("validation", {})
+        if validation.get("exact_match"):
+            reason = "none"
+        elif validation.get("shape_match") is False:
+            reason = "shape_contract_mismatch"
+        elif float(validation.get("accuracy", 0.0) or 0.0) <= 0.0:
+            reason = "execution_mismatch"
+        else:
+            reason = "partial_execution_mismatch"
+        return {
+            "operation": operation,
+            "domain": self._domain_for_operation(operation),
+            "reason": reason,
+            "accuracy": validation.get("accuracy", 0.0),
+            "shape_match": validation.get("shape_match"),
+            "source_shape": list(source.shape),
+            "target_shape": list(target.shape),
+        }
+
+    def _expected_operations(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+    ) -> list[str]:
+        return sorted(
+            dict.fromkeys(
+                str(event.get("expected_operation"))
+                for event in self._expected_operation_traces(
+                    concepts,
+                    execution_intents,
+                )
+                if event.get("expected_operation")
+            )
+        )
+
+    def _expected_operation_traces(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        traces = []
+        seen: set[tuple[str, str, str]] = set()
+        intent_expected_operations: set[str] = set()
+        concept_operation_pairs = self._concept_operation_pairs()
+        for intent in execution_intents:
+            if not isinstance(intent, Mapping):
+                continue
+            semantic_intent = str(intent.get("intent") or "unknown")
+            matched = {
+                semantic_intent,
+                *[str(item) for item in intent.get("matched_concepts", []) or []],
+            }
+            expected_operation = self._operation_for_concepts(
+                matched,
+                concept_operation_pairs,
+            )
+            resolved_operation = str(intent.get("operation") or expected_operation or "unknown")
+            if not expected_operation:
+                expected_operation = resolved_operation
+            intent_expected_operations.add(str(expected_operation))
+            program = (
+                intent.get("program_id")
+                or intent.get("candidate_id")
+                or intent.get("program")
+                or f"semantic_program_{expected_operation}"
+            )
+            traces.append(
+                self._compiler_trace_event(
+                    program=str(program),
+                    semantic_intent=semantic_intent,
+                    expected_operation=str(expected_operation),
+                    resolved_operation=str(resolved_operation),
+                    seen=seen,
+                )
+            )
+        for concept_set, operation in concept_operation_pairs:
+            if operation in intent_expected_operations:
+                continue
+            matches = sorted(concepts.intersection(concept_set))
+            for concept in matches:
+                traces.append(
+                    self._compiler_trace_event(
+                        program=f"semantic_program_{operation}",
+                        semantic_intent=concept,
+                        expected_operation=operation,
+                        resolved_operation=operation,
+                        seen=seen,
+                    )
+                )
+        return [trace for trace in traces if trace]
+
+    def _compiler_trace_event(
+        self,
+        *,
+        program: str,
+        semantic_intent: str,
+        expected_operation: str,
+        resolved_operation: str,
+        seen: set[tuple[str, str, str]],
+    ) -> dict[str, Any]:
+        key = (program, semantic_intent, expected_operation)
+        if key in seen:
+            return {}
+        seen.add(key)
+        compiler_rule = self._compiler_rule_for(expected_operation)
+        return {
+            "trace_id": (
+                "compiler_trace:"
+                f"{program}:{semantic_intent}:{expected_operation}"
+            ),
+            "program": program,
+            "semantic_intent": semantic_intent,
+            "expected_operation": expected_operation,
+            "resolved_operation": resolved_operation,
+            "operation": expected_operation,
+            "domain": self._domain_for_operation(expected_operation),
+            "compiler_rule": compiler_rule,
+        }
+
+    def _operation_for_concepts(
+        self,
+        concepts: set[str],
+        concept_operation_pairs: list[tuple[set[str], str]],
+    ) -> str | None:
+        for concept_set, operation in concept_operation_pairs:
+            if concepts.intersection(concept_set):
+                return operation
+        return None
+
+    def _concept_operation_pairs(self) -> list[tuple[set[str], str]]:
+        return [
+            (self.ROTATION_CONCEPTS, "rotate"),
+            (self.REFLECTION_CONCEPTS, "mirror_horizontal"),
+            (self.SCALING_CONCEPTS, "scale_up"),
+            (self.PATH_CONCEPTS, "construct_path"),
+            (self.FILTER_CONCEPTS, "remove_object"),
+            (self.TOPOLOGY_REPAIR_CONCEPTS, "construct_path"),
+            (self.COLOR_PRESERVATION_CONCEPTS, "preserve_colors"),
+            (self.SHAPE_PRESERVATION_CONCEPTS, "preserve_shape"),
+            (self.SIZE_PRESERVATION_CONCEPTS, "preserve_size"),
+            (self.DENSITY_PRESERVATION_CONCEPTS, "preserve_density"),
+            (self.TOPOLOGY_PRESERVATION_CONCEPTS, "preserve_topology"),
+            (self.SYMMETRY_PRESERVATION_CONCEPTS, "preserve_symmetry"),
+            (self.GRID_PRESERVATION_CONCEPTS, "preserve_grid"),
+            (self.COLOR_REMAP_CONCEPTS, "replace_color"),
+            (self.DUPLICATION_CONCEPTS, "duplicate_object"),
+        ]
+
+    def _compiler_rule_for(self, operation: str) -> str:
+        return self.COMPILER_RULES.get(operation, "RULE_NOT_RESOLVED")
+
+    def _legacy_expected_operations(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+    ) -> list[str]:
+        operations = []
+        intent_operations = {
+            str(intent.get("operation"))
+            for intent in execution_intents
+            if isinstance(intent, Mapping) and intent.get("operation")
+        }
+        operations.extend(
+            operation for operation in sorted(intent_operations)
+            if operation and operation != "None"
+        )
+        concept_operation_pairs = self._concept_operation_pairs()
+        for concept_set, operation in concept_operation_pairs:
+            if concepts.intersection(concept_set):
+                operations.append(operation)
+        return sorted(dict.fromkeys(operations))
+
+    def _candidate_operation(self, candidate: Mapping[str, Any]) -> str:
+        steps = candidate.get("compiled_program", {}).get("steps", [])
+        if steps and isinstance(steps[0], Mapping):
+            return str(steps[0].get("operation") or "unknown")
+        return "unknown"
+
+    def _operation_has_primitive(self, operation: str) -> bool:
+        return operation in {
+            "scale_up",
+            "scale_down",
+            "rotate",
+            "mirror_horizontal",
+            "mirror_vertical",
+            "construct_path",
+            "connect_components",
+            "remove_object",
+            "replace_color",
+            "duplicate_object",
+            "preserve_grid",
+            "preserve_colors",
+            "preserve_topology",
+            "preserve_shape",
+            "preserve_size",
+            "preserve_density",
+            "preserve_symmetry",
+        }
+
+    def _missing_candidate_reason(
+        self,
+        operation: str,
+        source: np.ndarray,
+        target: np.ndarray,
+    ) -> str:
+        if operation.startswith("preserve_") and not np.array_equal(source, target):
+            return "operation_semantics_mismatch"
+        if operation == "replace_color" and source.shape == target.shape:
+            changed = np.argwhere(source != target)
+            mappings = {}
+            for row, col in changed:
+                src = int(source[row, col])
+                dst = int(target[row, col])
+                if src in mappings and mappings[src] != dst:
+                    return "operation_ambiguity"
+                mappings[src] = dst
+        if operation == "duplicate_object":
+            background = self._background_color(source)
+            if not np.any((source == background) & (target != background)):
+                return "execution_mismatch"
+        return "invalid_composition"
+
+    def _domain_for_operation(self, operation: str) -> str:
+        if operation in {"replace_color", "preserve_colors"}:
+            return "Color"
+        if operation in {
+            "translate",
+            "preserve_grid",
+            "preserve_shape",
+            "preserve_size",
+            "rotate",
+            "mirror_horizontal",
+            "mirror_vertical",
+        }:
+            return "Spatial"
+        if operation in {"construct_path", "connect_components", "preserve_topology"}:
+            return "Topology"
+        if operation in {"duplicate_object", "preserve_density", "scale_up", "scale_down"}:
+            return "Growth"
+        if operation in {"preserve_symmetry"}:
+            return "Geometry"
+        return "Transformation"
 
     def _array(self, grid) -> np.ndarray:
         if grid is None:

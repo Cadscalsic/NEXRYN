@@ -42,6 +42,13 @@ from runtime.world_governance.cognitive_policy_engine import (
     cognitive_policy_engine,
     default_cognitive_policies,
 )
+from runtime.world_governance.capability_promotion_policy import (
+    CapabilityPromotionPolicyDecision,
+    CapabilityPromotionPolicyEngine,
+    EXPECTED_OPERATIONAL_DOMAINS,
+    SandboxCitizenshipThresholds,
+    capability_promotion_policy_engine,
+)
 from runtime.world_governance.cognitive_decision_intelligence import (
     CognitiveDecision,
     CognitiveDecisionIntelligenceEngine,
@@ -235,6 +242,8 @@ __all__ = [
     "CONSTITUTIONAL_IDENTITY",
     "CORE_CONSTITUTIONAL_PRINCIPLES",
     "CandidateWorld",
+    "CapabilityPromotionPolicyDecision",
+    "CapabilityPromotionPolicyEngine",
     "CognitiveCompass",
     "CognitiveCompassState",
     "CognitiveDecision",
@@ -265,6 +274,7 @@ __all__ = [
     "EvolutionPolicy",
     "EvolutionPathRanker",
     "EXECUTIVE_DOMAINS",
+    "EXPECTED_OPERATIONAL_DOMAINS",
     "ExecutiveCognitiveGovernor",
     "GrowthOpportunity",
     "GrowthOpportunityDetector",
@@ -301,6 +311,7 @@ __all__ = [
     "RepresentationBalancer",
     "RewardHackingDetector",
     "SUSPENSION_LEVELS",
+    "SandboxCitizenshipThresholds",
     "StagnationAssessment",
     "StagnationDetector",
     "ConsensusBuilder",
@@ -323,6 +334,7 @@ __all__ = [
     "CognitiveSituationAwarenessEngine",
     "accountability_manager",
     "admission_policy",
+    "capability_promotion_policy_engine",
     "cognitive_budget_controller",
     "cognitive_compass",
     "cognitive_decision_intelligence_engine",

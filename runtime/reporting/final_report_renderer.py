@@ -1567,6 +1567,60 @@ class DeterministicFinalReportRenderer:
         )
         top_incubating = summary.get("top_incubating_capabilities") or []
         top_incubating = top_incubating if isinstance(top_incubating, list) else []
+        top_operational_citizens = summary.get("top_operational_citizens") or []
+        top_operational_citizens = (
+            top_operational_citizens
+            if isinstance(top_operational_citizens, list)
+            else []
+        )
+        top_crystallization_candidates = (
+            summary.get("top_crystallization_candidates") or []
+        )
+        top_crystallization_candidates = (
+            top_crystallization_candidates
+            if isinstance(top_crystallization_candidates, list)
+            else []
+        )
+        top_graduation_candidates = summary.get("top_graduation_candidates") or []
+        top_graduation_candidates = (
+            top_graduation_candidates
+            if isinstance(top_graduation_candidates, list)
+            else []
+        )
+        top_cognitive_citizens = summary.get("top_cognitive_citizens") or []
+        top_cognitive_citizens = (
+            top_cognitive_citizens
+            if isinstance(top_cognitive_citizens, list)
+            else []
+        )
+        top_stability_regressions = summary.get("top_stability_regressions") or []
+        top_stability_regressions = (
+            top_stability_regressions
+            if isinstance(top_stability_regressions, list)
+            else []
+        )
+        compiler_failure_reasons = (
+            summary.get("compiler_failure_reason_distribution") or {}
+        )
+        compiler_failure_reasons = (
+            compiler_failure_reasons
+            if isinstance(compiler_failure_reasons, dict)
+            else {}
+        )
+        compiler_failure_domains = (
+            summary.get("compiler_failure_domain_distribution") or {}
+        )
+        compiler_failure_domains = (
+            compiler_failure_domains
+            if isinstance(compiler_failure_domains, dict)
+            else {}
+        )
+        compiler_failure_rows = summary.get("compiler_failure_rows") or []
+        compiler_failure_rows = (
+            compiler_failure_rows
+            if isinstance(compiler_failure_rows, list)
+            else []
+        )
         missing_packages = summary.get("missing_execution_packages") or []
         missing_packages = (
             missing_packages if isinstance(missing_packages, list) else [missing_packages]
@@ -1688,16 +1742,68 @@ class DeterministicFinalReportRenderer:
             f"{self._percent(summary.get('operational_domain_citizenship_coverage'))}",
             "Historical Operational Domain Citizens: "
             f"{self._value(summary.get('historical_operational_domain_citizen_count'))}",
+            "Sandbox Operational Domain Citizens: "
+            f"{self._value(summary.get('sandbox_operational_domain_citizen_count'))}",
+            "Operational Domain Citizens: "
+            f"{self._value(summary.get('operational_domain_citizen_count'))}",
             "Expected Operational Domain Citizens: "
             f"{self._value(summary.get('expected_operational_domain_citizen_count'))}",
             "Surviving Capability Domain Count: "
             f"{self._value(summary.get('surviving_capability_domain_count'))}",
+            "Operational Citizen Domain Distribution: "
+            f"{self._value(summary.get('operational_citizen_domain_distribution'))}",
+            "Historical Operational Domain Distribution: "
+            f"{self._value(summary.get('historical_operational_domain_distribution'))}",
+            "Sandbox Operational Domain Distribution: "
+            f"{self._value(summary.get('sandbox_operational_domain_distribution'))}",
+            "Combined Operational Domain Distribution: "
+            f"{self._value(summary.get('combined_operational_domain_distribution'))}",
+            "Dominant Operational Domain: "
+            f"{self._value(summary.get('dominant_operational_domain'))}",
+            "Domain Monopoly Share: "
+            f"{self._percent(summary.get('domain_monopoly_share'))}",
+            "Domain Operational Imbalance State: "
+            f"{self._value(summary.get('domain_operational_imbalance_state'))}",
             "Missing Operational Citizen Domains: "
             f"{self._value(summary.get('missing_operational_citizen_domains'))}",
             "Surviving Capabilities: "
             f"{self._value(summary.get('surviving_capability_count'))}",
             "Validation Gap Candidate Count: "
             f"{self._value(summary.get('validation_gap_candidate_count'))}",
+            "Unresolved Validation Gap Candidate Count: "
+            f"{self._value(summary.get('unresolved_validation_gap_candidate_count'))}",
+            "Crystallization Candidate Count: "
+            f"{self._value(summary.get('crystallization_candidate_count'))}",
+            "Quality To Citizen Crystallization Rate: "
+            f"{self._percent(summary.get('quality_to_citizen_crystallization_rate'))}",
+            "Candidate To Citizen Crystallization Rate: "
+            f"{self._percent(summary.get('candidate_to_citizen_crystallization_rate'))}",
+            "Generated To Citizen Pressure Ratio: "
+            f"{self._value(summary.get('generated_to_citizen_pressure_ratio'))}",
+            "Capability Crystallization State: "
+            f"{self._value(summary.get('capability_crystallization_state'))}",
+            "Capability Graduation Candidates: "
+            f"{self._value(summary.get('capability_graduation_candidate_count'))}",
+            "Capability Graduation Pressure: "
+            f"{self._percent(summary.get('capability_graduation_pressure'))}",
+            "Capability Graduation Pressure State: "
+            f"{self._value(summary.get('capability_graduation_pressure_state'))}",
+            "World Governance Graduation Action: "
+            f"{self._value(summary.get('world_governance_graduation_action'))}",
+            "Cognitive Citizens: "
+            f"{self._value(summary.get('cognitive_citizen_count'))}",
+            "Cognitive Citizenship Definition: "
+            f"{self._value(summary.get('cognitive_citizenship_definition'))}",
+            "World Governance Promotion Policy: "
+            f"{self._value(summary.get('world_governance_promotion_policy_state'))}",
+            "Sandbox Citizenship Thresholds: "
+            f"{self._value(summary.get('sandbox_citizenship_thresholds'))}",
+            "Trusted Capability Policy: "
+            f"{self._value(summary.get('trusted_capability_policy'))}",
+            "Decision Authority Policy: "
+            f"{self._value(summary.get('decision_authority_policy'))}",
+            "Capability Stability Regression Count: "
+            f"{self._value(summary.get('capability_stability_regression_count'))}",
             "Capability Population Evolution Speed: "
             f"{self._percent(summary.get('capability_population_evolution_speed'))}",
             "Operational Experience Growth Speed: "
@@ -1816,11 +1922,55 @@ class DeterministicFinalReportRenderer:
             f"{self._value(lifecycle.get('current_run_materialization_gap'))}",
             "Compiler Success Rate: "
             f"{self._percent(lifecycle.get('compiler_activation_to_compile_success_rate'))}",
+            "Compiler Diagnostic State: "
+            f"{self._value(summary.get('compiler_diagnostic_state'))}",
+            "Compiler Failure Count: "
+            f"{self._value(summary.get('compiler_failure_count'))}",
+            "Compiler Failure Pressure: "
+            f"{self._percent(summary.get('compiler_failure_pressure'))}",
+            "Compiler Failure Detail Capture: "
+            f"{self._value(summary.get('compiler_failure_detail_capture_state'))}",
             "Validation Success Rate: "
             f"{self._percent(lifecycle.get('arena_to_validation_rate'))}",
             "Capability Materialization Rate: "
             f"{self._percent(lifecycle.get('validation_to_operational_capability_rate'))}",
         ]
+        if compiler_failure_reasons:
+            lines.append(
+                "Compiler Failure Reasons: "
+                + "; ".join(
+                    f"{self._value(reason)}={self._value(count)}"
+                    for reason, count in sorted(compiler_failure_reasons.items())
+                )
+            )
+        if compiler_failure_domains:
+            lines.append(
+                "Compiler Failure Distribution By Domain: "
+                + "; ".join(
+                    f"{self._value(domain)}={self._value(count)}"
+                    for domain, count in sorted(compiler_failure_domains.items())
+                )
+            )
+        if compiler_failure_rows:
+            lines.append("Top Compiler Failure Examples:")
+            for row in compiler_failure_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"program={self._value(row.get('program'))} "
+                    f"intent={self._value(row.get('semantic_intent'))} "
+                    f"expected={self._value(row.get('expected_operation'))} "
+                    f"resolved={self._value(row.get('resolved_operation'))} "
+                    f"stage={self._value(row.get('failure_stage'))} "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"reason={self._value(row.get('reason'))} "
+                    f"rule={self._value(row.get('compiler_rule'))} "
+                    f"detail={self._value(row.get('detail'))} "
+                    f"count={self._value(row.get('failure_count'))} "
+                    f"source={self._value(row.get('diagnostic_row_source'))}"
+                )
         rejection_reasons = attrition.get("rejection_reasons") or {}
         if isinstance(rejection_reasons, dict) and rejection_reasons:
             lines.append(
@@ -1873,6 +2023,95 @@ class DeterministicFinalReportRenderer:
                     f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
                     f"validation_attempts={self._value(row.get('validation_attempts'))} "
                     f"trend={self._value(row.get('improvement_trend'))} "
+                    f"next={self._value(row.get('next_required_evidence'))}"
+                )
+        if top_operational_citizens:
+            lines.append("Top Operational Citizens:")
+            for row in top_operational_citizens[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"arena={self._value(row.get('arena_simulated_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"basis={self._value(row.get('citizenship_basis'))} "
+                    f"trusted={self._value(row.get('trusted_for_decision'))}"
+                )
+        if top_crystallization_candidates:
+            lines.append("Top Crystallization Candidates:")
+            for row in top_crystallization_candidates[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"quality={self._value(row.get('arena_quality_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    f"next={self._value(row.get('next_required_evidence'))}"
+                )
+        if top_graduation_candidates:
+            lines.append("Top Graduation Candidates:")
+            for row in top_graduation_candidates[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"quality={self._value(row.get('arena_quality_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    f"graduation_score={self._percent(row.get('graduation_score'))} "
+                    f"missing={self._value(row.get('missing_graduation_evidence'))} "
+                    f"action={self._value(row.get('world_governance_graduation_action'))}"
+                )
+        if top_cognitive_citizens:
+            lines.append("Top Cognitive Citizens:")
+            for row in top_cognitive_citizens[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"quality={self._value(row.get('arena_quality_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    "authority=SANDBOX_ONLY trusted=FALSE"
+                )
+        if top_stability_regressions:
+            lines.append("Top Stability Regressions:")
+            for row in top_stability_regressions[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"stability={self._value(row.get('stability_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
                     f"next={self._value(row.get('next_required_evidence'))}"
                 )
         domain_rows = domain_architecture.get("domain_rows") or []

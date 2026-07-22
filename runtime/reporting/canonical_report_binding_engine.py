@@ -2410,11 +2410,251 @@ class CanonicalReportBindingEngine:
             **summary,
         }
 
+    def _semantic_compiler_report(
+        self,
+        report_state: dict[str, Any],
+        performance: dict[str, Any],
+    ) -> dict[str, Any]:
+        synthesis = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "TRANSFORMATION_SYNTHESIS_REPORT",
+                "transformation_synthesis_report",
+            ),
+            self._first_dict(
+                performance,
+                "TRANSFORMATION_SYNTHESIS_REPORT",
+                "transformation_synthesis_report",
+            ),
+        )
+        return self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "SEMANTIC_COMPILATION_REPORT",
+                "semantic_compilation_report",
+            ),
+            self._first_dict(
+                performance,
+                "SEMANTIC_COMPILATION_REPORT",
+                "semantic_compilation_report",
+            ),
+            self._first_dict(
+                report_state,
+                "semantic_to_transformation_compilation_report",
+            ),
+            self._first_dict(
+                performance,
+                "semantic_to_transformation_compilation_report",
+            ),
+            self._first_dict(
+                synthesis,
+                "semantic_to_transformation_compilation_report",
+            ),
+        )
+
+    def _compiler_failure_diagnostics_summary(
+        self,
+        compiler_report: dict[str, Any],
+        *,
+        generated_programs: int,
+        compiler_runtime_activated_programs: int,
+        compiled_programs: int,
+    ) -> dict[str, Any]:
+        diagnostics = compiler_report.get("compiler_failure_diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        reason_counts = diagnostics.get("failure_reason_counts") or {}
+        reason_counts = reason_counts if isinstance(reason_counts, dict) else {}
+        domain_distribution = diagnostics.get("failure_domain_distribution") or {}
+        domain_distribution = (
+            domain_distribution if isinstance(domain_distribution, dict) else {}
+        )
+        rows = diagnostics.get("failure_rows") or []
+        rows = rows if isinstance(rows, list) else []
+        reported_failures = sum(
+            int(value or 0)
+            for value in reason_counts.values()
+            if isinstance(value, (int, float))
+        )
+        total_failures = max(
+            compiler_runtime_activated_programs - compiled_programs,
+            reported_failures,
+            0,
+        )
+        if total_failures and not reason_counts:
+            failure_reason = (
+                compiler_report.get("failure_reason")
+                or "compiler_failure_reason_not_reported"
+            )
+            reason_counts = {str(failure_reason): total_failures}
+        normalized_rows = self._normalize_compiler_failure_rows(
+            rows,
+            reason_counts,
+            domain_distribution,
+        )
+        compiler_success_rate = self._bounded_ratio(
+            compiled_programs,
+            compiler_runtime_activated_programs,
+        )
+        return {
+            "compiler_failure_count": total_failures,
+            "compiler_failure_reason_distribution": dict(
+                sorted((str(key), int(value or 0)) for key, value in reason_counts.items())
+            ),
+            "compiler_failure_domain_distribution": dict(
+                sorted((str(key), int(value or 0)) for key, value in domain_distribution.items())
+            ),
+            "compiler_failure_rows": normalized_rows[:10],
+            "compiler_failure_detail_capture_state": (
+                self._compiler_failure_detail_capture_state(
+                    rows,
+                    normalized_rows,
+                )
+            ),
+            "compiler_diagnostic_state": (
+                "COMPILER_BOTTLENECK_DIAGNOSED"
+                if total_failures and reason_counts
+                else "COMPILER_BOTTLENECK_UNEXPLAINED"
+                if total_failures
+                else "NO_COMPILER_BOTTLENECK"
+            ),
+            "compiler_failure_pressure": self._bounded_ratio(
+                total_failures,
+                max(generated_programs, compiler_runtime_activated_programs),
+            ),
+            "compiler_success_rate": compiler_success_rate,
+        }
+
+    def _compiler_failure_detail_capture_state(
+        self,
+        source_rows: list[Any],
+        normalized_rows: list[dict[str, Any]],
+    ) -> str:
+        if not normalized_rows:
+            return "NO_FAILURE_DETAILS"
+        if not source_rows:
+            return "SYNTHETIC_FAILURE_ROWS_FROM_AGGREGATES"
+        if any(self._compiler_failure_row_has_semantic_trace(row) for row in normalized_rows):
+            return "DETAILED_FAILURE_ROWS_CAPTURED"
+        return "STRUCTURED_PLACEHOLDER_ROWS_CAPTURED"
+
+    def _compiler_failure_row_has_semantic_trace(self, row: dict[str, Any]) -> bool:
+        if not isinstance(row, dict):
+            return False
+        unresolved = {
+            "",
+            "unknown",
+            "unresolved",
+            "unresolved_compiler_attempt",
+            "semantic_program_unresolved_compiler_attempt",
+            "not available",
+            "not_available",
+        }
+        program = str(row.get("program") or "").strip().lower()
+        semantic_intent = str(row.get("semantic_intent") or "").strip().lower()
+        stage = str(row.get("failure_stage") or "").strip().lower()
+        reason = str(row.get("reason") or "").strip().lower()
+        rule = str(row.get("compiler_rule") or "").strip().lower()
+        trace_id = str(row.get("trace_id") or "").strip().lower()
+        return (
+            bool(trace_id)
+            and program not in unresolved
+            and semantic_intent not in unresolved
+            and stage not in unresolved
+            and reason not in unresolved
+            and rule not in unresolved
+            and rule != "rule_not_captured"
+        )
+
+    def _normalize_compiler_failure_rows(
+        self,
+        rows: list[Any],
+        reason_counts: dict[Any, Any],
+        domain_distribution: dict[Any, Any],
+    ) -> list[dict[str, Any]]:
+        top_domain = None
+        if domain_distribution:
+            top_domain = sorted(
+                domain_distribution.items(),
+                key=lambda item: (-int(item[1] or 0), str(item[0])),
+            )[0][0]
+        normalized = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            reason = (
+                row.get("reason")
+                or next(iter(reason_counts.keys()), None)
+                or "compiler_failure_reason_not_reported"
+            )
+            domain = (
+                row.get("domain")
+                or top_domain
+                or "Unknown"
+            )
+            operation = (
+                row.get("operation")
+                or row.get("expected_operation")
+                or "unresolved_compiler_attempt"
+            )
+            expected_operation = row.get("expected_operation") or operation
+            resolved_operation = row.get("resolved_operation") or operation
+            program = row.get("program") or f"semantic_program_{expected_operation}"
+            semantic_intent = row.get("semantic_intent") or expected_operation
+            normalized.append({
+                **row,
+                "trace_id": row.get("trace_id")
+                or (
+                    "compiler_trace:"
+                    f"{program}:{semantic_intent}:{expected_operation}"
+                ),
+                "program": program,
+                "semantic_intent": semantic_intent,
+                "operation": operation,
+                "expected_operation": expected_operation,
+                "resolved_operation": resolved_operation,
+                "domain": domain,
+                "failure_stage": row.get("failure_stage")
+                or "compiler_failure_diagnostics",
+                "reason": reason,
+                "detail": row.get("detail")
+                or "compiler_failure_detail_not_captured",
+                "compiler_rule": row.get("compiler_rule")
+                or "RULE_NOT_CAPTURED",
+                "diagnostic_row_source": row.get(
+                    "diagnostic_row_source",
+                    "compiler_failure_diagnostics",
+                ),
+            })
+        if normalized or not reason_counts:
+            return normalized
+        for reason, count in sorted(reason_counts.items()):
+            normalized.append({
+                "trace_id": (
+                    "compiler_trace:"
+                    "unresolved_compiler_attempt:unknown:"
+                    "unresolved_compiler_attempt"
+                ),
+                "program": "unresolved_compiler_attempt",
+                "semantic_intent": "unknown",
+                "operation": "unresolved_compiler_attempt",
+                "expected_operation": "unresolved_compiler_attempt",
+                "resolved_operation": "unresolved_compiler_attempt",
+                "domain": top_domain or "Unknown",
+                "failure_stage": "compiler_failure_aggregation",
+                "reason": str(reason),
+                "detail": "compiler_failure_detail_not_captured",
+                "compiler_rule": "RULE_NOT_CAPTURED",
+                "failure_count": int(count or 0),
+                "diagnostic_row_source": "aggregate_failure_distribution",
+            })
+        return normalized
+
     def _build_cognitive_capability_coverage_visibility(
         self,
         report_state: dict[str, Any],
         performance: dict[str, Any],
     ) -> dict[str, Any]:
+        compiler_report = self._semantic_compiler_report(report_state, performance)
         semantic = self._build_executable_semantic_coverage_visibility(
             report_state,
             performance,
@@ -2541,6 +2781,12 @@ class CanonicalReportBindingEngine:
             compiler_runtime_activated_programs,
             max(generated_blueprints, generated_programs),
         )
+        compiler_failure_diagnostics = self._compiler_failure_diagnostics_summary(
+            compiler_report,
+            generated_programs=generated_programs,
+            compiler_runtime_activated_programs=compiler_runtime_activated_programs,
+            compiled_programs=compiled_programs,
+        )
         known_operational_capabilities = int(
             self._first_number(
                 materialization.get("known_operational_capability_count"),
@@ -2645,6 +2891,14 @@ class CanonicalReportBindingEngine:
             )
             or 0
         )
+        unresolved_validation_gap_candidate_count = int(
+            self._first_number(
+                materialization.get("unresolved_validation_gap_candidate_count"),
+                survival.get("unresolved_validation_gap_candidate_count"),
+                validation_gap_candidate_count,
+            )
+            or 0
+        )
         generated_survival_candidate_count = int(
             self._first_number(
                 materialization.get("generated_survival_candidate_count"),
@@ -2689,6 +2943,213 @@ class CanonicalReportBindingEngine:
             top_incubating_capabilities
             if isinstance(top_incubating_capabilities, list)
             else []
+        )
+        top_operational_citizens = (
+            materialization.get("top_operational_citizens")
+            or survival.get("top_operational_citizens")
+            or []
+        )
+        top_operational_citizens = (
+            top_operational_citizens
+            if isinstance(top_operational_citizens, list)
+            else []
+        )
+        capability_stability_regression_count = int(
+            self._first_number(
+                materialization.get("capability_stability_regression_count"),
+                survival.get("capability_stability_regression_count"),
+                0,
+            )
+            or 0
+        )
+        top_stability_regressions = (
+            materialization.get("top_stability_regressions")
+            or survival.get("top_stability_regressions")
+            or []
+        )
+        top_stability_regressions = (
+            top_stability_regressions
+            if isinstance(top_stability_regressions, list)
+            else []
+        )
+        top_crystallization_candidates = (
+            materialization.get("top_crystallization_candidates")
+            or survival.get("top_crystallization_candidates")
+            or []
+        )
+        top_crystallization_candidates = (
+            top_crystallization_candidates
+            if isinstance(top_crystallization_candidates, list)
+            else []
+        )
+        top_cognitive_citizens = (
+            materialization.get("top_cognitive_citizens")
+            or survival.get("top_cognitive_citizens")
+            or []
+        )
+        top_cognitive_citizens = (
+            top_cognitive_citizens
+            if isinstance(top_cognitive_citizens, list)
+            else []
+        )
+        cognitive_citizen_count = int(
+            self._first_number(
+                materialization.get("cognitive_citizen_count"),
+                survival.get("cognitive_citizen_count"),
+                0,
+            )
+            or 0
+        )
+        cognitive_citizenship_definition = (
+            materialization.get("cognitive_citizenship_definition")
+            or survival.get("cognitive_citizenship_definition")
+            or "not_measured"
+        )
+        crystallization_candidate_count = int(
+            self._first_number(
+                materialization.get("crystallization_candidate_count"),
+                survival.get("crystallization_candidate_count"),
+                0,
+            )
+            or 0
+        )
+        quality_to_citizen_crystallization_rate = self._first_number(
+            materialization.get("quality_to_citizen_crystallization_rate"),
+            survival.get("quality_to_citizen_crystallization_rate"),
+        )
+        candidate_to_citizen_crystallization_rate = self._first_number(
+            materialization.get("candidate_to_citizen_crystallization_rate"),
+            survival.get("candidate_to_citizen_crystallization_rate"),
+        )
+        generated_to_citizen_pressure_ratio = self._first_number(
+            materialization.get("generated_to_citizen_pressure_ratio"),
+            survival.get("generated_to_citizen_pressure_ratio"),
+        )
+        capability_crystallization_state = (
+            materialization.get("capability_crystallization_state")
+            or survival.get("capability_crystallization_state")
+            or "NOT_MEASURABLE"
+        )
+        capability_graduation_candidate_count = int(
+            self._first_number(
+                materialization.get("capability_graduation_candidate_count"),
+                survival.get("capability_graduation_candidate_count"),
+                0,
+            )
+            or 0
+        )
+        capability_graduation_pressure = self._first_number(
+            materialization.get("capability_graduation_pressure"),
+            survival.get("capability_graduation_pressure"),
+        )
+        capability_graduation_pressure_state = (
+            materialization.get("capability_graduation_pressure_state")
+            or survival.get("capability_graduation_pressure_state")
+            or "NONE"
+        )
+        capability_graduation_queue = (
+            materialization.get("capability_graduation_queue")
+            or survival.get("capability_graduation_queue")
+            or []
+        )
+        capability_graduation_queue = (
+            capability_graduation_queue
+            if isinstance(capability_graduation_queue, list)
+            else []
+        )
+        top_graduation_candidates = (
+            materialization.get("top_graduation_candidates")
+            or survival.get("top_graduation_candidates")
+            or capability_graduation_queue
+            or []
+        )
+        top_graduation_candidates = (
+            top_graduation_candidates
+            if isinstance(top_graduation_candidates, list)
+            else []
+        )
+        world_governance_graduation_action = (
+            materialization.get("world_governance_graduation_action")
+            or survival.get("world_governance_graduation_action")
+            or "NO_GRADUATION_QUEUE"
+        )
+        world_governance_promotion_policy = (
+            materialization.get("world_governance_promotion_policy")
+            or survival.get("world_governance_promotion_policy")
+            or {}
+        )
+        world_governance_promotion_policy = (
+            world_governance_promotion_policy
+            if isinstance(world_governance_promotion_policy, dict)
+            else {}
+        )
+        world_governance_promotion_policy_state = (
+            materialization.get("world_governance_promotion_policy_state")
+            or survival.get("world_governance_promotion_policy_state")
+            or world_governance_promotion_policy.get("policy_state")
+            or "NOT_MEASURABLE"
+        )
+        sandbox_citizenship_thresholds = (
+            materialization.get("sandbox_citizenship_thresholds")
+            or survival.get("sandbox_citizenship_thresholds")
+            or world_governance_promotion_policy.get(
+                "sandbox_citizenship_thresholds",
+                {},
+            )
+        )
+        sandbox_citizenship_thresholds = (
+            sandbox_citizenship_thresholds
+            if isinstance(sandbox_citizenship_thresholds, dict)
+            else {}
+        )
+        trusted_capability_policy = (
+            materialization.get("trusted_capability_policy")
+            or survival.get("trusted_capability_policy")
+            or world_governance_promotion_policy.get(
+                "trusted_capability_policy",
+                {},
+            )
+        )
+        trusted_capability_policy = (
+            trusted_capability_policy
+            if isinstance(trusted_capability_policy, dict)
+            else {}
+        )
+        decision_authority_policy = (
+            materialization.get("decision_authority_policy")
+            or survival.get("decision_authority_policy")
+            or world_governance_promotion_policy.get(
+                "decision_authority_policy",
+                {},
+            )
+        )
+        decision_authority_policy = (
+            decision_authority_policy
+            if isinstance(decision_authority_policy, dict)
+            else {}
+        )
+        operational_citizen_domain_distribution = (
+            materialization.get("operational_citizen_domain_distribution")
+            or survival.get("operational_citizen_domain_distribution")
+            or {}
+        )
+        operational_citizen_domain_distribution = (
+            operational_citizen_domain_distribution
+            if isinstance(operational_citizen_domain_distribution, dict)
+            else {}
+        )
+        domain_monopoly_share = self._first_number(
+            materialization.get("domain_monopoly_share"),
+            survival.get("domain_monopoly_share"),
+        )
+        dominant_operational_domain = (
+            materialization.get("dominant_operational_domain")
+            or survival.get("dominant_operational_domain")
+        )
+        domain_operational_imbalance_state = (
+            materialization.get("domain_operational_imbalance_state")
+            or survival.get("domain_operational_imbalance_state")
+            or "NOT_MEASURABLE"
         )
         capability_survival_rows = survival.get("capability_survival_rows") or []
         capability_survival_rows = (
@@ -3042,6 +3503,66 @@ class CanonicalReportBindingEngine:
             for operation in known_operational_operations
             if operation
         )
+        historical_operational_domain_distribution: dict[str, int] = {}
+        for operation in known_operational_operations:
+            domain = self._cognitive_domain_label(
+                self._cognitive_domain_for_operation(operation)
+            )
+            historical_operational_domain_distribution[domain] = (
+                historical_operational_domain_distribution.get(domain, 0) + 1
+            )
+        for domain in known_operational_domains:
+            historical_operational_domain_distribution.setdefault(
+                self._cognitive_domain_label(domain),
+                0,
+            )
+        sandbox_operational_domain_labels = {
+            self._cognitive_domain_label(domain)
+            for domain in operational_citizen_domain_distribution.keys()
+            if domain
+        }
+        sandbox_operational_domain_labels.update(
+            self._cognitive_domain_label(
+                row.get("domain")
+                or self._cognitive_domain_for_operation(row.get("operation"))
+            )
+            for row in top_operational_citizens
+            if isinstance(row, dict)
+        )
+        operational_domain_citizen_labels = (
+            known_operational_domain_labels | sandbox_operational_domain_labels
+        )
+        sandbox_operational_domain_distribution = {
+            self._cognitive_domain_label(domain): int(count or 0)
+            for domain, count in operational_citizen_domain_distribution.items()
+        }
+        combined_operational_domain_distribution = dict(
+            historical_operational_domain_distribution
+        )
+        for domain, count in sandbox_operational_domain_distribution.items():
+            combined_operational_domain_distribution[domain] = (
+                combined_operational_domain_distribution.get(domain, 0) + count
+            )
+        combined_total = sum(combined_operational_domain_distribution.values())
+        if combined_total:
+            combined_dominant_domain, combined_dominant_count = sorted(
+                combined_operational_domain_distribution.items(),
+                key=lambda item: (-item[1], item[0]),
+            )[0]
+            dominant_operational_domain = combined_dominant_domain
+            domain_monopoly_share = self._bounded_ratio(
+                combined_dominant_count,
+                combined_total,
+            )
+            domain_operational_imbalance_state = (
+                "DOMAIN_MONOPOLY"
+                if isinstance(domain_monopoly_share, (int, float))
+                and domain_monopoly_share >= 0.60
+                else "DOMAIN_IMBALANCE"
+                if isinstance(domain_monopoly_share, (int, float))
+                and domain_monopoly_share >= 0.40
+                else "BALANCED"
+            )
         surviving_capability_domain_labels = {
             self._cognitive_domain_label(
                 row.get("domain")
@@ -3065,8 +3586,12 @@ class CanonicalReportBindingEngine:
         historical_operational_domain_citizen_count = len(
             known_operational_domain_labels
         )
+        sandbox_operational_domain_citizen_count = len(
+            sandbox_operational_domain_labels
+        )
+        operational_domain_citizen_count = len(operational_domain_citizen_labels)
         operational_domain_citizenship_coverage = self._bounded_ratio(
-            historical_operational_domain_citizen_count,
+            operational_domain_citizen_count,
             expected_operational_domain_citizen_count,
         )
         surviving_capability_domain_count = len(surviving_capability_domain_labels)
@@ -3075,7 +3600,7 @@ class CanonicalReportBindingEngine:
             for row in domain_rows_for_citizenship
             if isinstance(row, dict)
             and self._cognitive_domain_label(row.get("domain_name"))
-            not in known_operational_domain_labels
+            not in operational_domain_citizen_labels
             and isinstance(row.get("domain_operational_readiness"), (int, float))
             and float(row.get("domain_operational_readiness")) >= 0.60
         ]
@@ -3177,8 +3702,29 @@ class CanonicalReportBindingEngine:
             "historical_operational_domain_citizen_count": (
                 historical_operational_domain_citizen_count
             ),
+            "sandbox_operational_domain_citizen_count": (
+                sandbox_operational_domain_citizen_count
+            ),
+            "operational_domain_citizen_count": operational_domain_citizen_count,
             "operational_domain_citizenship_coverage": (
                 operational_domain_citizenship_coverage
+            ),
+            "operational_citizen_domain_distribution": (
+                operational_citizen_domain_distribution
+            ),
+            "historical_operational_domain_distribution": (
+                historical_operational_domain_distribution
+            ),
+            "sandbox_operational_domain_distribution": (
+                sandbox_operational_domain_distribution
+            ),
+            "combined_operational_domain_distribution": (
+                combined_operational_domain_distribution
+            ),
+            "dominant_operational_domain": dominant_operational_domain,
+            "domain_monopoly_share": domain_monopoly_share,
+            "domain_operational_imbalance_state": (
+                domain_operational_imbalance_state
             ),
             "surviving_capability_domain_count": surviving_capability_domain_count,
             "missing_operational_citizen_domains": (
@@ -3190,8 +3736,52 @@ class CanonicalReportBindingEngine:
             "incubating_operational_capability_count": incubating_operational_capability_count,
             "operational_citizen_count": operational_citizen_count,
             "validation_gap_candidate_count": validation_gap_candidate_count,
+            "unresolved_validation_gap_candidate_count": (
+                unresolved_validation_gap_candidate_count
+            ),
             "capability_survival_state_distribution": survival_state_distribution,
             "top_incubating_capabilities": top_incubating_capabilities[:5],
+            "top_operational_citizens": top_operational_citizens[:5],
+            "top_crystallization_candidates": top_crystallization_candidates[:5],
+            "cognitive_citizen_count": cognitive_citizen_count,
+            "top_cognitive_citizens": top_cognitive_citizens[:5],
+            "cognitive_citizenship_definition": cognitive_citizenship_definition,
+            "crystallization_candidate_count": crystallization_candidate_count,
+            "quality_to_citizen_crystallization_rate": (
+                quality_to_citizen_crystallization_rate
+            ),
+            "candidate_to_citizen_crystallization_rate": (
+                candidate_to_citizen_crystallization_rate
+            ),
+            "generated_to_citizen_pressure_ratio": (
+                generated_to_citizen_pressure_ratio
+            ),
+            "capability_crystallization_state": capability_crystallization_state,
+            "capability_graduation_candidate_count": (
+                capability_graduation_candidate_count
+            ),
+            "capability_graduation_pressure": capability_graduation_pressure,
+            "capability_graduation_pressure_state": (
+                capability_graduation_pressure_state
+            ),
+            "capability_graduation_queue": capability_graduation_queue[:5],
+            "top_graduation_candidates": top_graduation_candidates[:5],
+            "world_governance_graduation_action": (
+                world_governance_graduation_action
+            ),
+            "world_governance_promotion_policy": (
+                world_governance_promotion_policy
+            ),
+            "world_governance_promotion_policy_state": (
+                world_governance_promotion_policy_state
+            ),
+            "sandbox_citizenship_thresholds": sandbox_citizenship_thresholds,
+            "trusted_capability_policy": trusted_capability_policy,
+            "decision_authority_policy": decision_authority_policy,
+            "capability_stability_regression_count": (
+                capability_stability_regression_count
+            ),
+            "top_stability_regressions": top_stability_regressions[:5],
             "capability_survival_rows": capability_survival_rows,
             "capability_survival_store_path": materialization.get(
                 "capability_survival_store_path"
@@ -3220,6 +3810,40 @@ class CanonicalReportBindingEngine:
             "independent_reuse_capability_count": independent_reuse_capability_count,
             "capability_experience_distribution": valid_distribution[:5],
             "compiler_runtime_coverage": compiler_runtime_coverage,
+            "compiler_failure_count": compiler_failure_diagnostics.get(
+                "compiler_failure_count",
+                0,
+            ),
+            "compiler_failure_reason_distribution": (
+                compiler_failure_diagnostics.get(
+                    "compiler_failure_reason_distribution",
+                    {},
+                )
+            ),
+            "compiler_failure_domain_distribution": (
+                compiler_failure_diagnostics.get(
+                    "compiler_failure_domain_distribution",
+                    {},
+                )
+            ),
+            "compiler_failure_rows": compiler_failure_diagnostics.get(
+                "compiler_failure_rows",
+                [],
+            ),
+            "compiler_diagnostic_state": compiler_failure_diagnostics.get(
+                "compiler_diagnostic_state",
+            ),
+            "compiler_failure_detail_capture_state": (
+                compiler_failure_diagnostics.get(
+                    "compiler_failure_detail_capture_state",
+                )
+            ),
+            "compiler_failure_pressure": compiler_failure_diagnostics.get(
+                "compiler_failure_pressure",
+            ),
+            "compiler_success_rate": compiler_failure_diagnostics.get(
+                "compiler_success_rate",
+            ),
             "generated_concepts": generated_concepts,
             "measured_concepts": measured_concepts,
             "executable_concepts": executable_concepts,

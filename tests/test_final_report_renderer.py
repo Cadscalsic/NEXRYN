@@ -291,6 +291,59 @@ def test_render_includes_cognitive_capability_coverage_map():
         "operational_citizen_count": 0,
         "validation_bottleneck_inflation": 0.5,
         "validation_bottleneck_state": "VALIDATION_BOTTLENECK",
+        "unresolved_validation_gap_candidate_count": 1,
+        "operational_citizen_domain_distribution": {
+            "Identity": 1,
+        },
+        "dominant_operational_domain": "Identity",
+        "domain_monopoly_share": 1.0,
+        "domain_operational_imbalance_state": "DOMAIN_MONOPOLY",
+        "capability_stability_regression_count": 1,
+        "crystallization_candidate_count": 1,
+        "quality_to_citizen_crystallization_rate": 0.0,
+        "candidate_to_citizen_crystallization_rate": 0.0,
+        "generated_to_citizen_pressure_ratio": 3.0,
+        "capability_crystallization_state": "SEVERE_CRYSTALLIZATION_FAILURE",
+        "capability_graduation_candidate_count": 1,
+        "capability_graduation_pressure": 0.92,
+        "capability_graduation_pressure_state": "HIGH",
+        "world_governance_graduation_action": "GRADUATION_SPRINT_REQUIRED",
+        "top_graduation_candidates": [
+            {
+                "capability_id": "operational_capability:spatial:translate:spatial_reasoning",
+                "operation": "translate",
+                "domain": "Spatial",
+                "lifecycle_state": "SURVIVING_CAPABILITY",
+                "distinct_task_count": 17,
+                "arena_quality_count": 16,
+                "best_accuracy": 0.9444,
+                "average_accuracy": 0.7772,
+                "improvement_trend": "IMPROVING",
+                "graduation_score": 0.92,
+                "missing_graduation_evidence": "exact_or_governed_validation_success",
+                "world_governance_graduation_action": "GRADUATION_SPRINT_REQUIRED",
+            }
+        ],
+        "world_governance_promotion_policy_state": "RELAX_SANDBOX_CITIZENSHIP",
+        "sandbox_citizenship_thresholds": {
+            "min_distinct_tasks": 3,
+            "min_arena_quality_count": 3,
+            "min_average_accuracy": 0.8,
+            "min_best_accuracy": 0.0,
+            "allowed_trends": [
+                "STABLE",
+                "IMPROVING",
+                "STABLE_HIGH_PERFORMANCE",
+                "DECLINING_MINOR",
+            ],
+        },
+        "trusted_capability_policy": {
+            "policy_state": "STRICT_REVIEW_REQUIRED",
+        },
+        "decision_authority_policy": {
+            "policy_state": "SEPARATE_AUTHORITY_REVIEW_REQUIRED",
+            "automatic_authority_transfer": False,
+        },
         "capability_survival_store_path": "runtime/test_survival.json",
         "capability_survival_state_distribution": {
             "GENERATED_CANDIDATE": 1,
@@ -314,6 +367,91 @@ def test_render_includes_cognitive_capability_coverage_map():
                 "next_required_evidence": "repeatable_validation_across_independent_task",
             }
         ],
+        "top_operational_citizens": [
+            {
+                "capability_id": "operational_capability:identity:preserve_grid:object_identity_preservation",
+                "operation": "preserve_grid",
+                "domain": "Identity",
+                "lifecycle_state": "OPERATIONAL_CITIZEN",
+                "distinct_task_count": 3,
+                "arena_simulated_count": 3,
+                "best_accuracy": 0.9722,
+                "average_accuracy": 0.9241,
+                "citizenship_basis": "sandbox_governed_survival_evidence",
+                "trusted_for_decision": False,
+            }
+        ],
+        "top_crystallization_candidates": [
+            {
+                "capability_id": "operational_capability:spatial:preserve_shape:shape_preservation",
+                "operation": "preserve_shape",
+                "domain": "Spatial",
+                "lifecycle_state": "INCUBATING_VALIDATION_GAP",
+                "distinct_task_count": 3,
+                "arena_quality_count": 3,
+                "best_accuracy": 0.96,
+                "average_accuracy": 0.84,
+                "improvement_trend": "STABLE",
+                "next_required_evidence": "repeatable_validation_across_independent_task",
+            }
+        ],
+        "cognitive_citizen_count": 1,
+        "cognitive_citizenship_definition": (
+            "independent_high_quality_sandbox_evidence_without_decision_authority"
+        ),
+        "top_cognitive_citizens": [
+            {
+                "capability_id": "operational_capability:spatial:preserve_grid:object_identity_preservation",
+                "operation": "preserve_grid",
+                "domain": "Spatial",
+                "lifecycle_state": "ARENA_SIMULATED",
+                "distinct_task_count": 9,
+                "arena_quality_count": 8,
+                "best_accuracy": 0.9722,
+                "average_accuracy": 0.8092,
+                "improvement_trend": "STABLE_HIGH_PERFORMANCE",
+            }
+        ],
+        "top_stability_regressions": [
+            {
+                "capability_id": "operational_capability:spatial:preserve_grid:object_identity_preservation",
+                "operation": "preserve_grid",
+                "domain": "Spatial",
+                "lifecycle_state": "SURVIVING_CAPABILITY",
+                "stability_state": "STABILITY_REGRESSION",
+                "distinct_task_count": 6,
+                "average_accuracy": 0.7763,
+                "next_required_evidence": "stability_recovery_evidence",
+            }
+        ],
+    }
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "failure_reason": "no_supported_compiler_for_execution_intents",
+        "compiler_failure_diagnostics": {
+            "failure_reason_counts": {
+                "operation_semantics_mismatch": 2,
+                "invalid_composition": 1,
+            },
+            "failure_domain_distribution": {
+                "Spatial": 2,
+                "Topology": 1,
+            },
+            "failure_rows": [
+                {
+                    "operation": "preserve_grid",
+                    "program": "semantic_program_preserve_grid",
+                    "semantic_intent": "object_identity_preservation",
+                    "expected_operation": "preserve_grid",
+                    "resolved_operation": "translate",
+                    "failure_stage": "semantic_operation_resolution",
+                    "domain": "Spatial",
+                    "reason": "operation_semantics_mismatch",
+                    "compiler_rule": "RULE_GRID_PRESERVATION_01",
+                    "detail": "candidate_not_emitted:preserve_grid",
+                }
+            ],
+        },
     }
 
     report = DeterministicFinalReportRenderer().render(
@@ -336,6 +474,22 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Secondary Operationalization Bottleneck:" in report
     assert "Current Run Materialization Gap:" in report
     assert "Compiler Success Rate:" in report
+    assert "Compiler Diagnostic State:" in report
+    assert "Compiler Failure Count:" in report
+    assert "Compiler Failure Detail Capture:" in report
+    assert "Compiler Failure Reasons:" in report
+    assert "operation_semantics_mismatch=2" in report
+    assert "Compiler Failure Distribution By Domain:" in report
+    assert "Spatial=2" in report
+    assert "Top Compiler Failure Examples:" in report
+    assert "program=semantic_program_preserve_grid" in report
+    assert "intent=object_identity_preservation" in report
+    assert "expected=preserve_grid" in report
+    assert "resolved=translate" in report
+    assert "stage=semantic_operation_resolution" in report
+    assert "operation=preserve_grid" in report
+    assert "rule=RULE_GRID_PRESERVATION_01" in report
+    assert "source=compiler_failure_diagnostics" in report
     assert "Validation Success Rate:" in report
     assert "Capability Materialization Rate:" in report
     assert "Operational Yield From Concepts:" in report
@@ -378,11 +532,37 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Historical Operational Citizens:" in report
     assert "Operational Domain Citizenship Coverage:" in report
     assert "Historical Operational Domain Citizens:" in report
+    assert "Sandbox Operational Domain Citizens:" in report
+    assert "Operational Domain Citizens:" in report
     assert "Expected Operational Domain Citizens:" in report
     assert "Surviving Capability Domain Count:" in report
+    assert "Operational Citizen Domain Distribution:" in report
+    assert "Historical Operational Domain Distribution:" in report
+    assert "Sandbox Operational Domain Distribution:" in report
+    assert "Combined Operational Domain Distribution:" in report
+    assert "Dominant Operational Domain:" in report
+    assert "Domain Monopoly Share:" in report
+    assert "Domain Operational Imbalance State:" in report
     assert "Missing Operational Citizen Domains:" in report
     assert "Surviving Capabilities:" in report
     assert "Validation Gap Candidate Count:" in report
+    assert "Unresolved Validation Gap Candidate Count:" in report
+    assert "Crystallization Candidate Count:" in report
+    assert "Quality To Citizen Crystallization Rate:" in report
+    assert "Candidate To Citizen Crystallization Rate:" in report
+    assert "Generated To Citizen Pressure Ratio:" in report
+    assert "Capability Crystallization State:" in report
+    assert "Capability Graduation Candidates:" in report
+    assert "Capability Graduation Pressure:" in report
+    assert "Capability Graduation Pressure State:" in report
+    assert "World Governance Graduation Action:" in report
+    assert "Cognitive Citizens:" in report
+    assert "Cognitive Citizenship Definition:" in report
+    assert "World Governance Promotion Policy:" in report
+    assert "Sandbox Citizenship Thresholds:" in report
+    assert "Trusted Capability Policy:" in report
+    assert "Decision Authority Policy:" in report
+    assert "Capability Stability Regression Count:" in report
     assert "Capability Population Evolution Speed:" in report
     assert "Operational Experience Growth Speed:" in report
     assert "Capability Population Evolution Lag:" in report
@@ -406,6 +586,20 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Capability Survival Store:" in report
     assert "Capability Survival State Distribution:" in report
     assert "Top Incubating Capabilities:" in report
+    assert "Top Operational Citizens:" in report
+    assert "basis=sandbox_governed_survival_evidence trusted=FALSE" in report
+    assert "Top Crystallization Candidates:" in report
+    assert "operation=preserve_shape" in report
+    assert "Top Graduation Candidates:" in report
+    assert "operation=translate" in report
+    assert "graduation_score=92%" in report
+    assert "missing=exact_or_governed_validation_success" in report
+    assert "action=GRADUATION_SPRINT_REQUIRED" in report
+    assert "Top Cognitive Citizens:" in report
+    assert "operation=preserve_grid" in report
+    assert "authority=SANDBOX_ONLY trusted=FALSE" in report
+    assert "Top Stability Regressions:" in report
+    assert "next=stability_recovery_evidence" in report
     assert "Operational Experience Task Count:" in report
     assert "Operational Experience Per Capability:" in report
     assert "Operational Specialization Pressure:" in report

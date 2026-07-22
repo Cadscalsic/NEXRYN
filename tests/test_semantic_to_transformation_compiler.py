@@ -71,6 +71,79 @@ def test_compiles_noise_removal_into_explicit_filter_program():
     assert report["validation"]["exact_match"] is True
 
 
+def test_compiler_reports_failure_diagnostics_by_reason_and_domain():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 0],
+            [0, 0],
+        ],
+        output_grid=[
+            [1, 2],
+            [0, 0],
+        ],
+        detected_concepts=["object_identity_preservation", "position_preservation"],
+        execution_intents=[
+            {
+                "intent": "object_identity_preservation",
+                "operation": "preserve_grid",
+            }
+        ],
+    )
+
+    diagnostics = report["compiler_failure_diagnostics"]
+
+    assert report["semantic_to_transformation_compilation_success"] is False
+    assert diagnostics["failure_reason_counts"]["operation_semantics_mismatch"] == 1
+    assert diagnostics["failure_domain_distribution"]["Spatial"] == 1
+    assert diagnostics["failure_rows"][0]["operation"] == "preserve_grid"
+    assert diagnostics["failure_rows"][0]["domain"] == "Spatial"
+    assert diagnostics["failure_rows"][0]["program"] == "semantic_program_preserve_grid"
+    assert diagnostics["failure_rows"][0]["semantic_intent"] == "object_identity_preservation"
+    assert diagnostics["failure_rows"][0]["expected_operation"] == "preserve_grid"
+    assert diagnostics["failure_rows"][0]["resolved_operation"] == "preserve_grid"
+    assert diagnostics["failure_rows"][0]["failure_stage"] == "semantic_operation_resolution"
+    assert diagnostics["failure_rows"][0]["compiler_rule"] == "RULE_GRID_PRESERVATION_01"
+
+
+def test_compiler_reports_traceable_semantic_drift_failures():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 0],
+            [0, 0],
+        ],
+        output_grid=[
+            [1, 2],
+            [0, 0],
+        ],
+        detected_concepts=["topology_preservation"],
+        execution_intents=[
+            {
+                "program_id": "semantic_program_preserve_topology",
+                "intent": "preserve_topology",
+                "operation": "translate",
+                "matched_concepts": ["topology_preservation"],
+            }
+        ],
+    )
+
+    diagnostics = report["compiler_failure_diagnostics"]
+    row = diagnostics["failure_rows"][0]
+
+    assert report["semantic_to_transformation_compilation_success"] is False
+    assert diagnostics["failure_reason_counts"]["operation_semantics_mismatch"] == 1
+    assert row["trace_id"] == (
+        "compiler_trace:semantic_program_preserve_topology:"
+        "preserve_topology:preserve_topology"
+    )
+    assert row["program"] == "semantic_program_preserve_topology"
+    assert row["semantic_intent"] == "preserve_topology"
+    assert row["expected_operation"] == "preserve_topology"
+    assert row["resolved_operation"] == "translate"
+    assert row["failure_stage"] == "semantic_operation_resolution"
+    assert row["reason"] == "operation_semantics_mismatch"
+    assert row["compiler_rule"] == "RULE_TOPOLOGY_PRESERVATION_01"
+
+
 def test_compiler_is_stable_for_identical_inputs():
     compiler = SemanticToTransformationCompiler()
     kwargs = {
