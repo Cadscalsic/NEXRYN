@@ -329,6 +329,56 @@ def test_training_assistant_selects_one_elite_and_two_normal_tasks(tmp_path):
     )
 
 
+def test_training_assistant_selects_elite_only_for_v1_curriculum(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    tasks = {}
+    for sequence in range(1, 5):
+        task_file = f"elite_cognitive_task_{sequence:02d}.json"
+        tasks[task_file] = {
+            "nexryn_metadata": {
+                "curriculum": "nexryn_elite_training_curriculum_v1",
+                "operationalization_phase_curriculum": True,
+                "elite_cognitive_task": True,
+                "target_concepts": ["translation", "preserve_topology"],
+                "target_domains": ["Spatial", "Topology", "Identity"],
+                "deficiency_targets": ["domain_operationalization_gaps"],
+                "required_operational_capabilities": [
+                    "capability_composition",
+                ],
+            },
+        }
+    tasks["task_001.json"] = {
+        "nexryn_metadata": {
+            "target_concepts": ["old_task"],
+        },
+    }
+    for task_file, payload in tasks.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+    selected = assistant.select_batch(
+        list(tasks),
+        task_directory=tasks_directory,
+    )
+
+    assert selected["elite_only_policy_active"] is True
+    assert selected["selected_task_count"] == 3
+    assert selected["selected_task_files"] == selected["selected_elite_task_files"]
+    assert "task_001.json" not in selected["selected_task_files"]
+    assert selected["elite_selection_report"]["policy"] == (
+        "elite_tasks_only_operationalization_phase"
+    )
+
+
 def test_training_assistant_uses_survival_store_for_elite_reappearance(tmp_path):
     tasks_directory = tmp_path / "training"
     tasks_directory.mkdir()

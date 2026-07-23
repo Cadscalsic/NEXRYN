@@ -318,6 +318,60 @@ def test_render_includes_cognitive_capability_coverage_map():
         "capability_graduation_pressure": 0.92,
         "capability_graduation_pressure_state": "HIGH",
         "world_governance_graduation_action": "GRADUATION_SPRINT_REQUIRED",
+        "capability_graduation_health": 0.8125,
+        "graduation_pipeline_health": "BACKLOGGED",
+        "graduation_success_rate": 0.5,
+        "graduation_failure_rate": 0.3333,
+        "graduation_queue_health": "HEALTHY",
+        "graduation_evidence_coverage": 0.8,
+        "graduation_infrastructure_readiness": "READY",
+        "average_capability_graduation_time": 17.0,
+        "graduation_backlog_size": 1,
+        "capability_graduation_risk": "MEDIUM",
+        "capability_graduation_complexity": "MEDIUM",
+        "capability_graduation_confidence": 0.9444,
+        "graduation_pipeline_stages": {
+            "INCUBATING_VALIDATION_GAP": 1,
+            "SURVIVING_CAPABILITY": 1,
+            "COGNITIVE_CITIZEN": 0,
+            "OPERATIONAL_CITIZEN": 0,
+        },
+        "graduation_transition_rows": [
+            {
+                "transition": (
+                    "SURVIVING_CAPABILITY->COGNITIVE_CITIZEN"
+                ),
+                "source_count": 1,
+                "target_count": 0,
+                "stuck_count": 1,
+                "success_rate": 0.0,
+                "average_graduation_time": 17.0,
+                "stuck_reasons": {
+                    "exact_or_governed_validation_success": 1,
+                },
+            },
+        ],
+        "graduation_sprint_recommendations": [
+            {
+                "capability_id": (
+                    "operational_capability:spatial:translate:spatial_reasoning"
+                ),
+                "operation": "translate",
+                "priority": 0.9444,
+                "minimum_required_evidence": (
+                    "exact_or_governed_validation_success"
+                ),
+                "recommended_validation_type": "exact_or_governed_validation",
+                "recommended_training_signal": (
+                    "validator_acceptance_task_for:translate"
+                ),
+                "can_graduate_in_single_run": True,
+                "estimated_runs_required": 1,
+            },
+        ],
+        "validator_failure_distribution": {
+            "GOVERNED_VALIDATION_INCOMPLETE": 1,
+        },
         "top_graduation_candidates": [
             {
                 "capability_id": "operational_capability:spatial:translate:spatial_reasoning",
@@ -331,6 +385,8 @@ def test_render_includes_cognitive_capability_coverage_map():
                 "improvement_trend": "IMPROVING",
                 "graduation_score": 0.92,
                 "missing_graduation_evidence": "exact_or_governed_validation_success",
+                "validator_gap": "GOVERNED_VALIDATION_INCOMPLETE",
+                "capability_graduation_confidence": 0.9444,
                 "world_governance_graduation_action": "GRADUATION_SPRINT_REQUIRED",
             }
         ],
@@ -478,6 +534,15 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Operational Capability Coverage Target:" in report
     assert "Compiler Runtime Activated Programs:" in report
     assert "Execution Package Coverage:" in report
+    assert "Execution Package Health Score:" in report
+    assert "Primitive Operation Coverage:" in report
+    assert "Compiler Infrastructure Health:" in report
+    assert "Multi-Step Program Support:" in report
+    assert "Execution Package Dependency Coverage:" in report
+    assert "Primitive Infrastructure Coverage:" in report
+    assert "Compiler Primitive Success Rate:" in report
+    assert "Execution Package Utilization:" in report
+    assert "Compiler Infrastructure Readiness:" in report
     assert "Candidate Attrition Coverage:" in report
     assert "End-To-End Program Lifecycle:" in report
     assert "Operationalization Bottleneck:" in report
@@ -553,6 +618,31 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Dominant Operational Domain:" in report
     assert "Domain Monopoly Share:" in report
     assert "Domain Operational Imbalance State:" in report
+    assert "Operational Domain Health:" in report
+    assert "Operational Domain Coverage:" in report
+    assert "Domain Operationalization Score:" in report
+    assert "Domain Operationalization Bottleneck:" in report
+    assert "Domain Population Balance:" in report
+    assert "Domain Collaboration Score:" in report
+    assert "Domain Operational Growth Rate:" in report
+    assert "Domain Primitive Coverage:" in report
+    assert "Domain Capability Diversity:" in report
+    assert "Domain Infrastructure Readiness:" in report
+    assert "Operational Domain Population:" in report
+    assert "Domain Diversification Score:" in report
+    assert "Domain Monopoly Pressure:" in report
+    assert "Operational Domain Growth Rate:" in report
+    assert "Operational Domain Evolution Speed:" in report
+    assert "Capability Ecology Health:" in report
+    assert "Capability Cooperation Score:" in report
+    assert "Capability Composition Score:" in report
+    assert "Composite Capability Score:" in report
+    assert "Capability Collaboration Diversity:" in report
+    assert "Composite Operational Capability Count:" in report
+    assert "Capability Interaction Density:" in report
+    assert "Capability Composition Readiness:" in report
+    assert "Composite Intelligence Readiness:" in report
+    assert "Capability Economy Health:" in report
     assert "Missing Operational Citizen Domains:" in report
     assert "Surviving Capabilities:" in report
     assert "Validation Gap Candidate Count:" in report
@@ -566,6 +656,18 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Capability Graduation Pressure:" in report
     assert "Capability Graduation Pressure State:" in report
     assert "World Governance Graduation Action:" in report
+    assert "Capability Graduation Health:" in report
+    assert "Graduation Pipeline Health:" in report
+    assert "Graduation Success Rate:" in report
+    assert "Graduation Failure Rate:" in report
+    assert "Graduation Queue Health:" in report
+    assert "Graduation Evidence Coverage:" in report
+    assert "Graduation Infrastructure Readiness:" in report
+    assert "Average Capability Graduation Time:" in report
+    assert "Graduation Backlog Size:" in report
+    assert "Capability Graduation Risk:" in report
+    assert "Capability Graduation Complexity:" in report
+    assert "Capability Graduation Confidence:" in report
     assert "Cognitive Citizens:" in report
     assert "Cognitive Citizenship Definition:" in report
     assert "World Governance Promotion Policy:" in report
@@ -604,7 +706,18 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "operation=translate" in report
     assert "graduation_score=92%" in report
     assert "missing=exact_or_governed_validation_success" in report
+    assert "validator=GOVERNED_VALIDATION_INCOMPLETE" in report
+    assert "confidence=94.44%" in report
     assert "action=GRADUATION_SPRINT_REQUIRED" in report
+    assert "Graduation Pipeline Stages:" in report
+    assert "Graduation Pipeline Transitions:" in report
+    assert "SURVIVING_CAPABILITY->COGNITIVE_CITIZEN" in report
+    assert "Validator Failure Distribution:" in report
+    assert "Governed Validation Incomplete=1" in report
+    assert "Graduation Sprint Recommendations:" in report
+    assert "minimum_evidence=exact_or_governed_validation_success" in report
+    assert "validation=exact_or_governed_validation" in report
+    assert "single_run=TRUE" in report
     assert "Top Cognitive Citizens:" in report
     assert "operation=preserve_grid" in report
     assert "authority=SANDBOX_ONLY trusted=FALSE" in report
@@ -627,6 +740,11 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Experienced Capability Count:" in report
     assert "Independent Reuse Capability Count:" in report
     assert "Domain Architecture State:" in report
+    assert "Operational Domain Diagnostics:" in report
+    assert "Operational Domain Expansion Gaps:" in report
+    assert "Operational Domain Collaborations:" in report
+    assert "Operational Domain Targets:" in report
+    assert "Domain Expansion Roadmap:" in report
     assert "Cognitive Domain Architecture:" in report
     assert "gap=" in report
     assert "Missing Compiler Requirements: compiler_support" in report
@@ -1418,8 +1536,68 @@ def test_report_marks_selected_compiler_without_report_as_attempted_rejection():
     assert "Proposal Phase Entered: TRUE" in report
     assert "Sources Rejected: semantic_to_transformation_compiler" in report
     assert "Attempted Candidates: 2" in report
-    assert "Explicit Rejections: 1" in report
-    assert "semantic_to_transformation_compiler: REJECTED reason=Semantic compiler selected but no compilation report was produced." in report
+
+
+def test_candidate_proposal_phase_renders_adaptive_reuse_admission_trace():
+    state = _report_state()
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_phase_entered": True,
+        "proposal_phase_status": "SINGLE_SOURCE",
+        "eligible_source_count": 1,
+        "proposal_count": 0,
+        "explicit_rejection_count": 1,
+        "sources_with_proposals": [],
+        "sources_rejected": ["adaptive_reuse"],
+        "knowledge_investment_policy": "OPERATIONAL_VALUE_PRIORITIZED",
+        "knowledge_investment_authority": "candidate_proposal_runtime",
+        "candidate_proposals": [
+            {
+                "source": "adaptive_reuse",
+                "proposal_status": "REJECTED",
+                "rejection_reason": "COGNITIVE_REUSE_ONLY",
+            }
+        ],
+        "adaptive_reuse_admission_trace": [
+            {
+                "stage": "candidate_source_map",
+                "reuse_status": "COGNITIVE_REUSE_ONLY",
+                "reuse_output_mode": "COGNITIVE_REUSE_ONLY",
+                "arena_admission_eligible": False,
+                "reused_strategy_count": 3,
+                "reused_program_count": 0,
+                "program_steps_count": 0,
+                "operational_independent_reuse_success_count": 32,
+                "candidate_payload_present": False,
+                "proposal_rejection_reason": None,
+            },
+            {
+                "stage": "candidate_proposal_runtime",
+                "reuse_status": "COGNITIVE_REUSE_ONLY",
+                "reuse_output_mode": "COGNITIVE_REUSE_ONLY",
+                "arena_admission_eligible": False,
+                "reused_strategy_count": 3,
+                "reused_program_count": 0,
+                "program_steps_count": 0,
+                "operational_independent_reuse_success_count": 32,
+                "candidate_payload_present": False,
+                "proposal_candidate_detected": False,
+                "proposal_rejection_reason": "COGNITIVE_REUSE_ONLY",
+            },
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Adaptive Reuse Admission Trace:" in report
+    assert "candidate_source_map: status=COGNITIVE_REUSE_ONLY" in report
+    assert "mode=COGNITIVE_REUSE_ONLY" in report
+    assert "eligible=FALSE" in report
+    assert "independent_reuse=32" in report
+    assert "reason=COGNITIVE_REUSE_ONLY" in report
 
 
 def test_report_exposes_executable_semantic_coverage():

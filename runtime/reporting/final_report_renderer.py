@@ -1587,6 +1587,106 @@ class DeterministicFinalReportRenderer:
             if isinstance(top_graduation_candidates, list)
             else []
         )
+        graduation_pipeline_stages = (
+            summary.get("graduation_pipeline_stages") or {}
+        )
+        graduation_pipeline_stages = (
+            graduation_pipeline_stages
+            if isinstance(graduation_pipeline_stages, dict)
+            else {}
+        )
+        graduation_transition_rows = (
+            summary.get("graduation_transition_rows") or []
+        )
+        graduation_transition_rows = (
+            graduation_transition_rows
+            if isinstance(graduation_transition_rows, list)
+            else []
+        )
+        graduation_sprint_recommendations = (
+            summary.get("graduation_sprint_recommendations") or []
+        )
+        graduation_sprint_recommendations = (
+            graduation_sprint_recommendations
+            if isinstance(graduation_sprint_recommendations, list)
+            else []
+        )
+        validator_failure_distribution = (
+            summary.get("validator_failure_distribution") or {}
+        )
+        validator_failure_distribution = (
+            validator_failure_distribution
+            if isinstance(validator_failure_distribution, dict)
+            else {}
+        )
+        operational_domain_diagnostics = (
+            summary.get("operational_domain_diagnostics") or []
+        )
+        operational_domain_diagnostics = (
+            operational_domain_diagnostics
+            if isinstance(operational_domain_diagnostics, list)
+            else []
+        )
+        operational_domain_gaps = summary.get("operational_domain_gaps") or []
+        operational_domain_gaps = (
+            operational_domain_gaps if isinstance(operational_domain_gaps, list) else []
+        )
+        domain_collaboration_rows = summary.get("domain_collaboration_rows") or []
+        domain_collaboration_rows = (
+            domain_collaboration_rows
+            if isinstance(domain_collaboration_rows, list)
+            else []
+        )
+        domain_operational_targets = summary.get("domain_operational_targets") or []
+        domain_operational_targets = (
+            domain_operational_targets
+            if isinstance(domain_operational_targets, list)
+            else []
+        )
+        domain_expansion_roadmap = summary.get("domain_expansion_roadmap") or []
+        domain_expansion_roadmap = (
+            domain_expansion_roadmap
+            if isinstance(domain_expansion_roadmap, list)
+            else []
+        )
+        composite_capability_candidates = (
+            summary.get("composite_capability_candidates") or []
+        )
+        composite_capability_candidates = (
+            composite_capability_candidates
+            if isinstance(composite_capability_candidates, list)
+            else []
+        )
+        capability_synergy_matrix = summary.get("capability_synergy_matrix") or []
+        capability_synergy_matrix = (
+            capability_synergy_matrix
+            if isinstance(capability_synergy_matrix, list)
+            else []
+        )
+        capability_specialization_report = (
+            summary.get("capability_specialization_report") or []
+        )
+        capability_specialization_report = (
+            capability_specialization_report
+            if isinstance(capability_specialization_report, list)
+            else []
+        )
+        capability_composition_opportunities = (
+            summary.get("capability_composition_opportunities") or []
+        )
+        capability_composition_opportunities = (
+            capability_composition_opportunities
+            if isinstance(capability_composition_opportunities, list)
+            else []
+        )
+        capability_investment_priorities = (
+            summary.get("capability_investment_priorities") or []
+        )
+        capability_investment_priorities = (
+            capability_investment_priorities
+            if isinstance(capability_investment_priorities, list)
+            else []
+        )
         top_cognitive_citizens = summary.get("top_cognitive_citizens") or []
         top_cognitive_citizens = (
             top_cognitive_citizens
@@ -1631,6 +1731,26 @@ class DeterministicFinalReportRenderer:
             if isinstance(missing_requirements, list)
             else [missing_requirements]
         )
+        unused_packages = summary.get("unused_execution_packages") or []
+        unused_packages = (
+            unused_packages if isinstance(unused_packages, list) else [unused_packages]
+        )
+        partial_packages = summary.get("partial_execution_packages") or []
+        partial_packages = (
+            partial_packages if isinstance(partial_packages, list) else [partial_packages]
+        )
+        package_inventory = summary.get("execution_package_inventory") or []
+        package_inventory = (
+            package_inventory if isinstance(package_inventory, list) else []
+        )
+        primitive_inventory = summary.get("primitive_operation_inventory") or []
+        primitive_inventory = (
+            primitive_inventory if isinstance(primitive_inventory, list) else []
+        )
+        multi_step_report = summary.get("multi_step_program_report") or {}
+        multi_step_report = (
+            multi_step_report if isinstance(multi_step_report, dict) else {}
+        )
         lines = [
             "Overall Cognitive Capability Coverage: "
             f"{self._percent(summary.get('overall_cognitive_capability_coverage'))}",
@@ -1656,6 +1776,24 @@ class DeterministicFinalReportRenderer:
             f"Program Coverage: {self._percent(summary.get('program_coverage'))}",
             "Compiler Runtime Coverage: "
             f"{self._percent(summary.get('compiler_runtime_coverage'))}",
+            "Execution Package Health Score: "
+            f"{self._percent(summary.get('execution_package_health_score'))}",
+            "Primitive Operation Coverage: "
+            f"{self._percent(summary.get('primitive_operation_coverage'))}",
+            "Compiler Infrastructure Health: "
+            f"{self._percent(summary.get('compiler_infrastructure_health'))}",
+            "Multi-Step Program Support: "
+            f"{self._percent(summary.get('multi_step_program_support'))}",
+            "Execution Package Dependency Coverage: "
+            f"{self._percent(summary.get('execution_package_dependency_coverage'))}",
+            "Primitive Infrastructure Coverage: "
+            f"{self._percent(summary.get('primitive_infrastructure_coverage'))}",
+            "Compiler Primitive Success Rate: "
+            f"{self._percent(summary.get('compiler_primitive_success_rate'))}",
+            "Execution Package Utilization: "
+            f"{self._percent(summary.get('execution_package_utilization'))}",
+            "Compiler Infrastructure Readiness: "
+            f"{self._value(summary.get('compiler_infrastructure_readiness'))}",
             "Validated Executable Coverage: "
             f"{self._percent(summary.get('validated_executable_coverage'))}",
             "Operational Capability Coverage: "
@@ -1764,6 +1902,58 @@ class DeterministicFinalReportRenderer:
             f"{self._percent(summary.get('domain_monopoly_share'))}",
             "Domain Operational Imbalance State: "
             f"{self._value(summary.get('domain_operational_imbalance_state'))}",
+            "Operational Domain Health: "
+            f"{self._percent(summary.get('operational_domain_health'))}",
+            "Operational Domain Coverage: "
+            f"{self._percent(summary.get('operational_domain_coverage'))}",
+            "Domain Operationalization Score: "
+            f"{self._percent(summary.get('domain_operationalization_score'))}",
+            "Domain Operationalization Bottleneck: "
+            f"{self._value(summary.get('domain_operationalization_bottleneck'))}",
+            "Domain Population Balance: "
+            f"{self._value(summary.get('domain_population_balance'))}",
+            "Domain Collaboration Score: "
+            f"{self._percent(summary.get('domain_collaboration_score'))}",
+            "Domain Operational Growth Rate: "
+            f"{self._percent(summary.get('domain_operational_growth_rate'))}",
+            "Domain Primitive Coverage: "
+            f"{self._percent(summary.get('domain_primitive_coverage'))}",
+            "Domain Capability Diversity: "
+            f"{self._percent(summary.get('domain_capability_diversity'))}",
+            "Domain Infrastructure Readiness: "
+            f"{self._value(summary.get('domain_infrastructure_readiness'))}",
+            "Operational Domain Population: "
+            f"{self._value(summary.get('operational_domain_population'))}",
+            "Domain Diversification Score: "
+            f"{self._percent(summary.get('domain_diversification_score'))}",
+            "Domain Monopoly Pressure: "
+            f"{self._value(summary.get('domain_monopoly_pressure'))}",
+            "Operational Domain Growth Rate: "
+            f"{self._percent(summary.get('operational_domain_growth_rate'))}",
+            "Operational Domain Evolution Speed: "
+            f"{self._percent(summary.get('operational_domain_evolution_speed'))}",
+            "Capability Ecology Health: "
+            f"{self._percent(summary.get('capability_ecology_health'))}",
+            "Capability Ecology State: "
+            f"{self._value(summary.get('capability_ecology_state'))}",
+            "Capability Cooperation Score: "
+            f"{self._percent(summary.get('capability_cooperation_score'))}",
+            "Capability Composition Score: "
+            f"{self._percent(summary.get('capability_composition_score'))}",
+            "Composite Capability Score: "
+            f"{self._percent(summary.get('composite_capability_score'))}",
+            "Capability Collaboration Diversity: "
+            f"{self._percent(summary.get('capability_collaboration_diversity'))}",
+            "Composite Operational Capability Count: "
+            f"{self._value(summary.get('composite_operational_capability_count'))}",
+            "Capability Interaction Density: "
+            f"{self._percent(summary.get('capability_interaction_density'))}",
+            "Capability Composition Readiness: "
+            f"{self._value(summary.get('capability_composition_readiness'))}",
+            "Composite Intelligence Readiness: "
+            f"{self._value(summary.get('composite_intelligence_readiness'))}",
+            "Capability Economy Health: "
+            f"{self._percent(summary.get('capability_economy_health'))}",
             "Missing Operational Citizen Domains: "
             f"{self._value(summary.get('missing_operational_citizen_domains'))}",
             "Surviving Capabilities: "
@@ -1790,6 +1980,30 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('capability_graduation_pressure_state'))}",
             "World Governance Graduation Action: "
             f"{self._value(summary.get('world_governance_graduation_action'))}",
+            "Capability Graduation Health: "
+            f"{self._percent(summary.get('capability_graduation_health'))}",
+            "Graduation Pipeline Health: "
+            f"{self._value(summary.get('graduation_pipeline_health'))}",
+            "Graduation Success Rate: "
+            f"{self._percent(summary.get('graduation_success_rate'))}",
+            "Graduation Failure Rate: "
+            f"{self._percent(summary.get('graduation_failure_rate'))}",
+            "Graduation Queue Health: "
+            f"{self._value(summary.get('graduation_queue_health'))}",
+            "Graduation Evidence Coverage: "
+            f"{self._percent(summary.get('graduation_evidence_coverage'))}",
+            "Graduation Infrastructure Readiness: "
+            f"{self._value(summary.get('graduation_infrastructure_readiness'))}",
+            "Average Capability Graduation Time: "
+            f"{self._value(summary.get('average_capability_graduation_time'))}",
+            "Graduation Backlog Size: "
+            f"{self._value(summary.get('graduation_backlog_size'))}",
+            "Capability Graduation Risk: "
+            f"{self._value(summary.get('capability_graduation_risk'))}",
+            "Capability Graduation Complexity: "
+            f"{self._value(summary.get('capability_graduation_complexity'))}",
+            "Capability Graduation Confidence: "
+            f"{self._percent(summary.get('capability_graduation_confidence'))}",
             "Cognitive Citizens: "
             f"{self._value(summary.get('cognitive_citizen_count'))}",
             "Cognitive Citizenship Definition: "
@@ -1971,6 +2185,52 @@ class DeterministicFinalReportRenderer:
                     f"count={self._value(row.get('failure_count'))} "
                     f"source={self._value(row.get('diagnostic_row_source'))}"
                 )
+        if package_inventory:
+            lines.append("Execution Package Inventory:")
+            for row in package_inventory[:8]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('package'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('support_state'))} "
+                    f"usage={self._value(row.get('usage_count'))} "
+                    f"supported={self._value(row.get('supported_operations'))} "
+                    f"unsupported={self._value(row.get('unsupported_operations'))}"
+                )
+        if primitive_inventory:
+            lines.append("Primitive Operation Inventory:")
+            for row in primitive_inventory[:10]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"package={self._value(row.get('package'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"primitive={self._value(row.get('primitive_present'))} "
+                    f"executable={self._value(row.get('executable'))} "
+                    f"params={self._value(row.get('parameter_support'))} "
+                    f"multi_step={self._value(row.get('multi_step_supported'))} "
+                    f"compiler_emit={self._value(row.get('compiler_can_emit'))}"
+                )
+        multi_step_rows = multi_step_report.get("multi_step_program_rows") or []
+        multi_step_rows = multi_step_rows if isinstance(multi_step_rows, list) else []
+        if multi_step_rows:
+            lines.append("Multi-Step Program Diagnostics:")
+            for row in multi_step_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('program'))}: "
+                    f"steps={self._value(row.get('step_count'))} "
+                    f"primitives={self._value(row.get('required_primitives'))} "
+                    f"packages={self._value(row.get('required_execution_packages'))} "
+                    f"success={self._percent(row.get('step_success_rate'))} "
+                    f"failure_step={self._value(row.get('failure_step'))}"
+                )
         rejection_reasons = attrition.get("rejection_reasons") or {}
         if isinstance(rejection_reasons, dict) and rejection_reasons:
             lines.append(
@@ -2078,7 +2338,50 @@ class DeterministicFinalReportRenderer:
                     f"trend={self._value(row.get('improvement_trend'))} "
                     f"graduation_score={self._percent(row.get('graduation_score'))} "
                     f"missing={self._value(row.get('missing_graduation_evidence'))} "
+                    f"validator={self._value(row.get('validator_gap'))} "
+                    f"confidence={self._percent(row.get('capability_graduation_confidence'))} "
                     f"action={self._value(row.get('world_governance_graduation_action'))}"
+                )
+        if graduation_pipeline_stages:
+            lines.append(
+                "Graduation Pipeline Stages: "
+                f"{self._value(graduation_pipeline_stages)}"
+            )
+        if graduation_transition_rows:
+            lines.append("Graduation Pipeline Transitions:")
+            for row in graduation_transition_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('transition'))}: "
+                    f"source={self._value(row.get('source_count'))} "
+                    f"target={self._value(row.get('target_count'))} "
+                    f"stuck={self._value(row.get('stuck_count'))} "
+                    f"success={self._percent(row.get('success_rate'))} "
+                    f"avg_time={self._value(row.get('average_graduation_time'))} "
+                    f"reasons={self._value(row.get('stuck_reasons'))}"
+                )
+        if validator_failure_distribution:
+            lines.append(
+                "Validator Failure Distribution: "
+                f"{self._value(validator_failure_distribution)}"
+            )
+        if graduation_sprint_recommendations:
+            lines.append("Graduation Sprint Recommendations:")
+            for row in graduation_sprint_recommendations[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"priority={self._percent(row.get('priority'))} "
+                    f"minimum_evidence={self._value(row.get('minimum_required_evidence'))} "
+                    f"validation={self._value(row.get('recommended_validation_type'))} "
+                    f"training={self._value(row.get('recommended_training_signal'))} "
+                    f"single_run={self._value(row.get('can_graduate_in_single_run'))} "
+                    f"estimated_runs={self._value(row.get('estimated_runs_required'))}"
                 )
         if top_cognitive_citizens:
             lines.append("Top Cognitive Citizens:")
@@ -2113,6 +2416,141 @@ class DeterministicFinalReportRenderer:
                     f"tasks={self._value(row.get('distinct_task_count'))} "
                     f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
                     f"next={self._value(row.get('next_required_evidence'))}"
+                )
+        if operational_domain_diagnostics:
+            lines.append("Operational Domain Diagnostics:")
+            for row in operational_domain_diagnostics[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"semantic={self._value(row.get('semantic_concept_count'))} "
+                    f"packages={self._value(row.get('execution_package_count'))} "
+                    f"programs={self._value(row.get('program_blueprint_count'))} "
+                    f"candidates={self._value(row.get('candidate_count'))} "
+                    f"arena={self._value(row.get('arena_candidate_count'))} "
+                    f"validated={self._value(row.get('validation_success_count'))} "
+                    f"citizens={self._value(row.get('operational_citizen_count'))} "
+                    f"surviving={self._value(row.get('surviving_capability_count'))} "
+                    f"score={self._percent(row.get('domain_operationalization_score'))} "
+                    f"bottleneck={self._value(row.get('domain_operationalization_bottleneck'))} "
+                    f"health={self._value(row.get('domain_operational_health'))}"
+                )
+        if operational_domain_gaps:
+            lines.append("Operational Domain Expansion Gaps:")
+            for row in operational_domain_gaps[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"bottleneck={self._value(row.get('domain_operationalization_bottleneck'))} "
+                    f"priority={self._value(row.get('domain_expansion_priority'))} "
+                    f"guidance={self._value(row.get('domain_training_guidance'))}"
+                )
+        if domain_collaboration_rows:
+            lines.append("Operational Domain Collaborations:")
+            for row in domain_collaboration_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('composition_name'))}: "
+                    f"domains={self._value(row.get('participating_domains'))} "
+                    f"present={self._value(row.get('present_domains'))} "
+                    f"missing={self._value(row.get('missing_domains'))} "
+                    f"readiness={self._percent(row.get('domain_collaboration_readiness'))} "
+                    f"status={self._value(row.get('collaboration_status'))}"
+                )
+        if domain_operational_targets:
+            lines.append("Operational Domain Targets:")
+            for row in domain_operational_targets[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"target={self._value(row.get('target'))} "
+                    f"bottleneck={self._value(row.get('bottleneck'))} "
+                    f"guidance={self._value(row.get('training_guidance'))}"
+                )
+        if domain_expansion_roadmap:
+            lines.append("Domain Expansion Roadmap:")
+            for row in domain_expansion_roadmap[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"priority={self._value(row.get('priority'))} "
+                    f"target={self._value(row.get('target'))} "
+                    f"bottleneck={self._value(row.get('bottleneck'))} "
+                    f"score={self._percent(row.get('score'))} "
+                    f"citizens={self._value(row.get('operational_citizens'))}"
+                )
+        if composite_capability_candidates:
+            lines.append("Composite Capability Candidates:")
+            for row in composite_capability_candidates[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('composite_name'))}: "
+                    f"required={self._value(row.get('required_capabilities'))} "
+                    f"present={self._value(row.get('present_capabilities'))} "
+                    f"missing={self._value(row.get('missing_capabilities'))} "
+                    f"readiness={self._percent(row.get('composition_readiness'))} "
+                    f"state={self._value(row.get('composition_state'))}"
+                )
+        if capability_synergy_matrix:
+            lines.append("Capability Synergy Matrix:")
+            for row in capability_synergy_matrix[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_pair'))}: "
+                    f"score={self._percent(row.get('synergy_score'))} "
+                    f"state={self._value(row.get('synergy_state'))} "
+                    f"contexts={self._value(row.get('contexts'))}"
+                )
+        if capability_specialization_report:
+            lines.append("Capability Specialization Report:")
+            for row in capability_specialization_report[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"specialization={self._value(row.get('specialization'))} "
+                    f"collaborators={self._value(row.get('collaborates_with'))} "
+                    f"value={self._percent(row.get('operational_value_score'))}"
+                )
+        if capability_composition_opportunities:
+            lines.append("Capability Composition Opportunities:")
+            for row in capability_composition_opportunities[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('composite_name'))}: "
+                    f"missing={self._value(row.get('missing_capabilities'))} "
+                    f"readiness={self._percent(row.get('composition_readiness'))}"
+                )
+        if capability_investment_priorities:
+            lines.append("Capability Economy Priorities:")
+            for row in capability_investment_priorities[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"investment={self._percent(row.get('capability_investment_score'))} "
+                    f"reuse={self._percent(row.get('capability_reuse_value'))} "
+                    f"collaboration={self._percent(row.get('capability_collaboration_value'))} "
+                    f"state={self._value(row.get('capability_value_state'))}"
                 )
         domain_rows = domain_architecture.get("domain_rows") or []
         domain_rows = domain_rows if isinstance(domain_rows, list) else []
@@ -2165,6 +2603,16 @@ class DeterministicFinalReportRenderer:
             lines.append(
                 "Missing Execution Packages: "
                 + ", ".join(str(item) for item in missing_packages[:8])
+            )
+        if partial_packages:
+            lines.append(
+                "Partial Execution Packages: "
+                + ", ".join(str(item) for item in partial_packages[:8])
+            )
+        if unused_packages:
+            lines.append(
+                "Unused Execution Packages: "
+                + ", ".join(str(item) for item in unused_packages[:8])
             )
         if missing_requirements:
             lines.append(
@@ -2361,6 +2809,8 @@ class DeterministicFinalReportRenderer:
         summary = summary if isinstance(summary, dict) else {}
         proposals = summary.get("candidate_proposals") or []
         proposals = proposals if isinstance(proposals, list) else []
+        adaptive_trace = summary.get("adaptive_reuse_admission_trace") or []
+        adaptive_trace = adaptive_trace if isinstance(adaptive_trace, list) else []
         sources = summary.get("sources_with_proposals") or []
         sources = sources if isinstance(sources, list) else [sources]
         rejected = summary.get("sources_rejected") or []
@@ -2400,6 +2850,34 @@ class DeterministicFinalReportRenderer:
                     f"tier={self._value(proposal.get('investment_tier'))} "
                     f"reason={self._value(proposal.get('investment_reason') or proposal.get('rejection_reason'))}"
                 )
+        if adaptive_trace:
+            lines.append("Adaptive Reuse Admission Trace:")
+            for row in adaptive_trace[:3]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('stage'))}: "
+                    f"status={self._value(row.get('reuse_status'))} "
+                    f"mode={self._value(row.get('reuse_output_mode'))} "
+                    f"eligible={self._value(row.get('arena_admission_eligible'))} "
+                    f"strategies={self._value(row.get('reused_strategy_count'))} "
+                    f"programs={self._value(row.get('reused_program_count'))} "
+                    f"steps={self._value(row.get('program_steps_count'))} "
+                    "independent_reuse="
+                    f"{self._value(row.get('operational_independent_reuse_success_count'))} "
+                    f"candidate={self._value(row.get('candidate_payload_present'))} "
+                    f"detected={self._value(row.get('proposal_candidate_detected'))} "
+                    f"reason={self._value(row.get('proposal_rejection_reason'))}"
+                )
+                operations = row.get("resolved_operations") or row.get(
+                    "arena_adaptive_operations"
+                ) or []
+                if operations:
+                    lines.append(
+                        "     operations="
+                        + ", ".join(str(operation) for operation in operations[:6])
+                    )
         return self._section("CANDIDATE PROPOSAL PHASE", lines)
 
     def _render_search_quality(self, canonical: dict[str, Any]) -> str:

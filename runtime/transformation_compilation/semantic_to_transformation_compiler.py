@@ -13,6 +13,11 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from runtime.transformation_compilation.compiler_infrastructure import (
+    PRIMITIVE_OPERATION_REGISTRY,
+    compiler_infrastructure_analyzer,
+)
+
 
 class SemanticToTransformationCompiler:
     """Bridge semantic attribution and concrete transformation execution."""
@@ -247,7 +252,7 @@ class SemanticToTransformationCompiler:
             reverse=True,
         )
         selected = candidates[0]
-        return {
+        report = {
             "system": self.system_name,
             "semantic_to_transformation_compilation_success": selected["validation"]["accuracy"] > 0.0,
             "detected_intents": sorted(concepts),
@@ -271,6 +276,17 @@ class SemanticToTransformationCompiler:
             ),
             "timestamp": str(datetime.utcnow()),
         }
+        report["compiler_infrastructure_report"] = (
+            compiler_infrastructure_analyzer.build_report(
+                compiler_report=report,
+                expected_operations=report["compiler_failure_diagnostics"].get(
+                    "expected_operations",
+                    [],
+                ),
+                candidate_programs=candidates,
+            )
+        )
+        return report
 
     def execute_program(self, grid, program: Mapping[str, Any]) -> np.ndarray:
         output = self._array(grid).copy()
@@ -688,7 +704,7 @@ class SemanticToTransformationCompiler:
         source: np.ndarray | None = None,
         target: np.ndarray | None = None,
     ) -> dict[str, Any]:
-        return {
+        report = {
             "system": self.system_name,
             "semantic_to_transformation_compilation_success": False,
             "detected_intents": sorted(concepts),
@@ -714,6 +730,17 @@ class SemanticToTransformationCompiler:
             ),
             "timestamp": str(datetime.utcnow()),
         }
+        report["compiler_infrastructure_report"] = (
+            compiler_infrastructure_analyzer.build_report(
+                compiler_report=report,
+                expected_operations=report["compiler_failure_diagnostics"].get(
+                    "expected_operations",
+                    [],
+                ),
+                candidate_programs=[],
+            )
+        )
+        return report
 
     def _compiler_failure_diagnostics(
         self,
@@ -764,6 +791,7 @@ class SemanticToTransformationCompiler:
             reason = None
             detail = ""
             failure_stage = "program_candidate_generation"
+            matched_candidate = None
             if source is None or target is None or source.size == 0 or target.size == 0:
                 reason = "missing_grid_pair"
                 detail = "input_or_target_grid_missing"
@@ -813,6 +841,7 @@ class SemanticToTransformationCompiler:
                             item.get("validation", {}).get("accuracy", 0.0)
                         ),
                     )
+                    matched_candidate = best
                     validation = best.get("validation", {})
                     if not validation.get("exact_match"):
                         reason = "execution_mismatch"
@@ -823,6 +852,14 @@ class SemanticToTransformationCompiler:
                         failure_stage = "program_execution_validation"
             if reason:
                 reason_counts[reason] += 1
+                deep_diagnostic = self._deep_failure_diagnostic(
+                    operation=operation,
+                    resolved_operation=resolved_operation,
+                    reason=reason,
+                    failure_stage=failure_stage,
+                    detail=detail,
+                    candidate=matched_candidate,
+                )
                 rows.append({
                     "trace_id": event.get("trace_id"),
                     "program": event.get("program"),
@@ -835,6 +872,7 @@ class SemanticToTransformationCompiler:
                     "reason": reason,
                     "detail": detail,
                     "compiler_rule": event.get("compiler_rule"),
+                    **deep_diagnostic,
                     "diagnostic_row_source": "semantic_to_transformation_compiler",
                 })
         return {
@@ -870,6 +908,90 @@ class SemanticToTransformationCompiler:
             "shape_match": validation.get("shape_match"),
             "source_shape": list(source.shape),
             "target_shape": list(target.shape),
+            **self._deep_failure_diagnostic(
+                operation=operation,
+                resolved_operation=operation,
+                reason=reason,
+                failure_stage=(
+                    "program_execution_validation"
+                    if reason not in {"none", "shape_contract_mismatch"}
+                    else "execution_contract_validation"
+                ),
+                detail=str(validation),
+                candidate=candidate,
+            ),
+        }
+
+    def _deep_failure_diagnostic(
+        self,
+        *,
+        operation: str,
+        resolved_operation: str,
+        reason: str,
+        failure_stage: str,
+        detail: str,
+        candidate: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        metadata = PRIMITIVE_OPERATION_REGISTRY.get(operation, {})
+        package = metadata.get("package")
+        parameter_support = metadata.get("parameters", []) or []
+        candidate = candidate if isinstance(candidate, Mapping) else {}
+        program = candidate.get("compiled_program")
+        program = program if isinstance(program, Mapping) else {}
+        steps = program.get("steps") if isinstance(program.get("steps"), list) else []
+        parameters = {}
+        if steps and isinstance(steps[0], Mapping):
+            parameters = steps[0].get("parameters")
+            parameters = parameters if isinstance(parameters, Mapping) else {}
+        missing_parameters = [
+            str(parameter)
+            for parameter in parameter_support
+            if parameter not in parameters
+        ]
+        parameter_failure = (
+            "PARAMETER_CONTRACT_EMPTY"
+            if reason in {"invalid_composition", "execution_mismatch"}
+            and parameter_support
+            and not parameters
+            else "PARAMETER_CONTRACT_PARTIAL"
+            if reason in {"invalid_composition", "execution_mismatch"}
+            and missing_parameters
+            else "NONE"
+        )
+        return {
+            "failed_primitive": operation,
+            "execution_package": package,
+            "primitive_failure": (
+                "MISSING_PRIMITIVE"
+                if reason == "missing_primitive"
+                else "EXECUTION_PACKAGE_UNRESOLVED"
+                if not package
+                else "NONE"
+            ),
+            "parameter_failure": parameter_failure,
+            "missing_parameters": missing_parameters,
+            "semantic_mapping_failure": (
+                "SEMANTIC_OPERATION_MISMATCH"
+                if reason == "operation_semantics_mismatch"
+                or resolved_operation != operation
+                else "NONE"
+            ),
+            "program_composition_failure": (
+                "PROGRAM_COMPOSITION_INVALID"
+                if reason == "invalid_composition"
+                else "MULTI_STEP_COMPOSITION_UNVERIFIED"
+                if len(steps) > 1 and reason not in {"none"}
+                else "NONE"
+            ),
+            "execution_package_failure": (
+                "EXECUTION_PACKAGE_MISSING"
+                if not package
+                else "EXECUTION_PACKAGE_PARTIAL_OR_UNVERIFIED"
+                if reason in {"execution_mismatch", "invalid_composition"}
+                else "NONE"
+            ),
+            "failure_detail_depth": "PRIMITIVE_PACKAGE_PARAMETER_TRACE",
+            "diagnostic_detail": detail,
         }
 
     def _expected_operations(

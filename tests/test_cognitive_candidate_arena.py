@@ -224,6 +224,84 @@ def test_candidate_proposal_runtime_accepts_adaptive_reuse_operation_sequence():
     ]
 
 
+def test_candidate_proposal_runtime_reports_empty_steps_with_cognitive_reuse_mode():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "adaptive_reuse": {
+                "reuse_success_rate": 1.0,
+                "reused_strategies": [{"type": "directional_motion"}],
+                "composed_program": {
+                    "program_steps": [],
+                    "step_count": 0,
+                    "composition_state": "NO_PROGRAM_REUSE",
+                },
+            }
+        }
+    )
+
+    diagnostic = report["source_diagnostics"]["adaptive_reuse"]
+
+    assert report["sources_rejected"] == ["adaptive_reuse"]
+    assert report["candidate_proposals"][0]["rejection_reason"] == "COGNITIVE_REUSE_ONLY"
+    assert diagnostic["source_seen"] is True
+    assert diagnostic["candidate_detected"] is False
+    assert diagnostic["program_steps_present"] is False
+    assert diagnostic["rejection_reason"] == "COGNITIVE_REUSE_ONLY"
+    assert diagnostic["reuse_output_mode"] == "COGNITIVE_REUSE_ONLY"
+    assert diagnostic["arena_admission_eligible"] is False
+
+
+def test_candidate_proposal_runtime_reports_cognitive_reuse_only():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "adaptive_reuse": {
+                "reuse_success_rate": 1.0,
+                "reused_strategies": [{"type": "directional_motion"}],
+            }
+        }
+    )
+
+    diagnostic = report["source_diagnostics"]["adaptive_reuse"]
+
+    assert report["sources_rejected"] == ["adaptive_reuse"]
+    assert report["candidate_proposals"][0]["rejection_reason"] == (
+        "COGNITIVE_REUSE_ONLY"
+    )
+    assert diagnostic["reused_strategy_count"] == 1
+    assert diagnostic["reused_program_count"] == 0
+    assert diagnostic["candidate_detected"] is False
+    assert diagnostic["reuse_output_mode"] == "COGNITIVE_REUSE_ONLY"
+    assert diagnostic["arena_admission_eligible"] is False
+
+
+def test_candidate_proposal_runtime_treats_operational_reuse_evidence_as_cognitive_only():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "adaptive_reuse": {
+                "reuse_success_rate": 0.0,
+                "operational_independent_reuse_success_count": 32,
+                "operational_reuse_evidence_count": 34,
+                "reused_strategies": [],
+                "reused_programs": [],
+                "composed_program": {},
+                "adaptive_reuse_candidate_materialization_state": (
+                    "COGNITIVE_REUSE_ONLY"
+                ),
+            }
+        }
+    )
+
+    diagnostic = report["source_diagnostics"]["adaptive_reuse"]
+
+    assert report["sources_rejected"] == ["adaptive_reuse"]
+    assert report["candidate_proposals"][0]["rejection_reason"] == (
+        "COGNITIVE_REUSE_ONLY"
+    )
+    assert diagnostic["candidate_detected"] is False
+    assert diagnostic["reuse_output_mode"] == "COGNITIVE_REUSE_ONLY"
+    assert diagnostic["arena_admission_eligible"] is False
+
+
 def test_adaptive_reuse_does_not_win_automatically_when_simulation_is_worse():
     report = _arena().run(
         [

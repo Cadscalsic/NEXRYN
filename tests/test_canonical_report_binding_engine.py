@@ -1313,6 +1313,15 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
     assert coverage["compiler_failure_rows"][0]["resolved_operation"] == "translate"
     assert coverage["compiler_failure_rows"][0]["failure_stage"] == "semantic_operation_resolution"
     assert coverage["compiler_failure_rows"][0]["compiler_rule"] == "RULE_GRID_PRESERVATION_01"
+    assert "execution_package_health_score" in coverage
+    assert "primitive_operation_coverage" in coverage
+    assert "compiler_infrastructure_health" in coverage
+    assert "multi_step_program_support" in coverage
+    assert "execution_package_dependency_coverage" in coverage
+    assert "primitive_infrastructure_coverage" in coverage
+    assert "compiler_primitive_success_rate" in coverage
+    assert "execution_package_utilization" in coverage
+    assert "compiler_infrastructure_readiness" in coverage
 
     assert coverage["operational_capability_coverage"] == 0.0
     assert coverage["operational_capability_materialization_rate"] == 0.0
@@ -1565,6 +1574,80 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
         "capability_graduation_pressure": 0.92,
         "capability_graduation_pressure_state": "HIGH",
         "world_governance_graduation_action": "GRADUATION_SPRINT_REQUIRED",
+        "capability_graduation_health": 0.8125,
+        "graduation_pipeline_health": "BACKLOGGED",
+        "graduation_success_rate": 0.5,
+        "graduation_failure_rate": 0.3333,
+        "graduation_queue_health": "HEALTHY",
+        "graduation_evidence_coverage": 0.8,
+        "graduation_infrastructure_readiness": "READY",
+        "average_capability_graduation_time": 17.0,
+        "graduation_backlog_size": 1,
+        "capability_graduation_queue_health": "HEALTHY",
+        "capability_graduation_risk": "MEDIUM",
+        "capability_graduation_complexity": "MEDIUM",
+        "capability_graduation_confidence": 0.9444,
+        "graduation_pipeline_stages": {
+            "INCUBATING_VALIDATION_GAP": 2,
+            "SURVIVING_CAPABILITY": 1,
+            "COGNITIVE_CITIZEN": 0,
+            "OPERATIONAL_CITIZEN": 1,
+        },
+        "graduation_transition_rows": [
+            {
+                "transition": (
+                    "SURVIVING_CAPABILITY->COGNITIVE_CITIZEN"
+                ),
+                "source_count": 1,
+                "target_count": 0,
+                "stuck_count": 1,
+                "stuck_reasons": {
+                    "exact_or_governed_validation_success": 1,
+                },
+                "success_rate": 0.0,
+                "average_graduation_time": 17.0,
+            }
+        ],
+        "capability_graduation_diagnostics": [
+            {
+                "capability_id": (
+                    "operational_capability:spatial:translate:spatial_reasoning"
+                ),
+                "operation": "translate",
+                "graduation_status": "BLOCKED_AT_FINAL_VALIDATION",
+                "validator_gap": "GOVERNED_VALIDATION_INCOMPLETE",
+                "priority_missing_evidence": (
+                    "exact_or_governed_validation_success"
+                ),
+            }
+        ],
+        "top_graduation_priority": {
+            "capability_id": (
+                "operational_capability:spatial:translate:spatial_reasoning"
+            ),
+            "operation": "translate",
+        },
+        "graduation_sprint_recommendations": [
+            {
+                "capability_id": (
+                    "operational_capability:spatial:translate:spatial_reasoning"
+                ),
+                "operation": "translate",
+                "priority": 0.9444,
+                "minimum_required_evidence": (
+                    "exact_or_governed_validation_success"
+                ),
+                "recommended_validation_type": "exact_or_governed_validation",
+                "recommended_training_signal": (
+                    "validator_acceptance_task_for:translate"
+                ),
+                "can_graduate_in_single_run": True,
+                "estimated_runs_required": 1,
+            }
+        ],
+        "validator_failure_distribution": {
+            "GOVERNED_VALIDATION_INCOMPLETE": 1,
+        },
         "top_graduation_candidates": [
             {
                 "capability_id": "operational_capability:spatial:translate:spatial_reasoning",
@@ -1736,6 +1819,25 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["dominant_operational_domain"] == "Color"
     assert coverage["domain_monopoly_share"] == 0.6667
     assert coverage["domain_operational_imbalance_state"] == "DOMAIN_MONOPOLY"
+    assert "operational_domain_health" in coverage
+    assert "operational_domain_coverage" in coverage
+    assert "domain_operationalization_score" in coverage
+    assert "domain_operationalization_bottleneck" in coverage
+    assert "domain_population_balance" in coverage
+    assert "domain_collaboration_score" in coverage
+    assert "domain_primitive_coverage" in coverage
+    assert "domain_infrastructure_readiness" in coverage
+    assert "capability_ecology_health" in coverage
+    assert "capability_cooperation_score" in coverage
+    assert "capability_composition_score" in coverage
+    assert "composite_capability_score" in coverage
+    assert "capability_synergy_matrix" in coverage
+    assert "composite_capability_candidates" in coverage
+    assert "capability_economy_health" in coverage
+    assert "capability_specialization_report" in coverage
+    assert coverage["operational_domain_population"] >= 1
+    assert coverage["domain_expansion_roadmap"]
+    assert coverage["operational_domain_diagnostics"]
     assert coverage["surviving_capability_domain_count"] == 0
     assert coverage["generated_survival_candidate_count"] == 8
     assert coverage["arena_simulated_survival_candidate_count"] == 7
@@ -1762,6 +1864,32 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["world_governance_graduation_action"] == (
         "GRADUATION_SPRINT_REQUIRED"
     )
+    assert coverage["capability_graduation_health"] == 0.8125
+    assert coverage["graduation_pipeline_health"] == "BACKLOGGED"
+    assert coverage["graduation_success_rate"] == 0.5
+    assert coverage["graduation_failure_rate"] == 0.3333
+    assert coverage["graduation_queue_health"] == "HEALTHY"
+    assert coverage["graduation_evidence_coverage"] == 0.8
+    assert coverage["graduation_infrastructure_readiness"] == "READY"
+    assert coverage["average_capability_graduation_time"] == 17.0
+    assert coverage["graduation_backlog_size"] == 1
+    assert coverage["capability_graduation_risk"] == "MEDIUM"
+    assert coverage["capability_graduation_complexity"] == "MEDIUM"
+    assert coverage["capability_graduation_confidence"] == 0.9444
+    assert coverage["graduation_pipeline_stages"][
+        "SURVIVING_CAPABILITY"
+    ] == 1
+    assert coverage["graduation_transition_rows"][0]["stuck_count"] == 1
+    assert coverage["capability_graduation_diagnostics"][0][
+        "validator_gap"
+    ] == "GOVERNED_VALIDATION_INCOMPLETE"
+    assert coverage["top_graduation_priority"]["operation"] == "translate"
+    assert coverage["graduation_sprint_recommendations"][0][
+        "recommended_validation_type"
+    ] == "exact_or_governed_validation"
+    assert coverage["validator_failure_distribution"] == {
+        "GOVERNED_VALIDATION_INCOMPLETE": 1,
+    }
     assert coverage["top_graduation_candidates"][0]["operation"] == "translate"
     assert coverage["top_graduation_candidates"][0][
         "missing_graduation_evidence"

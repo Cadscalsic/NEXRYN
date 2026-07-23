@@ -218,10 +218,10 @@
           0,
           1,
           0,
-          7,
-          7,
-          7,
-          7,
+          8,
+          0,
+          0,
+          0,
           3,
           0,
           0,
@@ -230,13 +230,13 @@
         ],
         [
           0,
+          9,
           0,
           0,
           0,
           0,
           0,
-          0,
-          0,
+          9,
           0,
           0,
           0,
@@ -260,7 +260,7 @@
           0,
           0,
           0,
-          0,
+          9,
           0,
           8,
           0,
@@ -279,7 +279,7 @@
           0,
           0,
           0,
-          0,
+          9,
           0,
           0,
           0
@@ -544,7 +544,7 @@
         ],
         [
           0,
-          0,
+          9,
           0,
           2,
           0,
@@ -560,10 +560,10 @@
           0,
           0,
           0,
-          7,
-          7,
-          7,
-          7,
+          8,
+          0,
+          0,
+          0,
           3,
           0,
           0,
@@ -578,7 +578,7 @@
           0,
           8,
           0,
-          0,
+          9,
           0,
           0,
           0,
@@ -602,7 +602,7 @@
           0,
           0,
           0,
-          0,
+          9,
           0,
           0,
           0,
@@ -621,7 +621,7 @@
           0,
           0,
           0,
-          0,
+          9,
           0,
           0,
           0
@@ -862,7 +862,9 @@
   "expected_transformations": [
     "compose_capabilities",
     "infer_operational_path",
-    "dependency_bridge"
+    "multi_step_reasoning",
+    "multi_domain_reasoning",
+    "relation_markers"
   ],
   "negative_controls": [
     {
@@ -1210,20 +1212,67 @@
     }
   ],
   "nexryn_metadata": {
-    "curriculum": "nexryn_elite_cognitive_training_phase_01",
+    "curriculum": "nexryn_elite_training_curriculum_v1",
+    "curriculum_version": "Elite Training Curriculum V1",
     "task_id": "elite_cognitive_task_05",
-    "task_title": "Bridge Creation Capability Composition",
+    "task_title": "Spatial Geometry Candidate Entry",
     "elite_cognitive_task": true,
-    "elite_category": "capability_composition",
+    "operationalization_phase_curriculum": true,
+    "elite_category": "operationalization",
+    "curriculum_tier": "Tier 1",
+    "elite_task_difficulty": "very_high",
     "target_concepts": [
-      "bridge_creation",
-      "path_finding",
-      "topological_growth"
+      "relative_position",
+      "geometric_reasoning",
+      "object_relationship_discovery",
+      "identity_preservation"
     ],
     "target_domains": [
-      "bridge",
-      "path",
-      "topological"
+      "Spatial",
+      "Geometry",
+      "Identity"
+    ],
+    "domain_count": 3,
+    "minimum_domain_count": 3,
+    "maximum_domain_count": 6,
+    "multi_domain_reasoning": true,
+    "multi_step_reasoning": true,
+    "program_composition_required": true,
+    "transformation_sequence_required": true,
+    "operational_capability_composition_required": true,
+    "novel_abstraction_required": true,
+    "independent_validation_opportunities": [
+      "exact_validation",
+      "governed_validation",
+      "independent_task_validation",
+      "cross_domain_validation"
+    ],
+    "composite_capabilities": [
+      "Spatial Relation",
+      "Geometry Recognition",
+      "Object Identity Tracking"
+    ],
+    "capability_graduation_targets": [
+      "preserve_shape",
+      "preserve_grid"
+    ],
+    "domain_expansion_targets": [
+      "Geometry",
+      "Identity"
+    ],
+    "adaptive_reuse_opportunities": [
+      "historical_pattern_reuse",
+      "capability_transfer",
+      "program_reuse",
+      "cognitive_reuse"
+    ],
+    "curriculum_diagnostics_tags": [
+      "capability_graduation",
+      "domain_expansion",
+      "composite_capability",
+      "adaptive_reuse",
+      "compiler_infrastructure",
+      "operationalization"
     ],
     "deficiency_targets": [
       "operational_knowledge_waste",
@@ -1232,7 +1281,9 @@
       "validation_gaps",
       "domain_operationalization_gaps",
       "slow_capability_acquisition",
-      "historical_exploitation_bias"
+      "historical_exploitation_bias",
+      "domain_population_imbalance",
+      "adaptive_reuse_cognitive_only"
     ],
     "required_operational_capabilities": [
       "candidate_generation",
@@ -1240,7 +1291,10 @@
       "capability_composition",
       "compiler_runtime_activation",
       "world_model_validation",
-      "cross_domain_collaboration"
+      "cross_domain_collaboration",
+      "capability_graduation",
+      "domain_operationalization",
+      "adaptive_reuse"
     ],
     "multiple_valid_solution_strategies": true,
     "failure_is_training_signal": true,

@@ -126,6 +126,23 @@ class AdaptiveReuseLayer:
             for key, value in report["reused_assets"].items()
             if value
         }
+        executable_reuse_available = self._has_executable_reuse_payload(report)
+        cognitive_reuse_available = bool(
+            stats.strategy_hits
+            or stats.context_hits
+            or stats.truth_hits
+            or stats.dependency_hits
+        )
+        report["executable_reuse_available"] = executable_reuse_available
+        report["cognitive_reuse_available"] = cognitive_reuse_available
+        report["reuse_output_mode"] = (
+            "EXECUTABLE_REUSE_AVAILABLE"
+            if executable_reuse_available
+            else "COGNITIVE_REUSE_ONLY"
+            if cognitive_reuse_available
+            else "NO_REUSE_EVIDENCE"
+        )
+        report["arena_admission_eligible"] = executable_reuse_available
         reuse_success = bool(
             stats.strategy_hits
             or stats.program_hits
@@ -174,6 +191,33 @@ class AdaptiveReuseLayer:
         })
         self.last_report = report
         return report
+
+    def _has_executable_reuse_payload(self, report: Mapping[str, Any]) -> bool:
+        programs = report.get("reused_programs")
+        if isinstance(programs, list):
+            for program in programs:
+                if self._record_has_steps(program):
+                    return True
+        return self._record_has_steps(report.get("composed_program"))
+
+    def _record_has_steps(self, record: Any) -> bool:
+        if not isinstance(record, Mapping):
+            return False
+        program = (
+            record.get("program")
+            or record.get("compiled_program")
+            or record.get("selected_program")
+            or record
+        )
+        if not isinstance(program, Mapping):
+            return False
+        steps = (
+            program.get("steps")
+            or program.get("program_steps")
+            or program.get("operation_sequence")
+            or []
+        )
+        return isinstance(steps, list) and bool(steps)
 
     def store_success(self, runtime_context: Mapping[str, Any] | None) -> dict[str, Any]:
         return self.episode_memory.store_success(runtime_context)

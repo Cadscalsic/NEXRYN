@@ -12,12 +12,24 @@ from runtime.capability_intelligence.capability_cost_intelligence import (
     CapabilityCostRecord,
 )
 from runtime.capability_intelligence.capability_cost_predictor import CapabilityCostPredictor
+from runtime.capability_intelligence.capability_ecology_analysis import (
+    CapabilityEcologyAnalysis,
+    capability_ecology_analysis,
+)
+from runtime.capability_intelligence.capability_graduation_infrastructure import (
+    CapabilityGraduationInfrastructure,
+    capability_graduation_infrastructure,
+)
 from runtime.capability_intelligence.capability_effectiveness_tracker import (
     CapabilityEffectivenessRecord,
     CapabilityEffectivenessTracker,
 )
 from runtime.capability_intelligence.capability_intelligence_engine import (
     CapabilityIntelligenceEngine,
+)
+from runtime.capability_intelligence.operational_domain_infrastructure import (
+    OperationalDomainInfrastructure,
+    operational_domain_infrastructure,
 )
 from runtime.capability_intelligence.capability_recommendation_engine import (
     CapabilityRecommendation,
@@ -58,9 +70,12 @@ __all__ = [
     "CapabilityCostIntelligence",
     "CapabilityCostPredictor",
     "CapabilityCostRecord",
+    "CapabilityEcologyAnalysis",
     "CapabilityEffectivenessRecord",
     "CapabilityEffectivenessTracker",
+    "CapabilityGraduationInfrastructure",
     "CapabilityIntelligenceEngine",
+    "OperationalDomainInfrastructure",
     "CapabilityRecommendation",
     "CapabilityRecommendationEngine",
     "CapabilityRecommendationState",
@@ -68,6 +83,9 @@ __all__ = [
     "CapabilityRetirementState",
     "CapabilityUsageRecord",
     "CapabilityUsageStatistics",
+    "capability_graduation_infrastructure",
+    "capability_ecology_analysis",
+    "operational_domain_infrastructure",
     "PolicyRecommendationEngine",
     "StrategyDescriptor",
     "StrategyExecutionRecord",

@@ -1,4 +1,5 @@
 from contextlib import redirect_stdout
+from collections import Counter
 from io import StringIO
 import json
 from pathlib import Path
@@ -143,18 +144,29 @@ def test_phase_7_scarcity_curriculum_closes_runtime_target_gaps():
 def test_elite_cognitive_curriculum_contains_20_operational_tasks():
     assert all(path.exists() for path in ELITE_COGNITIVE_TASKS)
 
-    categories = set()
+    tiers = Counter()
+    covered_domains = set()
     for path in ELITE_COGNITIVE_TASKS:
         task = json.loads(path.read_text(encoding="utf-8"))
         metadata = task["nexryn_metadata"]
 
-        assert metadata["curriculum"] == (
-            "nexryn_elite_cognitive_training_phase_01"
-        )
+        assert metadata["curriculum"] == "nexryn_elite_training_curriculum_v1"
+        assert metadata["curriculum_version"] == "Elite Training Curriculum V1"
         assert metadata["elite_cognitive_task"] is True
+        assert metadata["operationalization_phase_curriculum"] is True
+        assert metadata["elite_task_difficulty"] == "very_high"
         assert metadata["multiple_valid_solution_strategies"] is True
         assert metadata["failure_is_training_signal"] is True
         assert len(metadata["target_concepts"]) >= 3
+        assert 3 <= len(metadata["target_domains"]) <= 6
+        assert metadata["multi_domain_reasoning"] is True
+        assert metadata["multi_step_reasoning"] is True
+        assert metadata["program_composition_required"] is True
+        assert metadata["operational_capability_composition_required"] is True
+        assert metadata["composite_capabilities"]
+        assert metadata["adaptive_reuse_opportunities"]
+        assert metadata["capability_graduation_targets"]
+        assert metadata["domain_expansion_targets"]
         assert len(metadata["required_operational_capabilities"]) >= 6
         assert len(metadata["deficiency_targets"]) >= 7
         assert len(task["train"]) == 2
@@ -163,17 +175,25 @@ def test_elite_cognitive_curriculum_contains_20_operational_tasks():
             example["input"] != example["output"]
             for example in task["train"]
         )
-        categories.add(metadata["elite_category"])
+        tiers[metadata["curriculum_tier"]] += 1
+        covered_domains.update(metadata["target_domains"])
         with redirect_stdout(StringIO()):
             assert ARCJSONLoader(str(path)).load() is True
 
-    assert categories == {
-        "cross_domain_reasoning",
-        "capability_composition",
-        "novel_capability_discovery",
-        "world_modeling",
-        "collaborative_intelligence",
-        "grand_boss",
+    assert tiers == {
+        "Tier 1": 5,
+        "Tier 2": 5,
+        "Tier 3": 5,
+        "Tier 4": 5,
+    }
+    assert covered_domains == {
+        "Color",
+        "Transformation",
+        "Topology",
+        "Spatial",
+        "Identity",
+        "Growth",
+        "Geometry",
     }
 
 
@@ -185,7 +205,7 @@ def test_elite_boss_task_requires_multi_domain_operational_collaboration():
     )
     metadata = task["nexryn_metadata"]
 
-    assert metadata["task_title"] == "THE GRAND COGNITIVE BOSS TASK"
+    assert metadata["task_title"] == "THE ELITE MULTI DOMAIN BOSS TASK"
     assert len([
         cell
         for row in task["train"][0]["input"]
@@ -204,4 +224,19 @@ def test_elite_boss_task_requires_multi_domain_operational_collaboration():
         "compiler_runtime_activation",
         "validation_pipeline",
     }.issubset(set(metadata["target_concepts"]))
+    assert set(metadata["target_domains"]) == {
+        "Color",
+        "Transformation",
+        "Topology",
+        "Spatial",
+        "Identity",
+        "Growth",
+    }
+    assert {
+        "translate",
+        "preserve_topology",
+        "preserve_colors",
+        "preserve_grid",
+        "duplicate_object",
+    }.issubset(set(metadata["capability_graduation_targets"]))
     assert "replace_color" in metadata["forbidden_simple_solution_classes"]

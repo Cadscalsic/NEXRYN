@@ -1539,6 +1539,15 @@ class PrimitiveExecutor:
             "connect_components":
             self.connect_components,
 
+            "bridge_creation":
+            self.connect_components,
+
+            "topological_change":
+            self.construct_path,
+
+            "topological_reasoning":
+            self.construct_path,
+
             "fill_region":
             self.fill_region,
 
@@ -1563,7 +1572,13 @@ class PrimitiveExecutor:
             "scale_down":
             self.shrink_grid,
 
+            "preserve_grid":
+            self.preserve_grid,
+
             "preserve_objects":
+            self.preserve_grid,
+
+            "preserve_size":
             self.preserve_grid,
 
             "preserve_shape":
@@ -1571,6 +1586,12 @@ class PrimitiveExecutor:
 
             "preserve_density":
             self.preserve_grid,
+
+            "density_modulation":
+            self.expand_pattern,
+
+            "pattern_completion":
+            self.expand_pattern,
 
             "preserve_colors":
             self.preserve_grid,

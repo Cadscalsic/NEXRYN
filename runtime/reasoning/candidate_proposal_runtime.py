@@ -18,9 +18,14 @@ class CandidateProposalRuntime:
     ) -> dict[str, Any]:
         sources = candidate_sources if isinstance(candidate_sources, Mapping) else {}
         proposals = []
+        source_diagnostics = {}
         for source_name in sorted(sources):
             source = sources.get(source_name)
             records = self._records(source)
+            source_diagnostics[source_name] = self._source_diagnostic(
+                source,
+                records,
+            )
             if records:
                 for index, record in enumerate(records):
                     proposals.append(self._proposal(
@@ -56,6 +61,7 @@ class CandidateProposalRuntime:
             "medium_value_knowledge_items": investment_tiers["MEDIUM_VALUE"],
             "low_value_knowledge_items": investment_tiers["LOW_VALUE"],
             "deprioritized_knowledge_items": investment_tiers["LOW_VALUE"],
+            "source_diagnostics": source_diagnostics,
             "proposal_phase_status": (
                 "COMPETITIVE"
                 if len(sources_with_proposals) > 1
@@ -95,7 +101,7 @@ class CandidateProposalRuntime:
             if source.get("selected_program") or source.get("compiled_program"):
                 return [source]
             if source.get("reuse_success_rate") or source.get("reuse_rate"):
-                return [source]
+                return [source] if self._has_executable_candidate(source) else []
         return []
 
     def _has_candidate(self, value: Any) -> bool:
@@ -117,9 +123,41 @@ class CandidateProposalRuntime:
             or value.get("reuse_rate")
         )
 
+    def _has_executable_candidate(self, value: Any) -> bool:
+        if not isinstance(value, Mapping):
+            return False
+        program = value.get("program") or value.get("compiled_program") or value
+        if isinstance(program, Mapping):
+            steps = (
+                program.get("steps")
+                or program.get("program_steps")
+                or program.get("operation_sequence")
+            )
+            if isinstance(steps, list) and steps:
+                return True
+        return bool(
+            value.get("operation")
+            or value.get("primitive")
+            or value.get("operator")
+        )
+
     def _rejection_reason(self, source: Any) -> str:
         if not isinstance(source, Mapping):
             return "source_not_available"
+        if source.get("adaptive_reuse_candidate_materialization_state"):
+            return str(source.get("adaptive_reuse_candidate_materialization_state"))
+        if source.get("reuse_success_rate") or source.get("reuse_rate"):
+            composed = source.get("composed_program")
+            if self._has_cognitive_reuse_evidence(source):
+                return "COGNITIVE_REUSE_ONLY"
+            if isinstance(composed, Mapping):
+                steps = composed.get("program_steps") or composed.get("steps") or []
+                if not steps:
+                    return "REUSE_STEPS_EMPTY"
+            if source.get("reused_strategies") and not (
+                source.get("reused_programs") or source.get("composed_program")
+            ):
+                return "NO_EXECUTABLE_REUSE_PAYLOAD"
         return str(
             source.get("failure_reason")
             or source.get("blocked_reason")
@@ -229,6 +267,83 @@ class CandidateProposalRuntime:
             return {}
         metadata = candidate.get("metadata")
         return dict(metadata) if isinstance(metadata, Mapping) else {}
+
+    def _source_diagnostic(
+        self,
+        source: Any,
+        records: list[Any],
+    ) -> dict[str, Any]:
+        source_map = source if isinstance(source, Mapping) else {}
+        composed = source_map.get("composed_program")
+        composed_map = composed if isinstance(composed, Mapping) else {}
+        steps = (
+            composed_map.get("program_steps")
+            or composed_map.get("steps")
+            or []
+        )
+        first_record = records[0] if records else None
+        executable_reuse_available = self._has_executable_candidate(source)
+        cognitive_reuse_available = self._has_cognitive_reuse_evidence(source)
+        return {
+            "source_seen": source is not None,
+            "source_type": type(source).__name__,
+            "candidate_detected": bool(records),
+            "candidate_rejected": not bool(records),
+            "rejection_reason": None if records else self._rejection_reason(source),
+            "reuse_output_mode": (
+                "EXECUTABLE_REUSE_AVAILABLE"
+                if executable_reuse_available
+                else "COGNITIVE_REUSE_ONLY"
+                if cognitive_reuse_available
+                else "NO_REUSE_EVIDENCE"
+            ),
+            "executable_reuse_available": executable_reuse_available,
+            "cognitive_reuse_available": cognitive_reuse_available,
+            "arena_admission_eligible": executable_reuse_available,
+            "reused_program_count": len(source_map.get("reused_programs") or [])
+            if isinstance(source_map.get("reused_programs"), list)
+            else 0,
+            "reused_strategy_count": len(source_map.get("reused_strategies") or [])
+            if isinstance(source_map.get("reused_strategies"), list)
+            else 0,
+            "composed_program_present": isinstance(composed, Mapping) and bool(composed),
+            "composed_program_type": type(composed).__name__,
+            "program_steps_present": bool(steps),
+            "program_steps_count": len(steps) if isinstance(steps, list) else 0,
+            "resolved_operation": self._operation(first_record),
+            "normalized_step_count": self._program(first_record).get("step_count")
+            if first_record is not None
+            else 0,
+        }
+
+    def _has_cognitive_reuse_evidence(self, source: Any) -> bool:
+        if not isinstance(source, Mapping):
+            return False
+        for key in (
+            "reused_strategies",
+            "reused_contexts",
+            "reused_truths",
+            "reused_dependencies",
+            "retrieved_experiences",
+        ):
+            value = source.get(key)
+            if isinstance(value, list) and value:
+                return True
+        for key in (
+            "strategy_hits",
+            "context_hits",
+            "truth_hits",
+            "dependency_hits",
+            "retrieval_successes",
+            "operational_independent_reuse_success_count",
+            "operational_reuse_evidence_count",
+        ):
+            try:
+                if float(source.get(key) or 0) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return bool(source.get("reuse_success_rate") or source.get("reuse_rate"))
 
     def _investment_tier_counts(self, proposals: list[dict[str, Any]]) -> dict[str, int]:
         counts = {"HIGH_VALUE": 0, "MEDIUM_VALUE": 0, "LOW_VALUE": 0}

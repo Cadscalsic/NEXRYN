@@ -23,6 +23,9 @@ from runtime.world_governance.capability_promotion_policy import (
     EXPECTED_OPERATIONAL_DOMAINS,
     capability_promotion_policy_engine,
 )
+from runtime.capability_intelligence.capability_graduation_infrastructure import (
+    capability_graduation_infrastructure,
+)
 
 
 # ============================================
@@ -506,6 +509,18 @@ def print_training_batch_summary(
             "elite_task:",
             elite_report.get("selected_elite_task_file"),
         )
+        if training_batch.get("elite_only_policy_active"):
+            print(
+                "elite_policy:",
+                elite_report.get("policy"),
+            )
+            print(
+                "elite_tasks_selected:",
+                output_governor.limit(
+                    training_batch.get("selected_elite_task_files", []),
+                    output_governor.max_visible_tasks,
+                ),
+            )
         if report_level != "minimal":
             print(
                 "elite_priority_reasons:",
@@ -514,6 +529,16 @@ def print_training_batch_summary(
                     output_governor.max_visible_candidates,
                 ),
             )
+    elite_curriculum = training_batch.get("elite_curriculum_report", {})
+    if isinstance(elite_curriculum, dict) and elite_curriculum:
+        print(
+            "elite_curriculum_health:",
+            elite_curriculum.get("elite_curriculum_health"),
+        )
+        print(
+            "elite_training_value_score:",
+            elite_curriculum.get("training_value_score"),
+        )
     if report_level != "minimal":
         print(
             "prioritized_concepts:",
@@ -987,6 +1012,221 @@ def build_candidate_arena_proposals(candidate_sources, *, max_per_source=8):
             if proposal:
                 proposals.append(proposal)
     return proposals
+
+
+def build_adaptive_reuse_admission_snapshot(
+    adaptive_reuse_report,
+    *,
+    stage,
+    proposal_report=None,
+    arena_proposals=None,
+):
+    report = adaptive_reuse_report if isinstance(adaptive_reuse_report, dict) else {}
+    composed = report.get("composed_program")
+    composed = composed if isinstance(composed, dict) else {}
+    steps = (
+        composed.get("program_steps")
+        if isinstance(composed.get("program_steps"), list)
+        else composed.get("steps")
+        if isinstance(composed.get("steps"), list)
+        else []
+    )
+    operations = [
+        step.get("operation") or step.get("primitive") or step.get("operator")
+        for step in steps
+        if isinstance(step, dict)
+    ]
+    proposal = proposal_report if isinstance(proposal_report, dict) else {}
+    diagnostics = proposal.get("source_diagnostics", {})
+    adaptive_diagnostic = (
+        diagnostics.get("adaptive_reuse", {})
+        if isinstance(diagnostics, dict)
+        else {}
+    )
+    proposals = proposal.get("candidate_proposals", [])
+    adaptive_proposals = [
+        item
+        for item in proposals
+        if isinstance(item, dict) and item.get("source") == "adaptive_reuse"
+    ] if isinstance(proposals, list) else []
+    arena = arena_proposals if isinstance(arena_proposals, list) else []
+    adaptive_arena = [
+        item
+        for item in arena
+        if isinstance(item, dict)
+        and _runtime_token(item.get("source")) == "adaptive_reuse"
+    ]
+    candidate_payload_present = _adaptive_reuse_executable_payload_present(
+        report,
+    )
+    cognitive_reuse_present = _adaptive_reuse_cognitive_evidence_present(
+        report,
+    )
+    reuse_output_mode = (
+        "EXECUTABLE_REUSE_AVAILABLE"
+        if candidate_payload_present
+        else "COGNITIVE_REUSE_ONLY"
+        if cognitive_reuse_present
+        else "NO_REUSE_EVIDENCE"
+    )
+    return {
+        "system": "adaptive_reuse_admission_trace",
+        "stage": stage,
+        "reuse_status": (
+            "EXECUTABLE_REUSE_AVAILABLE"
+            if candidate_payload_present
+            else "COGNITIVE_REUSE_ONLY"
+            if cognitive_reuse_present
+            else "REUSE_PAYLOAD_MISSING"
+        ),
+        "reuse_output_mode": report.get("reuse_output_mode") or reuse_output_mode,
+        "cognitive_reuse_available": bool(
+            report.get("cognitive_reuse_available")
+            if report.get("cognitive_reuse_available") is not None
+            else cognitive_reuse_present
+        ),
+        "executable_reuse_available": bool(
+            report.get("executable_reuse_available")
+            if report.get("executable_reuse_available") is not None
+            else candidate_payload_present
+        ),
+        "arena_admission_eligible": bool(
+            report.get("arena_admission_eligible")
+            if report.get("arena_admission_eligible") is not None
+            else candidate_payload_present
+        ),
+        "reuse_success_rate": report.get("reuse_success_rate"),
+        "strategy_hits": report.get("strategy_hits"),
+        "context_hits": report.get("context_hits"),
+        "truth_hits": report.get("truth_hits"),
+        "dependency_hits": report.get("dependency_hits"),
+        "operational_independent_reuse_success_count": report.get(
+            "operational_independent_reuse_success_count",
+        ),
+        "operational_reuse_evidence_count": report.get(
+            "operational_reuse_evidence_count",
+        ),
+        "reused_program_count": len(report.get("reused_programs") or [])
+        if isinstance(report.get("reused_programs"), list)
+        else 0,
+        "reused_strategy_count": len(report.get("reused_strategies") or [])
+        if isinstance(report.get("reused_strategies"), list)
+        else 0,
+        "composed_program_present": bool(composed),
+        "composed_program_type": type(report.get("composed_program")).__name__,
+        "program_steps_present": bool(steps),
+        "program_steps_count": len(steps),
+        "resolved_operations": [
+            str(operation)
+            for operation in operations
+            if operation
+        ],
+        "candidate_payload_present": candidate_payload_present,
+        "candidate_materialization_state": report.get(
+            "adaptive_reuse_candidate_materialization_state",
+        ),
+        "proposal_source_seen": adaptive_diagnostic.get("source_seen"),
+        "proposal_candidate_detected": adaptive_diagnostic.get(
+            "candidate_detected",
+        ),
+        "proposal_candidate_rejected": adaptive_diagnostic.get(
+            "candidate_rejected",
+        ),
+        "proposal_rejection_reason": adaptive_diagnostic.get(
+            "rejection_reason",
+        ),
+        "proposal_normalized_step_count": adaptive_diagnostic.get(
+            "normalized_step_count",
+        ),
+        "proposal_resolved_operation": adaptive_diagnostic.get(
+            "resolved_operation",
+        ),
+        "adaptive_proposal_count": len([
+            item
+            for item in adaptive_proposals
+            if item.get("proposal_status") == "PROPOSED"
+        ]),
+        "adaptive_rejection_count": len([
+            item
+            for item in adaptive_proposals
+            if item.get("proposal_status") == "REJECTED"
+        ]),
+        "arena_adaptive_proposal_count": len(adaptive_arena),
+        "arena_adaptive_operations": [
+            item.get("operation")
+            for item in adaptive_arena
+            if item.get("operation")
+        ],
+    }
+
+
+def _adaptive_reuse_executable_payload_present(report):
+    if not isinstance(report, dict):
+        return False
+    for key in ("reused_programs", "candidates", "candidate_rows"):
+        value = report.get(key)
+        if isinstance(value, list) and any(
+            _candidate_record_has_executable_payload(item)
+            for item in value
+        ):
+            return True
+    return _candidate_record_has_executable_payload(
+        report.get("composed_program"),
+    ) or _candidate_record_has_executable_payload(report)
+
+
+def _adaptive_reuse_cognitive_evidence_present(report):
+    if not isinstance(report, dict):
+        return False
+    for key in (
+        "reused_strategies",
+        "reused_contexts",
+        "reused_truths",
+        "reused_dependencies",
+        "retrieved_experiences",
+    ):
+        value = report.get(key)
+        if isinstance(value, list) and value:
+            return True
+    for key in (
+        "strategy_hits",
+        "context_hits",
+        "truth_hits",
+        "dependency_hits",
+        "retrieval_successes",
+        "operational_independent_reuse_success_count",
+        "operational_reuse_evidence_count",
+    ):
+        try:
+            if float(report.get(key) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return bool(report.get("reuse_success_rate") or report.get("reuse_rate"))
+
+
+def _candidate_record_has_executable_payload(record):
+    if not isinstance(record, dict):
+        return False
+    program = (
+        record.get("program")
+        or record.get("compiled_program")
+        or record.get("selected_program")
+        or record
+    )
+    if isinstance(program, dict):
+        steps = (
+            program.get("steps")
+            or program.get("program_steps")
+            or program.get("operation_sequence")
+        )
+        if isinstance(steps, list) and steps:
+            return True
+    return bool(
+        record.get("operation")
+        or record.get("primitive")
+        or record.get("operator")
+    )
 
 
 def _candidate_source_records(source):
@@ -2064,6 +2304,45 @@ def _aggregate_operational_capability_survival(store_path):
         if graduation_candidates
         else 0.0
     )
+    graduation_infrastructure_report = (
+        capability_graduation_infrastructure.analyze(
+            records,
+            promotion_policy=promotion_policy_report,
+        )
+    )
+    graduation_diagnostic_by_id = {
+        str(row.get("capability_id")): row
+        for row in graduation_infrastructure_report.get(
+            "capability_graduation_diagnostics",
+            [],
+        )
+        if isinstance(row, dict) and row.get("capability_id")
+    }
+    top_graduation_candidates = [
+        {
+            **item,
+            **{
+                key: value
+                for key, value in graduation_diagnostic_by_id.get(
+                    str(item.get("capability_id")),
+                    {},
+                ).items()
+                if key
+                in {
+                    "graduation_status",
+                    "graduation_gap_type",
+                    "priority_missing_evidence",
+                    "validator_gap",
+                    "validation_failure_reason",
+                    "capability_graduation_confidence",
+                    "can_graduate_in_single_run",
+                    "required_validation_type",
+                    "recommended_training_signal",
+                }
+            },
+        }
+        for item in top_graduation_candidates
+    ]
     stability_regressions = [
         item for item in records
         if item.get("stability_state") in {
@@ -2136,6 +2415,82 @@ def _aggregate_operational_capability_survival(store_path):
         ),
         "capability_graduation_queue": top_graduation_candidates,
         "top_graduation_candidates": top_graduation_candidates,
+        "capability_graduation_infrastructure_report": (
+            graduation_infrastructure_report
+        ),
+        "capability_graduation_health": (
+            graduation_infrastructure_report.get("capability_graduation_health")
+        ),
+        "graduation_pipeline_health": (
+            graduation_infrastructure_report.get("graduation_pipeline_health")
+        ),
+        "graduation_success_rate": (
+            graduation_infrastructure_report.get("graduation_success_rate")
+        ),
+        "graduation_failure_rate": (
+            graduation_infrastructure_report.get("graduation_failure_rate")
+        ),
+        "graduation_queue_health": (
+            graduation_infrastructure_report.get("graduation_queue_health")
+        ),
+        "graduation_evidence_coverage": (
+            graduation_infrastructure_report.get("graduation_evidence_coverage")
+        ),
+        "graduation_infrastructure_readiness": (
+            graduation_infrastructure_report.get(
+                "graduation_infrastructure_readiness"
+            )
+        ),
+        "average_capability_graduation_time": (
+            graduation_infrastructure_report.get(
+                "average_capability_graduation_time"
+            )
+        ),
+        "graduation_backlog_size": (
+            graduation_infrastructure_report.get("graduation_backlog_size")
+        ),
+        "capability_graduation_queue_health": (
+            graduation_infrastructure_report.get(
+                "capability_graduation_queue_health"
+            )
+        ),
+        "capability_graduation_risk": (
+            graduation_infrastructure_report.get("capability_graduation_risk")
+        ),
+        "capability_graduation_complexity": (
+            graduation_infrastructure_report.get(
+                "capability_graduation_complexity"
+            )
+        ),
+        "capability_graduation_confidence": (
+            graduation_infrastructure_report.get(
+                "capability_graduation_confidence"
+            )
+        ),
+        "graduation_pipeline_stages": (
+            graduation_infrastructure_report.get("graduation_pipeline_stages")
+        ),
+        "graduation_transition_rows": (
+            graduation_infrastructure_report.get("graduation_transition_rows")
+        ),
+        "capability_graduation_diagnostics": (
+            graduation_infrastructure_report.get(
+                "capability_graduation_diagnostics"
+            )
+        ),
+        "top_graduation_priority": (
+            graduation_infrastructure_report.get("top_graduation_priority")
+        ),
+        "graduation_sprint_recommendations": (
+            graduation_infrastructure_report.get(
+                "graduation_sprint_recommendations"
+            )
+        ),
+        "validator_failure_distribution": (
+            graduation_infrastructure_report.get(
+                "validator_failure_distribution"
+            )
+        ),
         "world_governance_graduation_action": (
             "GRADUATION_SPRINT_REQUIRED"
             if graduation_pressure >= 0.80
@@ -4271,6 +4626,13 @@ try:
                 return value
         return {}
 
+    latest_reused_programs = _latest_adaptive_list("reused_programs")
+    latest_reused_strategies = _latest_adaptive_list("reused_strategies")
+    latest_composed_program = _latest_adaptive_dict("composed_program")
+    operational_reuse_evidence = _aggregate_operational_capability_experience(
+        "runtime/artifacts/runtime_data/operational_capability_experience.json",
+    )
+
     adaptive_reuse_report = {
         "system": "adaptive_reuse_layer",
         "ADAPTIVE_REUSE_REPORT": True,
@@ -4343,14 +4705,19 @@ try:
             ),
             {},
         ),
-        "reused_programs": _latest_adaptive_list("reused_programs"),
-        "reused_strategies": _latest_adaptive_list("reused_strategies"),
-        "composed_program": _latest_adaptive_dict("composed_program"),
-        "adaptive_reuse_candidate_materialization_state": (
-            "EXECUTABLE_REUSE_CANDIDATE_AVAILABLE"
-            if _latest_adaptive_list("reused_programs")
-            or _latest_adaptive_dict("composed_program")
-            else "NO_EXECUTABLE_REUSE_CANDIDATE"
+        "reused_programs": latest_reused_programs,
+        "reused_strategies": latest_reused_strategies,
+        "composed_program": latest_composed_program,
+        "operational_independent_reuse_success_count": int(
+            operational_reuse_evidence.get(
+                "independent_reuse_success_count",
+                0,
+            )
+            or 0
+        ),
+        "operational_reuse_evidence_count": int(
+            operational_reuse_evidence.get("reuse_evidence_count", 0)
+            or 0
         ),
     }
     adaptive_attempts = max(adaptive_reuse_report["retrieval_attempts"], 1)
@@ -4358,6 +4725,31 @@ try:
         adaptive_reuse_report["retrieval_successes"] / adaptive_attempts,
         4,
     )
+    executable_reuse_available = _adaptive_reuse_executable_payload_present(
+        adaptive_reuse_report,
+    )
+    cognitive_reuse_available = _adaptive_reuse_cognitive_evidence_present(
+        adaptive_reuse_report,
+    )
+    adaptive_reuse_report.update({
+        "executable_reuse_available": executable_reuse_available,
+        "cognitive_reuse_available": cognitive_reuse_available,
+        "arena_admission_eligible": executable_reuse_available,
+        "reuse_output_mode": (
+            "EXECUTABLE_REUSE_AVAILABLE"
+            if executable_reuse_available
+            else "COGNITIVE_REUSE_ONLY"
+            if cognitive_reuse_available
+            else "NO_REUSE_EVIDENCE"
+        ),
+        "adaptive_reuse_candidate_materialization_state": (
+            "EXECUTABLE_REUSE_CANDIDATE_AVAILABLE"
+            if executable_reuse_available
+            else "COGNITIVE_REUSE_ONLY"
+            if cognitive_reuse_available
+            else "NO_REUSE_EVIDENCE"
+        ),
+    })
     performance_report.update({
         "context_hits": max(
             concept_lifecycle_report.get("context_hits", 0),
@@ -5785,11 +6177,35 @@ try:
             ),
             "adaptive_reuse": adaptive_reuse_report,
         }
+        adaptive_reuse_admission_trace = [
+            build_adaptive_reuse_admission_snapshot(
+                candidate_source_map.get("adaptive_reuse"),
+                stage="candidate_source_map",
+            )
+        ]
         candidate_proposal_report = candidate_proposal_runtime.collect(
             candidate_sources=candidate_source_map,
         )
+        adaptive_reuse_admission_trace.append(
+            build_adaptive_reuse_admission_snapshot(
+                candidate_source_map.get("adaptive_reuse"),
+                stage="candidate_proposal_runtime",
+                proposal_report=candidate_proposal_report,
+            )
+        )
+        candidate_proposal_report["adaptive_reuse_admission_trace"] = (
+            adaptive_reuse_admission_trace
+        )
         candidate_arena_proposals = build_candidate_arena_proposals(
             candidate_source_map,
+        )
+        adaptive_reuse_admission_trace.append(
+            build_adaptive_reuse_admission_snapshot(
+                candidate_source_map.get("adaptive_reuse"),
+                stage="arena_proposal_builder",
+                proposal_report=candidate_proposal_report,
+                arena_proposals=candidate_arena_proposals,
+            )
         )
         cognitive_candidate_arena_report = cognitive_candidate_arena.run(
             candidate_arena_proposals,
@@ -5848,6 +6264,7 @@ try:
             "activation_phase_entered": True,
             "analysis_only": True,
             "task_signature": executable_task_io.get("task"),
+            "adaptive_reuse_admission_trace": adaptive_reuse_admission_trace,
             "concept_lifecycle_count": executable_lifecycle_report.get(
                 "concept_count",
                 0,
@@ -5926,6 +6343,9 @@ try:
         cognitive_program_lifecycle_report
     )
     performance_report["CANDIDATE_PROPOSAL_REPORT"] = candidate_proposal_report
+    performance_report["ADAPTIVE_REUSE_ADMISSION_TRACE"] = (
+        adaptive_reuse_admission_trace
+    )
     performance_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
         cognitive_candidate_arena_report
     )
@@ -6000,6 +6420,9 @@ try:
         cognitive_program_lifecycle_report
     )
     training_report["CANDIDATE_PROPOSAL_REPORT"] = candidate_proposal_report
+    training_report["ADAPTIVE_REUSE_ADMISSION_TRACE"] = (
+        adaptive_reuse_admission_trace
+    )
     training_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
         cognitive_candidate_arena_report
     )

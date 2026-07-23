@@ -28,6 +28,15 @@ from runtime.reporting.report_timing_semantics import report_timing_semantic_eng
 from runtime.reporting.pre_final_report_diagnostics import (
     pre_final_report_diagnostics,
 )
+from runtime.transformation_compilation.compiler_infrastructure import (
+    compiler_infrastructure_analyzer,
+)
+from runtime.capability_intelligence.operational_domain_infrastructure import (
+    operational_domain_infrastructure,
+)
+from runtime.capability_intelligence.capability_ecology_analysis import (
+    capability_ecology_analysis,
+)
 
 
 class BindingState(str, Enum):
@@ -956,7 +965,7 @@ class CanonicalReportBindingEngine:
         *,
         max_depth: int = 5,
         max_list_items: int = 100,
-        max_dict_items: int = 200,
+        max_dict_items: int = 340,
         _depth: int = 0,
         _seen: set[int] | None = None,
     ) -> Any:
@@ -2787,6 +2796,17 @@ class CanonicalReportBindingEngine:
             compiler_runtime_activated_programs=compiler_runtime_activated_programs,
             compiled_programs=compiled_programs,
         )
+        compiler_infrastructure = compiler_report.get(
+            "compiler_infrastructure_report",
+        )
+        compiler_infrastructure = (
+            compiler_infrastructure
+            if isinstance(compiler_infrastructure, dict)
+            else compiler_infrastructure_analyzer.build_report(
+                compiler_report=compiler_report,
+                candidate_programs=compiler_report.get("compiler_candidates", []),
+            )
+        )
         known_operational_capabilities = int(
             self._first_number(
                 materialization.get("known_operational_capability_count"),
@@ -3072,6 +3092,175 @@ class CanonicalReportBindingEngine:
             materialization.get("world_governance_graduation_action")
             or survival.get("world_governance_graduation_action")
             or "NO_GRADUATION_QUEUE"
+        )
+        graduation_infrastructure_report = (
+            materialization.get("capability_graduation_infrastructure_report")
+            or survival.get("capability_graduation_infrastructure_report")
+            or {}
+        )
+        graduation_infrastructure_report = (
+            graduation_infrastructure_report
+            if isinstance(graduation_infrastructure_report, dict)
+            else {}
+        )
+        capability_graduation_health = self._first_number(
+            materialization.get("capability_graduation_health"),
+            survival.get("capability_graduation_health"),
+            graduation_infrastructure_report.get("capability_graduation_health"),
+        )
+        graduation_pipeline_health = (
+            materialization.get("graduation_pipeline_health")
+            or survival.get("graduation_pipeline_health")
+            or graduation_infrastructure_report.get("graduation_pipeline_health")
+            or "NOT_MEASURABLE"
+        )
+        graduation_success_rate = self._first_number(
+            materialization.get("graduation_success_rate"),
+            survival.get("graduation_success_rate"),
+            graduation_infrastructure_report.get("graduation_success_rate"),
+        )
+        graduation_failure_rate = self._first_number(
+            materialization.get("graduation_failure_rate"),
+            survival.get("graduation_failure_rate"),
+            graduation_infrastructure_report.get("graduation_failure_rate"),
+        )
+        graduation_queue_health = (
+            materialization.get("graduation_queue_health")
+            or survival.get("graduation_queue_health")
+            or graduation_infrastructure_report.get("graduation_queue_health")
+            or "NOT_MEASURABLE"
+        )
+        graduation_evidence_coverage = self._first_number(
+            materialization.get("graduation_evidence_coverage"),
+            survival.get("graduation_evidence_coverage"),
+            graduation_infrastructure_report.get("graduation_evidence_coverage"),
+        )
+        graduation_infrastructure_readiness = (
+            materialization.get("graduation_infrastructure_readiness")
+            or survival.get("graduation_infrastructure_readiness")
+            or graduation_infrastructure_report.get(
+                "graduation_infrastructure_readiness"
+            )
+            or "NOT_MEASURABLE"
+        )
+        average_capability_graduation_time = self._first_number(
+            materialization.get("average_capability_graduation_time"),
+            survival.get("average_capability_graduation_time"),
+            graduation_infrastructure_report.get(
+                "average_capability_graduation_time"
+            ),
+        )
+        graduation_backlog_size = int(
+            self._first_number(
+                materialization.get("graduation_backlog_size"),
+                survival.get("graduation_backlog_size"),
+                graduation_infrastructure_report.get("graduation_backlog_size"),
+                0,
+            )
+            or 0
+        )
+        capability_graduation_queue_health = (
+            materialization.get("capability_graduation_queue_health")
+            or survival.get("capability_graduation_queue_health")
+            or graduation_infrastructure_report.get(
+                "capability_graduation_queue_health"
+            )
+            or graduation_queue_health
+        )
+        capability_graduation_risk = (
+            materialization.get("capability_graduation_risk")
+            or survival.get("capability_graduation_risk")
+            or graduation_infrastructure_report.get(
+                "capability_graduation_risk"
+            )
+            or "NOT_MEASURABLE"
+        )
+        capability_graduation_complexity = (
+            materialization.get("capability_graduation_complexity")
+            or survival.get("capability_graduation_complexity")
+            or graduation_infrastructure_report.get(
+                "capability_graduation_complexity"
+            )
+            or "NOT_MEASURABLE"
+        )
+        capability_graduation_confidence = self._first_number(
+            materialization.get("capability_graduation_confidence"),
+            survival.get("capability_graduation_confidence"),
+            graduation_infrastructure_report.get(
+                "capability_graduation_confidence"
+            ),
+        )
+        graduation_pipeline_stages = (
+            materialization.get("graduation_pipeline_stages")
+            or survival.get("graduation_pipeline_stages")
+            or graduation_infrastructure_report.get("graduation_pipeline_stages")
+            or {}
+        )
+        graduation_pipeline_stages = (
+            graduation_pipeline_stages
+            if isinstance(graduation_pipeline_stages, dict)
+            else {}
+        )
+        graduation_transition_rows = (
+            materialization.get("graduation_transition_rows")
+            or survival.get("graduation_transition_rows")
+            or graduation_infrastructure_report.get("graduation_transition_rows")
+            or []
+        )
+        graduation_transition_rows = (
+            graduation_transition_rows
+            if isinstance(graduation_transition_rows, list)
+            else []
+        )
+        capability_graduation_diagnostics = (
+            materialization.get("capability_graduation_diagnostics")
+            or survival.get("capability_graduation_diagnostics")
+            or graduation_infrastructure_report.get(
+                "capability_graduation_diagnostics"
+            )
+            or []
+        )
+        capability_graduation_diagnostics = (
+            capability_graduation_diagnostics
+            if isinstance(capability_graduation_diagnostics, list)
+            else []
+        )
+        top_graduation_priority = (
+            materialization.get("top_graduation_priority")
+            or survival.get("top_graduation_priority")
+            or graduation_infrastructure_report.get("top_graduation_priority")
+            or {}
+        )
+        top_graduation_priority = (
+            top_graduation_priority
+            if isinstance(top_graduation_priority, dict)
+            else {}
+        )
+        graduation_sprint_recommendations = (
+            materialization.get("graduation_sprint_recommendations")
+            or survival.get("graduation_sprint_recommendations")
+            or graduation_infrastructure_report.get(
+                "graduation_sprint_recommendations"
+            )
+            or []
+        )
+        graduation_sprint_recommendations = (
+            graduation_sprint_recommendations
+            if isinstance(graduation_sprint_recommendations, list)
+            else []
+        )
+        validator_failure_distribution = (
+            materialization.get("validator_failure_distribution")
+            or survival.get("validator_failure_distribution")
+            or graduation_infrastructure_report.get(
+                "validator_failure_distribution"
+            )
+            or {}
+        )
+        validator_failure_distribution = (
+            validator_failure_distribution
+            if isinstance(validator_failure_distribution, dict)
+            else {}
         )
         world_governance_promotion_policy = (
             materialization.get("world_governance_promotion_policy")
@@ -3607,6 +3796,23 @@ class CanonicalReportBindingEngine:
         missing_operational_citizen_domains = sorted(
             set(missing_operational_citizen_domains)
         )
+        operational_domain_report = operational_domain_infrastructure.analyze(
+            domain_architecture=domain_architecture,
+            operational_distribution=combined_operational_domain_distribution,
+            survival_rows=capability_survival_rows,
+            graduation_diagnostics=capability_graduation_diagnostics,
+            target_domain_count=expected_operational_domain_citizen_count,
+        )
+        capability_ecology_report = capability_ecology_analysis.analyze(
+            known_operations=known_operational_operations,
+            experience_distribution=valid_distribution,
+            survival_rows=capability_survival_rows,
+            graduation_diagnostics=capability_graduation_diagnostics,
+            domain_collaboration_rows=(
+                operational_domain_report.get("domain_collaboration_rows") or []
+            ),
+            operational_programs=[],
+        )
         missing_requirements = program_generation.get("missing_requirements") or []
         if not isinstance(missing_requirements, list):
             missing_requirements = [missing_requirements]
@@ -3668,6 +3874,11 @@ class CanonicalReportBindingEngine:
             "operational_yield_stability": operational_yield_stability,
             "operational_yield_stability_basis": "experience_reuse_proxy",
             "operational_yield_health_state": operational_yield_health_state,
+            "candidate_attrition_summary": candidate_attrition,
+            "end_to_end_program_lifecycle": end_to_end_lifecycle,
+            "cognitive_domain_architecture_summary": domain_architecture,
+            "candidate_source_lineage": candidate_lineage,
+            "lowest_coverage_bottlenecks": bottlenecks[:5],
             "knowledge_investment_policy": proposal.get(
                 "knowledge_investment_policy"
             ),
@@ -3726,6 +3937,143 @@ class CanonicalReportBindingEngine:
             "domain_operational_imbalance_state": (
                 domain_operational_imbalance_state
             ),
+            "operational_domain_infrastructure_report": operational_domain_report,
+            "operational_domain_health": operational_domain_report.get(
+                "operational_domain_health"
+            ),
+            "operational_domain_coverage": operational_domain_report.get(
+                "operational_domain_coverage"
+            ),
+            "domain_operationalization_score": operational_domain_report.get(
+                "domain_operationalization_score"
+            ),
+            "domain_operationalization_bottleneck": (
+                operational_domain_report.get(
+                    "domain_operationalization_bottleneck"
+                )
+            ),
+            "domain_population_balance": operational_domain_report.get(
+                "domain_population_balance"
+            ),
+            "domain_collaboration_score": operational_domain_report.get(
+                "domain_collaboration_score"
+            ),
+            "domain_operational_growth_rate": operational_domain_report.get(
+                "domain_operational_growth_rate"
+            ),
+            "domain_primitive_coverage": operational_domain_report.get(
+                "domain_primitive_coverage"
+            ),
+            "domain_capability_diversity": operational_domain_report.get(
+                "domain_capability_diversity"
+            ),
+            "domain_infrastructure_readiness": operational_domain_report.get(
+                "domain_infrastructure_readiness"
+            ),
+            "operational_domain_population": operational_domain_report.get(
+                "operational_domain_population"
+            ),
+            "domain_diversification_score": operational_domain_report.get(
+                "domain_diversification_score"
+            ),
+            "domain_monopoly_pressure": operational_domain_report.get(
+                "domain_monopoly_pressure"
+            ),
+            "operational_domain_growth_rate": operational_domain_report.get(
+                "operational_domain_growth_rate"
+            ),
+            "operational_domain_evolution_speed": operational_domain_report.get(
+                "operational_domain_evolution_speed"
+            ),
+            "operational_domain_diagnostics": (
+                operational_domain_report.get("domain_diagnostics") or []
+            )[:10],
+            "operational_domain_gaps": (
+                operational_domain_report.get("domain_operationalization_gaps")
+                or []
+            )[:10],
+            "domain_collaboration_rows": (
+                operational_domain_report.get("domain_collaboration_rows") or []
+            )[:10],
+            "domain_collaboration_graph": operational_domain_report.get(
+                "domain_collaboration_graph"
+            ) or {},
+            "isolated_operational_domains": operational_domain_report.get(
+                "isolated_operational_domains"
+            ) or [],
+            "productive_operational_domains": operational_domain_report.get(
+                "productive_operational_domains"
+            ) or [],
+            "domain_operational_targets": (
+                operational_domain_report.get("domain_operational_targets") or []
+            )[:10],
+            "domain_expansion_roadmap": (
+                operational_domain_report.get("domain_expansion_roadmap") or []
+            )[:7],
+            "capability_ecology_report": capability_ecology_report,
+            "capability_ecology_health": capability_ecology_report.get(
+                "capability_ecology_health"
+            ),
+            "capability_cooperation_score": capability_ecology_report.get(
+                "capability_cooperation_score"
+            ),
+            "capability_composition_score": capability_ecology_report.get(
+                "capability_composition_score"
+            ),
+            "composite_capability_score": capability_ecology_report.get(
+                "composite_capability_score"
+            ),
+            "capability_collaboration_diversity": capability_ecology_report.get(
+                "capability_collaboration_diversity"
+            ),
+            "composite_operational_capability_count": (
+                capability_ecology_report.get(
+                    "composite_operational_capability_count"
+                )
+            ),
+            "capability_interaction_density": capability_ecology_report.get(
+                "capability_interaction_density"
+            ),
+            "capability_composition_readiness": capability_ecology_report.get(
+                "capability_composition_readiness"
+            ),
+            "composite_intelligence_readiness": capability_ecology_report.get(
+                "composite_intelligence_readiness"
+            ),
+            "capability_ecology_state": capability_ecology_report.get(
+                "capability_ecology_state"
+            ),
+            "composite_capability_candidates": (
+                capability_ecology_report.get("composite_capability_candidates")
+                or []
+            )[:10],
+            "capability_synergy_matrix": (
+                capability_ecology_report.get("capability_synergy_matrix")
+                or []
+            )[:10],
+            "capability_economy_health": capability_ecology_report.get(
+                "capability_economy_health"
+            ),
+            "capability_specialization_report": (
+                capability_ecology_report.get("capability_specialization_report")
+                or []
+            )[:10],
+            "capability_composition_opportunities": (
+                capability_ecology_report.get(
+                    "capability_composition_opportunities"
+                )
+                or []
+            )[:10],
+            "capability_economy_rows": (
+                capability_ecology_report.get("capability_economy_rows") or []
+            )[:10],
+            "high_value_capabilities": (
+                capability_ecology_report.get("high_value_capabilities") or []
+            )[:10],
+            "capability_investment_priorities": (
+                capability_ecology_report.get("capability_investment_priorities")
+                or []
+            )[:5],
             "surviving_capability_domain_count": surviving_capability_domain_count,
             "missing_operational_citizen_domains": (
                 missing_operational_citizen_domains
@@ -3769,6 +4117,42 @@ class CanonicalReportBindingEngine:
             "world_governance_graduation_action": (
                 world_governance_graduation_action
             ),
+            "capability_graduation_infrastructure_report": (
+                graduation_infrastructure_report
+            ),
+            "capability_graduation_health": capability_graduation_health,
+            "graduation_pipeline_health": graduation_pipeline_health,
+            "graduation_success_rate": graduation_success_rate,
+            "graduation_failure_rate": graduation_failure_rate,
+            "graduation_queue_health": graduation_queue_health,
+            "graduation_evidence_coverage": graduation_evidence_coverage,
+            "graduation_infrastructure_readiness": (
+                graduation_infrastructure_readiness
+            ),
+            "average_capability_graduation_time": (
+                average_capability_graduation_time
+            ),
+            "graduation_backlog_size": graduation_backlog_size,
+            "capability_graduation_queue_health": (
+                capability_graduation_queue_health
+            ),
+            "capability_graduation_risk": capability_graduation_risk,
+            "capability_graduation_complexity": (
+                capability_graduation_complexity
+            ),
+            "capability_graduation_confidence": (
+                capability_graduation_confidence
+            ),
+            "graduation_pipeline_stages": graduation_pipeline_stages,
+            "graduation_transition_rows": graduation_transition_rows[:5],
+            "capability_graduation_diagnostics": (
+                capability_graduation_diagnostics[:10]
+            ),
+            "top_graduation_priority": top_graduation_priority,
+            "graduation_sprint_recommendations": (
+                graduation_sprint_recommendations[:5]
+            ),
+            "validator_failure_distribution": validator_failure_distribution,
             "world_governance_promotion_policy": (
                 world_governance_promotion_policy
             ),
@@ -3844,6 +4228,47 @@ class CanonicalReportBindingEngine:
             "compiler_success_rate": compiler_failure_diagnostics.get(
                 "compiler_success_rate",
             ),
+            "execution_package_health_score": compiler_infrastructure.get(
+                "execution_package_health_score",
+            ),
+            "primitive_operation_coverage": compiler_infrastructure.get(
+                "primitive_operation_coverage",
+            ),
+            "compiler_infrastructure_health": compiler_infrastructure.get(
+                "compiler_infrastructure_health",
+            ),
+            "multi_step_program_support": compiler_infrastructure.get(
+                "multi_step_program_support",
+            ),
+            "execution_package_dependency_coverage": (
+                compiler_infrastructure.get(
+                    "execution_package_dependency_coverage",
+                )
+            ),
+            "primitive_infrastructure_coverage": compiler_infrastructure.get(
+                "primitive_infrastructure_coverage",
+            ),
+            "compiler_primitive_success_rate": compiler_infrastructure.get(
+                "compiler_primitive_success_rate",
+            ),
+            "execution_package_utilization": compiler_infrastructure.get(
+                "execution_package_utilization",
+            ),
+            "compiler_infrastructure_readiness": compiler_infrastructure.get(
+                "compiler_infrastructure_readiness",
+            ),
+            "execution_package_inventory": compiler_infrastructure.get(
+                "execution_package_inventory",
+                [],
+            ),
+            "primitive_operation_inventory": compiler_infrastructure.get(
+                "primitive_operation_inventory",
+                [],
+            ),
+            "multi_step_program_report": compiler_infrastructure.get(
+                "multi_step_program_report",
+                {},
+            ),
             "generated_concepts": generated_concepts,
             "measured_concepts": measured_concepts,
             "executable_concepts": executable_concepts,
@@ -3888,7 +4313,19 @@ class CanonicalReportBindingEngine:
             "operational_domain_population_target": 5,
             "capability_population_diversification": population_diversification,
             "operational_programs": operational_programs,
-            "missing_execution_packages": semantic.get("unsupported_operations") or [],
+            "missing_execution_packages": (
+                compiler_infrastructure.get("missing_execution_packages")
+                if "missing_execution_packages" in compiler_infrastructure
+                else semantic.get("unsupported_operations") or []
+            ),
+            "unused_execution_packages": compiler_infrastructure.get(
+                "unused_execution_packages",
+                [],
+            ),
+            "partial_execution_packages": compiler_infrastructure.get(
+                "partial_execution_packages",
+                [],
+            ),
             "missing_compiler_requirements": missing_requirements,
             "candidate_attrition_summary": candidate_attrition,
             "end_to_end_program_lifecycle": end_to_end_lifecycle,
@@ -3911,6 +4348,7 @@ class CanonicalReportBindingEngine:
                 "end_to_end_program_lifecycle": end_to_end_lifecycle,
                 "cognitive_domain_architecture_summary": domain_architecture,
                 "candidate_source_lineage": candidate_lineage,
+                "capability_ecology_report": capability_ecology_report,
                 "semantic_coverage_summary": semantic,
                 "program_generation_summary": program_generation,
                 "candidate_proposal_summary": proposal,
@@ -6118,6 +6556,10 @@ class CanonicalReportBindingEngine:
                     "deprioritized_knowledge_items"
                 ),
                 "candidate_proposals": proposals,
+                "source_diagnostics": explicit.get("source_diagnostics") or {},
+                "adaptive_reuse_admission_trace": explicit.get(
+                    "adaptive_reuse_admission_trace"
+                ) or [],
             }
         else:
             arena = self._build_candidate_arena_visibility(report_state, performance).get(
@@ -6162,6 +6604,8 @@ class CanonicalReportBindingEngine:
                 "low_value_knowledge_items": None,
                 "deprioritized_knowledge_items": None,
                 "candidate_proposals": proposals,
+                "source_diagnostics": {},
+                "adaptive_reuse_admission_trace": [],
             }
         return {
             "candidate_proposal_summary": summary,

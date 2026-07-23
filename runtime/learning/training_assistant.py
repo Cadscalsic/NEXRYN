@@ -5,6 +5,10 @@ from datetime import datetime
 from pathlib import Path
 
 from runtime.training.curriculum_manager import CurriculumManager
+from runtime.training.elite_curriculum_validator import (
+    ELITE_CURRICULUM_NAME,
+    validate_elite_curriculum,
+)
 
 
 class TrainingAssistant:
@@ -199,15 +203,39 @@ class TrainingAssistant:
                 normal.append(task_file)
         return elite, normal
 
+    def _elite_operationalization_policy_active(
+        self,
+        elite_task_files,
+        task_directory=None,
+    ):
+        if len(elite_task_files) < self.batch_size:
+            return False
+        for task_file in elite_task_files[: min(len(elite_task_files), 20)]:
+            metadata = self._task_metadata(task_file, task_directory)
+            if (
+                metadata.get("curriculum") == ELITE_CURRICULUM_NAME
+                and metadata.get("operationalization_phase_curriculum")
+            ):
+                return True
+        return False
+
     def _active_batch_matches_elite_policy(
         self,
         task_files,
         elite_task_files,
+        task_directory=None,
     ):
         if not elite_task_files:
             return True
         active_batch = list(self.state.get("active_batch", []))
         elite_set = set(elite_task_files)
+        if self._elite_operationalization_policy_active(
+            elite_task_files,
+            task_directory,
+        ):
+            return active_batch and all(
+                task_file in elite_set for task_file in active_batch
+            )
         return sum(1 for task_file in active_batch if task_file in elite_set) == 1
 
     def _core_knowledge_concepts(self, core_knowledge=None):
@@ -895,7 +923,7 @@ class TrainingAssistant:
             "domain_citizenship_matches": domain_matches,
         }
 
-    def _select_elite_task(
+    def _elite_priorities(
         self,
         elite_task_files,
         concept_counts=None,
@@ -904,10 +932,7 @@ class TrainingAssistant:
         core_knowledge=None,
     ):
         if not elite_task_files:
-            return None, {
-                "system": "elite_task_selection",
-                "elite_task_available": False,
-            }
+            return [], [], {}, {}, {}
         start = int(self.state.get("next_elite_task_index", 0))
         start %= len(elite_task_files)
         rotated = [
@@ -937,8 +962,33 @@ class TrainingAssistant:
                 item["original_order"],
             )
         )
+        return rotated, priorities, survival_targets, domain_gaps, population_policy
+
+    def _select_elite_task(
+        self,
+        elite_task_files,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+    ):
+        if not elite_task_files:
+            return None, {
+                "system": "elite_task_selection",
+                "elite_task_available": False,
+            }
+        rotated, priorities, survival_targets, domain_gaps, population_policy = (
+            self._elite_priorities(
+                elite_task_files,
+                concept_counts=concept_counts,
+                concept_states=concept_states,
+                task_directory=task_directory,
+                core_knowledge=core_knowledge,
+            )
+        )
         selected = priorities[0]["task_file"]
         selected_rotated_index = rotated.index(selected)
+        start = int(self.state.get("next_elite_task_index", 0))
         return selected, {
             "system": "elite_task_selection",
             "elite_task_available": True,
@@ -965,6 +1015,63 @@ class TrainingAssistant:
             "elite_task_priorities": priorities,
             "next_elite_task_index_after_completion": (
                 start + selected_rotated_index + 1
+            ) % len(elite_task_files),
+        }
+
+    def _select_elite_task_batch(
+        self,
+        elite_task_files,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+    ):
+        if not elite_task_files:
+            return [], {
+                "system": "elite_task_selection",
+                "elite_task_available": False,
+            }
+        rotated, priorities, survival_targets, domain_gaps, population_policy = (
+            self._elite_priorities(
+                elite_task_files,
+                concept_counts=concept_counts,
+                concept_states=concept_states,
+                task_directory=task_directory,
+                core_knowledge=core_knowledge,
+            )
+        )
+        selected = [row["task_file"] for row in priorities[: self.batch_size]]
+        last_selected = selected[-1]
+        selected_rotated_index = rotated.index(last_selected)
+        return selected, {
+            "system": "elite_task_selection",
+            "elite_task_available": True,
+            "policy": "elite_tasks_only_operationalization_phase",
+            "selected_elite_task_file": selected[0],
+            "selected_elite_task_files": selected,
+            "elite_task_count": len(elite_task_files),
+            "normal_task_slots": 0,
+            "prioritized_deficiencies": priorities[0].get(
+                "deficiency_targets",
+                [],
+            ),
+            "priority_reasons": priorities[0].get("priority_reasons", []),
+            "survival_reappearance_targets": survival_targets,
+            "survival_reappearance_matches": priorities[0].get(
+                "survival_reappearance_matches",
+                [],
+            ),
+            "domain_citizenship_gaps": domain_gaps,
+            "domain_citizenship_matches": priorities[0].get(
+                "domain_citizenship_matches",
+                [],
+            ),
+            "capability_population_evolution_policy": population_policy,
+            "elite_task_priorities": priorities,
+            "next_elite_task_index_after_completion": (
+                int(self.state.get("next_elite_task_index", 0))
+                + selected_rotated_index
+                + 1
             ) % len(elite_task_files),
         }
 
@@ -1245,8 +1352,14 @@ class TrainingAssistant:
             task_files,
             task_directory,
         )
+        elite_only_policy_active = self._elite_operationalization_policy_active(
+            elite_task_files,
+            task_directory,
+        )
         normal_selection_files = (
-            normal_task_files
+            []
+            if elite_only_policy_active
+            else normal_task_files
             if elite_task_files
             else task_files
         )
@@ -1265,6 +1378,7 @@ class TrainingAssistant:
             self._active_batch_matches_elite_policy(
                 task_files,
                 elite_task_files,
+                task_directory,
             )
             and (
                 task_directory is None
@@ -1303,15 +1417,28 @@ class TrainingAssistant:
                 start %= len(normal_selection_files)
             else:
                 start = 0
-            elite_task, elite_selection_report = self._select_elite_task(
-                elite_task_files,
-                concept_counts=concept_counts,
-                concept_states=concept_states,
-                task_directory=task_directory,
-                core_knowledge=core_knowledge,
-            )
+            if elite_only_policy_active:
+                elite_batch, elite_selection_report = self._select_elite_task_batch(
+                    elite_task_files,
+                    concept_counts=concept_counts,
+                    concept_states=concept_states,
+                    task_directory=task_directory,
+                    core_knowledge=core_knowledge,
+                )
+                elite_task = elite_batch[0] if elite_batch else None
+            else:
+                elite_task, elite_selection_report = self._select_elite_task(
+                    elite_task_files,
+                    concept_counts=concept_counts,
+                    concept_states=concept_states,
+                    task_directory=task_directory,
+                    core_knowledge=core_knowledge,
+                )
+                elite_batch = [elite_task] if elite_task else []
             normal_batch_size = min(
-                self.batch_size - (1 if elite_task else 0),
+                0
+                if elite_only_policy_active
+                else self.batch_size - (1 if elite_task else 0),
                 len(normal_selection_files),
             )
             if normal_selection_files:
@@ -1421,12 +1548,64 @@ class TrainingAssistant:
                 )
                 selection_report["random_seed"] = effective_seed
                 selection_report["run_id"] = run_id
-            if elite_task:
+            if elite_only_policy_active:
+                selected = list(elite_batch)
+            elif elite_task:
                 selected = [elite_task, *[
                     task_file
                     for task_file in selected
                     if task_file != elite_task
                 ]]
+            if elite_only_policy_active:
+                previous_batch = set(
+                    self.selection_memory.get("previous_batch", [])
+                )
+                selected_records = [
+                    self._task_record(task_file)
+                    for task_file in selected
+                ]
+                unseen_selected = sum(
+                    1
+                    for record in selected_records
+                    if record["times_selected"] <= 0
+                )
+                average_frequency = (
+                    sum(
+                        record["times_selected"]
+                        for record in selected_records
+                    )
+                    / len(selected_records)
+                    if selected_records
+                    else 0.0
+                )
+                previous_overlap = len(set(selected) & previous_batch)
+                selection_report = {
+                    "system": "training_selection_diversity",
+                    "total_available_tasks": len(elite_task_files),
+                    "selected_tasks": list(selected),
+                    "selection_mode": "elite_only_operationalization",
+                    "random_seed": effective_seed,
+                    "run_id": run_id,
+                    "previous_batch_overlap_count": previous_overlap,
+                    "unseen_tasks_selected": unseen_selected,
+                    "cooldown_filtered_tasks": 0,
+                    "cooldown_filtered_task_ids": [],
+                    "average_task_selection_frequency": round(
+                        average_frequency,
+                        4,
+                    ),
+                    "repeated_task_penalty_applied": previous_overlap > 0,
+                    "diversity_score": self._selection_diversity_score(
+                        selected,
+                        previous_overlap,
+                        unseen_selected,
+                        average_frequency,
+                    ),
+                    "cooldown_window_runs": self.task_cooldown_runs,
+                    "cooldown_relaxed": False,
+                    "dataset_large": len(elite_task_files) > self.batch_size * 5,
+                    "elite_only_policy_active": True,
+                }
             selected_concepts = sorted({
                 concept
                 for report in curriculum_report.get("task_priorities", [])
@@ -1481,6 +1660,47 @@ class TrainingAssistant:
             training_diversity_report["selection_diversity_score"] = (
                 selection_report.get("diversity_score", 0.0)
             )
+        elite_curriculum_report = {}
+        if elite_task_files:
+            try:
+                elite_curriculum_report = validate_elite_curriculum(
+                    task_directory or "data/training",
+                )
+            except (OSError, TypeError, ValueError):
+                elite_curriculum_report = {}
+        if elite_curriculum_report:
+            training_diversity_report.update({
+                "elite_curriculum_health": elite_curriculum_report.get(
+                    "elite_curriculum_health",
+                ),
+                "elite_task_difficulty": elite_curriculum_report.get(
+                    "elite_task_difficulty",
+                ),
+                "capability_graduation_coverage": elite_curriculum_report.get(
+                    "capability_graduation_coverage",
+                ),
+                "domain_expansion_coverage": elite_curriculum_report.get(
+                    "domain_expansion_coverage",
+                ),
+                "composite_capability_coverage": elite_curriculum_report.get(
+                    "composite_capability_coverage",
+                ),
+                "adaptive_reuse_coverage": elite_curriculum_report.get(
+                    "adaptive_reuse_coverage",
+                ),
+                "operationalization_coverage": elite_curriculum_report.get(
+                    "operationalization_coverage",
+                ),
+                "curriculum_diversity_score": elite_curriculum_report.get(
+                    "curriculum_diversity_score",
+                ),
+                "elite_task_utilization": elite_curriculum_report.get(
+                    "elite_task_utilization",
+                ),
+                "training_value_score": elite_curriculum_report.get(
+                    "training_value_score",
+                ),
+            })
 
         return {
             "system": "training_assistant",
@@ -1496,6 +1716,7 @@ class TrainingAssistant:
             "prioritized_concepts": prioritized_concepts,
             "selected_concepts": selected_concepts,
             "curriculum_report": curriculum_report,
+            "elite_curriculum_report": elite_curriculum_report,
             "training_diversity_report": training_diversity_report,
             "selection_diversity_report": selection_report,
             "elite_selection_report": elite_selection_report,
@@ -1503,6 +1724,7 @@ class TrainingAssistant:
             "available_task_count": len(task_files),
             "available_elite_task_count": len(elite_task_files),
             "available_normal_task_count": len(normal_task_files),
+            "elite_only_policy_active": elite_only_policy_active,
             "selected_task_count": len(selected),
             "selected_task_files": selected,
             "selected_elite_task_files": [

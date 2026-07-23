@@ -5324,6 +5324,31 @@ def print_training_report(report, report_level="normal"):
             "graduated_concepts="
             f"{_recent_items(training_diversity_report.get('graduated_concepts', []), detail_limit)}",
         )
+        if training_diversity_report.get("elite_curriculum_health") is not None:
+            print(
+                "elite_curriculum_health="
+                f"{training_diversity_report.get('elite_curriculum_health', 0.0)}",
+                "elite_task_difficulty="
+                f"{training_diversity_report.get('elite_task_difficulty', 'not_available')}",
+                "capability_graduation_coverage="
+                f"{training_diversity_report.get('capability_graduation_coverage', 0.0)}",
+                "domain_expansion_coverage="
+                f"{training_diversity_report.get('domain_expansion_coverage', 0.0)}",
+                "composite_capability_coverage="
+                f"{training_diversity_report.get('composite_capability_coverage', 0.0)}",
+            )
+            print(
+                "adaptive_reuse_coverage="
+                f"{training_diversity_report.get('adaptive_reuse_coverage', 0.0)}",
+                "operationalization_coverage="
+                f"{training_diversity_report.get('operationalization_coverage', 0.0)}",
+                "curriculum_diversity_score="
+                f"{training_diversity_report.get('curriculum_diversity_score', 0.0)}",
+                "elite_task_utilization="
+                f"{training_diversity_report.get('elite_task_utilization', 0.0)}",
+                "training_value_score="
+                f"{training_diversity_report.get('training_value_score', 0.0)}",
+            )
 
     curriculum_coverage_report = report.get("curriculum_coverage_report", {})
     if not curriculum_coverage_report:
