@@ -2222,10 +2222,18 @@ class DeterministicFinalReportRenderer:
             f"Attempted Candidates: {self._value(summary.get('attempted_candidate_count'))}",
             f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
             f"Competitor Sources: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            "Cross Source Consensus State: "
+            f"{self._value(summary.get('cross_source_consensus_state'))}",
+            "Cross Source Consensus Count: "
+            f"{self._value(summary.get('cross_source_consensus_count'))}",
             f"Competition Diversity: {self._value(summary.get('competition_diversity'))}",
             f"Operational Diversity: {self._value(summary.get('operational_diversity'))}",
             f"Source Diversity: {self._value(summary.get('source_diversity'))}",
             f"Source Diversity Bottleneck: {source_diversity_bottleneck}",
+            "Arena Source Diversity State: "
+            f"{self._value(summary.get('arena_source_diversity_state'))}",
+            "Arena Source Diversity Action: "
+            f"{self._value(summary.get('arena_source_diversity_action'))}",
             f"Simulation Count: {self._value(summary.get('simulation_count'))}",
             f"Simulation Success Count: {self._value(summary.get('simulation_success_count'))}",
             f"Governance Blocked Count: {self._value(summary.get('governance_blocked_count'))}",
@@ -2262,6 +2270,12 @@ class DeterministicFinalReportRenderer:
                     f"status={self._value(row.get('validation_status'))} "
                     f"{marker}"
                 )
+                if row.get("program_representation") or row.get("reuse_evidence"):
+                    lines.append(
+                        "     Program Representation: "
+                        f"{self._value(row.get('program_representation'))}; "
+                        f"Reuse Evidence: {self._value(row.get('reuse_evidence'))}"
+                    )
                 lines.append(f"     Origin Sources: {origin_sources}")
                 lines.append(f"     Normalized Sources: {normalized_sources}")
         if source_outcomes:

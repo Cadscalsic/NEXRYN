@@ -1053,6 +1053,40 @@ def test_candidate_arena_binding_detects_single_source_dominance():
     assert "Semantic Compilation" in decision["decision_pipeline"]
 
 
+def test_candidate_arena_binding_admits_nested_adaptive_reuse_program_steps():
+    state = _state()
+    state["ADAPTIVE_REUSE_REPORT"] = {
+        "reuse_success_rate": 1.0,
+        "reused_programs": [
+            {
+                "program": {
+                    "program_steps": [
+                        {"operation": "translate", "parameters": {"delta_row": 1}}
+                    ],
+                },
+                "step_count": 1,
+            }
+        ],
+    }
+    state["PREDICTION_PROVENANCE_REPORT"] = {
+        "prediction_source": "adaptive_reuse",
+        "decision_owner": "Adaptive Reuse Layer",
+        "winning_candidate": "translate",
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata={"execution_id": "exec-1"},
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["candidate_count"] == 1
+    assert summary["source_status"]["adaptive_reuse"] == "ENTERED"
+    assert summary["competitor_sources"] == ["adaptive_reuse"]
+    assert summary["source_outcomes"][0]["operation"] == "translate"
+
+
 def test_selected_semantic_compiler_without_report_is_explicit_rejection():
     state = _state()
     state["tool_selection_report"] = {

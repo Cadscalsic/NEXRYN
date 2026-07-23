@@ -16,7 +16,7 @@ class CandidateNormalizer:
         canonical = [self._candidate(item) for item in proposals or [] if isinstance(item, Mapping)]
         groups: dict[str, list[dict[str, Any]]] = {}
         for candidate in canonical:
-            groups.setdefault(candidate["program_signature"], []).append(candidate)
+            groups.setdefault(self._collapse_key(candidate), []).append(candidate)
         normalized = []
         equivalent_groups = []
         collapsed = 0
@@ -28,17 +28,21 @@ class CandidateNormalizer:
             normalized.append(merged)
             collapsed += len(group) - 1
             equivalent_groups.append({
-                "program_signature": signature,
+                "program_signature": merged["program_signature"],
                 "candidate_ids": [item["candidate_id"] for item in group],
                 "sources": sorted({source for item in group for source in item.get("sources", [item.get("source")])}),
                 "merged_candidate_id": merged["candidate_id"],
             })
+        consensus_groups = self._cross_source_consensus_groups(normalized)
+        self._annotate_consensus(normalized, consensus_groups)
         normalized.sort(key=lambda item: item["candidate_id"])
         return {
             "system": self.system_name,
             "normalized_candidates": normalized,
             "duplicate_candidates_collapsed": collapsed,
             "equivalent_candidate_groups": equivalent_groups,
+            "cross_source_consensus_groups": consensus_groups,
+            "cross_source_consensus_count": len(consensus_groups),
             "normalization_success": True,
         }
 
@@ -86,6 +90,10 @@ class CandidateNormalizer:
             } if source else {},
         })
         return candidate
+
+    def _collapse_key(self, candidate: Mapping[str, Any]) -> str:
+        source = candidate.get("source") or "unknown"
+        return f"{candidate.get('program_signature')}::{source}"
 
     def _step(self, step: Mapping[str, Any]) -> dict[str, Any]:
         operation = _normalize_operation(step.get("operation") or step.get("primitive"))
@@ -142,6 +150,52 @@ class CandidateNormalizer:
         }
         base["equivalent_candidate_ids"] = [item["candidate_id"] for item in group]
         return base
+
+    def _cross_source_consensus_groups(
+        self,
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        by_signature: dict[str, list[dict[str, Any]]] = {}
+        for candidate in candidates:
+            by_signature.setdefault(candidate["program_signature"], []).append(candidate)
+        groups = []
+        for signature, group in sorted(by_signature.items()):
+            sources = sorted({
+                source
+                for item in group
+                for source in item.get("sources", [item.get("source")])
+                if source
+            })
+            if len(sources) < 2:
+                continue
+            groups.append({
+                "consensus_id": f"cross_source:{signature[:16]}",
+                "program_signature": signature,
+                "candidate_ids": [item["candidate_id"] for item in group],
+                "sources": sources,
+                "operation": group[0].get("operation"),
+                "consensus_state": "CROSS_SOURCE_CONSENSUS",
+            })
+        return groups
+
+    def _annotate_consensus(
+        self,
+        candidates: list[dict[str, Any]],
+        consensus_groups: list[dict[str, Any]],
+    ) -> None:
+        group_by_candidate = {
+            candidate_id: group
+            for group in consensus_groups
+            for candidate_id in group.get("candidate_ids", [])
+        }
+        for candidate in candidates:
+            group = group_by_candidate.get(candidate.get("candidate_id"))
+            if not group:
+                candidate["cross_source_consensus"] = False
+                continue
+            candidate["cross_source_consensus"] = True
+            candidate["cross_source_consensus_id"] = group["consensus_id"]
+            candidate["consensus_sources"] = group["sources"]
 
     def _program_signature(self, program: Mapping[str, Any]) -> str:
         payload = json.dumps(program, sort_keys=True, separators=(",", ":"))

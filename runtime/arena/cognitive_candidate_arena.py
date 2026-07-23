@@ -88,6 +88,12 @@ class CognitiveCandidateArena:
             winner=winner,
             expected_sources=runtime_context.get("expected_candidate_sources", []),
         )
+        source_policy = self._source_diversity_policy(
+            diversity,
+            dominance,
+            eligible,
+            runtime_context,
+        )
         arena_state = self._arena_state(
             candidates,
             eligible,
@@ -112,6 +118,19 @@ class CognitiveCandidateArena:
             "arena_state": arena_state,
             "candidate_count": len(eligible),
             "unique_candidate_count": len(candidates),
+            "cross_source_consensus_count": normalization.get(
+                "cross_source_consensus_count",
+                0,
+            ),
+            "cross_source_consensus_groups": normalization.get(
+                "cross_source_consensus_groups",
+                [],
+            ),
+            "cross_source_consensus_state": (
+                "CROSS_SOURCE_CONSENSUS"
+                if normalization.get("cross_source_consensus_count")
+                else "NO_CROSS_SOURCE_CONSENSUS"
+            ),
             "source_count": len(sources_entered),
             "sources_entered": sources_entered,
             "sources_rejected": sources_rejected,
@@ -129,6 +148,10 @@ class CognitiveCandidateArena:
             "selection_margin": selection.get("selection_margin"),
             "selection_state": selection.get("selection_state"),
             "source_dominance_detected": dominance.get("dominance_detected"),
+            "arena_source_diversity_state": source_policy["state"],
+            "arena_source_diversity_action": source_policy["action"],
+            "target_candidate_sources": source_policy["target_sources"],
+            "missing_candidate_sources": source_policy["missing_sources"],
             "no_competition_reason": self._no_competition_reason(eligible, diversity, gateway_report, blocked),
             "selection_explanation": selection.get("selection_explanation"),
             "candidate_scores_fully_explained": True,
@@ -229,6 +252,43 @@ class CognitiveCandidateArena:
                     return True
         return False
 
+    def _source_diversity_policy(
+        self,
+        diversity: Mapping[str, Any],
+        dominance: Mapping[str, Any],
+        eligible: list[Mapping[str, Any]],
+        runtime_context: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        source_diversity = float(diversity.get("source_diversity") or 0.0)
+        source_count = int(diversity.get("source_count") or 0)
+        target_sources = [
+            str(source)
+            for source in runtime_context.get("expected_candidate_sources", []) or []
+            if source
+        ]
+        missing_sources = dominance.get("missing_candidate_sources") or []
+        missing_sources = [
+            str(source) for source in missing_sources if source
+        ]
+        if not eligible:
+            state = "NO_CANDIDATE_SOURCES"
+            action = "REQUEST_CANDIDATE_SOURCE_ACTIVATION"
+        elif source_count <= 1:
+            state = "LOW_SOURCE_DIVERSITY"
+            action = "SOURCE_DIVERSITY_SPRINT_REQUIRED"
+        elif source_diversity < 0.25:
+            state = "SOURCE_DIVERSITY_PRESSURE"
+            action = "EXPAND_ARENA_SOURCE_MIX"
+        else:
+            state = "MULTI_SOURCE_ARENA"
+            action = "MONITOR_SOURCE_DIVERSITY"
+        return {
+            "state": state,
+            "action": action,
+            "target_sources": target_sources,
+            "missing_sources": missing_sources,
+        }
+
     def _arena_state(self, candidates, eligible, blocked, diversity, selection, dominance):
         if blocked and not eligible:
             return "GOVERNANCE_BLOCKED"
@@ -256,6 +316,11 @@ class CognitiveCandidateArena:
             candidate_id = candidate.get("candidate_id")
             score = score_by_id.get(candidate_id, {})
             simulation = simulations.get(candidate_id, {})
+            metadata = (
+                candidate.get("metadata")
+                if isinstance(candidate.get("metadata"), dict)
+                else {}
+            )
             if governance[candidate_id]["decision"] == "BLOCK_CANDIDATE":
                 status = "BLOCKED_BY_GOVERNANCE"
             elif candidate_id == winner_id and selection.get("selection_state") in {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}:
@@ -288,6 +353,13 @@ class CognitiveCandidateArena:
                 "blocked_reason": ";".join(governance[candidate_id].get("reasons", [])) or None,
                 "semantic_intent": candidate.get("intent"),
                 "program_signature": candidate.get("program_signature"),
+                "program_representation": metadata.get("program_representation"),
+                "reuse_evidence": metadata.get("reuse_evidence"),
+                "cross_source_consensus": candidate.get("cross_source_consensus"),
+                "cross_source_consensus_id": candidate.get(
+                    "cross_source_consensus_id"
+                ),
+                "consensus_sources": candidate.get("consensus_sources", []),
             })
         return rows
 

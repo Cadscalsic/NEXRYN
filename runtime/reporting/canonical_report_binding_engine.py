@@ -5900,6 +5900,7 @@ class CanonicalReportBindingEngine:
                     {
                         "source": row.get("source"),
                         "candidate_id": row.get("candidate_id"),
+                        "operation": row.get("operation"),
                         "entered_arena": row.get("entered_arena"),
                         "status": row.get("status"),
                         "reason": row.get("blocked_reason"),
@@ -5914,9 +5915,31 @@ class CanonicalReportBindingEngine:
                 "missing_competition_reason": explicit_summary.get("no_competition_reason"),
                 "unique_candidate_count": explicit_summary.get("unique_candidate_count"),
                 "source_count": explicit_summary.get("source_count"),
+                "cross_source_consensus_count": explicit_summary.get(
+                    "cross_source_consensus_count",
+                    0,
+                ),
+                "cross_source_consensus_state": explicit_summary.get(
+                    "cross_source_consensus_state"
+                ),
+                "cross_source_consensus_groups": explicit_summary.get(
+                    "cross_source_consensus_groups"
+                ) or [],
                 "competition_diversity": explicit_summary.get("competition_diversity"),
                 "operational_diversity": explicit_summary.get("operational_diversity"),
                 "source_diversity": explicit_summary.get("source_diversity"),
+                "arena_source_diversity_state": explicit_summary.get(
+                    "arena_source_diversity_state"
+                ),
+                "arena_source_diversity_action": explicit_summary.get(
+                    "arena_source_diversity_action"
+                ),
+                "target_candidate_sources": explicit_summary.get(
+                    "target_candidate_sources"
+                ) or [],
+                "missing_candidate_sources": explicit_summary.get(
+                    "missing_candidate_sources"
+                ) or [],
                 "simulation_count": explicit_summary.get("simulation_count"),
                 "simulation_success_count": explicit_summary.get("simulation_success_count"),
                 "governance_blocked_count": explicit_summary.get("governance_blocked_count"),
@@ -5989,6 +6012,7 @@ class CanonicalReportBindingEngine:
             {
                 "source": candidate.get("source"),
                 "candidate_id": candidate.get("candidate_id"),
+                "operation": candidate.get("operation"),
                 "entered_arena": bool(candidate.get("entered_arena")),
                 "status": (
                     "ENTERED"
@@ -6204,13 +6228,27 @@ class CanonicalReportBindingEngine:
         if not adaptive:
             return []
         rows = []
+        composed = adaptive.get("composed_program")
+        if isinstance(composed, dict) and self._program_operation(composed):
+            rows.append(self._arena_candidate(
+                source="adaptive_reuse",
+                candidate_id="composed_program",
+                operation=self._program_operation(composed),
+                confidence=self._first_number(adaptive.get("reuse_success_rate"), adaptive.get("reuse_rate")),
+                validation_status=composed.get("composition_state") or "REUSED",
+                selected=provenance.get("prediction_source") == "adaptive_reuse",
+                entered=True,
+            ))
         reused = adaptive.get("reused_programs") or []
         if isinstance(reused, list):
             for index, program in enumerate(reused[:8]):
+                operation = self._program_operation(program)
+                if not operation:
+                    continue
                 rows.append(self._arena_candidate(
                     source="adaptive_reuse",
                     candidate_id=f"reused_program:{index}",
-                    operation=self._program_operation(program),
+                    operation=operation,
                     confidence=self._first_number(adaptive.get("reuse_success_rate"), adaptive.get("reuse_rate")),
                     validation_status="REUSED",
                     selected=provenance.get("prediction_source") == "adaptive_reuse",
@@ -6391,10 +6429,15 @@ class CanonicalReportBindingEngine:
     def _program_operation(self, program: Any) -> Any:
         if not isinstance(program, dict):
             return None
-        steps = program.get("steps") or []
+        nested = program.get("program")
+        if isinstance(nested, dict):
+            nested_operation = self._program_operation(nested)
+            if nested_operation:
+                return nested_operation
+        steps = program.get("steps") or program.get("program_steps") or []
         if steps and isinstance(steps[0], dict):
-            return steps[0].get("operation")
-        return program.get("operation") or program.get("primitive")
+            return steps[0].get("operation") or steps[0].get("primitive") or steps[0].get("operator")
+        return program.get("operation") or program.get("primitive") or program.get("operator")
 
     def _validation_from_accuracy(self, accuracy: Any) -> str:
         value = self._first_number(accuracy)

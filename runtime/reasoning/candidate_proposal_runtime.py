@@ -88,6 +88,8 @@ class CandidateProposalRuntime:
                     records = [item for item in value if self._has_candidate(item)]
                     if records:
                         return records
+            if self._has_candidate(source.get("composed_program")):
+                return [source.get("composed_program")]
             if source.get("semantic_to_transformation_compilation_success"):
                 return [source]
             if source.get("selected_program") or source.get("compiled_program"):
@@ -101,7 +103,11 @@ class CandidateProposalRuntime:
             return value is not None
         program = value.get("program") or value.get("compiled_program") or value
         if isinstance(program, Mapping):
-            steps = program.get("steps")
+            steps = (
+                program.get("steps")
+                or program.get("program_steps")
+                or program.get("operation_sequence")
+            )
             if isinstance(steps, list) and steps:
                 return True
         return bool(
@@ -131,11 +137,16 @@ class CandidateProposalRuntime:
         rejection_reason: str | None = None,
     ) -> dict[str, Any]:
         operation = self._operation(candidate)
+        program = self._program(candidate)
         return {
             "source": source,
             "proposal_id": proposal_id,
+            "candidate_id": self._candidate_field(candidate, "candidate_id")
+            or proposal_id,
             "proposal_status": status,
+            "intent": self._candidate_field(candidate, "intent") or operation,
             "operation": operation,
+            "program": program,
             "operational_value_score": self._candidate_field(
                 candidate,
                 "operational_value_score",
@@ -147,17 +158,61 @@ class CandidateProposalRuntime:
             ),
             "candidate_available": status == "PROPOSED",
             "rejection_reason": rejection_reason,
+            "metadata": self._metadata(candidate),
         }
 
     def _operation(self, candidate: Any) -> Any:
         if not isinstance(candidate, Mapping):
             return None
-        program = candidate.get("program") or candidate.get("compiled_program") or candidate
+        program = (
+            candidate.get("program")
+            or candidate.get("compiled_program")
+            or candidate.get("selected_program")
+            or candidate
+        )
         if isinstance(program, Mapping):
-            steps = program.get("steps") or []
+            steps = (
+                program.get("steps")
+                or program.get("program_steps")
+                or program.get("operation_sequence")
+                or []
+            )
             if steps and isinstance(steps[0], Mapping):
-                return steps[0].get("operation")
-        return candidate.get("operation")
+                return (
+                    steps[0].get("operation")
+                    or steps[0].get("primitive")
+                    or steps[0].get("operator")
+                )
+        return candidate.get("operation") or candidate.get("primitive") or candidate.get("operator")
+
+    def _program(self, candidate: Any) -> dict[str, Any]:
+        if not isinstance(candidate, Mapping):
+            return {"step_count": 0, "steps": []}
+        program = (
+            candidate.get("program")
+            or candidate.get("compiled_program")
+            or candidate.get("selected_program")
+            or candidate
+        )
+        steps = []
+        if isinstance(program, Mapping):
+            raw_steps = (
+                program.get("steps")
+                or program.get("program_steps")
+                or program.get("operation_sequence")
+                or []
+            )
+            if isinstance(raw_steps, list):
+                steps = [dict(step) for step in raw_steps if isinstance(step, Mapping)]
+        return {
+            "step_count": int(
+                self._candidate_field(candidate, "step_count")
+                or (program.get("step_count") if isinstance(program, Mapping) else 0)
+                or len(steps)
+                or 0
+            ),
+            "steps": steps,
+        }
 
     def _candidate_field(self, candidate: Any, key: str) -> Any:
         if not isinstance(candidate, Mapping):
@@ -168,6 +223,12 @@ class CandidateProposalRuntime:
         if isinstance(metadata, Mapping):
             return metadata.get(key)
         return None
+
+    def _metadata(self, candidate: Any) -> dict[str, Any]:
+        if not isinstance(candidate, Mapping):
+            return {}
+        metadata = candidate.get("metadata")
+        return dict(metadata) if isinstance(metadata, Mapping) else {}
 
     def _investment_tier_counts(self, proposals: list[dict[str, Any]]) -> dict[str, int]:
         counts = {"HIGH_VALUE": 0, "MEDIUM_VALUE": 0, "LOW_VALUE": 0}

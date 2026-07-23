@@ -744,6 +744,7 @@ def build_executable_candidate_proposals(
             operation,
             parameters,
         )
+        source_domain = _candidate_domain_for_blueprint(blueprint)
         seen.add(concept)
         proposals.append({
             "source": "program_generation",
@@ -770,6 +771,7 @@ def build_executable_candidate_proposals(
             "localization_support": 0.6,
             "metadata": {
                 "concept": concept,
+                "source_domain": source_domain,
                 "program_type": blueprint.get("program_type"),
                 "generation_status": blueprint.get("generation_status"),
                 "execution_package_available": blueprint.get(
@@ -787,7 +789,55 @@ def build_executable_candidate_proposals(
             str(item.get("intent") or ""),
         )
     )
-    return proposals[:max_candidates]
+    return _select_domain_balanced_candidates(proposals, max_candidates)
+
+
+def _select_domain_balanced_candidates(proposals, max_candidates):
+    if max_candidates <= 0:
+        return []
+    selected = []
+    selected_ids = set()
+    by_domain = {}
+    for proposal in proposals:
+        metadata = proposal.get("metadata") if isinstance(proposal.get("metadata"), dict) else {}
+        domain = metadata.get("source_domain") or "Unknown"
+        by_domain.setdefault(domain, []).append(proposal)
+    for domain in sorted(by_domain):
+        proposal = by_domain[domain][0]
+        candidate_id = proposal.get("candidate_id")
+        if candidate_id in selected_ids:
+            continue
+        selected.append(proposal)
+        selected_ids.add(candidate_id)
+        if len(selected) >= max_candidates:
+            return selected
+    for proposal in proposals:
+        candidate_id = proposal.get("candidate_id")
+        if candidate_id in selected_ids:
+            continue
+        selected.append(proposal)
+        selected_ids.add(candidate_id)
+        if len(selected) >= max_candidates:
+            break
+    return selected
+
+
+def _candidate_domain_for_blueprint(blueprint):
+    concept = _runtime_token(blueprint.get("concept_name"))
+    program_type = _runtime_token(blueprint.get("program_type"))
+    if any(part in concept or part in program_type for part in ("identity", "preservation", "shape", "size")):
+        return "Identity"
+    if any(part in concept or part in program_type for part in ("spatial", "position", "motion", "path", "route")):
+        return "Spatial"
+    if any(part in concept or part in program_type for part in ("topology", "connectivity", "component", "bridge")):
+        return "Topology"
+    if any(part in concept or part in program_type for part in ("color", "symbolic")):
+        return "Color"
+    if any(part in concept or part in program_type for part in ("growth", "density", "replication")):
+        return "Growth"
+    if any(part in concept or part in program_type for part in ("symmetry", "rotation", "reflection", "geometry")):
+        return "Geometry"
+    return "Transformation"
 
 
 def _operational_investment_assessment(blueprint, operation, parameters=None):
@@ -921,6 +971,172 @@ def build_semantic_compiler_execution_intents(candidate_proposals):
             "investment_reason": proposal.get("investment_reason"),
         })
     return intents
+
+
+def build_candidate_arena_proposals(candidate_sources, *, max_per_source=8):
+    sources = candidate_sources if isinstance(candidate_sources, dict) else {}
+    proposals = []
+    for source_name in sorted(sources):
+        records = _candidate_source_records(sources.get(source_name))
+        for index, record in enumerate(records[:max_per_source]):
+            proposal = _arena_proposal_from_source_record(
+                source_name,
+                record,
+                index,
+            )
+            if proposal:
+                proposals.append(proposal)
+    return proposals
+
+
+def _candidate_source_records(source):
+    if source is None:
+        return []
+    if isinstance(source, (list, tuple)):
+        return [item for item in source if _candidate_record_has_signal(item)]
+    if isinstance(source, dict):
+        for key in (
+            "compiler_candidates",
+            "ranked_candidates",
+            "candidate_rows",
+            "candidates",
+            "reused_programs",
+            "counterfactual_candidates",
+            "repair_candidates",
+            "transfer_learning_opportunities",
+        ):
+            value = source.get(key)
+            if isinstance(value, (list, tuple)):
+                records = [
+                    item for item in value
+                    if _candidate_record_has_signal(item)
+                ]
+                if records:
+                    return records
+        if _candidate_record_has_signal(source.get("composed_program")):
+            return [source.get("composed_program")]
+        if source.get("semantic_to_transformation_compilation_success"):
+            return [source]
+        if (
+            source.get("selected_program")
+            or source.get("compiled_program")
+            or source.get("program")
+            or source.get("operation")
+        ):
+            return [source]
+    return []
+
+
+def _candidate_record_has_signal(record):
+    if not isinstance(record, dict):
+        return record is not None
+    program = (
+        record.get("program")
+        or record.get("compiled_program")
+        or record.get("selected_program")
+        or record
+    )
+    if isinstance(program, dict):
+        steps = program.get("steps") or program.get("program_steps")
+        if isinstance(steps, list) and steps:
+            return True
+    return bool(
+        record.get("candidate_id")
+        or record.get("operation")
+        or record.get("reuse_success_rate")
+        or record.get("reuse_rate")
+    )
+
+
+def _arena_proposal_from_source_record(source_name, record, index):
+    if not isinstance(record, dict):
+        return None
+    proposal = dict(record)
+    program = (
+        proposal.get("program")
+        or proposal.get("compiled_program")
+        or proposal.get("selected_program")
+    )
+    if not isinstance(program, dict) and isinstance(proposal.get("steps"), list):
+        program = {
+            "step_count": int(proposal.get("step_count", len(proposal["steps"])) or 0),
+            "steps": proposal["steps"],
+        }
+    if not isinstance(program, dict) and isinstance(proposal.get("program_steps"), list):
+        program = {
+            "step_count": int(
+                proposal.get("step_count", len(proposal["program_steps"])) or 0
+            ),
+            "steps": proposal["program_steps"],
+        }
+    if not isinstance(program, dict):
+        program = {}
+    steps = (
+        program.get("steps")
+        if isinstance(program.get("steps"), list)
+        else program.get("program_steps")
+        if isinstance(program.get("program_steps"), list)
+        else []
+    )
+    operation = (
+        proposal.get("operation")
+        or (steps[0].get("operation") if steps and isinstance(steps[0], dict) else None)
+        or (steps[0].get("primitive") if steps and isinstance(steps[0], dict) else None)
+    )
+    if not operation:
+        return None
+    source = str(proposal.get("source") or source_name)
+    proposal.update({
+        "source": source,
+        "candidate_id": proposal.get("candidate_id")
+        or f"{source_name}:{index}:{_runtime_token(operation)}",
+        "operation": operation,
+        "program": {
+            "step_count": int(program.get("step_count", len(steps)) or 0),
+            "steps": steps,
+        },
+        "source_confidence": proposal.get(
+            "source_confidence",
+            proposal.get("confidence", _default_source_confidence(source_name)),
+        ),
+        "semantic_support": proposal.get("semantic_support", 0.72),
+        "truth_support": proposal.get("truth_support", 0.5),
+        "context_support": proposal.get("context_support", 0.55),
+        "dependency_support": proposal.get("dependency_support", 0.5),
+        "identity_support": proposal.get("identity_support", 0.55),
+        "localization_support": proposal.get("localization_support", 0.5),
+    })
+    metadata = proposal.get("metadata")
+    metadata = dict(metadata) if isinstance(metadata, dict) else {}
+    metadata.setdefault("arena_source_diversification", True)
+    metadata.setdefault("source_diversity_policy", "MULTI_SOURCE_ARENA_ENTRY")
+    metadata.setdefault(
+        "program_representation",
+        "program_steps"
+        if isinstance(proposal.get("program_steps"), list)
+        else "compiled_program"
+        if isinstance(proposal.get("compiled_program"), dict)
+        else "selected_program"
+        if isinstance(proposal.get("selected_program"), dict)
+        else "program",
+    )
+    if _runtime_token(source_name) == "adaptive_reuse":
+        metadata.setdefault("reuse_evidence", "historical_reuse_candidate")
+    proposal["metadata"] = metadata
+    return proposal
+
+
+def _default_source_confidence(source_name):
+    source = _runtime_token(source_name)
+    if source == "program_generation":
+        return 0.74
+    if source == "semantic_to_transformation_compiler":
+        return 0.82
+    if source == "adaptive_reuse":
+        return 0.78
+    if source in {"repair_engine", "transfer_learning"}:
+        return 0.68
+    return 0.6
 
 
 def build_operational_capability_materialization_report(
@@ -4038,6 +4254,23 @@ try:
             4,
         )
 
+    def _latest_adaptive_list(metric_name, limit=8):
+        rows = []
+        for report in reversed(adaptive_reuse_reports):
+            value = _nested_adaptive_report(report).get(metric_name)
+            if isinstance(value, list):
+                rows.extend(item for item in value if isinstance(item, dict))
+            if len(rows) >= limit:
+                break
+        return rows[:limit]
+
+    def _latest_adaptive_dict(metric_name):
+        for report in reversed(adaptive_reuse_reports):
+            value = _nested_adaptive_report(report).get(metric_name)
+            if isinstance(value, dict) and value:
+                return value
+        return {}
+
     adaptive_reuse_report = {
         "system": "adaptive_reuse_layer",
         "ADAPTIVE_REUSE_REPORT": True,
@@ -4109,6 +4342,15 @@ try:
                 )
             ),
             {},
+        ),
+        "reused_programs": _latest_adaptive_list("reused_programs"),
+        "reused_strategies": _latest_adaptive_list("reused_strategies"),
+        "composed_program": _latest_adaptive_dict("composed_program"),
+        "adaptive_reuse_candidate_materialization_state": (
+            "EXECUTABLE_REUSE_CANDIDATE_AVAILABLE"
+            if _latest_adaptive_list("reused_programs")
+            or _latest_adaptive_dict("composed_program")
+            else "NO_EXECUTABLE_REUSE_CANDIDATE"
         ),
     }
     adaptive_attempts = max(adaptive_reuse_report["retrieval_attempts"], 1)
@@ -5536,23 +5778,28 @@ try:
                     program_blueprint_intelligence_report,
                 )
             )
+        candidate_source_map = {
+            "program_generation": executable_candidate_proposals,
+            "semantic_to_transformation_compiler": (
+                semantic_compiler_runtime_report
+            ),
+            "adaptive_reuse": adaptive_reuse_report,
+        }
         candidate_proposal_report = candidate_proposal_runtime.collect(
-            candidate_sources={
-                "program_generation": executable_candidate_proposals,
-                "semantic_to_transformation_compiler": (
-                    semantic_compiler_runtime_report
-                ),
-            },
+            candidate_sources=candidate_source_map,
+        )
+        candidate_arena_proposals = build_candidate_arena_proposals(
+            candidate_source_map,
         )
         cognitive_candidate_arena_report = cognitive_candidate_arena.run(
-            executable_candidate_proposals,
+            candidate_arena_proposals,
             input_grid=executable_task_io.get("input_grid"),
             target_grid=executable_task_io.get("target_grid"),
             runtime_context={
                 "expected_candidate_sources": [
                     "normalized_program_candidates",
-                    "program_generation",
-                    "adaptive_search",
+                    "semantic_compiler",
+                    "adaptive_reuse",
                 ],
                 "shared_state_inputs": executable_shared_inputs,
             },

@@ -69,10 +69,10 @@ def test_multiple_independent_candidates_enter_arena_and_best_wins():
     assert report["direct_source_to_executor_access"] is False
 
 
-def test_duplicate_candidates_are_collapsed_and_provenance_preserved():
+def test_same_source_duplicate_candidates_are_collapsed():
     gateway = CandidateProposalGateway().submit([
         _proposal("semantic_compiler", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
-        _proposal("rule_engine", "global_recolor", [{"operation": "global_recolor", "parameters": {"color_mapping": {1: 2}}}]),
+        _proposal("semantic_compiler", "global_recolor", [{"operation": "global_recolor", "parameters": {"color_mapping": {1: 2}}}]),
     ])
 
     normalized = CandidateNormalizer().normalize(gateway["proposals"])
@@ -80,30 +80,35 @@ def test_duplicate_candidates_are_collapsed_and_provenance_preserved():
 
     assert normalized["duplicate_candidates_collapsed"] == 1
     assert normalized["equivalent_candidate_groups"]
-    assert sorted(candidate["sources"]) == ["rule_engine", "semantic_compiler"]
-    assert sorted(candidate["origin_sources"]) == ["rule_engine", "semantic_compiler"]
-    assert sorted(candidate["normalized_sources"]) == ["rule_engine", "semantic_compiler"]
+    assert sorted(candidate["sources"]) == ["semantic_compiler"]
+    assert sorted(candidate["origin_sources"]) == ["semantic_compiler"]
+    assert sorted(candidate["normalized_sources"]) == ["semantic_compiler"]
     assert len(candidate["provenance_history"]) == 2
 
 
-def test_normalized_candidates_preserve_original_proposal_sources():
+def test_cross_source_equivalent_candidates_remain_independent_for_evaluation():
     gateway = CandidateProposalGateway().submit([
         _proposal("program_generation", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
         _proposal("semantic_to_transformation_compiler", "global_recolor", [{"operation": "global_recolor", "parameters": {"color_mapping": {1: 2}}}]),
+        _proposal("adaptive_reuse", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
     ])
 
     normalized = CandidateNormalizer().normalize(gateway["proposals"])
-    candidate = normalized["normalized_candidates"][0]
+    candidates = normalized["normalized_candidates"]
+    sources = sorted(candidate["source"] for candidate in candidates)
 
-    assert sorted(candidate["origin_sources"]) == [
-        "program_generation",
-        "semantic_to_transformation_compiler",
-    ]
-    assert sorted(candidate["normalized_sources"]) == [
+    assert normalized["duplicate_candidates_collapsed"] == 0
+    assert len(candidates) == 3
+    assert sources == [
+        "adaptive_reuse",
         "normalized_program_candidates",
         "semantic_compiler",
     ]
-    assert len(candidate["provenance_history"]) == 2
+    assert normalized["cross_source_consensus_count"] == 1
+    consensus = normalized["cross_source_consensus_groups"][0]
+    assert consensus["consensus_state"] == "CROSS_SOURCE_CONSENSUS"
+    assert consensus["sources"] == sources
+    assert all(candidate["cross_source_consensus"] is True for candidate in candidates)
 
 
 def test_candidate_proposal_runtime_preserves_operational_investment_signal():
@@ -137,10 +142,101 @@ def test_candidate_proposal_runtime_preserves_operational_investment_signal():
     assert report["candidate_proposals"][0]["investment_tier"] == "HIGH_VALUE"
 
 
+def test_candidate_proposal_runtime_accepts_adaptive_reuse_composed_program():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "adaptive_reuse": {
+                "reuse_success_rate": 1.0,
+                "composed_program": {
+                    "program_steps": [
+                        {"operation": "preserve_grid", "parameters": {}}
+                    ],
+                    "step_count": 1,
+                    "composition_state": "COMPOSED_FROM_EXPERIENCE",
+                },
+            }
+        }
+    )
+
+    assert report["proposal_phase_status"] == "SINGLE_SOURCE"
+    assert report["proposal_count"] == 1
+    assert report["explicit_rejection_count"] == 0
+    assert report["sources_with_proposals"] == ["adaptive_reuse"]
+    assert report["candidate_proposals"][0]["operation"] == "preserve_grid"
+    assert report["candidate_proposals"][0]["program"] == {
+        "step_count": 1,
+        "steps": [{"operation": "preserve_grid", "parameters": {}}],
+    }
+
+
+def test_candidate_proposal_runtime_preserves_adaptive_reuse_reused_program_body():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "adaptive_reuse": {
+                "reuse_success_rate": 1.0,
+                "reused_programs": [
+                    {
+                        "program": {
+                            "program_steps": [
+                                {"operation": "translate", "parameters": {"delta_row": 1}},
+                            ],
+                        },
+                        "step_count": 1,
+                    }
+                ],
+            }
+        }
+    )
+
+    proposal = report["candidate_proposals"][0]
+
+    assert report["proposal_count"] == 1
+    assert report["sources_rejected"] == []
+    assert proposal["source"] == "adaptive_reuse"
+    assert proposal["operation"] == "translate"
+    assert proposal["program"]["steps"] == [
+        {"operation": "translate", "parameters": {"delta_row": 1}},
+    ]
+
+
+def test_candidate_proposal_runtime_accepts_adaptive_reuse_operation_sequence():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "adaptive_reuse": {
+                "reuse_success_rate": 1.0,
+                "reused_programs": [
+                    {
+                        "operation_sequence": [
+                            {"operator": "duplicate_object", "parameters": {}},
+                        ],
+                        "step_count": 1,
+                    }
+                ],
+            }
+        }
+    )
+
+    proposal = report["candidate_proposals"][0]
+
+    assert proposal["operation"] == "duplicate_object"
+    assert proposal["program"]["steps"] == [
+        {"operator": "duplicate_object", "parameters": {}},
+    ]
+
+
 def test_adaptive_reuse_does_not_win_automatically_when_simulation_is_worse():
     report = _arena().run(
         [
-            _proposal("adaptive_reuse", "preserve_grid", [{"operation": "preserve_grid", "parameters": {}}], confidence=1.0),
+            _proposal(
+                "adaptive_reuse",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+                confidence=1.0,
+                metadata={
+                    "program_representation": "program_steps",
+                    "reuse_evidence": "historical_reuse_candidate",
+                },
+            ),
             _proposal("rule_engine", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}], confidence=0.8),
         ],
         input_grid=[[1, 1]],
@@ -149,6 +245,12 @@ def test_adaptive_reuse_does_not_win_automatically_when_simulation_is_worse():
 
     assert report["winner_source"] == "rule_engine"
     assert report["winner_score"] > report["second_best_score"]
+    adaptive_row = next(
+        row for row in report["candidate_summary"]
+        if row["source"] == "adaptive_reuse"
+    )
+    assert adaptive_row["program_representation"] == "program_steps"
+    assert adaptive_row["reuse_evidence"] == "historical_reuse_candidate"
 
 
 def test_highest_confidence_candidate_loses_when_simulation_is_worse():
@@ -281,6 +383,108 @@ def test_source_dominance_guard_detects_single_adaptive_source():
     assert "adaptive_reuse_without_meaningful_competition" in review["dominance_reasons"]
 
 
+def test_arena_reports_source_diversity_sprint_when_single_source_enters():
+    report = _arena().run(
+        [
+            _proposal(
+                "program_generation",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+            ),
+        ],
+        input_grid=[[1]],
+        target_grid=[[1]],
+        runtime_context={
+            "expected_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+                "adaptive_reuse",
+            ],
+        },
+    )
+
+    assert report["source_count"] == 1
+    assert report["arena_source_diversity_state"] == "LOW_SOURCE_DIVERSITY"
+    assert report["arena_source_diversity_action"] == (
+        "SOURCE_DIVERSITY_SPRINT_REQUIRED"
+    )
+    assert "semantic_compiler" in report["missing_candidate_sources"]
+    assert "adaptive_reuse" in report["missing_candidate_sources"]
+
+
+def test_arena_reports_multi_source_state_when_competitive_sources_enter():
+    report = _arena().run(
+        [
+            _proposal(
+                "program_generation",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+            ),
+            _proposal(
+                "semantic_to_transformation_compiler",
+                "replace_color",
+                [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+            ),
+        ],
+        input_grid=[[1]],
+        target_grid=[[2]],
+        runtime_context={
+            "expected_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+        },
+    )
+
+    assert report["source_count"] == 2
+    assert report["arena_source_diversity_state"] == "MULTI_SOURCE_ARENA"
+    assert report["arena_source_diversity_action"] == "MONITOR_SOURCE_DIVERSITY"
+
+
+def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():
+    report = _arena().run(
+        [
+            _proposal(
+                "program_generation",
+                "duplicate_object",
+                [{"operation": "duplicate_object", "parameters": {"cells_to_write": [[0, 1, 2]]}}],
+            ),
+            _proposal(
+                "semantic_to_transformation_compiler",
+                "duplicate_object",
+                [{"operation": "duplicate_object", "parameters": {"cells_to_write": [[0, 1, 2]]}}],
+            ),
+            _proposal(
+                "adaptive_reuse",
+                "duplicate_object",
+                [{"operation": "duplicate_object", "parameters": {"cells_to_write": [[0, 1, 2]]}}],
+            ),
+        ],
+        input_grid=[[1, 0]],
+        target_grid=[[1, 2]],
+        runtime_context={
+            "expected_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+                "adaptive_reuse",
+            ],
+        },
+    )
+
+    assert report["candidate_count"] == 3
+    assert report["cross_source_consensus_state"] == "CROSS_SOURCE_CONSENSUS"
+    assert report["cross_source_consensus_count"] == 1
+    assert sorted(report["cross_source_consensus_groups"][0]["sources"]) == [
+        "adaptive_reuse",
+        "normalized_program_candidates",
+        "semantic_compiler",
+    ]
+    assert all(
+        row["cross_source_consensus"] is True
+        for row in report["candidate_summary"]
+    )
+
+
 def test_arena_memory_statistics_are_operational():
     memory = ArenaMemory()
     arena = CognitiveCandidateArena(memory=memory)
@@ -328,7 +532,7 @@ def test_arena_report_is_compact_and_deterministic():
     assert "candidate_arena_diagnostics" not in first
 
 
-def test_diversity_analyzer_ignores_identical_program_name_variants():
+def test_diversity_analyzer_preserves_cross_source_program_variants():
     gateway = CandidateProposalGateway().submit([
         _proposal("semantic_compiler", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
         _proposal("rule_engine", "remap_colors", [{"operation": "remap_colors", "parameters": {"color_mapping": {1: 2}}}]),
@@ -336,6 +540,7 @@ def test_diversity_analyzer_ignores_identical_program_name_variants():
     normalized = CandidateNormalizer().normalize(gateway["proposals"])["normalized_candidates"]
     diversity = CandidateDiversityAnalyzer().analyze(normalized)
 
-    assert diversity["candidate_count"] == 1
+    assert diversity["candidate_count"] == 2
     assert diversity["unique_program_count"] == 1
+    assert diversity["source_count"] == 2
     assert diversity["diversity_sufficient"] is False

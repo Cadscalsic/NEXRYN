@@ -258,6 +258,16 @@ def test_render_includes_cognitive_capability_coverage_map():
             "candidate_count": 1,
             "source_count": 1,
             "sources_entered": ["normalized_program_candidates"],
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "cross_source_consensus_count": 0,
+            "arena_source_diversity_state": "LOW_SOURCE_DIVERSITY",
+            "arena_source_diversity_action": "SOURCE_DIVERSITY_SPRINT_REQUIRED",
+            "target_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+                "adaptive_reuse",
+            ],
+            "missing_candidate_sources": ["semantic_compiler", "adaptive_reuse"],
             "candidate_summary": [
                 {
                     "source": "normalized_program_candidates",
@@ -622,6 +632,13 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Missing Compiler Requirements: compiler_support" in report
     assert "Origin Sources: program_generation" in report
     assert "Normalized Sources: normalized_program_candidates" in report
+    assert "Cross Source Consensus State: NO_CROSS_SOURCE_CONSENSUS" in report
+    assert "Cross Source Consensus Count: 0" in report
+    assert "Arena Source Diversity State: LOW_SOURCE_DIVERSITY" in report
+    assert (
+        "Arena Source Diversity Action: SOURCE_DIVERSITY_SPRINT_REQUIRED"
+        in report
+    )
     assert "value=0.82 tier=HIGH_VALUE" in report
     assert "reason=concrete_task_execution_signal" in report
     assert (
