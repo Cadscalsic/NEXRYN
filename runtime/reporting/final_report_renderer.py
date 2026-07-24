@@ -206,6 +206,12 @@ class DeterministicFinalReportRenderer:
                 artifact_text,
                 Path(artifact_directory) / "runtime_report.txt",
             )
+            self.write_operational_economy_artifact(
+                binding_result,
+                Path(artifact_directory)
+                / "runtime_data"
+                / "operational_economy_report.json",
+            )
             artifact_written = True
         if write_diagnostic_artifact and artifact_directory:
             self.write_diagnostic_artifact(
@@ -282,6 +288,37 @@ class DeterministicFinalReportRenderer:
 
     def write_text_artifact(self, text: str, path: Path) -> None:
         self._atomic_write_text(text, path)
+
+    def write_operational_economy_artifact(
+        self,
+        binding_result: dict[str, Any],
+        path: Path,
+    ) -> None:
+        field = (
+            binding_result.get("field_bindings", {})
+            .get("cognitive_capability_coverage_summary", {})
+        )
+        summary = field.get("value") if isinstance(field, dict) else {}
+        if not isinstance(summary, dict):
+            return
+        economy = summary.get("operational_economy_report")
+        if not isinstance(economy, dict) or not economy:
+            return
+        payload = {
+            **economy,
+            "capability_investment_priorities": (
+                summary.get("capability_investment_priorities") or []
+            ),
+            "capability_economy_health": summary.get("capability_economy_health"),
+            "capability_ecology_health": summary.get("capability_ecology_health"),
+            "composite_capability_candidates": (
+                summary.get("composite_capability_candidates") or []
+            ),
+        }
+        self._atomic_write_text(
+            json.dumps(payload, indent=2, ensure_ascii=True, default=str),
+            path,
+        )
 
     def write_diagnostic_artifact(self, payload: Any, path: Path) -> None:
         diagnostic_text = json.dumps(
@@ -1687,6 +1724,38 @@ class DeterministicFinalReportRenderer:
             if isinstance(capability_investment_priorities, list)
             else []
         )
+        knowledge_attrition_lifecycle = (
+            summary.get("knowledge_attrition_lifecycle") or []
+        )
+        knowledge_attrition_lifecycle = (
+            knowledge_attrition_lifecycle
+            if isinstance(knowledge_attrition_lifecycle, list)
+            else []
+        )
+        operational_lifecycle_conversion_rates = (
+            summary.get("operational_lifecycle_conversion_rates") or {}
+        )
+        operational_lifecycle_conversion_rates = (
+            operational_lifecycle_conversion_rates
+            if isinstance(operational_lifecycle_conversion_rates, dict)
+            else {}
+        )
+        operational_economy_roadmap = (
+            summary.get("operational_economy_roadmap") or []
+        )
+        operational_economy_roadmap = (
+            operational_economy_roadmap
+            if isinstance(operational_economy_roadmap, list)
+            else []
+        )
+        operational_capability_clusters = (
+            summary.get("operational_capability_clusters") or []
+        )
+        operational_capability_clusters = (
+            operational_capability_clusters
+            if isinstance(operational_capability_clusters, list)
+            else []
+        )
         top_cognitive_citizens = summary.get("top_cognitive_citizens") or []
         top_cognitive_citizens = (
             top_cognitive_citizens
@@ -1954,6 +2023,42 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('composite_intelligence_readiness'))}",
             "Capability Economy Health: "
             f"{self._percent(summary.get('capability_economy_health'))}",
+            "Operational Economy Health: "
+            f"{self._percent(summary.get('operational_economy_health'))}",
+            "Knowledge Attrition Health: "
+            f"{self._percent(summary.get('knowledge_attrition_health'))}",
+            "Knowledge Attrition Loss Score: "
+            f"{self._percent(summary.get('knowledge_attrition_loss_score'))}",
+            "Knowledge Attrition State: "
+            f"{self._value(summary.get('knowledge_attrition_state'))}",
+            "Operational Investment Return: "
+            f"{self._percent(summary.get('operational_investment_return'))}",
+            "Operational Investment Return State: "
+            f"{self._value(summary.get('operational_investment_return_state'))}",
+            "Knowledge Crystallization Efficiency: "
+            f"{self._percent(summary.get('knowledge_crystallization_efficiency'))}",
+            "Knowledge Crystallization Pressure: "
+            f"{self._value(summary.get('knowledge_crystallization_pressure'))}",
+            "Operational Population Growth Pressure: "
+            f"{self._percent(summary.get('operational_population_growth_pressure'))}",
+            "Capability Economy Crisis Score: "
+            f"{self._percent(summary.get('capability_economy_crisis_score'))}",
+            "Capability Economy Crisis State: "
+            f"{self._value(summary.get('capability_economy_crisis_state'))}",
+            "Capability Lifecycle Efficiency: "
+            f"{self._percent(summary.get('capability_lifecycle_efficiency'))}",
+            "Knowledge To Citizen Efficiency: "
+            f"{self._percent(summary.get('knowledge_to_citizen_efficiency'))}",
+            "Candidate Attrition Cost: "
+            f"{self._value(summary.get('candidate_attrition_cost'))}",
+            "Candidate Attrition Cost State: "
+            f"{self._value(summary.get('candidate_attrition_cost_state'))}",
+            "Operational Economy Bottleneck: "
+            f"{self._value(summary.get('operational_economy_bottleneck'))}",
+            "Operational Cluster Readiness: "
+            f"{self._percent(summary.get('operational_cluster_readiness'))}",
+            "Operational Cluster Count: "
+            f"{self._value(summary.get('operational_cluster_count'))}",
             "Missing Operational Citizen Domains: "
             f"{self._value(summary.get('missing_operational_citizen_domains'))}",
             "Surviving Capabilities: "
@@ -2551,6 +2656,52 @@ class DeterministicFinalReportRenderer:
                     f"reuse={self._percent(row.get('capability_reuse_value'))} "
                     f"collaboration={self._percent(row.get('capability_collaboration_value'))} "
                     f"state={self._value(row.get('capability_value_state'))}"
+                )
+        if knowledge_attrition_lifecycle:
+            lines.append("Knowledge Attrition Lifecycle:")
+            for row in knowledge_attrition_lifecycle[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('from_stage'))}"
+                    f"->{self._value(row.get('to_stage'))}: "
+                    f"input={self._value(row.get('input_count'))} "
+                    f"output={self._value(row.get('output_count'))} "
+                    f"lost={self._value(row.get('lost_count'))} "
+                    f"conversion={self._percent(row.get('conversion_rate'))} "
+                    f"loss={self._percent(row.get('loss_rate'))} "
+                    f"state={self._value(row.get('attrition_state'))}"
+                )
+        if operational_lifecycle_conversion_rates:
+            lines.append(
+                "Operational Lifecycle Conversion Rates: "
+                f"{self._value(operational_lifecycle_conversion_rates)}"
+            )
+        if operational_capability_clusters:
+            lines.append("Operational Capability Clusters:")
+            for row in operational_capability_clusters[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('cluster_name'))}: "
+                    f"members={self._value(row.get('member_capabilities'))} "
+                    f"present={self._value(row.get('present_capabilities'))} "
+                    f"missing={self._value(row.get('missing_capabilities'))} "
+                    f"readiness={self._percent(row.get('cluster_readiness'))} "
+                    f"state={self._value(row.get('cluster_state'))}"
+                )
+        if operational_economy_roadmap:
+            lines.append("Operational Economy Roadmap:")
+            for row in operational_economy_roadmap[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('priority'))}: "
+                    f"target={self._value(row.get('target'))} "
+                    f"action={self._value(row.get('action'))}"
                 )
         domain_rows = domain_architecture.get("domain_rows") or []
         domain_rows = domain_rows if isinstance(domain_rows, list) else []

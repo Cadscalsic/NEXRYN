@@ -643,6 +643,24 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Capability Composition Readiness:" in report
     assert "Composite Intelligence Readiness:" in report
     assert "Capability Economy Health:" in report
+    assert "Operational Economy Health:" in report
+    assert "Knowledge Attrition Health:" in report
+    assert "Knowledge Attrition Loss Score:" in report
+    assert "Knowledge Attrition State:" in report
+    assert "Operational Investment Return:" in report
+    assert "Operational Investment Return State:" in report
+    assert "Knowledge Crystallization Efficiency:" in report
+    assert "Knowledge Crystallization Pressure:" in report
+    assert "Operational Population Growth Pressure:" in report
+    assert "Capability Economy Crisis Score:" in report
+    assert "Capability Economy Crisis State:" in report
+    assert "Capability Lifecycle Efficiency:" in report
+    assert "Knowledge To Citizen Efficiency:" in report
+    assert "Candidate Attrition Cost:" in report
+    assert "Candidate Attrition Cost State:" in report
+    assert "Operational Economy Bottleneck:" in report
+    assert "Operational Cluster Readiness:" in report
+    assert "Operational Cluster Count:" in report
     assert "Missing Operational Citizen Domains:" in report
     assert "Surviving Capabilities:" in report
     assert "Validation Gap Candidate Count:" in report

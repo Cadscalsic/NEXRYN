@@ -37,6 +37,9 @@ from runtime.capability_intelligence.operational_domain_infrastructure import (
 from runtime.capability_intelligence.capability_ecology_analysis import (
     capability_ecology_analysis,
 )
+from runtime.capability_intelligence.operational_economy_analysis import (
+    operational_economy_analysis,
+)
 
 
 class BindingState(str, Enum):
@@ -3813,6 +3816,35 @@ class CanonicalReportBindingEngine:
             ),
             operational_programs=[],
         )
+        operational_economy_report = operational_economy_analysis.analyze(
+            generated_concepts=generated_concepts,
+            generated_programs=generated_programs,
+            candidate_count=candidate_count,
+            arena_candidate_count=arena_candidates,
+            compiled_programs=compiled_programs,
+            validated_programs=validated_programs,
+            materialized_operational_capabilities=(
+                materialized_operational_capabilities
+            ),
+            operational_citizen_count=operational_citizen_count,
+            expected_operational_capability_count=(
+                expected_operational_capability_count
+            ),
+            known_operational_capability_count=known_operational_capabilities,
+            operational_experience_count=operational_experience_count,
+            candidate_attrition_summary=candidate_attrition,
+            capability_ecology_report=capability_ecology_report,
+            capability_population_evolution_lag=(
+                capability_population_evolution_lag
+            ),
+            generated_to_citizen_pressure_ratio=(
+                generated_to_citizen_pressure_ratio
+            ),
+            crystallization_candidate_count=crystallization_candidate_count,
+            high_value_knowledge_items=high_value_knowledge_items,
+            medium_value_knowledge_items=medium_value_knowledge_items,
+            low_value_knowledge_items=low_value_knowledge_items,
+        )
         missing_requirements = program_generation.get("missing_requirements") or []
         if not isinstance(missing_requirements, list):
             missing_requirements = [missing_requirements]
@@ -4074,6 +4106,81 @@ class CanonicalReportBindingEngine:
                 capability_ecology_report.get("capability_investment_priorities")
                 or []
             )[:5],
+            "operational_economy_report": operational_economy_report,
+            "operational_economy_health": operational_economy_report.get(
+                "operational_economy_health"
+            ),
+            "knowledge_attrition_health": operational_economy_report.get(
+                "knowledge_attrition_health"
+            ),
+            "knowledge_attrition_loss_score": operational_economy_report.get(
+                "knowledge_attrition_loss_score"
+            ),
+            "knowledge_attrition_state": operational_economy_report.get(
+                "knowledge_attrition_state"
+            ),
+            "operational_investment_return": operational_economy_report.get(
+                "operational_investment_return"
+            ),
+            "operational_investment_return_state": (
+                operational_economy_report.get("operational_investment_return_state")
+            ),
+            "knowledge_crystallization_efficiency": (
+                operational_economy_report.get(
+                    "knowledge_crystallization_efficiency"
+                )
+            ),
+            "knowledge_crystallization_pressure": (
+                operational_economy_report.get("knowledge_crystallization_pressure")
+            ),
+            "operational_population_growth_pressure": (
+                operational_economy_report.get("operational_population_growth_pressure")
+            ),
+            "capability_economy_crisis_score": operational_economy_report.get(
+                "capability_economy_crisis_score"
+            ),
+            "capability_economy_crisis_state": operational_economy_report.get(
+                "capability_economy_crisis_state"
+            ),
+            "capability_lifecycle_efficiency": operational_economy_report.get(
+                "capability_lifecycle_efficiency"
+            ),
+            "knowledge_to_citizen_efficiency": operational_economy_report.get(
+                "knowledge_to_citizen_efficiency"
+            ),
+            "candidate_attrition_cost": operational_economy_report.get(
+                "candidate_attrition_cost"
+            ),
+            "candidate_attrition_cost_state": operational_economy_report.get(
+                "candidate_attrition_cost_state"
+            ),
+            "knowledge_attrition_lifecycle": (
+                operational_economy_report.get("knowledge_attrition_lifecycle")
+                or []
+            )[:10],
+            "operational_lifecycle_conversion_rates": (
+                operational_economy_report.get(
+                    "operational_lifecycle_conversion_rates"
+                )
+                or {}
+            ),
+            "operational_economy_bottleneck": operational_economy_report.get(
+                "operational_economy_bottleneck"
+            ),
+            "operational_economy_roadmap": (
+                operational_economy_report.get("operational_economy_roadmap")
+                or []
+            )[:7],
+            "operational_capability_clusters": (
+                operational_economy_report.get("operational_capability_clusters")
+                or []
+            )[:10],
+            "operational_cluster_readiness": operational_economy_report.get(
+                "operational_cluster_readiness"
+            ),
+            "operational_cluster_count": operational_economy_report.get(
+                "operational_cluster_count"
+            ),
             "surviving_capability_domain_count": surviving_capability_domain_count,
             "missing_operational_citizen_domains": (
                 missing_operational_citizen_domains
@@ -4349,6 +4456,7 @@ class CanonicalReportBindingEngine:
                 "cognitive_domain_architecture_summary": domain_architecture,
                 "candidate_source_lineage": candidate_lineage,
                 "capability_ecology_report": capability_ecology_report,
+                "operational_economy_report": operational_economy_report,
                 "semantic_coverage_summary": semantic,
                 "program_generation_summary": program_generation,
                 "candidate_proposal_summary": proposal,

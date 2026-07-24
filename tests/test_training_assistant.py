@@ -379,6 +379,91 @@ def test_training_assistant_selects_elite_only_for_v1_curriculum(tmp_path):
     )
 
 
+def test_training_assistant_aligns_elite_selection_with_operational_economy(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    tasks = {
+        "elite_cognitive_task_01.json": ["color_noise"],
+        "elite_cognitive_task_02.json": ["growth_probe"],
+        "elite_cognitive_task_03.json": ["translate", "preserve_topology"],
+        "elite_cognitive_task_04.json": ["shape_probe"],
+    }
+    for task_file, concepts in tasks.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({
+                "nexryn_metadata": {
+                    "curriculum": "nexryn_elite_training_curriculum_v1",
+                    "operationalization_phase_curriculum": True,
+                    "elite_cognitive_task": True,
+                    "target_concepts": concepts,
+                    "target_domains": ["Spatial", "Topology", "Color"],
+                    "deficiency_targets": ["validation_gap"],
+                    "required_operational_capabilities": concepts,
+                    "composite_capabilities": [
+                        "Topology Preserving Translation"
+                    ] if "translate" in concepts else [],
+                },
+            }),
+            encoding="utf-8",
+        )
+
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=2,
+        selection_mode="curriculum",
+    )
+    selected = assistant.select_batch(
+        list(tasks),
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "operational_economy_health": 0.55,
+            "capability_economy_crisis_state": "CAPABILITY_ECONOMY_PRESSURE",
+            "operational_economy_bottleneck": "compiled_programs->validated_programs",
+            "capability_investment_priorities": [
+                {"operation": "translate", "capability_investment_score": 0.9},
+                {
+                    "operation": "preserve_topology",
+                    "capability_investment_score": 0.85,
+                },
+            ],
+            "operational_capability_clusters": [
+                {
+                    "cluster_name": "Topology Preserving Translation",
+                    "member_capabilities": [
+                        "translate",
+                        "preserve_topology",
+                        "preserve_colors",
+                    ],
+                    "missing_capabilities": [],
+                    "cluster_readiness": 1.0,
+                }
+            ],
+            "operational_economy_roadmap": [
+                {
+                    "priority": "knowledge_crystallization",
+                    "target": "compiled_programs->validated_programs",
+                    "action": "prioritize_validation_and_graduation_evidence",
+                }
+            ],
+        },
+    )
+
+    assert selected["selected_task_files"][0] == "elite_cognitive_task_03.json"
+    assert selected["training_economy_alignment_report"]["alignment_state"] == (
+        "ECONOMY_ALIGNED_TRAINING"
+    )
+    assert selected["training_economy_alignment_report"][
+        "training_economy_alignment_score"
+    ] > 0
+    assert "capability_economy_investment_alignment" in selected[
+        "elite_selection_report"
+    ]["priority_reasons"]
+    assert selected["training_diversity_report"][
+        "training_economy_alignment_state"
+    ] == "ECONOMY_ALIGNED_TRAINING"
+
+
 def test_training_assistant_uses_survival_store_for_elite_reappearance(tmp_path):
     tasks_directory = tmp_path / "training"
     tasks_directory.mkdir()

@@ -31,6 +31,10 @@ from runtime.capability_intelligence.operational_domain_infrastructure import (
     OperationalDomainInfrastructure,
     operational_domain_infrastructure,
 )
+from runtime.capability_intelligence.operational_economy_analysis import (
+    OperationalEconomyAnalysis,
+    operational_economy_analysis,
+)
 from runtime.capability_intelligence.capability_recommendation_engine import (
     CapabilityRecommendation,
     CapabilityRecommendationEngine,
@@ -76,6 +80,7 @@ __all__ = [
     "CapabilityGraduationInfrastructure",
     "CapabilityIntelligenceEngine",
     "OperationalDomainInfrastructure",
+    "OperationalEconomyAnalysis",
     "CapabilityRecommendation",
     "CapabilityRecommendationEngine",
     "CapabilityRecommendationState",
@@ -86,6 +91,7 @@ __all__ = [
     "capability_graduation_infrastructure",
     "capability_ecology_analysis",
     "operational_domain_infrastructure",
+    "operational_economy_analysis",
     "PolicyRecommendationEngine",
     "StrategyDescriptor",
     "StrategyExecutionRecord",

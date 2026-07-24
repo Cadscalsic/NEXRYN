@@ -5349,6 +5349,17 @@ def print_training_report(report, report_level="normal"):
                 "training_value_score="
                 f"{training_diversity_report.get('training_value_score', 0.0)}",
             )
+        if training_diversity_report.get("training_economy_alignment_state"):
+            print(
+                "training_economy_alignment_state="
+                f"{training_diversity_report.get('training_economy_alignment_state')}",
+                "training_economy_alignment_score="
+                f"{training_diversity_report.get('training_economy_alignment_score', 0.0)}",
+                "training_economy_match_count="
+                f"{training_diversity_report.get('training_economy_match_count', 0)}",
+                "training_economy_bottleneck="
+                f"{training_diversity_report.get('training_economy_bottleneck')}",
+            )
 
     curriculum_coverage_report = report.get("curriculum_coverage_report", {})
     if not curriculum_coverage_report:

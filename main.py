@@ -539,6 +539,23 @@ def print_training_batch_summary(
             "elite_training_value_score:",
             elite_curriculum.get("training_value_score"),
         )
+    economy_alignment = training_batch.get(
+        "training_economy_alignment_report",
+        {},
+    )
+    if isinstance(economy_alignment, dict) and economy_alignment:
+        print(
+            "training_economy_alignment:",
+            economy_alignment.get("alignment_state"),
+        )
+        print(
+            "training_economy_score:",
+            economy_alignment.get("training_economy_alignment_score"),
+        )
+        print(
+            "training_economy_bottleneck:",
+            economy_alignment.get("operational_economy_bottleneck"),
+        )
     if report_level != "minimal":
         print(
             "prioritized_concepts:",

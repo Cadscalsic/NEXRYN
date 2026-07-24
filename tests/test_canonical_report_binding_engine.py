@@ -1835,6 +1835,13 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert "composite_capability_candidates" in coverage
     assert "capability_economy_health" in coverage
     assert "capability_specialization_report" in coverage
+    assert "operational_economy_health" in coverage
+    assert "knowledge_attrition_lifecycle" in coverage
+    assert "knowledge_attrition_state" in coverage
+    assert "operational_investment_return" in coverage
+    assert "capability_economy_crisis_state" in coverage
+    assert "operational_capability_clusters" in coverage
+    assert "operational_economy_roadmap" in coverage
     assert coverage["operational_domain_population"] >= 1
     assert coverage["domain_expansion_roadmap"]
     assert coverage["operational_domain_diagnostics"]

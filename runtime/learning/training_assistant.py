@@ -38,6 +38,7 @@ class TrainingAssistant:
         random_seed=None,
         task_cooldown_runs=TASK_COOLDOWN_RUNS,
         survival_store_path="runtime/artifacts/runtime_data/operational_capability_survival.json",
+        operational_economy_path="runtime/artifacts/runtime_data/operational_economy_report.json",
     ):
         self.state_path = Path(state_path)
         self.batch_size = max(int(batch_size), 1)
@@ -47,6 +48,7 @@ class TrainingAssistant:
         self.random_seed = random_seed
         self.task_cooldown_runs = max(int(task_cooldown_runs), 0)
         self.survival_store_path = Path(survival_store_path)
+        self.operational_economy_path = Path(operational_economy_path)
         self.state = self._load()
         self.selection_memory = self._load_selection_memory()
 
@@ -64,6 +66,7 @@ class TrainingAssistant:
             "curriculum_report": {},
             "selection_diversity_report": {},
             "elite_selection_report": {},
+            "training_economy_alignment_report": {},
             "history": [],
         }
 
@@ -181,6 +184,230 @@ class TrainingAssistant:
             task_file,
             task_directory,
         )
+
+    def _load_operational_economy_report(self):
+        if not self.operational_economy_path.exists():
+            return {}
+        try:
+            with self.operational_economy_path.open("r", encoding="utf-8") as file:
+                report = json.load(file)
+            return report if isinstance(report, dict) else {}
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    def _term(self, value):
+        return str(value or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+    def _metadata_terms(self, metadata):
+        terms = set()
+
+        def visit(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    visit(key)
+                    visit(item)
+            elif isinstance(value, (list, tuple, set)):
+                for item in value:
+                    visit(item)
+            elif value is not None:
+                term = self._term(value)
+                if term:
+                    terms.add(term)
+                    terms.update(part for part in term.split("_") if part)
+
+        for key in (
+            "target_concepts",
+            "target_domains",
+            "deficiency_targets",
+            "required_operational_capabilities",
+            "composite_capabilities",
+            "capability_graduation_targets",
+            "domain_expansion_targets",
+            "adaptive_reuse_opportunities",
+            "curriculum_diagnostics_tags",
+            "independent_validation_opportunities",
+        ):
+            visit(metadata.get(key))
+        return terms
+
+    def _operational_economy_context(self, report):
+        report = report if isinstance(report, dict) else {}
+        investment_rows = [
+            row for row in report.get("capability_investment_priorities", []) or []
+            if isinstance(row, dict)
+        ]
+        clusters = [
+            row for row in report.get("operational_capability_clusters", []) or []
+            if isinstance(row, dict)
+        ]
+        roadmap = [
+            row for row in report.get("operational_economy_roadmap", []) or []
+            if isinstance(row, dict)
+        ]
+        capability_targets = []
+        for row in investment_rows[:8]:
+            operation = row.get("operation")
+            if operation:
+                capability_targets.append(self._term(operation))
+        cluster_targets = []
+        for row in clusters[:8]:
+            cluster_targets.append(self._term(row.get("cluster_name")))
+            for capability in row.get("member_capabilities") or []:
+                cluster_targets.append(self._term(capability))
+            for capability in row.get("missing_capabilities") or []:
+                cluster_targets.append(self._term(capability))
+        roadmap_targets = []
+        for row in roadmap[:7]:
+            roadmap_targets.extend([
+                self._term(row.get("priority")),
+                self._term(row.get("target")),
+                self._term(row.get("action")),
+            ])
+        return {
+            "source_available": bool(report),
+            "operational_economy_health": report.get("operational_economy_health"),
+            "capability_economy_crisis_state": report.get(
+                "capability_economy_crisis_state"
+            ),
+            "operational_economy_bottleneck": report.get(
+                "operational_economy_bottleneck"
+            ),
+            "investment_targets": sorted(set(filter(None, capability_targets))),
+            "cluster_targets": sorted(set(filter(None, cluster_targets))),
+            "roadmap_targets": sorted(set(filter(None, roadmap_targets))),
+            "investment_rows": investment_rows[:8],
+            "cluster_rows": clusters[:8],
+            "roadmap_rows": roadmap[:7],
+        }
+
+    def _training_economy_priority(self, metadata, economy_context):
+        if not economy_context or not economy_context.get("source_available"):
+            return 0.0, [], []
+        terms = self._metadata_terms(metadata)
+        matches = []
+        priority = 0.0
+        reasons = []
+
+        def matched_targets(targets):
+            found = []
+            for target in targets:
+                if not target:
+                    continue
+                target_parts = set(target.split("_"))
+                if target in terms or target_parts.intersection(terms):
+                    found.append(target)
+            return sorted(set(found))
+
+        investment_matches = matched_targets(
+            economy_context.get("investment_targets", [])
+        )
+        if investment_matches:
+            priority += 45 + min(len(investment_matches), 4) * 8
+            reasons.append("capability_economy_investment_alignment")
+            matches.extend(
+                {
+                    "match_type": "investment_priority",
+                    "target": target,
+                }
+                for target in investment_matches[:6]
+            )
+
+        cluster_matches = matched_targets(economy_context.get("cluster_targets", []))
+        if cluster_matches:
+            priority += 35 + min(len(cluster_matches), 5) * 6
+            reasons.append("operational_cluster_training_alignment")
+            matches.extend(
+                {
+                    "match_type": "operational_cluster",
+                    "target": target,
+                }
+                for target in cluster_matches[:6]
+            )
+
+        roadmap_matches = matched_targets(economy_context.get("roadmap_targets", []))
+        if roadmap_matches:
+            priority += 30 + min(len(roadmap_matches), 4) * 5
+            reasons.append("operational_economy_roadmap_alignment")
+            matches.extend(
+                {
+                    "match_type": "economy_roadmap",
+                    "target": target,
+                }
+                for target in roadmap_matches[:6]
+            )
+
+        bottleneck = self._term(economy_context.get("operational_economy_bottleneck"))
+        if bottleneck and any(part in terms for part in bottleneck.split("_")):
+            priority += 25
+            reasons.append("operational_economy_bottleneck_probe")
+            matches.append({
+                "match_type": "economy_bottleneck",
+                "target": bottleneck,
+            })
+
+        return round(priority, 4), reasons, matches[:12]
+
+    def _training_economy_alignment_report(
+        self,
+        selected,
+        elite_selection_report,
+        economy_context,
+    ):
+        priorities = elite_selection_report.get("elite_task_priorities", [])
+        priorities = priorities if isinstance(priorities, list) else []
+        selected_set = set(selected or [])
+        selected_rows = [
+            row for row in priorities
+            if isinstance(row, dict) and row.get("task_file") in selected_set
+        ]
+        match_rows = [
+            match
+            for row in selected_rows
+            for match in row.get("training_economy_matches", []) or []
+            if isinstance(match, dict)
+        ]
+        matched_targets = sorted({
+            str(match.get("target"))
+            for match in match_rows
+            if match.get("target")
+        })
+        selected_with_matches = [
+            row.get("task_file")
+            for row in selected_rows
+            if row.get("training_economy_matches")
+        ]
+        return {
+            "system": "training_economy_alignment",
+            "operational_economy_source_available": bool(
+                economy_context.get("source_available")
+            ),
+            "alignment_state": (
+                "ECONOMY_ALIGNED_TRAINING"
+                if selected_with_matches
+                else "ECONOMY_SIGNAL_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("source_available")
+                else "NO_OPERATIONAL_ECONOMY_SIGNAL"
+            ),
+            "operational_economy_health": economy_context.get(
+                "operational_economy_health"
+            ),
+            "capability_economy_crisis_state": economy_context.get(
+                "capability_economy_crisis_state"
+            ),
+            "operational_economy_bottleneck": economy_context.get(
+                "operational_economy_bottleneck"
+            ),
+            "investment_targets": economy_context.get("investment_targets", []),
+            "cluster_targets": economy_context.get("cluster_targets", []),
+            "roadmap_targets": economy_context.get("roadmap_targets", []),
+            "selected_economy_aligned_tasks": selected_with_matches,
+            "matched_economy_targets": matched_targets[:12],
+            "alignment_match_count": len(match_rows),
+            "training_economy_alignment_score": round(
+                len(selected_with_matches) / max(len(selected or []), 1),
+                4,
+            ),
+        }
 
     def _is_elite_task(self, task_file, task_directory=None):
         if str(task_file).startswith("elite_cognitive_task_"):
@@ -806,6 +1033,7 @@ class TrainingAssistant:
         survival_targets=None,
         domain_gaps=None,
         population_policy=None,
+        operational_economy_context=None,
     ):
         metadata = self._task_metadata(task_file, task_directory)
         concepts = [
@@ -909,6 +1137,15 @@ class TrainingAssistant:
         if domain_priority:
             priority += domain_priority
             reasons.append("domain_citizenship_gap_probe")
+        economy_priority, economy_reasons, economy_matches = (
+            self._training_economy_priority(
+                metadata,
+                operational_economy_context or {},
+            )
+        )
+        if economy_priority:
+            priority += economy_priority
+            reasons.extend(economy_reasons)
         priority += max(0, 20 - order) * 0.01
         return {
             "task_file": task_file,
@@ -921,6 +1158,7 @@ class TrainingAssistant:
             "priority_reasons": reasons,
             "survival_reappearance_matches": survival_matches,
             "domain_citizenship_matches": domain_matches,
+            "training_economy_matches": economy_matches,
         }
 
     def _elite_priorities(
@@ -930,6 +1168,7 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         core_knowledge=None,
+        operational_economy_context=None,
     ):
         if not elite_task_files:
             return [], [], {}, {}, {}
@@ -953,6 +1192,7 @@ class TrainingAssistant:
                 survival_targets=survival_targets,
                 domain_gaps=domain_gaps,
                 population_policy=population_policy,
+                operational_economy_context=operational_economy_context,
             )
             for order, task_file in enumerate(rotated)
         ]
@@ -971,6 +1211,7 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         core_knowledge=None,
+        operational_economy_context=None,
     ):
         if not elite_task_files:
             return None, {
@@ -984,6 +1225,7 @@ class TrainingAssistant:
                 concept_states=concept_states,
                 task_directory=task_directory,
                 core_knowledge=core_knowledge,
+                operational_economy_context=operational_economy_context,
             )
         )
         selected = priorities[0]["task_file"]
@@ -1011,6 +1253,10 @@ class TrainingAssistant:
                 "domain_citizenship_matches",
                 [],
             ),
+            "training_economy_matches": priorities[0].get(
+                "training_economy_matches",
+                [],
+            ),
             "capability_population_evolution_policy": population_policy,
             "elite_task_priorities": priorities,
             "next_elite_task_index_after_completion": (
@@ -1025,6 +1271,7 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         core_knowledge=None,
+        operational_economy_context=None,
     ):
         if not elite_task_files:
             return [], {
@@ -1038,6 +1285,7 @@ class TrainingAssistant:
                 concept_states=concept_states,
                 task_directory=task_directory,
                 core_knowledge=core_knowledge,
+                operational_economy_context=operational_economy_context,
             )
         )
         selected = [row["task_file"] for row in priorities[: self.batch_size]]
@@ -1064,6 +1312,10 @@ class TrainingAssistant:
             "domain_citizenship_gaps": domain_gaps,
             "domain_citizenship_matches": priorities[0].get(
                 "domain_citizenship_matches",
+                [],
+            ),
+            "training_economy_matches": priorities[0].get(
+                "training_economy_matches",
                 [],
             ),
             "capability_population_evolution_policy": population_policy,
@@ -1344,6 +1596,7 @@ class TrainingAssistant:
         core_knowledge=None,
         selection_mode=None,
         random_seed=None,
+        operational_economy_report=None,
     ):
         task_files = self._normalized_tasks(task_files)
         if not task_files:
@@ -1355,6 +1608,11 @@ class TrainingAssistant:
         elite_only_policy_active = self._elite_operationalization_policy_active(
             elite_task_files,
             task_directory,
+        )
+        if operational_economy_report is None:
+            operational_economy_report = self._load_operational_economy_report()
+        operational_economy_context = self._operational_economy_context(
+            operational_economy_report,
         )
         normal_selection_files = (
             []
@@ -1424,6 +1682,7 @@ class TrainingAssistant:
                     concept_states=concept_states,
                     task_directory=task_directory,
                     core_knowledge=core_knowledge,
+                    operational_economy_context=operational_economy_context,
                 )
                 elite_task = elite_batch[0] if elite_batch else None
             else:
@@ -1433,6 +1692,7 @@ class TrainingAssistant:
                     concept_states=concept_states,
                     task_directory=task_directory,
                     core_knowledge=core_knowledge,
+                    operational_economy_context=operational_economy_context,
                 )
                 elite_batch = [elite_task] if elite_task else []
             normal_batch_size = min(
@@ -1628,6 +1888,13 @@ class TrainingAssistant:
             self.state["curriculum_report"] = curriculum_report
             self.state["selection_diversity_report"] = selection_report
             self.state["elite_selection_report"] = elite_selection_report
+            self.state["training_economy_alignment_report"] = (
+                self._training_economy_alignment_report(
+                    selected,
+                    elite_selection_report,
+                    operational_economy_context,
+                )
+            )
             self.state["pending_next_task_index"] = (
                 (start + len([
                     task_file
@@ -1660,6 +1927,36 @@ class TrainingAssistant:
             training_diversity_report["selection_diversity_score"] = (
                 selection_report.get("diversity_score", 0.0)
             )
+        training_economy_alignment_report = dict(
+            self.state.get("training_economy_alignment_report", {})
+        )
+        if not training_economy_alignment_report:
+            training_economy_alignment_report = (
+                self._training_economy_alignment_report(
+                    self.state.get("active_batch", []),
+                    elite_selection_report,
+                    operational_economy_context,
+                )
+            )
+        if training_economy_alignment_report:
+            training_diversity_report.update({
+                "training_economy_alignment_state": (
+                    training_economy_alignment_report.get("alignment_state")
+                ),
+                "training_economy_alignment_score": (
+                    training_economy_alignment_report.get(
+                        "training_economy_alignment_score"
+                    )
+                ),
+                "training_economy_match_count": (
+                    training_economy_alignment_report.get("alignment_match_count")
+                ),
+                "training_economy_bottleneck": (
+                    training_economy_alignment_report.get(
+                        "operational_economy_bottleneck"
+                    )
+                ),
+            })
         elite_curriculum_report = {}
         if elite_task_files:
             try:
@@ -1717,6 +2014,7 @@ class TrainingAssistant:
             "selected_concepts": selected_concepts,
             "curriculum_report": curriculum_report,
             "elite_curriculum_report": elite_curriculum_report,
+            "training_economy_alignment_report": training_economy_alignment_report,
             "training_diversity_report": training_diversity_report,
             "selection_diversity_report": selection_report,
             "elite_selection_report": elite_selection_report,
@@ -1768,6 +2066,7 @@ class TrainingAssistant:
         self.state["curriculum_report"] = {}
         self.state["selection_diversity_report"] = {}
         self.state["elite_selection_report"] = {}
+        self.state["training_economy_alignment_report"] = {}
         self.state["history"] = [
             *list(self.state.get("history", []))[-31:],
             {
