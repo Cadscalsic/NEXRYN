@@ -1049,8 +1049,75 @@ def test_candidate_arena_binding_detects_single_source_dominance():
     assert summary["source_status"]["semantic_to_transformation_compiler"] == "BLOCKED"
     assert summary["source_outcomes"][0]["source"] == "semantic_to_transformation_compiler"
     assert summary["source_outcomes"][0]["status"] == "REJECTED"
+    materialization = {
+        row["source"]: row
+        for row in summary["candidate_source_materialization_rows"]
+    }
+    assert materialization["adaptive_reuse"]["source_materialization_state"] == (
+        "ENTERED_ARENA"
+    )
+    assert materialization["semantic_to_transformation_compiler"][
+        "source_materialization_state"
+    ] == "KNOWLEDGE_SIGNAL_NOT_MATERIALIZED"
+    assert summary["candidate_source_materialization_state"] == (
+        "SOURCE_MATERIALIZATION_GAPS_PRESENT"
+    )
     assert decision["compiler_attempted"] is True
     assert "Semantic Compilation" in decision["decision_pipeline"]
+
+
+def test_candidate_arena_reports_source_materialization_gaps_for_explicit_arena():
+    state = _state()
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "arena_state": "SINGLE_SOURCE_ONLY",
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "candidate_count": 1,
+            "unique_candidate_count": 1,
+            "source_count": 1,
+            "sources_entered": ["normalized_program_candidates"],
+            "target_candidate_sources": [
+                "program_generation",
+                "semantic_to_transformation_compiler",
+                "adaptive_reuse",
+                "counterfactual_reasoning",
+                "execution_memory",
+            ],
+            "candidate_summary": [
+                {
+                    "source": "normalized_program_candidates",
+                    "candidate_id": "program_generation:translate",
+                    "operation": "translate",
+                    "entered_arena": True,
+                    "status": "ENTERED",
+                }
+            ],
+        }
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata={"execution_id": "exec-1"},
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+    materialization = {
+        row["source"]: row
+        for row in summary["candidate_source_materialization_rows"]
+    }
+
+    assert summary["source_count"] == 1
+    assert materialization["program_generation"]["entered_arena"] is True
+    assert materialization["adaptive_reuse"]["source_materialization_state"] == (
+        "KNOWLEDGE_SIGNAL_NOT_MATERIALIZED"
+    )
+    assert materialization["counterfactual_reasoning"]["failure_stage"] == (
+        "candidate_materialization"
+    )
+    assert summary["candidate_source_materialization_gap_count"] == 4
+    assert summary["candidate_source_materialization_state"] == (
+        "SOURCE_MATERIALIZATION_GAPS_PRESENT"
+    )
 
 
 def test_candidate_arena_binding_admits_nested_adaptive_reuse_program_steps():
@@ -1321,9 +1388,29 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
     assert "primitive_infrastructure_coverage" in coverage
     assert "compiler_primitive_success_rate" in coverage
     assert "execution_package_utilization" in coverage
+    assert "package_utilization_gap_rows" in coverage
+    assert "package_utilization_gap_count" in coverage
+    assert "package_utilization_gap_state" in coverage
     assert "compiler_infrastructure_readiness" in coverage
+    assert coverage["execution_package_inventory_state"] == (
+        "PACKAGE_INVENTORY_AVAILABLE"
+    )
+    assert coverage["primitive_operation_inventory_state"] == (
+        "PRIMITIVE_INVENTORY_AVAILABLE"
+    )
+    assert coverage["execution_package_inventory_count"] >= 1
+    assert coverage["primitive_operation_inventory_count"] >= 1
+    assert coverage["executable_package_count"] >= 1
+    assert coverage["executable_primitive_count"] >= 1
 
     assert coverage["operational_capability_coverage"] == 0.0
+    assert coverage["operational_capability_coverage_semantics"] == (
+        "current_run_materialized_capabilities_per_generated_concept"
+    )
+    assert "sandbox_operational_citizen_coverage" in coverage
+    assert coverage["sandbox_operational_citizen_coverage_semantics"] == (
+        "sandbox_operational_citizens_per_generated_concept"
+    )
     assert coverage["operational_capability_materialization_rate"] == 0.0
     assert coverage["knowledge_production_efficiency"] == 0.25
     assert coverage["knowledge_operationalization_efficiency"] == 0.0
@@ -1381,6 +1468,13 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
     assert coverage["candidate_attrition_summary"]["generated_candidates"] == 1
     assert coverage["candidate_attrition_summary"]["entered_arena"] == 1
     assert coverage["candidate_attrition_summary"]["arena_acceptance_rate"] == 1.0
+    assert "ready_operational_cluster_count" in coverage
+    assert "cluster_operationalization_candidate_count" in coverage
+    assert "cluster_to_materialization_gap" in coverage
+    assert "cluster_to_citizen_gap" in coverage
+    assert "cluster_operationalization_pressure" in coverage
+    assert "cluster_operationalization_state" in coverage
+    assert "cluster_operationalization_action" in coverage
     domain_summary = coverage["cognitive_domain_architecture_summary"]
     assert domain_summary["domain_count"] >= 1
     assert any(
@@ -1393,6 +1487,69 @@ def test_cognitive_capability_coverage_reports_pipeline_bottlenecks():
     )
     assert coverage["candidate_source_lineage"][0]["arena_source"] == (
         "normalized_program_candidates"
+    )
+
+
+def test_identity_domain_arena_gap_is_reported_as_constraint_governance_role():
+    state = _state()
+    state["SEMANTIC_INTELLIGENCE_REPORT"] = {
+        "supported_concept_rows": [
+            {
+                "concept": "object_identity_preservation",
+                "executable": True,
+            }
+        ],
+    }
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 1,
+        "generated_blueprints": 1,
+        "program_blueprints": [
+            {
+                "program_name": "semantic_program_preserve_grid",
+                "supported_concepts": ["object_identity_preservation"],
+            }
+        ],
+    }
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_phase_entered": True,
+        "proposal_count": 1,
+        "candidate_proposals": [
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "preserve_grid",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "candidate_count": 0,
+            "candidate_summary": [],
+            "sources_entered": [],
+        }
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "cognitive_capability_coverage_summary"
+    ]["value"]
+    rows = {
+        row["domain_name"]: row
+        for row in coverage["cognitive_domain_architecture_summary"]["domain_rows"]
+    }
+    identity = rows["Identity Cognitive Domain"]
+
+    assert identity["operationalization_gap"] == "arena_entry_gap"
+    assert identity["domain_operational_role"] == (
+        "ARENA_GOVERNOR_CONSTRAINT_DOMAIN"
+    )
+    assert identity["domain_arena_relationship"] == "constraint_governor"
+    assert identity["domain_operationalization_action"] == (
+        "bind_identity_constraints_to_arena_validation"
     )
 
 
@@ -1414,6 +1571,21 @@ def test_compiler_failure_diagnostics_synthesize_rows_from_aggregates():
                 "Topology": 2,
             },
             "failure_rows": [],
+            "grounding_requirement_rows": [
+                {
+                    "program": "semantic_program_translate",
+                    "semantic_intent": "directional_translation",
+                    "operation": "translate",
+                    "domain": "Spatial",
+                    "missing_grounding": "input_output_grid_pair",
+                    "required_evidence": "exact_or_governed_validation_success",
+                    "required_task_property": (
+                        "unambiguous_directional_translation_ground_truth"
+                    ),
+                }
+            ],
+            "grounding_required_for_operations": ["translate"],
+            "grounding_required_for_domains": {"Spatial": 1},
         },
     }
     state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
@@ -1501,6 +1673,157 @@ def test_compiler_failure_diagnostics_distinguish_placeholder_rows():
     assert coverage["compiler_failure_detail_capture_state"] == (
         "STRUCTURED_PLACEHOLDER_ROWS_CAPTURED"
     )
+
+
+def test_missing_grid_pair_is_reported_as_operational_grounding_failure():
+    state = _state()
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 13,
+        "generated_blueprints": 13,
+    }
+    state["CANDIDATE_PROPOSAL_REPORT"] = {
+        "proposal_count": 13,
+        "candidate_proposals": [
+            {
+                "source": "program_generation",
+                "proposal_status": "PROPOSED",
+                "operation": "translate",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "arena_state": "MULTI_SOURCE_ARENA",
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "candidate_count": 8,
+            "unique_candidate_count": 8,
+            "source_count": 2,
+            "sources_entered": ["normalized_program_candidates", "semantic_compiler"],
+            "candidate_summary": [
+                {
+                    "source": "semantic_compiler",
+                    "candidate_id": "semantic_program_translate",
+                    "operation": "translate",
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "compiler_failure_diagnostics": {
+            "failure_reason_counts": {
+                "missing_grid_pair": 13,
+            },
+            "failure_domain_distribution": {
+                "Identity": 5,
+                "Topology": 4,
+                "Geometry": 4,
+            },
+            "failure_rows": [],
+            "grounding_requirement_rows": [
+                {
+                    "program": "semantic_program_translate",
+                    "semantic_intent": "directional_translation",
+                    "operation": "translate",
+                    "domain": "Spatial",
+                    "missing_grounding": "input_output_grid_pair",
+                    "required_evidence": "exact_or_governed_validation_success",
+                    "required_task_property": (
+                        "unambiguous_directional_translation_ground_truth"
+                    ),
+                }
+            ],
+            "grounding_required_for_operations": ["translate"],
+            "grounding_required_for_domains": {"Spatial": 1},
+        },
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "compiler_runtime_activated_programs": 13,
+        "compiled_programs": 1,
+        "validated_programs": 0,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "cognitive_capability_coverage_summary"
+    ]["value"]
+
+    assert coverage["operational_grounding_failure_count"] == 13
+    assert coverage["compiler_semantic_failure_count"] == 0
+    assert coverage["operational_grounding_failure_rate"] == 1.0
+    assert coverage["operational_grounding_state"] == (
+        "GROUNDING_FAILURE_DOMINANT"
+    )
+    assert coverage["compiler_diagnostic_state"] == (
+        "OPERATIONAL_GROUNDING_BOTTLENECK_DIAGNOSED"
+    )
+    assert coverage["compiler_failure_interpretation"] == (
+        "operational_grounding_failure"
+    )
+    assert coverage["grounding_required_for_operations"] == ["translate"]
+    assert coverage["grounding_required_for_domains"]["Spatial"] == 1
+    assert coverage["grounding_requirement_rows"][0]["operation"] == "translate"
+    assert coverage["grounding_requirement_rows"][0]["required_task_property"] == (
+        "unambiguous_directional_translation_ground_truth"
+    )
+    assert coverage["knowledge_operationalization_choke_point"] == (
+        "arena_to_compiled"
+    )
+    assert coverage["knowledge_operationalization_choke_cause"] == (
+        "operational_grounding"
+    )
+    assert coverage["knowledge_operationalization_choke_action"] == (
+        "select_grounding_aligned_validation_tasks"
+    )
+
+
+def test_grounding_requirement_rows_are_synthesized_from_aggregates_when_placeholders():
+    state = _state()
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "generated_programs": 1,
+        "generated_blueprints": 1,
+    }
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "compiler_failure_diagnostics": {
+            "failure_reason_counts": {"missing_grid_pair": 1},
+            "failure_domain_distribution": {"Spatial": 1},
+            "failure_rows": [],
+            "grounding_requirement_rows": [{}],
+            "grounding_required_for_operations": ["translate"],
+            "grounding_required_for_domains": {"Spatial": 1},
+        },
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "compiler_runtime_activated_programs": 1,
+        "compiled_programs": 0,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "cognitive_capability_coverage_summary"
+    ]["value"]
+    row = coverage["grounding_requirement_rows"][0]
+
+    assert row["program"] == "semantic_program_translate"
+    assert row["operation"] == "translate"
+    assert row["domain"] == "Spatial"
+    assert row["missing_grounding"] == "input_output_grid_pair"
+    assert row["required_evidence"] == "exact_or_governed_validation_success"
+    assert row["required_task_property"] == (
+        "unambiguous_directional_translation_ground_truth"
+    )
+    assert row["grounding_stage"] == "compiler_input_grounding"
+    assert row["action"] == "select_grounding_aligned_task"
 
 
 def test_capability_survival_metrics_are_bound_from_materialization_report():
@@ -1593,6 +1916,36 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
             "COGNITIVE_CITIZEN": 0,
             "OPERATIONAL_CITIZEN": 1,
         },
+        "capability_promotion_phase_state": (
+            "CAPABILITY_PROMOTION_PHASE_DETECTED"
+        ),
+        "capability_promotion_candidate_count": 1,
+        "capability_promotion_interpretation": (
+            "promotion_interprets_evidence_before_trust_or_graduation"
+        ),
+        "evidence_acceptance_state": (
+            "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK"
+        ),
+        "evidence_acceptance_bottleneck": (
+            "governed_validation_evidence_acceptance"
+        ),
+        "evidence_acceptance_failure_count": 1,
+        "evidence_acceptance_failure_share": 1.0,
+        "capability_promotion_rows": [
+            {
+                "capability_id": "operational_capability:identity:preserve_size:size",
+                "operation": "preserve_size",
+                "domain": "Identity",
+                "lifecycle_state": "COGNITIVE_CITIZEN",
+                "graduation_status": "BLOCKED_AT_FINAL_VALIDATION",
+                "validator_gap": "GOVERNED_VALIDATION_INCOMPLETE",
+                "capability_graduation_confidence": 0.91,
+                "promotion_interpretation": (
+                    "high_quality_evidence_requires_acceptance_before_trust"
+                ),
+                "trusted_for_decision": False,
+            }
+        ],
         "graduation_transition_rows": [
             {
                 "transition": (
@@ -1775,6 +2128,19 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
                     "operation": "construct_path",
                     "lifecycle_state": "INCUBATING_VALIDATION_GAP",
                 },
+                {
+                    "capability_id": "operational_capability:growth:duplicate_object:growth",
+                    "operation": "duplicate_object",
+                    "domain": "Growth",
+                    "lifecycle_state": "SURVIVING_CAPABILITY",
+                    "distinct_task_count": 35,
+                    "arena_simulated_count": 60,
+                    "best_accuracy": 1.0,
+                    "average_accuracy": 0.1154,
+                    "validation_attempts": 4,
+                    "improvement_trend": "STABLE_HIGH_PERFORMANCE",
+                    "trusted_for_decision": False,
+                },
             ],
         },
     }
@@ -1833,6 +2199,22 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert "composite_capability_score" in coverage
     assert "capability_synergy_matrix" in coverage
     assert "composite_capability_candidates" in coverage
+    composites = {
+        row["composite_name"]: row
+        for row in coverage["composite_capability_candidates"]
+    }
+    assert composites["Pattern Completion Intelligence"]["missing_capabilities"] == []
+    assert composites["Spatial Growth Intelligence"]["missing_capabilities"] == []
+    assert composites["Structural Bridge Intelligence"]["missing_capabilities"] == []
+    assert "pattern_completion" in composites[
+        "Pattern Completion Intelligence"
+    ]["present_capabilities"]
+    assert "growth_detection" in composites[
+        "Spatial Growth Intelligence"
+    ]["present_capabilities"]
+    assert "bridge_creation" in composites[
+        "Structural Bridge Intelligence"
+    ]["present_capabilities"]
     assert "capability_economy_health" in coverage
     assert "capability_specialization_report" in coverage
     assert "operational_economy_health" in coverage
@@ -1845,7 +2227,7 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["operational_domain_population"] >= 1
     assert coverage["domain_expansion_roadmap"]
     assert coverage["operational_domain_diagnostics"]
-    assert coverage["surviving_capability_domain_count"] == 0
+    assert coverage["surviving_capability_domain_count"] == 1
     assert coverage["generated_survival_candidate_count"] == 8
     assert coverage["arena_simulated_survival_candidate_count"] == 7
     assert coverage["arena_quality_survival_candidate_count"] == 2
@@ -1886,6 +2268,24 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["graduation_pipeline_stages"][
         "SURVIVING_CAPABILITY"
     ] == 1
+    assert coverage["capability_promotion_phase_state"] == (
+        "CAPABILITY_PROMOTION_PHASE_DETECTED"
+    )
+    assert coverage["capability_promotion_candidate_count"] == 1
+    assert coverage["capability_promotion_interpretation"] == (
+        "promotion_interprets_evidence_before_trust_or_graduation"
+    )
+    assert coverage["evidence_acceptance_state"] == (
+        "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK"
+    )
+    assert coverage["evidence_acceptance_bottleneck"] == (
+        "governed_validation_evidence_acceptance"
+    )
+    assert coverage["evidence_acceptance_failure_count"] == 1
+    assert coverage["evidence_acceptance_failure_share"] == 1.0
+    assert coverage["capability_promotion_rows"][0]["operation"] == (
+        "preserve_size"
+    )
     assert coverage["graduation_transition_rows"][0]["stuck_count"] == 1
     assert coverage["capability_graduation_diagnostics"][0][
         "validator_gap"
@@ -1897,6 +2297,26 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["validator_failure_distribution"] == {
         "GOVERNED_VALIDATION_INCOMPLETE": 1,
     }
+    assert coverage["governed_validation_bottleneck"] == (
+        "governed_validation_infrastructure"
+    )
+    assert coverage["governed_validation_bottleneck_state"] == (
+        "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK"
+    )
+    assert coverage["governed_validation_failure_count"] == 1
+    assert coverage["governed_validation_failure_share"] == 1.0
+    assert coverage["governed_validation_action"] == (
+        "select_governed_validation_evidence_tasks"
+    )
+    assert coverage["governed_validation_required_evidence"] == (
+        "exact_or_governed_validation_success"
+    )
+    assert coverage["knowledge_operationalization_root_cause"] == (
+        "governed_validation_infrastructure"
+    )
+    assert coverage["knowledge_operationalization_symptom"] == (
+        coverage["knowledge_operationalization_choke_point"]
+    )
     assert coverage["top_graduation_candidates"][0]["operation"] == "translate"
     assert coverage["top_graduation_candidates"][0][
         "missing_graduation_evidence"
@@ -1926,6 +2346,51 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
         "preserve_grid"
     )
     assert coverage["top_operational_citizens"][0]["trusted_for_decision"] is False
+    assert coverage["top_operational_citizens"][0]["citizenship_tier"] == (
+        "SANDBOX_OPERATIONAL_CITIZEN"
+    )
+    assert coverage["top_operational_citizens"][0]["authority_scope"] == (
+        "SANDBOX_REUSE_ONLY"
+    )
+    assert coverage["top_operational_citizens"][0]["trust_state"] == (
+        "NOT_TRUSTED_FOR_DECISION"
+    )
+    assert coverage["top_operational_citizens"][0]["graduation_semantics"] == (
+        "citizenship_is_sandbox_reuse_not_decision_authority"
+    )
+    assert coverage["capability_governance_contract_state"] == (
+        "CAPABILITY_GOVERNANCE_ACTIVE"
+    )
+    assert coverage["capability_rights_policy"]["decision_authority"] == (
+        "trusted_capabilities_only"
+    )
+    assert coverage["capability_obligations_policy"]["preserve_lineage"] is True
+    governance_rows = {
+        row["operation"]: row for row in coverage["capability_governance_rows"]
+    }
+    assert governance_rows["preserve_grid"]["authority_scope"] == (
+        "SANDBOX_REUSE_ONLY"
+    )
+    assert "request_validation" in governance_rows["preserve_grid"]["rights"]
+    assert "preserve_lineage" in governance_rows["preserve_grid"]["obligations"]
+    assert governance_rows["preserve_grid"]["trust_score"] < 0.5
+    assert coverage["capability_evidence_contamination_state"] == (
+        "EVIDENCE_LEDGER_CONTAMINATION_RISK"
+    )
+    assert coverage["capability_evidence_contamination_count"] == 1
+    assert governance_rows["duplicate_object"]["arena_simulation_count"] == 60
+    assert governance_rows["duplicate_object"]["relevant_task_attempt_count"] == 35
+    assert governance_rows["duplicate_object"]["evidence_contamination_state"] == (
+        "ARENA_EXPOSURE_CONTAMINATION_RISK"
+    )
+    assert governance_rows["duplicate_object"]["recommended_accuracy_basis"] == (
+        "relevant_task_attempt_accuracy"
+    )
+    assert governance_rows["duplicate_object"]["evidence_adjusted_accuracy"] > (
+        governance_rows["duplicate_object"]["reputation_basis"]["average_accuracy"]
+    )
+    assert coverage["capability_reputation_average"] is not None
+    assert coverage["capability_trust_average"] is not None
     assert coverage["top_crystallization_candidates"][0]["operation"] == (
         "preserve_shape"
     )

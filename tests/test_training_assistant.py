@@ -399,6 +399,14 @@ def test_training_assistant_aligns_elite_selection_with_operational_economy(tmp_
                     "target_domains": ["Spatial", "Topology", "Color"],
                     "deficiency_targets": ["validation_gap"],
                     "required_operational_capabilities": concepts,
+                    "required_evidence": (
+                        ["exact_or_governed_validation_success"]
+                        if "translate" in concepts else []
+                    ),
+                    "task_properties": (
+                        ["unambiguous_directional_translation_ground_truth"]
+                        if "translate" in concepts else []
+                    ),
                     "composite_capabilities": [
                         "Topology Preserving Translation"
                     ] if "translate" in concepts else [],
@@ -437,6 +445,30 @@ def test_training_assistant_aligns_elite_selection_with_operational_economy(tmp_
                     ],
                     "missing_capabilities": [],
                     "cluster_readiness": 1.0,
+                    "required_grounding": [
+                        {
+                            "operation": "translate",
+                            "domain": "Spatial",
+                            "required_evidence": (
+                                "exact_or_governed_validation_success"
+                            ),
+                            "required_task_property": (
+                                "unambiguous_directional_translation_ground_truth"
+                            ),
+                            "cluster_name": "Topology Preserving Translation",
+                        },
+                        {
+                            "operation": "preserve_topology",
+                            "domain": "Topology",
+                            "required_evidence": (
+                                "exact_or_governed_validation_success"
+                            ),
+                            "required_task_property": (
+                                "topology_preserving_transformation_ground_truth"
+                            ),
+                            "cluster_name": "Topology Preserving Translation",
+                        },
+                    ],
                 }
             ],
             "operational_economy_roadmap": [
@@ -462,6 +494,21 @@ def test_training_assistant_aligns_elite_selection_with_operational_economy(tmp_
     assert selected["training_diversity_report"][
         "training_economy_alignment_state"
     ] == "ECONOMY_ALIGNED_TRAINING"
+    assert selected["training_economy_alignment_report"][
+        "grounding_economy_alignment"
+    ] == "GROUNDING_ECONOMY_ALIGNED"
+    assert selected["training_economy_alignment_report"][
+        "selected_grounding_aligned_tasks"
+    ] == ["elite_cognitive_task_03.json"]
+    assert "unambiguous_directional_translation_ground_truth" in selected[
+        "training_economy_alignment_report"
+    ]["matched_grounding_targets"]
+    assert selected["training_economy_alignment_report"][
+        "grounding_alignment_trace"
+    ][0]["evidence_collection_attempted"] is True
+    assert selected["training_diversity_report"][
+        "grounding_economy_alignment"
+    ] == "GROUNDING_ECONOMY_ALIGNED"
 
 
 def test_training_assistant_uses_survival_store_for_elite_reappearance(tmp_path):
@@ -975,3 +1022,199 @@ def test_training_assistant_targets_exact_evidence_gap_not_generic_reappearance(
     )
     assert match["evidence_gap_aligned"] is True
     assert match["maturation_no_progress"] is True
+
+
+def test_training_assistant_prioritizes_governed_validation_evidence_signal(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["translation"],
+            "required_operational_capabilities": ["translate"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["translation"],
+            "required_evidence": ["exact_or_governed_validation_success"],
+            "task_properties": ["exact_or_governed_validation_ground_truth"],
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+        "normal_002.json": {"target_concepts": ["path_finding"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    economy_report = {
+        "governed_validation_bottleneck_state": (
+            "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK"
+        ),
+        "governed_validation_action": (
+            "select_governed_validation_evidence_tasks"
+        ),
+        "governed_validation_required_evidence": (
+            "exact_or_governed_validation_success"
+        ),
+    }
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=3,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+            "normal_002.json",
+        ],
+        task_directory=tasks_directory,
+        operational_economy_report=economy_report,
+    )
+
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["governed_validation_bottleneck_state"] == (
+        "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK"
+    )
+    report = selected["elite_selection_report"]
+    assert "governed_validation_evidence_alignment" in report[
+        "priority_reasons"
+    ]
+    assert any(
+        match["match_type"] == "governed_validation_required_evidence"
+        for row in report["elite_task_priorities"]
+        for match in row.get("training_economy_matches", [])
+        if row["task_file"] == "elite_cognitive_task_02.json"
+    )
+
+
+def test_training_assistant_uses_validation_academy_opportunity_matching(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    survival_path = tmp_path / "operational_capability_survival.json"
+    academy_path = tmp_path / "elite_validation_academy_v1.json"
+    survival_path.write_text(
+        json.dumps({
+            "operational_capability:growth:duplicate_object:growth": {
+                "capability_id": "operational_capability:growth:duplicate_object:growth",
+                "operation": "duplicate_object",
+                "domain": "Growth",
+                "lifecycle_state": "SURVIVING_CAPABILITY",
+                "next_required_evidence": "exact_or_governed_validation_success",
+                "best_accuracy": 1.0,
+                "average_accuracy": 0.56,
+                "distinct_task_count": 35,
+                "arena_simulated_count": 61,
+                "arena_quality_count": 35,
+                "validation_attempts": 10,
+            },
+        }),
+        encoding="utf-8",
+    )
+    academy_path.write_text(
+        json.dumps({
+            "academy": "nexryn_elite_validation_academy_v1",
+            "tasks": [
+                {
+                    "task_id": "elite_validation_task_27",
+                    "elite_group": "Capability Graduation Tasks",
+                    "target_capability": "duplicate_object",
+                    "target_cluster": "Symbolic Object Replication",
+                    "target_domain": "Growth",
+                    "required_task_property": (
+                        "paired_symbolic_object_replication_ground_truth"
+                    ),
+                    "required_validation_evidence": (
+                        "exact_or_governed_validation_success"
+                    ),
+                    "promotion_weight": 0.98,
+                }
+            ],
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["growth"],
+            "required_operational_capabilities": ["duplicate_object"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["growth", "symbolic_object_replication"],
+            "required_operational_capabilities": ["duplicate_object"],
+            "required_task_property": (
+                "paired_symbolic_object_replication_ground_truth"
+            ),
+            "required_evidence": ["exact_or_governed_validation_success"],
+            "target_cluster": "Symbolic Object Replication",
+            "target_capability": "duplicate_object",
+        },
+        "normal_001.json": {"target_concepts": ["identity_preservation"]},
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    economy_report = {
+        "governed_validation_bottleneck_state": (
+            "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK"
+        ),
+        "governed_validation_required_evidence": (
+            "exact_or_governed_validation_success"
+        ),
+        "grounding_requirement_rows": [
+            {
+                "operation": "duplicate_object",
+                "required_task_property": (
+                    "paired_symbolic_object_replication_ground_truth"
+                ),
+            }
+        ],
+    }
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        survival_store_path=survival_path,
+        validation_academy_path=academy_path,
+        batch_size=2,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        [
+            "elite_cognitive_task_01.json",
+            "elite_cognitive_task_02.json",
+            "normal_001.json",
+        ],
+        task_directory=tasks_directory,
+        operational_economy_report=economy_report,
+    )
+
+    assert selected["selected_elite_task_files"] == [
+        "elite_cognitive_task_02.json",
+    ]
+    report = selected["elite_selection_report"]
+    assert "elite_validation_task_selection_intelligence" in report[
+        "priority_reasons"
+    ]
+    assert "capability_directed_validation" in report["priority_reasons"]
+    match = report["validation_academy_matches"][0]
+    assert match["academy_task_id"] == "elite_validation_task_27"
+    assert match["target_capability"] == "duplicate_object"
+    assert match["required_task_property"] == (
+        "paired_symbolic_object_replication_ground_truth"
+    )
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["validation_academy_alignment"] == (
+        "VALIDATION_ACADEMY_ALIGNED"
+    )
+    assert alignment["validation_academy_alignment_trace"][0][
+        "academy_task_id"
+    ] == "elite_validation_task_27"

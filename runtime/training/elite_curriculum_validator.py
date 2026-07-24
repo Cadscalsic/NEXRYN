@@ -14,6 +14,10 @@ from typing import Any, Mapping
 
 TRAINING_DIRECTORY = Path("data/training")
 ELITE_CURRICULUM_NAME = "nexryn_elite_training_curriculum_v1"
+ELITE_VALIDATION_ACADEMY_NAME = "nexryn_elite_validation_academy_v1"
+ELITE_VALIDATION_ACADEMY_PATH = Path(
+    "data/curriculum/elite_validation_academy_v1.json"
+)
 REQUIRED_DOMAINS = {
     "Color",
     "Transformation",
@@ -43,6 +47,35 @@ REQUIRED_TIERS = {
     "Tier 2": "Capability Graduation Tasks",
     "Tier 3": "Composite Capability Tasks",
     "Tier 4": "Elite Multi-Domain Tasks",
+}
+REQUIRED_VALIDATION_GROUPS = {
+    "Capability Validation Tasks": 10,
+    "Composite Capability Validation Tasks": 5,
+    "Cross Domain Validation Tasks": 5,
+    "Trust Formation Tasks": 5,
+    "Capability Graduation Tasks": 5,
+}
+REQUIRED_VALIDATION_FIELDS = {
+    "task_id",
+    "task_name",
+    "elite_group",
+    "target_capability",
+    "target_cluster",
+    "target_domain",
+    "required_ground_truth",
+    "required_validation_evidence",
+    "required_task_property",
+    "validation_objective",
+    "trust_objective",
+    "graduation_objective",
+    "difficulty_level",
+    "promotion_weight",
+    "cross_domain_requirement",
+    "operationalization_objective",
+    "expected_capability_promotion",
+    "expected_governed_validation_effect",
+    "expected_capability_trust_effect",
+    "expected_graduation_effect",
 }
 
 
@@ -258,6 +291,117 @@ def validate_elite_curriculum(
     return EliteCurriculumValidator().validate(training_directory)
 
 
+def validate_elite_validation_academy(
+    academy_path: Path | str = ELITE_VALIDATION_ACADEMY_PATH,
+) -> dict[str, Any]:
+    path = Path(academy_path)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {
+            "system": "elite_validation_academy_validator",
+            "academy": ELITE_VALIDATION_ACADEMY_NAME,
+            "academy_task_count": 0,
+            "academy_readiness": "MISSING",
+            "invalid_validation_tasks": [{
+                "task_file": str(path),
+                "failures": ["academy_file_unreadable"],
+            }],
+        }
+    tasks = payload.get("tasks") or []
+    tasks = tasks if isinstance(tasks, list) else []
+    group_counts = Counter(
+        str(task.get("elite_group"))
+        for task in tasks
+        if isinstance(task, Mapping)
+    )
+    required_properties = Counter()
+    target_capabilities = Counter()
+    target_clusters = Counter()
+    invalid_tasks = []
+    for index, task in enumerate(tasks, start=1):
+        if not isinstance(task, Mapping):
+            invalid_tasks.append({
+                "task_id": f"task:{index}",
+                "failures": ["task_not_mapping"],
+            })
+            continue
+        failures = []
+        missing_fields = [
+            field for field in sorted(REQUIRED_VALIDATION_FIELDS)
+            if task.get(field) in (None, "", [])
+        ]
+        if missing_fields:
+            failures.append(
+                "missing_required_fields:" + ",".join(missing_fields)
+            )
+        if not isinstance(task.get("cross_domain_requirement"), list):
+            failures.append("cross_domain_requirement_not_list")
+        elif len(task.get("cross_domain_requirement") or []) < 2:
+            failures.append("insufficient_cross_domain_requirement")
+        weight = task.get("promotion_weight")
+        if not isinstance(weight, int | float) or not 0.0 <= float(weight) <= 1.0:
+            failures.append("promotion_weight_out_of_bounds")
+        required_properties[str(task.get("required_task_property"))] += 1
+        target_capabilities[str(task.get("target_capability"))] += 1
+        target_clusters[str(task.get("target_cluster"))] += 1
+        if failures:
+            invalid_tasks.append({
+                "task_id": task.get("task_id") or f"task:{index}",
+                "failures": failures,
+            })
+    distribution_ok = all(
+        group_counts.get(group, 0) == expected
+        for group, expected in REQUIRED_VALIDATION_GROUPS.items()
+    )
+    fields_ok = not invalid_tasks
+    task_count_ok = len(tasks) == 30
+    property_coverage = _ratio(len([
+        key for key in required_properties
+        if key and key != "None"
+    ]), 8)
+    cluster_coverage = _ratio(len([
+        key for key in target_clusters
+        if key and key != "None"
+    ]), 6)
+    health = round(
+        (
+            (1.0 if payload.get("academy") == ELITE_VALIDATION_ACADEMY_NAME else 0.0)
+            + (1.0 if task_count_ok else 0.0)
+            + (1.0 if distribution_ok else 0.0)
+            + (1.0 if fields_ok else 0.0)
+            + min(property_coverage, 1.0)
+            + min(cluster_coverage, 1.0)
+        )
+        / 6,
+        4,
+    )
+    return {
+        "system": "elite_validation_academy_validator",
+        "academy": payload.get("academy") or ELITE_VALIDATION_ACADEMY_NAME,
+        "academy_version": payload.get("academy_version"),
+        "academy_task_count": len(tasks),
+        "academy_health": health,
+        "academy_readiness": (
+            "READY"
+            if health >= 0.95
+            and task_count_ok
+            and distribution_ok
+            and fields_ok
+            else "PARTIAL"
+            if tasks
+            else "MISSING"
+        ),
+        "group_distribution": dict(sorted(group_counts.items())),
+        "required_task_property_distribution": dict(
+            sorted(required_properties.items())
+        ),
+        "target_capability_distribution": dict(sorted(target_capabilities.items())),
+        "target_cluster_distribution": dict(sorted(target_clusters.items())),
+        "invalid_validation_tasks": invalid_tasks,
+    }
+
+
 def _ratio(value: int | float, total: int | float) -> float:
     return round(float(value) / float(total), 4) if total else 0.0
 
@@ -275,6 +419,8 @@ def _average(values: Any) -> float:
 
 __all__ = [
     "ELITE_CURRICULUM_NAME",
+    "ELITE_VALIDATION_ACADEMY_NAME",
     "EliteCurriculumValidator",
     "validate_elite_curriculum",
+    "validate_elite_validation_academy",
 ]

@@ -61,7 +61,21 @@ def test_operational_economy_measures_attrition_and_crisis_state():
     assert report["operational_capability_clusters"][0]["cluster_state"] == (
         "OPERATIONAL_CLUSTER_READY"
     )
+    assert report["operational_capability_clusters"][0]["required_grounding"][0][
+        "required_evidence"
+    ] == "exact_or_governed_validation_success"
+    assert report["operational_capability_clusters"][0]["required_grounding"][0][
+        "required_task_property"
+    ] == "unambiguous_directional_translation_ground_truth"
     assert report["operational_cluster_readiness"] == 1.0
+    assert report["ready_operational_cluster_count"] == 1
+    assert report["cluster_operationalization_state"] == (
+        "READY_CLUSTERS_AWAITING_MATERIALIZATION"
+    )
+    assert report["cluster_operationalization_action"] == (
+        "TARGET_CLUSTER_VALIDATION_AND_GROUNDING"
+    )
+    assert report["cluster_to_materialization_gap"] == 1
     assert report["knowledge_to_citizen_efficiency"] == 0.01
 
 
@@ -93,5 +107,78 @@ def test_operational_economy_keeps_clusters_as_diagnostics_only():
         "PARTIAL_OPERATIONAL_CLUSTER"
     )
     assert "capability_type" not in report["operational_capability_clusters"][0]
+    assert "required_grounding" in report["operational_capability_clusters"][0]
     assert report["knowledge_crystallization_efficiency"] is None
     assert report["operational_economy_health"] <= 1.0
+
+
+def test_ready_clusters_without_citizens_require_operationalization():
+    report = OperationalEconomyAnalysis().analyze(
+        generated_concepts=18,
+        generated_programs=15,
+        candidate_count=13,
+        arena_candidate_count=8,
+        compiled_programs=1,
+        validated_programs=0,
+        materialized_operational_capabilities=0,
+        operational_citizen_count=0,
+        operational_grounding_failure_count=13,
+        operational_grounding_failure_rate=1.0,
+        capability_ecology_report={
+            "composite_capability_candidates": [
+                {
+                    "composite_name": "Identity Preserving Transformation",
+                    "required_capabilities": ["preserve_grid", "translate"],
+                    "present_capabilities": ["preserve_grid", "translate"],
+                    "missing_capabilities": [],
+                    "participating_domains": ["Identity", "Spatial"],
+                    "composition_readiness": 1.0,
+                },
+                {
+                    "composite_name": "Topology Preserving Translation",
+                    "required_capabilities": [
+                        "translate",
+                        "preserve_topology",
+                        "preserve_colors",
+                    ],
+                    "present_capabilities": [
+                        "translate",
+                        "preserve_topology",
+                        "preserve_colors",
+                    ],
+                    "missing_capabilities": [],
+                    "participating_domains": ["Topology", "Spatial", "Color"],
+                    "composition_readiness": 1.0,
+                },
+            ],
+        },
+    )
+
+    assert report["ready_operational_cluster_count"] == 2
+    assert report["cluster_operationalization_candidate_count"] == 2
+    assert report["cluster_to_materialization_gap"] == 2
+    assert report["cluster_to_citizen_gap"] == 2
+    assert report["cluster_operationalization_pressure"] == 1.0
+    assert report["cluster_operationalization_state"] == (
+        "READY_CLUSTERS_BLOCKED_BY_OPERATIONALIZATION"
+    )
+    assert report["cluster_operationalization_action"] == (
+        "CLUSTER_OPERATIONALIZATION_REQUIRED"
+    )
+    assert any(
+        row["priority"] == "cluster_operationalization"
+        for row in report["operational_economy_roadmap"]
+    )
+    assert report["knowledge_operationalization_choke_point"] == (
+        "arena_to_compiled"
+    )
+    assert report["knowledge_operationalization_choke_cause"] == (
+        "operational_grounding"
+    )
+    assert report["knowledge_operationalization_choke_action"] == (
+        "select_grounding_aligned_validation_tasks"
+    )
+    assert report["knowledge_operationalization_state"] == (
+        "SEVERE_KNOWLEDGE_OPERATIONALIZATION_CHOKE"
+    )
+    assert report["knowledge_operationalization_path"][1]["lost_count"] == 7

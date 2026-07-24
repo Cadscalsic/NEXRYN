@@ -53,6 +53,25 @@ def test_graduation_infrastructure_diagnoses_final_validation_gap():
         "exact_or_governed_validation_success"
     )
     assert diagnostic["can_graduate_in_single_run"] is True
+    assert report["capability_promotion_phase_state"] == (
+        "CAPABILITY_PROMOTION_PHASE_DETECTED"
+    )
+    assert report["capability_promotion_candidate_count"] == 1
+    assert report["capability_promotion_interpretation"] == (
+        "promotion_interprets_evidence_before_trust_or_graduation"
+    )
+    assert report["evidence_acceptance_state"] == (
+        "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK"
+    )
+    assert report["evidence_acceptance_bottleneck"] == (
+        "governed_validation_evidence_acceptance"
+    )
+    assert report["evidence_acceptance_failure_count"] == 1
+    assert report["evidence_acceptance_failure_share"] == 1.0
+    assert report["capability_promotion_rows"][0]["promotion_interpretation"] == (
+        "high_quality_evidence_requires_acceptance_before_trust"
+    )
+    assert report["capability_promotion_rows"][0]["trusted_for_decision"] is False
     assert report["graduation_sprint_recommendations"][0][
         "recommended_validation_type"
     ] == "exact_or_governed_validation"

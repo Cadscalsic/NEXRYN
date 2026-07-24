@@ -180,6 +180,40 @@ def test_executable_intelligence_report_is_compact_and_rendered():
 
     assert "EXECUTABLE INTELLIGENCE REPORT" in rendered
     assert "Object Grounding Operational: TRUE" in rendered
+    assert "Program Validation Infrastructure Available: TRUE" in rendered
+    assert "Program Validation Invoked: TRUE" in rendered
+    assert "Program Validation Success Count: 1" in rendered
+    assert "Program Validation Semantics State: VALIDATION_SEMANTICS_CLEAR" in rendered
+    assert "Program Validation Contract State: VALIDATION_CONTRACT_CLEAR" in rendered
     assert "Generated Repairs: 1" in rendered
+    assert "Execution Success Basis: Not Available / 1" in rendered
+    assert "Execution Attempt Count: 1" in rendered
     assert "repair_proposals" not in rendered
     assert renderer.validate(rendered) == []
+
+
+def test_executable_intelligence_report_identifies_validation_semantics_bottleneck():
+    renderer = DeterministicFinalReportRenderer()
+    rendered = renderer.render({
+        "EXECUTABLE_INTELLIGENCE_REPORT": {
+            "program_validation_operational": True,
+            "compiled_programs": 1,
+            "validated_programs": 0,
+        }
+    })
+
+    assert "Program Validation Infrastructure Available: TRUE" in rendered
+    assert "Program Validation Invoked: TRUE" in rendered
+    assert "Program Validation Success Count: 0" in rendered
+    assert (
+        "Program Validation Semantics State: VALIDATION_SEMANTICS_BOTTLENECK"
+        in rendered
+    )
+    assert (
+        "Program Validation Contract State: "
+        "EVIDENCE_ACCEPTANCE_CONTRACT_UNSATISFIED"
+    ) in rendered
+    assert (
+        "Program Validation Semantics Question: "
+        "what_constitutes_acceptable_evidence"
+    ) in rendered

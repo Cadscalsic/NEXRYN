@@ -18,7 +18,8 @@ from runtime.reporting.pre_final_report_diagnostics import (
 )
 
 
-REPORT_BEGIN_MARKER = "<<< NEXRYN_REPORT_BEGIN >>>"
+REPORT_SCHEMA_VERSION = "1.0"
+REPORT_BEGIN_MARKER = "<<< NEXRYN_REPORT_START >>>"
 REPORT_END_MARKER = "<<< NEXRYN_REPORT_END >>>"
 
 SECTION_ORDER = [
@@ -252,10 +253,16 @@ class DeterministicFinalReportRenderer:
 
     def validate(self, rendered_report: str) -> list[str]:
         errors: list[str] = []
-        if not rendered_report.startswith(REPORT_BEGIN_MARKER):
+        if REPORT_BEGIN_MARKER not in rendered_report.splitlines()[:3]:
             errors.append("missing_report_begin_marker")
-        if not rendered_report.rstrip().endswith(REPORT_END_MARKER):
+        if REPORT_END_MARKER not in rendered_report.splitlines()[-3:]:
             errors.append("missing_report_end_marker")
+        if "Report Schema Version: " not in rendered_report:
+            errors.append("missing_report_schema_version")
+        if "Console Emission Started: TRUE" not in rendered_report:
+            errors.append("missing_console_emission_started")
+        if "Console Emission Completed: TRUE" not in rendered_report:
+            errors.append("missing_console_emission_completed")
         if rendered_report.count("NEXRYN :: FINAL STATUS") != 1:
             errors.append("final_status_occurs_not_once")
         if "\nFINAL STATUS\n" in rendered_report:
@@ -275,7 +282,9 @@ class DeterministicFinalReportRenderer:
         if section_positions != sorted(section_positions):
             errors.append("section_order_invalid")
 
-        first_content = rendered_report[len(REPORT_BEGIN_MARKER):].lstrip()
+        first_content = rendered_report[
+            rendered_report.find(REPORT_BEGIN_MARKER) + len(REPORT_BEGIN_MARKER):
+        ].lstrip()
         if first_content.startswith((",", "}", "]", ":", "'")):
             errors.append("partial_beginning_detected")
         if self._ends_inside_structure(rendered_report):
@@ -514,6 +523,7 @@ class DeterministicFinalReportRenderer:
 
     def _render_full_report(self, canonical: dict[str, Any]) -> str:
         sections = [
+            self._render_lifecycle_start("VALID"),
             self._render_header(canonical),
             self._render_execution_summary(canonical),
             self._render_cognitive_outputs(canonical),
@@ -548,9 +558,10 @@ class DeterministicFinalReportRenderer:
             self._render_warnings(canonical),
             self._render_runtime_metadata(canonical),
             self._render_technical_appendix(canonical),
-            self._render_final_status(canonical),
+            self._render_final_status(canonical, report_integrity="VALID"),
+            self._render_lifecycle_end(),
         ]
-        text = "\n".join([REPORT_BEGIN_MARKER, *sections, REPORT_END_MARKER])
+        text = "\n".join(sections)
         return self._normalize_text(text)
 
     def _render_budget_summary(
@@ -564,7 +575,7 @@ class DeterministicFinalReportRenderer:
             "through runtime_diagnostic_report.json when enabled."
         )
         text = "\n".join([
-            REPORT_BEGIN_MARKER,
+            self._render_lifecycle_start("TRUNCATED"),
             self._render_header(canonical),
             self._render_execution_summary(canonical),
             self._render_cognitive_outputs(canonical),
@@ -603,10 +614,32 @@ class DeterministicFinalReportRenderer:
                 f"Full Report Characters: {len(full_report)}",
                 canonical["technical_appendix_note"],
             ]),
-            self._render_final_status(canonical),
-            REPORT_END_MARKER,
+            self._render_final_status(canonical, report_integrity="TRUNCATED"),
+            self._render_lifecycle_end(),
         ])
         return self._normalize_text(text)
+
+    def _render_lifecycle_start(self, report_integrity: str) -> str:
+        return "\n".join([
+            "=" * 50,
+            REPORT_BEGIN_MARKER,
+            "=" * 50,
+            "",
+            f"Report Schema Version: {REPORT_SCHEMA_VERSION}",
+            f"Report Integrity: {report_integrity}",
+            "Console Emission Started: TRUE",
+            "",
+            "=" * 50,
+            "NEXRYN MAIN RUNTIME",
+            "=" * 50,
+        ])
+
+    def _render_lifecycle_end(self) -> str:
+        return "\n".join([
+            "=" * 50,
+            REPORT_END_MARKER,
+            "=" * 50,
+        ])
 
     def _render_header(self, canonical: dict[str, Any]) -> str:
         metadata = canonical["runtime_metadata"]
@@ -626,6 +659,13 @@ class DeterministicFinalReportRenderer:
         state = canonical["report_state"]
         performance = canonical["performance"]
         lifecycle = canonical["lifecycle"]
+        coverage_summary = self._binding_value(
+            canonical,
+            "cognitive_capability_coverage",
+        )
+        coverage_summary = (
+            coverage_summary if isinstance(coverage_summary, dict) else {}
+        )
         return self._section("EXECUTION SUMMARY", [
             f"Total Executions: {self._field(canonical, 'total_executions')}",
             f"Completed Executions: {self._field(canonical, 'completed_executions')}",
@@ -636,6 +676,20 @@ class DeterministicFinalReportRenderer:
             f"Parent Execution Duration: {self._field(canonical, 'parent_execution_duration')}",
             f"Total Wall Time: {self._field(canonical, 'total_wall_time')}",
             f"Overall Status: {self._field(canonical, 'runtime_status')}",
+            "Knowledge Operationalization Root Cause: "
+            f"{self._value(coverage_summary.get('knowledge_operationalization_root_cause'))}",
+            "Governed Validation Bottleneck State: "
+            f"{self._value(coverage_summary.get('governed_validation_bottleneck_state'))}",
+            "Governed Validation Failure Share: "
+            f"{self._percent(coverage_summary.get('governed_validation_failure_share'))}",
+            "Operational Capability Coverage Semantics: "
+            f"{self._value(coverage_summary.get('operational_capability_coverage_semantics'))}",
+            "Sandbox Operational Citizen Coverage: "
+            f"{self._percent(coverage_summary.get('sandbox_operational_citizen_coverage'))}",
+            "Capability Evidence Contamination State: "
+            f"{self._value(coverage_summary.get('capability_evidence_contamination_state'))}",
+            "Capability Evidence Contamination Count: "
+            f"{self._value(coverage_summary.get('capability_evidence_contamination_count'))}",
         ])
 
     def _render_cognitive_outputs(self, canonical: dict[str, Any]) -> str:
@@ -1640,6 +1694,14 @@ class DeterministicFinalReportRenderer:
             if isinstance(graduation_transition_rows, list)
             else []
         )
+        capability_promotion_rows = (
+            summary.get("capability_promotion_rows") or []
+        )
+        capability_promotion_rows = (
+            capability_promotion_rows
+            if isinstance(capability_promotion_rows, list)
+            else []
+        )
         graduation_sprint_recommendations = (
             summary.get("graduation_sprint_recommendations") or []
         )
@@ -1740,6 +1802,14 @@ class DeterministicFinalReportRenderer:
             if isinstance(operational_lifecycle_conversion_rates, dict)
             else {}
         )
+        knowledge_operationalization_path = (
+            summary.get("knowledge_operationalization_path") or []
+        )
+        knowledge_operationalization_path = (
+            knowledge_operationalization_path
+            if isinstance(knowledge_operationalization_path, list)
+            else []
+        )
         operational_economy_roadmap = (
             summary.get("operational_economy_roadmap") or []
         )
@@ -1760,6 +1830,22 @@ class DeterministicFinalReportRenderer:
         top_cognitive_citizens = (
             top_cognitive_citizens
             if isinstance(top_cognitive_citizens, list)
+            else []
+        )
+        capability_governance_rows = (
+            summary.get("capability_governance_rows") or []
+        )
+        capability_governance_rows = (
+            capability_governance_rows
+            if isinstance(capability_governance_rows, list)
+            else []
+        )
+        evidence_contamination_rows = (
+            summary.get("capability_evidence_contamination_rows") or []
+        )
+        evidence_contamination_rows = (
+            evidence_contamination_rows
+            if isinstance(evidence_contamination_rows, list)
             else []
         )
         top_stability_regressions = summary.get("top_stability_regressions") or []
@@ -1803,6 +1889,14 @@ class DeterministicFinalReportRenderer:
         unused_packages = summary.get("unused_execution_packages") or []
         unused_packages = (
             unused_packages if isinstance(unused_packages, list) else [unused_packages]
+        )
+        package_utilization_gap_rows = (
+            summary.get("package_utilization_gap_rows") or []
+        )
+        package_utilization_gap_rows = (
+            package_utilization_gap_rows
+            if isinstance(package_utilization_gap_rows, list)
+            else []
         )
         partial_packages = summary.get("partial_execution_packages") or []
         partial_packages = (
@@ -1863,10 +1957,28 @@ class DeterministicFinalReportRenderer:
             f"{self._percent(summary.get('execution_package_utilization'))}",
             "Compiler Infrastructure Readiness: "
             f"{self._value(summary.get('compiler_infrastructure_readiness'))}",
+            "Execution Package Inventory State: "
+            f"{self._value(summary.get('execution_package_inventory_state'))}",
+            "Primitive Operation Inventory State: "
+            f"{self._value(summary.get('primitive_operation_inventory_state'))}",
+            "Execution Package Inventory Count: "
+            f"{self._value(summary.get('execution_package_inventory_count'))}",
+            "Primitive Operation Inventory Count: "
+            f"{self._value(summary.get('primitive_operation_inventory_count'))}",
+            "Executable Package Count: "
+            f"{self._value(summary.get('executable_package_count'))}",
+            "Executable Primitive Count: "
+            f"{self._value(summary.get('executable_primitive_count'))}",
             "Validated Executable Coverage: "
             f"{self._percent(summary.get('validated_executable_coverage'))}",
             "Operational Capability Coverage: "
             f"{self._percent(summary.get('operational_capability_coverage'))}",
+            "Operational Capability Coverage Semantics: "
+            f"{self._value(summary.get('operational_capability_coverage_semantics'))}",
+            "Sandbox Operational Citizen Coverage: "
+            f"{self._percent(summary.get('sandbox_operational_citizen_coverage'))}",
+            "Sandbox Operational Citizen Coverage Semantics: "
+            f"{self._value(summary.get('sandbox_operational_citizen_coverage_semantics'))}",
             "Operational Capability Materialization Rate: "
             f"{self._percent(summary.get('operational_capability_materialization_rate'))}",
             "Operational Yield From Concepts: "
@@ -2059,6 +2171,20 @@ class DeterministicFinalReportRenderer:
             f"{self._percent(summary.get('operational_cluster_readiness'))}",
             "Operational Cluster Count: "
             f"{self._value(summary.get('operational_cluster_count'))}",
+            "Ready Operational Cluster Count: "
+            f"{self._value(summary.get('ready_operational_cluster_count'))}",
+            "Cluster Operationalization Candidate Count: "
+            f"{self._value(summary.get('cluster_operationalization_candidate_count'))}",
+            "Cluster To Materialization Gap: "
+            f"{self._value(summary.get('cluster_to_materialization_gap'))}",
+            "Cluster To Citizen Gap: "
+            f"{self._value(summary.get('cluster_to_citizen_gap'))}",
+            "Cluster Operationalization Pressure: "
+            f"{self._percent(summary.get('cluster_operationalization_pressure'))}",
+            "Cluster Operationalization State: "
+            f"{self._value(summary.get('cluster_operationalization_state'))}",
+            "Cluster Operationalization Action: "
+            f"{self._value(summary.get('cluster_operationalization_action'))}",
             "Missing Operational Citizen Domains: "
             f"{self._value(summary.get('missing_operational_citizen_domains'))}",
             "Surviving Capabilities: "
@@ -2121,6 +2247,20 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('trusted_capability_policy'))}",
             "Decision Authority Policy: "
             f"{self._value(summary.get('decision_authority_policy'))}",
+            "Capability Governance Contract State: "
+            f"{self._value(summary.get('capability_governance_contract_state'))}",
+            "Capability Rights Policy: "
+            f"{self._value(summary.get('capability_rights_policy'))}",
+            "Capability Obligations Policy: "
+            f"{self._value(summary.get('capability_obligations_policy'))}",
+            "Capability Reputation Average: "
+            f"{self._percent(summary.get('capability_reputation_average'))}",
+            "Capability Trust Average: "
+            f"{self._percent(summary.get('capability_trust_average'))}",
+            "Capability Evidence Contamination State: "
+            f"{self._value(summary.get('capability_evidence_contamination_state'))}",
+            "Capability Evidence Contamination Count: "
+            f"{self._value(summary.get('capability_evidence_contamination_count'))}",
             "Capability Stability Regression Count: "
             f"{self._value(summary.get('capability_stability_regression_count'))}",
             "Capability Population Evolution Speed: "
@@ -2247,6 +2387,22 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('compiler_failure_count'))}",
             "Compiler Failure Pressure: "
             f"{self._percent(summary.get('compiler_failure_pressure'))}",
+            "Operational Grounding State: "
+            f"{self._value(summary.get('operational_grounding_state'))}",
+            "Operational Grounding Failure Count: "
+            f"{self._value(summary.get('operational_grounding_failure_count'))}",
+            "Operational Grounding Failure Rate: "
+            f"{self._percent(summary.get('operational_grounding_failure_rate'))}",
+            "Grounding Required For Operations: "
+            f"{self._value(summary.get('grounding_required_for_operations'))}",
+            "Grounding Required For Domains: "
+            f"{self._value(summary.get('grounding_required_for_domains'))}",
+            "Compiler Semantic Failure Count: "
+            f"{self._value(summary.get('compiler_semantic_failure_count'))}",
+            "Compiler Failure Interpretation: "
+            f"{self._value(summary.get('compiler_failure_interpretation'))}",
+            "Grounding Adjusted Compiler Failure Pressure: "
+            f"{self._percent(summary.get('grounding_adjusted_compiler_failure_pressure'))}",
             "Compiler Failure Detail Capture: "
             f"{self._value(summary.get('compiler_failure_detail_capture_state'))}",
             "Validation Success Rate: "
@@ -2289,6 +2445,20 @@ class DeterministicFinalReportRenderer:
                     f"detail={self._value(row.get('detail'))} "
                     f"count={self._value(row.get('failure_count'))} "
                     f"source={self._value(row.get('diagnostic_row_source'))}"
+                )
+        grounding_requirement_rows = summary.get("grounding_requirement_rows") or []
+        if grounding_requirement_rows:
+            lines.append("Operational Grounding Requirements:")
+            for row in grounding_requirement_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"program={self._value(row.get('program'))} "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"missing={self._value(row.get('missing_grounding'))} "
+                    f"requires={self._value(row.get('required_task_property'))}"
                 )
         if package_inventory:
             lines.append("Execution Package Inventory:")
@@ -2395,6 +2565,25 @@ class DeterministicFinalReportRenderer:
             for row in top_operational_citizens[:5]:
                 if not isinstance(row, dict):
                     continue
+                trusted = bool(row.get("trusted_for_decision"))
+                citizenship_tier = row.get("citizenship_tier") or (
+                    "TRUSTED_OPERATIONAL_CAPABILITY"
+                    if trusted
+                    else "SANDBOX_OPERATIONAL_CITIZEN"
+                )
+                authority_scope = row.get("authority_scope") or (
+                    "DECISION_AUTHORIZED" if trusted else "SANDBOX_REUSE_ONLY"
+                )
+                trust_state = row.get("trust_state") or (
+                    "TRUSTED_FOR_DECISION"
+                    if trusted
+                    else "NOT_TRUSTED_FOR_DECISION"
+                )
+                graduation_semantics = row.get("graduation_semantics") or (
+                    "citizenship_includes_trusted_decision_authority"
+                    if trusted
+                    else "citizenship_is_sandbox_reuse_not_decision_authority"
+                )
                 lines.append(
                     "  "
                     f"{self._value(row.get('capability_id'))}: "
@@ -2405,7 +2594,47 @@ class DeterministicFinalReportRenderer:
                     f"best_accuracy={self._percent(row.get('best_accuracy'))} "
                     f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
                     f"basis={self._value(row.get('citizenship_basis'))} "
-                    f"trusted={self._value(row.get('trusted_for_decision'))}"
+                    f"tier={self._value(citizenship_tier)} "
+                    f"authority={self._value(authority_scope)} "
+                    f"trust_state={self._value(trust_state)}"
+                )
+                lines.append(
+                    "    Graduation Semantics: "
+                    f"{self._value(graduation_semantics)}"
+                )
+        if capability_governance_rows:
+            lines.append("Capability Governance Contracts:")
+            for row in capability_governance_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"tier={self._value(row.get('citizenship_tier'))} "
+                    f"authority={self._value(row.get('authority_scope'))} "
+                    f"reputation={self._percent(row.get('reputation_score'))} "
+                    f"trust={self._percent(row.get('trust_score'))} "
+                    f"evidence_state={self._value(row.get('evidence_contamination_state'))} "
+                    f"adjusted_accuracy={self._percent(row.get('evidence_adjusted_accuracy'))} "
+                    f"relevant_attempts={self._value(row.get('relevant_task_attempt_count'))} "
+                    f"arena_simulations={self._value(row.get('arena_simulation_count'))} "
+                    f"rights={self._value(row.get('rights'))} "
+                    f"obligations={self._value(row.get('obligations'))}"
+                )
+        if evidence_contamination_rows:
+            lines.append("Capability Evidence Contamination Risks:")
+            for row in evidence_contamination_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"raw_avg={self._percent((row.get('evidence_ledger') or {}).get('raw_average_accuracy'))} "
+                    f"adjusted_avg={self._percent(row.get('evidence_adjusted_accuracy'))} "
+                    f"best_accuracy={self._percent((row.get('reputation_basis') or {}).get('best_accuracy'))} "
+                    f"tasks={self._value((row.get('reputation_basis') or {}).get('distinct_tasks'))} "
+                    f"arena={self._value(row.get('arena_simulation_count'))} "
+                    f"basis={self._value(row.get('recommended_accuracy_basis'))}"
                 )
         if top_crystallization_candidates:
             lines.append("Top Crystallization Candidates:")
@@ -2452,6 +2681,38 @@ class DeterministicFinalReportRenderer:
                 "Graduation Pipeline Stages: "
                 f"{self._value(graduation_pipeline_stages)}"
             )
+        lines.extend([
+            "Capability Promotion Phase State: "
+            f"{self._value(summary.get('capability_promotion_phase_state'))}",
+            "Capability Promotion Candidate Count: "
+            f"{self._value(summary.get('capability_promotion_candidate_count'))}",
+            "Capability Promotion Interpretation: "
+            f"{self._value(summary.get('capability_promotion_interpretation'))}",
+            "Evidence Acceptance State: "
+            f"{self._value(summary.get('evidence_acceptance_state'))}",
+            "Evidence Acceptance Bottleneck: "
+            f"{self._value(summary.get('evidence_acceptance_bottleneck'))}",
+            "Evidence Acceptance Failure Count: "
+            f"{self._value(summary.get('evidence_acceptance_failure_count'))}",
+            "Evidence Acceptance Failure Share: "
+            f"{self._percent(summary.get('evidence_acceptance_failure_share'))}",
+        ])
+        if capability_promotion_rows:
+            lines.append("Capability Promotion Candidates:")
+            for row in capability_promotion_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"status={self._value(row.get('graduation_status'))} "
+                    f"validator={self._value(row.get('validator_gap'))} "
+                    f"confidence={self._percent(row.get('capability_graduation_confidence'))} "
+                    f"promotion={self._value(row.get('promotion_interpretation'))} "
+                    f"trusted={self._value(row.get('trusted_for_decision'))}"
+                )
         if graduation_transition_rows:
             lines.append("Graduation Pipeline Transitions:")
             for row in graduation_transition_rows[:5]:
@@ -2472,6 +2733,20 @@ class DeterministicFinalReportRenderer:
                 "Validator Failure Distribution: "
                 f"{self._value(validator_failure_distribution)}"
             )
+        lines.extend([
+            "Governed Validation Bottleneck: "
+            f"{self._value(summary.get('governed_validation_bottleneck'))}",
+            "Governed Validation Bottleneck State: "
+            f"{self._value(summary.get('governed_validation_bottleneck_state'))}",
+            "Governed Validation Failure Count: "
+            f"{self._value(summary.get('governed_validation_failure_count'))}",
+            "Governed Validation Failure Share: "
+            f"{self._percent(summary.get('governed_validation_failure_share'))}",
+            "Governed Validation Action: "
+            f"{self._value(summary.get('governed_validation_action'))}",
+            "Governed Validation Required Evidence: "
+            f"{self._value(summary.get('governed_validation_required_evidence'))}",
+        ])
         if graduation_sprint_recommendations:
             lines.append("Graduation Sprint Recommendations:")
             for row in graduation_sprint_recommendations[:5]:
@@ -2645,6 +2920,20 @@ class DeterministicFinalReportRenderer:
                     f"readiness={self._percent(row.get('composition_readiness'))}"
                 )
         if capability_investment_priorities:
+            lines.extend([
+                "Capability Investment Intelligence Phase: "
+                f"{self._value(summary.get('capability_investment_intelligence_phase'))}",
+                "Capability Investment Governance Principle: "
+                f"{self._value(summary.get('capability_investment_governance_principle'))}",
+                "Capability Investment Truth Boundary: "
+                f"{self._value(summary.get('capability_investment_truth_boundary'))}",
+                "Capability Investment Authority Scope: "
+                f"{self._value(summary.get('capability_investment_authority_scope'))}",
+                "Capability Investment Forbidden Authority: "
+                f"{self._value(summary.get('capability_investment_forbidden_authority'))}",
+                "Capability Promotion Roadmap: "
+                f"{self._value(summary.get('capability_promotion_roadmap'))}",
+            ])
             lines.append("Capability Economy Priorities:")
             for row in capability_investment_priorities[:5]:
                 if not isinstance(row, dict):
@@ -2678,6 +2967,39 @@ class DeterministicFinalReportRenderer:
                 "Operational Lifecycle Conversion Rates: "
                 f"{self._value(operational_lifecycle_conversion_rates)}"
             )
+        lines.extend([
+            "Knowledge Operationalization Choke Point: "
+            f"{self._value(summary.get('knowledge_operationalization_choke_point'))}",
+            "Knowledge Operationalization Symptom: "
+            f"{self._value(summary.get('knowledge_operationalization_symptom'))}",
+            "Knowledge Operationalization Root Cause: "
+            f"{self._value(summary.get('knowledge_operationalization_root_cause'))}",
+            "Knowledge Operationalization Choke Cause: "
+            f"{self._value(summary.get('knowledge_operationalization_choke_cause'))}",
+            "Knowledge Operationalization Choke Action: "
+            f"{self._value(summary.get('knowledge_operationalization_choke_action'))}",
+            "Knowledge Operationalization Loss Count: "
+            f"{self._value(summary.get('knowledge_operationalization_loss_count'))}",
+            "Knowledge Operationalization Loss Pressure: "
+            f"{self._percent(summary.get('knowledge_operationalization_loss_pressure'))}",
+            "Knowledge Operationalization State: "
+            f"{self._value(summary.get('knowledge_operationalization_state'))}",
+        ])
+        if knowledge_operationalization_path:
+            lines.append("Knowledge Operationalization Path:")
+            for row in knowledge_operationalization_path[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('stage'))}: "
+                    f"input={self._value(row.get('input_count'))} "
+                    f"output={self._value(row.get('output_count'))} "
+                    f"lost={self._value(row.get('lost_count'))} "
+                    f"conversion={self._percent(row.get('conversion_rate'))} "
+                    f"cause={self._value(row.get('likely_cause'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
         if operational_capability_clusters:
             lines.append("Operational Capability Clusters:")
             for row in operational_capability_clusters[:7]:
@@ -2690,8 +3012,19 @@ class DeterministicFinalReportRenderer:
                     f"present={self._value(row.get('present_capabilities'))} "
                     f"missing={self._value(row.get('missing_capabilities'))} "
                     f"readiness={self._percent(row.get('cluster_readiness'))} "
-                    f"state={self._value(row.get('cluster_state'))}"
+                    f"state={self._value(row.get('cluster_state'))} "
+                    f"required_grounding_count={len(row.get('required_grounding') or [])}"
                 )
+                for grounding in (row.get("required_grounding") or [])[:3]:
+                    if not isinstance(grounding, dict):
+                        continue
+                    lines.append(
+                        "    "
+                        f"{self._value(grounding.get('operation'))}: "
+                        "required_task_property="
+                        f"{self._value(grounding.get('required_task_property'))} "
+                        f"required_evidence={self._value(grounding.get('required_evidence'))}"
+                    )
         if operational_economy_roadmap:
             lines.append("Operational Economy Roadmap:")
             for row in operational_economy_roadmap[:7]:
@@ -2721,7 +3054,10 @@ class DeterministicFinalReportRenderer:
                     f"validated={self._value(row.get('validated_program_count'))} "
                     f"readiness={self._percent(row.get('domain_operational_readiness'))} "
                     f"status={self._value(row.get('domain_status'))} "
-                    f"gap={self._value(row.get('operationalization_gap'))}"
+                    f"gap={self._value(row.get('operationalization_gap'))} "
+                    f"role={self._value(row.get('domain_operational_role'))} "
+                    f"arena_relationship={self._value(row.get('domain_arena_relationship'))} "
+                    f"action={self._value(row.get('domain_operationalization_action'))}"
                 )
         domain_gaps = domain_architecture.get("domain_operationalization_gaps") or []
         domain_gaps = domain_gaps if isinstance(domain_gaps, list) else []
@@ -2737,7 +3073,9 @@ class DeterministicFinalReportRenderer:
                     f"programs={self._value(row.get('program_blueprint_count'))} "
                     f"packages={self._value(row.get('execution_package_count'))} "
                     f"candidates={self._value(row.get('candidate_count'))} "
-                    f"arena={self._value(row.get('arena_candidate_count'))}"
+                    f"arena={self._value(row.get('arena_candidate_count'))} "
+                    f"role={self._value(row.get('domain_operational_role'))} "
+                    f"action={self._value(row.get('domain_operationalization_action'))}"
                 )
         if bottlenecks:
             lines.append("Lowest Coverage Bottlenecks:")
@@ -2765,6 +3103,25 @@ class DeterministicFinalReportRenderer:
                 "Unused Execution Packages: "
                 + ", ".join(str(item) for item in unused_packages[:8])
             )
+        lines.extend([
+            "Package Utilization Gap Count: "
+            f"{self._value(summary.get('package_utilization_gap_count'))}",
+            "Package Utilization Gap State: "
+            f"{self._value(summary.get('package_utilization_gap_state'))}",
+        ])
+        if package_utilization_gap_rows:
+            lines.append("Package Utilization Gaps:")
+            for row in package_utilization_gap_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('package'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"operations={self._value(row.get('supported_operations'))} "
+                    f"type={self._value(row.get('utilization_gap_type'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
         if missing_requirements:
             lines.append(
                 "Missing Compiler Requirements: "
@@ -2801,6 +3158,14 @@ class DeterministicFinalReportRenderer:
         source_status = source_status if isinstance(source_status, dict) else {}
         source_outcomes = summary.get("source_outcomes") or []
         source_outcomes = source_outcomes if isinstance(source_outcomes, list) else []
+        source_materialization_rows = (
+            summary.get("candidate_source_materialization_rows") or []
+        )
+        source_materialization_rows = (
+            source_materialization_rows
+            if isinstance(source_materialization_rows, list)
+            else []
+        )
         source_diversity = summary.get("source_diversity")
         operational_diversity = summary.get("operational_diversity")
         source_diversity_bottleneck = (
@@ -2829,6 +3194,10 @@ class DeterministicFinalReportRenderer:
             f"Operational Diversity: {self._value(summary.get('operational_diversity'))}",
             f"Source Diversity: {self._value(summary.get('source_diversity'))}",
             f"Source Diversity Bottleneck: {source_diversity_bottleneck}",
+            "Candidate Source Materialization Gap Count: "
+            f"{self._value(summary.get('candidate_source_materialization_gap_count'))}",
+            "Candidate Source Materialization State: "
+            f"{self._value(summary.get('candidate_source_materialization_state'))}",
             "Arena Source Diversity State: "
             f"{self._value(summary.get('arena_source_diversity_state'))}",
             "Arena Source Diversity Action: "
@@ -2877,6 +3246,21 @@ class DeterministicFinalReportRenderer:
                     )
                 lines.append(f"     Origin Sources: {origin_sources}")
                 lines.append(f"     Normalized Sources: {normalized_sources}")
+        if source_materialization_rows:
+            lines.append("Candidate Source Materialization:")
+            for row in source_materialization_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('source'))}: "
+                    f"signal={self._value(row.get('knowledge_signal'))} "
+                    f"candidate={self._value(row.get('candidate_materialized'))} "
+                    f"arena={self._value(row.get('entered_arena'))} "
+                    f"state={self._value(row.get('source_materialization_state'))} "
+                    f"stage={self._value(row.get('failure_stage'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
         if source_outcomes:
             lines.append("Cognitive Source Outcomes:")
             for outcome in source_outcomes[:6]:
@@ -3122,6 +3506,59 @@ class DeterministicFinalReportRenderer:
                     "executable_intelligence_engine_report",
                 )
             report = self._first_dict(engine, "EXECUTABLE_INTELLIGENCE_REPORT") or engine
+        def _count(value: Any) -> int | None:
+            if isinstance(value, list | tuple | set | dict):
+                return len(value)
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                return int(value)
+            return None
+        compiled_programs = _count(report.get("compiled_programs"))
+        validated_programs = _count(report.get("validated_programs")) or 0
+        execution_attempt_count = _count(
+            report.get("execution_attempt_count")
+            or report.get("attempted_executions")
+            or report.get("executed_programs")
+            or compiled_programs
+        )
+        execution_success_count = _count(
+            report.get("execution_success_count")
+            or report.get("successful_executions")
+        )
+        validation_infrastructure_available = report.get(
+            "program_validation_infrastructure_available",
+            report.get("program_validation_operational"),
+        )
+        validation_invoked = report.get("program_validation_invoked")
+        if validation_invoked is None:
+            validation_invoked = bool(
+                (compiled_programs or 0) > 0 or validated_programs > 0
+            )
+        validation_semantics_state = report.get("program_validation_semantics_state")
+        if validation_semantics_state is None:
+            if (
+                validation_infrastructure_available is True
+                and validation_invoked is True
+                and validated_programs == 0
+            ):
+                validation_semantics_state = "VALIDATION_SEMANTICS_BOTTLENECK"
+            elif validation_infrastructure_available is False:
+                validation_semantics_state = "VALIDATION_INFRASTRUCTURE_UNAVAILABLE"
+            elif validation_invoked is False:
+                validation_semantics_state = "VALIDATION_NOT_INVOKED"
+            else:
+                validation_semantics_state = "VALIDATION_SEMANTICS_CLEAR"
+        validation_contract_state = report.get("program_validation_contract_state")
+        if validation_contract_state is None:
+            if validation_semantics_state == "VALIDATION_SEMANTICS_BOTTLENECK":
+                validation_contract_state = (
+                    "EVIDENCE_ACCEPTANCE_CONTRACT_UNSATISFIED"
+                )
+            else:
+                validation_contract_state = "VALIDATION_CONTRACT_CLEAR"
+        validation_semantics_question = report.get(
+            "program_validation_semantics_question",
+            "what_constitutes_acceptable_evidence",
+        )
         lines = [
             f"Semantic Intent Operational: {self._value(report.get('semantic_intent_operational'))}",
             f"Object Grounding Operational: {self._value(report.get('object_grounding_operational'))}",
@@ -3130,6 +3567,16 @@ class DeterministicFinalReportRenderer:
             f"Program Synthesis Operational: {self._value(report.get('program_synthesis_operational'))}",
             f"Program Compilation Operational: {self._value(report.get('program_compilation_operational'))}",
             f"Program Validation Operational: {self._value(report.get('program_validation_operational'))}",
+            "Program Validation Infrastructure Available: "
+            f"{self._value(validation_infrastructure_available)}",
+            f"Program Validation Invoked: {self._value(validation_invoked)}",
+            f"Program Validation Success Count: {self._value(validated_programs)}",
+            "Program Validation Semantics State: "
+            f"{self._value(validation_semantics_state)}",
+            "Program Validation Contract State: "
+            f"{self._value(validation_contract_state)}",
+            "Program Validation Semantics Question: "
+            f"{self._value(validation_semantics_question)}",
             f"Residual Localization Operational: {self._value(report.get('residual_localization_operational'))}",
             f"Residual Repair Operational: {self._value(report.get('residual_repair_operational'))}",
             f"Execution Adaptation Operational: {self._value(report.get('execution_adaptation_operational'))}",
@@ -3145,6 +3592,9 @@ class DeterministicFinalReportRenderer:
             f"Residual Regions: {self._value(report.get('residual_regions'))}",
             f"Generated Repairs: {self._value(report.get('generated_repairs'))}",
             f"Execution Success Rate: {self._value(report.get('execution_success_rate'))}",
+            "Execution Success Basis: "
+            f"{self._value(execution_success_count)} / {self._value(execution_attempt_count)}",
+            f"Execution Attempt Count: {self._value(execution_attempt_count)}",
             f"Execution Adaptations: {self._value(report.get('execution_adaptations'))}",
             f"Execution Feedback: {self._value(report.get('execution_feedback'))}",
         ]
@@ -3394,7 +3844,12 @@ class DeterministicFinalReportRenderer:
             f"{self._binding_status(canonical)}",
         ])
 
-    def _render_final_status(self, canonical: dict[str, Any]) -> str:
+    def _render_final_status(
+        self,
+        canonical: dict[str, Any],
+        *,
+        report_integrity: str = "VALID",
+    ) -> str:
         state = canonical["report_state"]
         status = self._value(
             self._read_any(state, canonical["performance"], "runtime_status", "status"),
@@ -3406,6 +3861,9 @@ class DeterministicFinalReportRenderer:
             "Report Complete: TRUE",
             f"Warnings: {warning_count}",
             "Errors: 0",
+            "",
+            "Console Emission Completed: TRUE",
+            f"Report Integrity: {report_integrity}",
         ], title="NEXRYN :: FINAL STATUS")
 
     def _derive_warnings(self, canonical: dict[str, Any]) -> list[str]:
@@ -3663,8 +4121,8 @@ class DeterministicFinalReportRenderer:
         return {
             "report_render_success": not validation_errors,
             "report_complete": (
-                rendered_report.startswith(REPORT_BEGIN_MARKER)
-                and rendered_report.rstrip().endswith(REPORT_END_MARKER)
+                REPORT_BEGIN_MARKER in rendered_report.splitlines()[:3]
+                and REPORT_END_MARKER in rendered_report.splitlines()[-3:]
                 and not validation_errors
             ),
             "report_truncated": "Console Appendix: omitted" in rendered_report,
@@ -3675,11 +4133,25 @@ class DeterministicFinalReportRenderer:
             ),
             "report_duplicate_section_count": duplicate_count,
             "report_raw_structure_count": raw_count,
-            "report_begin_marker_present": rendered_report.startswith(
-                REPORT_BEGIN_MARKER,
+            "report_begin_marker_present": (
+                REPORT_BEGIN_MARKER in rendered_report.splitlines()[:3]
             ),
-            "report_end_marker_present": rendered_report.rstrip().endswith(
-                REPORT_END_MARKER,
+            "report_end_marker_present": (
+                REPORT_END_MARKER in rendered_report.splitlines()[-3:]
+            ),
+            "report_schema_version": REPORT_SCHEMA_VERSION,
+            "console_emission_started": (
+                "Console Emission Started: TRUE" in rendered_report
+            ),
+            "console_emission_completed": (
+                "Console Emission Completed: TRUE" in rendered_report
+            ),
+            "report_integrity": (
+                "TRUNCATED"
+                if "Report Integrity: TRUNCATED" in rendered_report
+                else "VALID"
+                if "Report Integrity: VALID" in rendered_report
+                else "INVALID"
             ),
             "report_character_count": len(rendered_report),
             "report_line_count": len(rendered_report.splitlines()),
@@ -3698,6 +4170,10 @@ class DeterministicFinalReportRenderer:
             "report_raw_structure_count": 0,
             "report_begin_marker_present": False,
             "report_end_marker_present": False,
+            "report_schema_version": REPORT_SCHEMA_VERSION,
+            "console_emission_started": False,
+            "console_emission_completed": False,
+            "report_integrity": "INVALID",
             "report_character_count": 0,
             "report_line_count": 0,
             "report_artifact_written": False,

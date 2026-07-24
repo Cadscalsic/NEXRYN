@@ -7,6 +7,7 @@ from pathlib import Path
 from runtime.training.curriculum_manager import CurriculumManager
 from runtime.training.elite_curriculum_validator import (
     ELITE_CURRICULUM_NAME,
+    ELITE_VALIDATION_ACADEMY_PATH,
     validate_elite_curriculum,
 )
 
@@ -39,6 +40,7 @@ class TrainingAssistant:
         task_cooldown_runs=TASK_COOLDOWN_RUNS,
         survival_store_path="runtime/artifacts/runtime_data/operational_capability_survival.json",
         operational_economy_path="runtime/artifacts/runtime_data/operational_economy_report.json",
+        validation_academy_path=ELITE_VALIDATION_ACADEMY_PATH,
     ):
         self.state_path = Path(state_path)
         self.batch_size = max(int(batch_size), 1)
@@ -49,6 +51,7 @@ class TrainingAssistant:
         self.task_cooldown_runs = max(int(task_cooldown_runs), 0)
         self.survival_store_path = Path(survival_store_path)
         self.operational_economy_path = Path(operational_economy_path)
+        self.validation_academy_path = Path(validation_academy_path)
         self.state = self._load()
         self.selection_memory = self._load_selection_memory()
 
@@ -195,6 +198,17 @@ class TrainingAssistant:
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return {}
 
+    def _load_validation_academy_tasks(self):
+        if not self.validation_academy_path.exists():
+            return []
+        try:
+            with self.validation_academy_path.open("r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return []
+        tasks = payload.get("tasks") or []
+        return [task for task in tasks if isinstance(task, dict)]
+
     def _term(self, value):
         return str(value or "").strip().lower().replace(" ", "_").replace("-", "_")
 
@@ -226,6 +240,23 @@ class TrainingAssistant:
             "adaptive_reuse_opportunities",
             "curriculum_diagnostics_tags",
             "independent_validation_opportunities",
+            "required_evidence",
+            "evidence_targets",
+            "validation_evidence",
+            "task_properties",
+            "transformation_contract",
+            "operation_contract",
+            "primary_operation",
+            "ground_truth_type",
+            "required_task_property",
+            "required_ground_truth",
+            "target_capability",
+            "target_cluster",
+            "target_domain",
+            "validation_objective",
+            "trust_objective",
+            "graduation_objective",
+            "operationalization_objective",
         ):
             visit(metadata.get(key))
         return terms
@@ -244,6 +275,15 @@ class TrainingAssistant:
             row for row in report.get("operational_economy_roadmap", []) or []
             if isinstance(row, dict)
         ]
+        grounding_rows = [
+            row for row in report.get("grounding_requirement_rows", []) or []
+            if isinstance(row, dict)
+        ]
+        for cluster in clusters:
+            grounding_rows.extend([
+                row for row in cluster.get("required_grounding", []) or []
+                if isinstance(row, dict)
+            ])
         capability_targets = []
         for row in investment_rows[:8]:
             operation = row.get("operation")
@@ -263,6 +303,14 @@ class TrainingAssistant:
                 self._term(row.get("target")),
                 self._term(row.get("action")),
             ])
+        grounding_targets = []
+        grounding_properties = []
+        for row in grounding_rows[:12]:
+            grounding_targets.append(self._term(row.get("operation")))
+            grounding_properties.extend([
+                self._term(row.get("required_task_property")),
+                self._term(row.get("required_evidence")),
+            ])
         return {
             "source_available": bool(report),
             "operational_economy_health": report.get("operational_economy_health"),
@@ -272,12 +320,24 @@ class TrainingAssistant:
             "operational_economy_bottleneck": report.get(
                 "operational_economy_bottleneck"
             ),
+            "governed_validation_bottleneck_state": report.get(
+                "governed_validation_bottleneck_state"
+            ),
+            "governed_validation_action": report.get(
+                "governed_validation_action"
+            ),
+            "governed_validation_required_evidence": report.get(
+                "governed_validation_required_evidence"
+            ),
             "investment_targets": sorted(set(filter(None, capability_targets))),
             "cluster_targets": sorted(set(filter(None, cluster_targets))),
             "roadmap_targets": sorted(set(filter(None, roadmap_targets))),
+            "grounding_targets": sorted(set(filter(None, grounding_targets))),
+            "grounding_properties": sorted(set(filter(None, grounding_properties))),
             "investment_rows": investment_rows[:8],
             "cluster_rows": clusters[:8],
             "roadmap_rows": roadmap[:7],
+            "grounding_requirement_rows": grounding_rows[:12],
         }
 
     def _training_economy_priority(self, metadata, economy_context):
@@ -295,6 +355,15 @@ class TrainingAssistant:
                     continue
                 target_parts = set(target.split("_"))
                 if target in terms or target_parts.intersection(terms):
+                    found.append(target)
+            return sorted(set(found))
+
+        def matched_grounding_targets(targets):
+            found = []
+            for target in targets:
+                if not target:
+                    continue
+                if target in terms:
                     found.append(target)
             return sorted(set(found))
 
@@ -336,6 +405,51 @@ class TrainingAssistant:
                 for target in roadmap_matches[:6]
             )
 
+        grounding_matches = matched_grounding_targets(
+            economy_context.get("grounding_targets", [])
+        )
+        grounding_property_matches = matched_grounding_targets(
+            economy_context.get("grounding_properties", [])
+        )
+        if grounding_matches or grounding_property_matches:
+            priority += (
+                40
+                + min(len(grounding_matches), 4) * 6
+                + min(len(grounding_property_matches), 3) * 10
+            )
+            reasons.append("grounding_economy_alignment")
+            matches.extend(
+                {
+                    "match_type": "grounding_requirement",
+                    "target": target,
+                }
+                for target in grounding_matches[:6]
+            )
+            matches.extend(
+                {
+                    "match_type": "grounding_required_task_property",
+                    "target": target,
+                }
+                for target in grounding_property_matches[:6]
+            )
+
+        governed_evidence = self._term(
+            economy_context.get("governed_validation_required_evidence")
+        )
+        governed_action = self._term(economy_context.get("governed_validation_action"))
+        governed_evidence_match = bool(governed_evidence and governed_evidence in terms)
+        governed_action_match = bool(
+            governed_action
+            and any(part in terms for part in governed_action.split("_"))
+        )
+        if governed_evidence_match or governed_action_match:
+            priority += 35
+            reasons.append("governed_validation_evidence_alignment")
+            matches.append({
+                "match_type": "governed_validation_required_evidence",
+                "target": governed_evidence or governed_action,
+            })
+
         bottleneck = self._term(economy_context.get("operational_economy_bottleneck"))
         if bottleneck and any(part in terms for part in bottleneck.split("_")):
             priority += 25
@@ -346,6 +460,122 @@ class TrainingAssistant:
             })
 
         return round(priority, 4), reasons, matches[:12]
+
+    def _validation_academy_priority(
+        self,
+        metadata,
+        *,
+        validation_academy_tasks,
+        survival_targets,
+        operational_economy_context,
+    ):
+        if not validation_academy_tasks:
+            return 0.0, [], []
+        terms = self._metadata_terms(metadata) | self._task_evidence_terms(metadata)
+        survival_targets = [
+            target for target in (survival_targets or [])
+            if isinstance(target, dict)
+        ]
+        target_operations = {
+            self._term(target.get("operation"))
+            for target in survival_targets
+            if target.get("operation")
+        }
+        target_operations.update(
+            self._term(target)
+            for target in (
+                operational_economy_context or {}
+            ).get("grounding_targets", [])
+            if target
+        )
+        required_properties = {
+            self._term(target.get("required_task_property"))
+            for target in survival_targets
+            if target.get("required_task_property")
+        }
+        required_properties.update(
+            self._term(prop)
+            for prop in (
+                operational_economy_context or {}
+            ).get("grounding_properties", [])
+            if prop
+        )
+        governed_evidence = self._term(
+            (operational_economy_context or {}).get(
+                "governed_validation_required_evidence"
+            )
+        )
+        if governed_evidence:
+            required_properties.add(governed_evidence)
+        priority = 0.0
+        matches = []
+        for academy_task in validation_academy_tasks:
+            capability = self._term(academy_task.get("target_capability"))
+            required_property = self._term(
+                academy_task.get("required_task_property")
+            )
+            required_evidence = self._term(
+                academy_task.get("required_validation_evidence")
+            )
+            cluster = self._term(academy_task.get("target_cluster"))
+            domain = self._term(academy_task.get("target_domain"))
+            overlap = sorted(
+                item for item in {
+                    capability,
+                    required_property,
+                    required_evidence,
+                    cluster,
+                    domain,
+                }
+                if item and item in terms
+            )
+            if not overlap:
+                continue
+            contribution = 0.0
+            if capability and capability in target_operations:
+                contribution += 65
+            if required_property and required_property in required_properties:
+                contribution += 80
+            if required_evidence and required_evidence in required_properties:
+                contribution += 40
+            if cluster and cluster in terms:
+                contribution += 25
+            if domain and domain in terms:
+                contribution += 10
+            if required_property and required_property in terms:
+                contribution += 35
+            if contribution <= 0:
+                continue
+            contribution *= float(academy_task.get("promotion_weight") or 1.0)
+            priority += contribution
+            matches.append({
+                "match_type": "elite_validation_opportunity",
+                "academy_task_id": academy_task.get("task_id"),
+                "elite_group": academy_task.get("elite_group"),
+                "target_capability": academy_task.get("target_capability"),
+                "target_cluster": academy_task.get("target_cluster"),
+                "required_task_property": academy_task.get(
+                    "required_task_property"
+                ),
+                "required_validation_evidence": academy_task.get(
+                    "required_validation_evidence"
+                ),
+                "matched_terms": overlap,
+                "priority": round(contribution, 4),
+            })
+        matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
+        reasons = ["elite_validation_task_selection_intelligence"] if matches else []
+        if any(
+            self._term(match.get("required_task_property")) in required_properties
+            for match in matches
+        ):
+            reasons.append("validation_task_property_match")
+        if any(
+            self._term(match.get("target_capability")) in target_operations
+            for match in matches
+        ):
+            reasons.append("capability_directed_validation")
+        return round(priority, 4), reasons, matches[:5]
 
     def _training_economy_alignment_report(
         self,
@@ -366,11 +596,30 @@ class TrainingAssistant:
             for match in row.get("training_economy_matches", []) or []
             if isinstance(match, dict)
         ]
+        academy_match_rows = [
+            match
+            for row in selected_rows
+            for match in row.get("validation_academy_matches", []) or []
+            if isinstance(match, dict)
+        ]
         matched_targets = sorted({
             str(match.get("target"))
             for match in match_rows
             if match.get("target")
         })
+        grounding_match_rows = [
+            match for match in match_rows
+            if str(match.get("match_type", "")).startswith("grounding")
+        ]
+        selected_grounding_aligned_tasks = [
+            row.get("task_file")
+            for row in selected_rows
+            if any(
+                isinstance(match, dict)
+                and str(match.get("match_type", "")).startswith("grounding")
+                for match in row.get("training_economy_matches", []) or []
+            )
+        ]
         selected_with_matches = [
             row.get("task_file")
             for row in selected_rows
@@ -397,11 +646,75 @@ class TrainingAssistant:
             "operational_economy_bottleneck": economy_context.get(
                 "operational_economy_bottleneck"
             ),
+            "governed_validation_bottleneck_state": economy_context.get(
+                "governed_validation_bottleneck_state"
+            ),
+            "governed_validation_action": economy_context.get(
+                "governed_validation_action"
+            ),
+            "governed_validation_required_evidence": economy_context.get(
+                "governed_validation_required_evidence"
+            ),
             "investment_targets": economy_context.get("investment_targets", []),
             "cluster_targets": economy_context.get("cluster_targets", []),
             "roadmap_targets": economy_context.get("roadmap_targets", []),
+            "grounding_targets": economy_context.get("grounding_targets", []),
+            "grounding_properties": economy_context.get("grounding_properties", []),
             "selected_economy_aligned_tasks": selected_with_matches,
+            "selected_grounding_aligned_tasks": selected_grounding_aligned_tasks,
             "matched_economy_targets": matched_targets[:12],
+            "matched_grounding_targets": [
+                match.get("target")
+                for match in grounding_match_rows[:12]
+                if match.get("target")
+            ],
+            "grounding_economy_alignment": (
+                "GROUNDING_ECONOMY_ALIGNED"
+                if selected_grounding_aligned_tasks
+                else "GROUNDING_SIGNAL_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("grounding_requirement_rows")
+                else "NO_GROUNDING_ECONOMY_SIGNAL"
+            ),
+            "grounding_alignment_trace": [
+                {
+                    "selected_task": row.get("task_file"),
+                    "matched_operation_or_property": match.get("target"),
+                    "match_type": match.get("match_type"),
+                    "evidence_collection_attempted": (
+                        str(match.get("match_type", "")).startswith("grounding")
+                    ),
+                }
+                for row in selected_rows
+                for match in row.get("training_economy_matches", []) or []
+                if isinstance(match, dict)
+                and str(match.get("match_type", "")).startswith("grounding")
+            ][:12],
+            "validation_academy_alignment": (
+                "VALIDATION_ACADEMY_ALIGNED"
+                if academy_match_rows
+                else "VALIDATION_ACADEMY_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if elite_selection_report.get("elite_task_priorities")
+                else "NO_VALIDATION_ACADEMY_SIGNAL"
+            ),
+            "validation_academy_alignment_trace": [
+                {
+                    "selected_task": row.get("task_file"),
+                    "academy_task_id": match.get("academy_task_id"),
+                    "target_capability": match.get("target_capability"),
+                    "target_cluster": match.get("target_cluster"),
+                    "required_task_property": match.get(
+                        "required_task_property"
+                    ),
+                    "required_validation_evidence": match.get(
+                        "required_validation_evidence"
+                    ),
+                    "evidence_collection_attempted": True,
+                }
+                for row in selected_rows
+                for match in row.get("validation_academy_matches", []) or []
+                if isinstance(match, dict)
+            ][:12],
+            "validation_academy_match_count": len(academy_match_rows),
             "alignment_match_count": len(match_rows),
             "training_economy_alignment_score": round(
                 len(selected_with_matches) / max(len(selected or []), 1),
@@ -807,6 +1120,15 @@ class TrainingAssistant:
             "operation_contract",
             "primary_operation",
             "ground_truth_type",
+            "required_task_property",
+            "required_ground_truth",
+            "target_capability",
+            "target_cluster",
+            "target_domain",
+            "validation_objective",
+            "trust_objective",
+            "graduation_objective",
+            "operationalization_objective",
         ):
             values.extend(self._flatten_metadata_values(metadata.get(key)))
         normalized = {
@@ -1034,6 +1356,7 @@ class TrainingAssistant:
         domain_gaps=None,
         population_policy=None,
         operational_economy_context=None,
+        validation_academy_tasks=None,
     ):
         metadata = self._task_metadata(task_file, task_directory)
         concepts = [
@@ -1146,6 +1469,17 @@ class TrainingAssistant:
         if economy_priority:
             priority += economy_priority
             reasons.extend(economy_reasons)
+        academy_priority, academy_reasons, academy_matches = (
+            self._validation_academy_priority(
+                metadata,
+                validation_academy_tasks=validation_academy_tasks or [],
+                survival_targets=survival_targets or [],
+                operational_economy_context=operational_economy_context or {},
+            )
+        )
+        if academy_priority:
+            priority += academy_priority
+            reasons.extend(academy_reasons)
         priority += max(0, 20 - order) * 0.01
         return {
             "task_file": task_file,
@@ -1159,6 +1493,7 @@ class TrainingAssistant:
             "survival_reappearance_matches": survival_matches,
             "domain_citizenship_matches": domain_matches,
             "training_economy_matches": economy_matches,
+            "validation_academy_matches": academy_matches,
         }
 
     def _elite_priorities(
@@ -1181,6 +1516,7 @@ class TrainingAssistant:
         survival_targets = self._survival_reappearance_targets()
         domain_gaps = self._domain_citizenship_gaps()
         population_policy = self._capability_population_evolution_policy()
+        validation_academy_tasks = self._load_validation_academy_tasks()
         priorities = [
             self._elite_priority_for(
                 task_file,
@@ -1193,6 +1529,7 @@ class TrainingAssistant:
                 domain_gaps=domain_gaps,
                 population_policy=population_policy,
                 operational_economy_context=operational_economy_context,
+                validation_academy_tasks=validation_academy_tasks,
             )
             for order, task_file in enumerate(rotated)
         ]
@@ -1257,6 +1594,10 @@ class TrainingAssistant:
                 "training_economy_matches",
                 [],
             ),
+            "validation_academy_matches": priorities[0].get(
+                "validation_academy_matches",
+                [],
+            ),
             "capability_population_evolution_policy": population_policy,
             "elite_task_priorities": priorities,
             "next_elite_task_index_after_completion": (
@@ -1316,6 +1657,10 @@ class TrainingAssistant:
             ),
             "training_economy_matches": priorities[0].get(
                 "training_economy_matches",
+                [],
+            ),
+            "validation_academy_matches": priorities[0].get(
+                "validation_academy_matches",
                 [],
             ),
             "capability_population_evolution_policy": population_policy,
@@ -1954,6 +2299,11 @@ class TrainingAssistant:
                 "training_economy_bottleneck": (
                     training_economy_alignment_report.get(
                         "operational_economy_bottleneck"
+                    )
+                ),
+                "grounding_economy_alignment": (
+                    training_economy_alignment_report.get(
+                        "grounding_economy_alignment"
                     )
                 ),
             })

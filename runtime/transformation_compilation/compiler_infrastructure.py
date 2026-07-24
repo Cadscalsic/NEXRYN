@@ -265,6 +265,11 @@ class CompilerInfrastructureAnalyzer:
             for row in packages
             if row["usage_count"] == 0
         ])
+        package_utilization_gap_rows = self._package_utilization_gap_rows(
+            packages=packages,
+            primitives=primitives,
+            reason_counts=self._failure_reason_counts(compiler_report),
+        )
         primitive_coverage = self._ratio(
             len([row for row in primitives if row["primitive_present"]]),
             len(primitives),
@@ -277,6 +282,14 @@ class CompilerInfrastructureAnalyzer:
             len([row for row in packages if row["package_present"]]),
             len(packages),
         )
+        package_count = len(packages)
+        primitive_count = len(primitives)
+        executable_package_count = len([
+            row for row in packages if row["package_present"]
+        ])
+        executable_primitive_count = len([
+            row for row in primitives if row["executable"]
+        ])
         dependency_coverage = self._ratio(
             len([row for row in packages if row["support_state"] == "FULL_SUPPORT"]),
             len(packages),
@@ -299,11 +312,32 @@ class CompilerInfrastructureAnalyzer:
             "system": "compiler_infrastructure",
             "execution_package_inventory": packages,
             "primitive_operation_inventory": primitives,
+            "execution_package_inventory_state": (
+                "PACKAGE_INVENTORY_AVAILABLE"
+                if package_count
+                else "PACKAGE_INVENTORY_NOT_AVAILABLE"
+            ),
+            "primitive_operation_inventory_state": (
+                "PRIMITIVE_INVENTORY_AVAILABLE"
+                if primitive_count
+                else "PRIMITIVE_INVENTORY_NOT_AVAILABLE"
+            ),
+            "execution_package_inventory_count": package_count,
+            "primitive_operation_inventory_count": primitive_count,
+            "executable_package_count": executable_package_count,
+            "executable_primitive_count": executable_primitive_count,
             "existing_execution_packages": sorted([
                 row["package"] for row in packages if row["package_present"]
             ]),
             "missing_execution_packages": missing_packages,
             "unused_execution_packages": unused_packages,
+            "package_utilization_gap_rows": package_utilization_gap_rows,
+            "package_utilization_gap_count": len(package_utilization_gap_rows),
+            "package_utilization_gap_state": (
+                "UNUSED_EXECUTABLE_PACKAGES_PRESENT"
+                if package_utilization_gap_rows
+                else "NO_UNUSED_EXECUTABLE_PACKAGE_GAP"
+            ),
             "partial_execution_packages": partial_packages,
             "execution_package_health_score": health_score,
             "primitive_operation_coverage": primitive_coverage,
@@ -325,6 +359,73 @@ class CompilerInfrastructureAnalyzer:
                 else "BLOCKED"
             ),
         }
+
+    def _failure_reason_counts(self, compiler_report: Mapping[str, Any]) -> dict[str, int]:
+        diagnostics = compiler_report.get("compiler_failure_diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, Mapping) else {}
+        counts = diagnostics.get("failure_reason_counts") or {}
+        return {
+            str(reason): int(count or 0)
+            for reason, count in counts.items()
+            if count
+        } if isinstance(counts, Mapping) else {}
+
+    def _package_utilization_gap_rows(
+        self,
+        *,
+        packages: list[Mapping[str, Any]],
+        primitives: list[Mapping[str, Any]],
+        reason_counts: Mapping[str, int],
+    ) -> list[dict[str, Any]]:
+        primitive_by_package: dict[str, list[Mapping[str, Any]]] = {}
+        for primitive in primitives:
+            primitive_by_package.setdefault(
+                str(primitive.get("package") or "unknown_execution_package"),
+                [],
+            ).append(primitive)
+        gap_rows = []
+        for package in packages:
+            if int(package.get("usage_count") or 0) > 0:
+                continue
+            if not package.get("package_present"):
+                continue
+            package_name = str(package.get("package"))
+            executable_operations = [
+                str(row.get("operation"))
+                for row in primitive_by_package.get(package_name, [])
+                if row.get("executable")
+            ]
+            if not executable_operations:
+                continue
+            gap_rows.append({
+                "package": package_name,
+                "domain": package.get("domain"),
+                "supported_operations": sorted(executable_operations),
+                "failure_reasons_present": sorted(reason_counts),
+                "utilization_gap_type": self._package_utilization_gap_type(
+                    reason_counts
+                ),
+                "diagnostic": (
+                    "execution_package_available_but_not_selected_by_compiler"
+                ),
+                "action": "route_semantic_programs_to_existing_package",
+            })
+        return gap_rows
+
+    def _package_utilization_gap_type(
+        self,
+        reason_counts: Mapping[str, int],
+    ) -> str:
+        reasons = set(reason_counts)
+        if "missing_grid_pair" in reasons:
+            return "GROUNDING_BLOCKED_PACKAGE_UTILIZATION"
+        if "compiler_support_missing" in reasons or "missing_primitive" in reasons:
+            return "COMPILER_ROUTING_OR_PRIMITIVE_ALIGNMENT_GAP"
+        if "execution_package_missing" in reasons:
+            return "PACKAGE_DISCOVERY_OR_BINDING_GAP"
+        if "RULE_NOT_CAPTURED" in reasons:
+            return "RULE_TRACEABILITY_GAP"
+        return "UNUSED_PACKAGE_UTILIZATION_GAP"
 
     def _package_rows(
         self,

@@ -121,6 +121,39 @@ def test_compiler_reports_failure_diagnostics_by_reason_and_domain():
     )
 
 
+def test_compiler_reports_operational_grounding_requirements_when_grid_pair_missing():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=None,
+        output_grid=None,
+        detected_concepts=["translation"],
+        execution_intents=[
+            {
+                "program_id": "semantic_program_translate",
+                "intent": "directional_translation",
+                "operation": "translate",
+            }
+        ],
+    )
+
+    diagnostics = report["compiler_failure_diagnostics"]
+    row = diagnostics["grounding_requirement_rows"][0]
+
+    assert diagnostics["failure_reason_counts"]["missing_grid_pair"] >= 1
+    assert diagnostics["operational_grounding_failure_count"] >= 1
+    assert diagnostics["operational_grounding_state"] == "GROUNDING_FAILURE_DOMINANT"
+    assert diagnostics["grounding_required_for_operations"] == ["translate"]
+    assert diagnostics["grounding_required_for_domains"]["Spatial"] == 1
+    assert row["operation"] == "translate"
+    assert row["domain"] == "Spatial"
+    assert row["missing_grounding"] == "input_output_grid_pair"
+    assert row["required_evidence"] == "exact_or_governed_validation_success"
+    assert row["required_task_property"] == (
+        "unambiguous_directional_translation_ground_truth"
+    )
+    assert row["grounding_stage"] == "compiler_input_grounding"
+    assert row["action"] == "select_grounding_aligned_task"
+
+
 def test_compiler_infrastructure_analyzer_reports_packages_primitives_and_multistep():
     analyzer = CompilerInfrastructureAnalyzer()
     report = analyzer.build_report(
@@ -146,11 +179,55 @@ def test_compiler_infrastructure_analyzer_reports_packages_primitives_and_multis
     }
 
     assert report["missing_execution_packages"] == []
+    assert report["execution_package_inventory_state"] == (
+        "PACKAGE_INVENTORY_AVAILABLE"
+    )
+    assert report["primitive_operation_inventory_state"] == (
+        "PRIMITIVE_INVENTORY_AVAILABLE"
+    )
+    assert report["execution_package_inventory_count"] >= 1
+    assert report["primitive_operation_inventory_count"] >= 1
+    assert report["executable_package_count"] >= 1
+    assert report["executable_primitive_count"] >= 1
     assert report["multi_step_program_support"] == 1.0
     assert report["compiler_primitive_success_rate"] == 1.0
     assert operations["density_modulation"]["canonical_operation"] == "expand_pattern"
     assert operations["density_modulation"]["executable"] is True
     assert operations["translate"]["compiler_can_emit"] is True
+
+
+def test_compiler_infrastructure_reports_unused_executable_package_gaps():
+    report = CompilerInfrastructureAnalyzer().build_report(
+        compiler_report={
+            "compiler_failure_diagnostics": {
+                "failure_reason_counts": {
+                    "missing_grid_pair": 3,
+                    "execution_package_missing": 1,
+                }
+            }
+        },
+        expected_operations=["translate"],
+    )
+
+    gaps = {
+        row["package"]: row
+        for row in report["package_utilization_gap_rows"]
+    }
+
+    assert "object_execution_package" in report["unused_execution_packages"]
+    assert "pattern_execution_package" in report["unused_execution_packages"]
+    assert gaps["object_execution_package"]["utilization_gap_type"] == (
+        "GROUNDING_BLOCKED_PACKAGE_UTILIZATION"
+    )
+    assert "remove_object" in gaps["object_execution_package"][
+        "supported_operations"
+    ]
+    assert "expand_pattern" in gaps["pattern_execution_package"][
+        "supported_operations"
+    ]
+    assert report["package_utilization_gap_state"] == (
+        "UNUSED_EXECUTABLE_PACKAGES_PRESENT"
+    )
 
 
 def test_primitive_executor_supports_compiler_infrastructure_aliases():

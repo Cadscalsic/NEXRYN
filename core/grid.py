@@ -298,7 +298,7 @@ class ARCGrid:
         analysis = self.export_dict()
 
         print(
-            "\n===== AMIS GRID ANALYSIS =====\n"
+            "\n===== NEXRYN GRID ANALYSIS =====\n"
         )
 
         for key, value in analysis.items():

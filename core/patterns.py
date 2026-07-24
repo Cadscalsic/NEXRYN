@@ -204,7 +204,7 @@ class ARCPatternEngine:
 
     def print_report(self):
 
-        print("\n========== AMIS PATTERN ANALYSIS ==========\n")
+        print("\n========== NEXRYN PATTERN ANALYSIS ==========\n")
 
         for pattern in self.patterns:
 

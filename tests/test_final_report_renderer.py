@@ -197,8 +197,9 @@ def test_render_has_boundaries_and_stable_section_order():
         report_level="normal",
     )
 
-    assert report.startswith(REPORT_BEGIN_MARKER)
-    assert report.rstrip().endswith(REPORT_END_MARKER)
+    lines = report.splitlines()
+    assert lines[:3] == ["=" * 50, REPORT_BEGIN_MARKER, "=" * 50]
+    assert lines[-3:] == ["=" * 50, REPORT_END_MARKER, "=" * 50]
     positions = [report.index(section) for section in SECTION_ORDER]
     assert positions == sorted(positions)
     assert renderer.report()["report_complete"] is True
@@ -330,13 +331,45 @@ def test_render_includes_cognitive_capability_coverage_map():
         "capability_graduation_risk": "MEDIUM",
         "capability_graduation_complexity": "MEDIUM",
         "capability_graduation_confidence": 0.9444,
-        "graduation_pipeline_stages": {
-            "INCUBATING_VALIDATION_GAP": 1,
-            "SURVIVING_CAPABILITY": 1,
-            "COGNITIVE_CITIZEN": 0,
-            "OPERATIONAL_CITIZEN": 0,
-        },
-        "graduation_transition_rows": [
+            "graduation_pipeline_stages": {
+                "INCUBATING_VALIDATION_GAP": 1,
+                "SURVIVING_CAPABILITY": 1,
+                "COGNITIVE_CITIZEN": 0,
+                "OPERATIONAL_CITIZEN": 0,
+            },
+            "capability_promotion_phase_state": (
+                "CAPABILITY_PROMOTION_PHASE_DETECTED"
+            ),
+            "capability_promotion_candidate_count": 1,
+            "capability_promotion_interpretation": (
+                "promotion_interprets_evidence_before_trust_or_graduation"
+            ),
+            "evidence_acceptance_state": (
+                "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK"
+            ),
+            "evidence_acceptance_bottleneck": (
+                "governed_validation_evidence_acceptance"
+            ),
+            "evidence_acceptance_failure_count": 1,
+            "evidence_acceptance_failure_share": 1.0,
+            "capability_promotion_rows": [
+                {
+                    "capability_id": (
+                        "operational_capability:identity:preserve_size:size"
+                    ),
+                    "operation": "preserve_size",
+                    "domain": "Identity",
+                    "lifecycle_state": "COGNITIVE_CITIZEN",
+                    "graduation_status": "BLOCKED_AT_FINAL_VALIDATION",
+                    "validator_gap": "GOVERNED_VALIDATION_INCOMPLETE",
+                    "capability_graduation_confidence": 0.91,
+                    "promotion_interpretation": (
+                        "high_quality_evidence_requires_acceptance_before_trust"
+                    ),
+                    "trusted_for_decision": False,
+                }
+            ],
+            "graduation_transition_rows": [
             {
                 "transition": (
                     "SURVIVING_CAPABILITY->COGNITIVE_CITIZEN"
@@ -447,6 +480,97 @@ def test_render_includes_cognitive_capability_coverage_map():
                 "trusted_for_decision": False,
             }
         ],
+        "capability_survival_report": {
+            "capability_survival_rows": [
+                {
+                    "capability_id": "operational_capability:growth:duplicate_object:growth",
+                    "operation": "duplicate_object",
+                    "domain": "Growth",
+                    "lifecycle_state": "SURVIVING_CAPABILITY",
+                    "distinct_task_count": 35,
+                    "arena_simulated_count": 60,
+                    "best_accuracy": 1.0,
+                    "average_accuracy": 0.1154,
+                    "validation_attempts": 4,
+                    "improvement_trend": "STABLE_HIGH_PERFORMANCE",
+                    "trusted_for_decision": False,
+                },
+            ],
+        },
+        "capability_governance_contract_state": (
+            "CAPABILITY_GOVERNANCE_ACTIVE"
+        ),
+        "capability_rights_policy": {
+            "decision_authority": "trusted_capabilities_only",
+            "request_validation": "sandbox_citizens",
+        },
+        "capability_obligations_policy": {
+            "preserve_lineage": True,
+            "respect_sandbox_limits": True,
+        },
+        "capability_reputation_average": 0.83,
+        "capability_trust_average": 0.41,
+        "capability_evidence_contamination_state": (
+            "EVIDENCE_LEDGER_CONTAMINATION_RISK"
+        ),
+        "capability_evidence_contamination_count": 1,
+        "capability_governance_rows": [
+            {
+                "capability_id": "operational_capability:identity:preserve_grid:object_identity_preservation",
+                "operation": "preserve_grid",
+                "domain": "Identity",
+                "lifecycle_state": "OPERATIONAL_CITIZEN",
+                "citizenship_tier": "SANDBOX_OPERATIONAL_CITIZEN",
+                "authority_scope": "SANDBOX_REUSE_ONLY",
+                "trust_state": "NOT_TRUSTED_FOR_DECISION",
+                "rights": [
+                    "participate_in_arena",
+                    "accumulate_evidence",
+                    "request_validation",
+                    "join_clusters",
+                ],
+                "obligations": [
+                    "report_failures",
+                    "preserve_lineage",
+                    "respect_sandbox_limits",
+                    "undergo_regression_review",
+                ],
+                "reputation_score": 0.83,
+                "trust_score": 0.41,
+                "evidence_contamination_state": (
+                    "ARENA_EXPOSURE_CONTAMINATION_RISK"
+                ),
+                "evidence_adjusted_accuracy": 0.5833,
+                "relevant_task_attempt_count": 35,
+                "arena_simulation_count": 60,
+                "recommended_accuracy_basis": "relevant_task_attempt_accuracy",
+                "evidence_ledger": {
+                    "raw_average_accuracy": 0.1154,
+                },
+                "reputation_basis": {
+                    "best_accuracy": 1.0,
+                    "distinct_tasks": 35,
+                },
+            }
+        ],
+        "capability_evidence_contamination_rows": [
+            {
+                "operation": "duplicate_object",
+                "evidence_contamination_state": (
+                    "ARENA_EXPOSURE_CONTAMINATION_RISK"
+                ),
+                "evidence_adjusted_accuracy": 0.5833,
+                "arena_simulation_count": 60,
+                "recommended_accuracy_basis": "relevant_task_attempt_accuracy",
+                "evidence_ledger": {
+                    "raw_average_accuracy": 0.1154,
+                },
+                "reputation_basis": {
+                    "best_accuracy": 1.0,
+                    "distinct_tasks": 35,
+                },
+            }
+        ],
         "top_crystallization_candidates": [
             {
                 "capability_id": "operational_capability:spatial:preserve_shape:shape_preservation",
@@ -497,8 +621,29 @@ def test_render_includes_cognitive_capability_coverage_map():
         "compiler_failure_diagnostics": {
             "failure_reason_counts": {
                 "operation_semantics_mismatch": 2,
+                "missing_grid_pair": 1,
                 "invalid_composition": 1,
             },
+            "operational_grounding_failure_count": 1,
+            "compiler_semantic_failure_count": 3,
+            "operational_grounding_failure_rate": 0.25,
+            "operational_grounding_state": "GROUNDING_FAILURE_PRESENT",
+            "compiler_failure_interpretation": (
+                "mixed_grounding_and_compiler_failure"
+            ),
+            "grounding_requirement_rows": [
+                {
+                    "program": "semantic_program_translate",
+                    "operation": "translate",
+                    "domain": "Spatial",
+                    "missing_grounding": "input_output_grid_pair",
+                    "required_task_property": (
+                        "unambiguous_directional_translation_ground_truth"
+                    ),
+                }
+            ],
+            "grounding_required_for_operations": ["translate"],
+            "grounding_required_for_domains": {"Spatial": 1},
             "failure_domain_distribution": {
                 "Spatial": 2,
                 "Topology": 1,
@@ -532,6 +677,9 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Execution Package Coverage Target:" in report
     assert "Compiler Runtime Coverage Target:" in report
     assert "Operational Capability Coverage Target:" in report
+    assert "Operational Capability Coverage Semantics:" in report
+    assert "Sandbox Operational Citizen Coverage:" in report
+    assert "Sandbox Operational Citizen Coverage Semantics:" in report
     assert "Compiler Runtime Activated Programs:" in report
     assert "Execution Package Coverage:" in report
     assert "Execution Package Health Score:" in report
@@ -543,6 +691,12 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Compiler Primitive Success Rate:" in report
     assert "Execution Package Utilization:" in report
     assert "Compiler Infrastructure Readiness:" in report
+    assert "Execution Package Inventory State:" in report
+    assert "Primitive Operation Inventory State:" in report
+    assert "Execution Package Inventory Count:" in report
+    assert "Primitive Operation Inventory Count:" in report
+    assert "Executable Package Count:" in report
+    assert "Executable Primitive Count:" in report
     assert "Candidate Attrition Coverage:" in report
     assert "End-To-End Program Lifecycle:" in report
     assert "Operationalization Bottleneck:" in report
@@ -551,6 +705,20 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Compiler Success Rate:" in report
     assert "Compiler Diagnostic State:" in report
     assert "Compiler Failure Count:" in report
+    assert "Operational Grounding State:" in report
+    assert "GROUNDING_FAILURE_PRESENT" in report
+    assert "Operational Grounding Failure Count:" in report
+    assert "Operational Grounding Failure Rate:" in report
+    assert "Grounding Required For Operations:" in report
+    assert "Grounding Required For Domains:" in report
+    assert "Compiler Semantic Failure Count:" in report
+    assert "Compiler Failure Interpretation:" in report
+    assert "mixed_grounding_and_compiler_failure" in report
+    assert "Grounding Adjusted Compiler Failure Pressure:" in report
+    assert "Operational Grounding Requirements:" in report
+    assert "unambiguous_directional_translation_ground_truth" in report
+    assert "Package Utilization Gap Count:" in report
+    assert "Package Utilization Gap State:" in report
     assert "Compiler Failure Detail Capture:" in report
     assert "Compiler Failure Reasons:" in report
     assert "operation_semantics_mismatch=2" in report
@@ -628,6 +796,8 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Domain Primitive Coverage:" in report
     assert "Domain Capability Diversity:" in report
     assert "Domain Infrastructure Readiness:" in report
+    assert "role=" in report
+    assert "arena_relationship=" in report
     assert "Operational Domain Population:" in report
     assert "Domain Diversification Score:" in report
     assert "Domain Monopoly Pressure:" in report
@@ -658,9 +828,38 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Knowledge To Citizen Efficiency:" in report
     assert "Candidate Attrition Cost:" in report
     assert "Candidate Attrition Cost State:" in report
+    assert "Capability Investment Intelligence Phase:" in report
+    assert "ROADMAP_ONLY" in report
+    assert "Capability Investment Governance Principle:" in report
+    assert "investment_allocates_validation_opportunities_only" in report
+    assert "Capability Investment Truth Boundary:" in report
+    assert "INVESTMENT_NEVER_INFLUENCES_TRUTH_FORMATION" in report
+    assert "Capability Investment Authority Scope:" in report
+    assert "validation_prioritization" in report
+    assert "Capability Investment Forbidden Authority:" in report
+    assert "trust_scores" in report
+    assert "graduation_authority" in report
+    assert "Capability Promotion Roadmap:" in report
+    assert "capability_promotion" in report
     assert "Operational Economy Bottleneck:" in report
+    assert "Knowledge Operationalization Choke Point:" in report
+    assert "Knowledge Operationalization Symptom:" in report
+    assert "Knowledge Operationalization Root Cause:" in report
+    assert "Knowledge Operationalization Choke Cause:" in report
+    assert "Knowledge Operationalization Choke Action:" in report
+    assert "Knowledge Operationalization Loss Count:" in report
+    assert "Knowledge Operationalization Loss Pressure:" in report
+    assert "Knowledge Operationalization State:" in report
+    assert "Knowledge Operationalization Path:" in report
     assert "Operational Cluster Readiness:" in report
     assert "Operational Cluster Count:" in report
+    assert "Ready Operational Cluster Count:" in report
+    assert "Cluster Operationalization Candidate Count:" in report
+    assert "Cluster To Materialization Gap:" in report
+    assert "Cluster To Citizen Gap:" in report
+    assert "Cluster Operationalization Pressure:" in report
+    assert "Cluster Operationalization State:" in report
+    assert "Cluster Operationalization Action:" in report
     assert "Missing Operational Citizen Domains:" in report
     assert "Surviving Capabilities:" in report
     assert "Validation Gap Candidate Count:" in report
@@ -692,6 +891,13 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Sandbox Citizenship Thresholds:" in report
     assert "Trusted Capability Policy:" in report
     assert "Decision Authority Policy:" in report
+    assert "Capability Governance Contract State:" in report
+    assert "Capability Rights Policy:" in report
+    assert "Capability Obligations Policy:" in report
+    assert "Capability Reputation Average:" in report
+    assert "Capability Trust Average:" in report
+    assert "Capability Evidence Contamination State:" in report
+    assert "Capability Evidence Contamination Count:" in report
     assert "Capability Stability Regression Count:" in report
     assert "Capability Population Evolution Speed:" in report
     assert "Operational Experience Growth Speed:" in report
@@ -717,7 +923,26 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Capability Survival State Distribution:" in report
     assert "Top Incubating Capabilities:" in report
     assert "Top Operational Citizens:" in report
-    assert "basis=sandbox_governed_survival_evidence trusted=FALSE" in report
+    assert "basis=sandbox_governed_survival_evidence" in report
+    assert "tier=SANDBOX_OPERATIONAL_CITIZEN" in report
+    assert "authority=SANDBOX_REUSE_ONLY" in report
+    assert "trust_state=NOT_TRUSTED_FOR_DECISION" in report
+    assert (
+        "Graduation Semantics: citizenship_is_sandbox_reuse_not_decision_authority"
+        in report
+    )
+    assert "Capability Governance Contracts:" in report
+    assert "rights=" in report
+    assert "obligations=" in report
+    assert "reputation=" in report
+    assert "trust=" in report
+    assert "evidence_state=ARENA_EXPOSURE_CONTAMINATION_RISK" in report
+    assert "adjusted_accuracy=58.33%" in report
+    assert "relevant_attempts=35" in report
+    assert "arena_simulations=60" in report
+    assert "Capability Evidence Contamination Risks:" in report
+    assert "raw_avg=11.54%" in report
+    assert "basis=relevant_task_attempt_accuracy" in report
     assert "Top Crystallization Candidates:" in report
     assert "operation=preserve_shape" in report
     assert "Top Graduation Candidates:" in report
@@ -728,10 +953,33 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "confidence=94.44%" in report
     assert "action=GRADUATION_SPRINT_REQUIRED" in report
     assert "Graduation Pipeline Stages:" in report
+    assert "Capability Promotion Phase State:" in report
+    assert "CAPABILITY_PROMOTION_PHASE_DETECTED" in report
+    assert "Capability Promotion Candidate Count:" in report
+    assert "Capability Promotion Interpretation:" in report
+    assert "promotion_interprets_evidence_before_trust_or_graduation" in report
+    assert "Evidence Acceptance State:" in report
+    assert "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK" in report
+    assert "Evidence Acceptance Bottleneck:" in report
+    assert "governed_validation_evidence_acceptance" in report
+    assert "Evidence Acceptance Failure Count:" in report
+    assert "Evidence Acceptance Failure Share:" in report
+    assert "Capability Promotion Candidates:" in report
+    assert "operation=preserve_size" in report
+    assert "promotion=high_quality_evidence_requires_acceptance_before_trust" in report
     assert "Graduation Pipeline Transitions:" in report
     assert "SURVIVING_CAPABILITY->COGNITIVE_CITIZEN" in report
     assert "Validator Failure Distribution:" in report
     assert "Governed Validation Incomplete=1" in report
+    assert "Governed Validation Bottleneck:" in report
+    assert "governed_validation_infrastructure" in report
+    assert "Governed Validation Bottleneck State:" in report
+    assert "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK" in report
+    assert "Governed Validation Failure Count:" in report
+    assert "Governed Validation Failure Share:" in report
+    assert "Governed Validation Action:" in report
+    assert "select_governed_validation_evidence_tasks" in report
+    assert "Governed Validation Required Evidence:" in report
     assert "Graduation Sprint Recommendations:" in report
     assert "minimum_evidence=exact_or_governed_validation_success" in report
     assert "validation=exact_or_governed_validation" in report
@@ -812,13 +1060,40 @@ def test_render_has_single_final_status_and_no_raw_dict_repr():
     assert "raw_nested_report" not in report
 
 
+def test_report_lifecycle_contract_boundaries_and_metadata_are_emitted():
+    renderer = DeterministicFinalReportRenderer(console_budget_chars=100_000)
+    report = renderer.render(_report_state(), runtime_metadata=_metadata())
+    lines = report.splitlines()
+
+    assert lines[:3] == [
+        "=" * 50,
+        REPORT_BEGIN_MARKER,
+        "=" * 50,
+    ]
+    assert "Report Schema Version: 1.0" in report
+    assert "Report Integrity: VALID" in report
+    assert "Console Emission Started: TRUE" in report
+    assert "NEXRYN MAIN RUNTIME" in report
+    assert "Console Emission Completed: TRUE" in report
+    assert lines[-3:] == [
+        "=" * 50,
+        REPORT_END_MARKER,
+        "=" * 50,
+    ]
+    assert renderer.report()["report_integrity"] == "VALID"
+    assert renderer.report()["console_emission_started"] is True
+    assert renderer.report()["console_emission_completed"] is True
+
+
 def test_render_does_not_begin_or_end_with_partial_structure():
     report = DeterministicFinalReportRenderer().render(
         _report_state(),
         runtime_metadata=_metadata(),
     )
 
-    first_after_marker = report[len(REPORT_BEGIN_MARKER):].lstrip()
+    first_after_marker = report[
+        report.find(REPORT_BEGIN_MARKER) + len(REPORT_BEGIN_MARKER):
+    ].lstrip()
     assert first_after_marker.startswith("=")
     assert not report.rstrip().endswith(("{", "[", ":", ","))
 
@@ -839,11 +1114,13 @@ def test_console_budget_fallback_remains_complete():
 
     report = renderer.render(state, runtime_metadata=_metadata())
 
-    assert report.startswith(REPORT_BEGIN_MARKER)
-    assert report.rstrip().endswith(REPORT_END_MARKER)
+    assert REPORT_BEGIN_MARKER in report.splitlines()[:3]
+    assert REPORT_END_MARKER in report.splitlines()[-3:]
+    assert "Report Integrity: TRUNCATED" in report
     assert "Console Appendix: omitted" in report
     assert renderer.report()["report_truncated"] is True
     assert renderer.report()["report_complete"] is True
+    assert renderer.report()["report_integrity"] == "TRUNCATED"
 
 
 def test_console_budget_writes_full_text_artifact(tmp_path):
@@ -863,8 +1140,8 @@ def test_console_budget_writes_full_text_artifact(tmp_path):
     )
     assert "Console Appendix: omitted" in console_report
     assert "Console Appendix: omitted" not in artifact_text
-    assert artifact_text.startswith(REPORT_BEGIN_MARKER)
-    assert artifact_text.rstrip().endswith(REPORT_END_MARKER)
+    assert REPORT_BEGIN_MARKER in artifact_text.splitlines()[:3]
+    assert REPORT_END_MARKER in artifact_text.splitlines()[-3:]
 
 
 def test_text_artifact_matches_rendered_report(tmp_path):
@@ -1506,6 +1783,9 @@ def test_candidate_arena_reports_adaptive_reuse_single_source_dominance():
     assert "Explicit Rejections: 1" in report
     assert "Competitor Sources: adaptive_reuse" in report
     assert "Source Diversity Bottleneck:" in report
+    assert "Candidate Source Materialization Gap Count:" in report
+    assert "Candidate Source Materialization State:" in report
+    assert "Candidate Source Materialization:" in report
     assert "Winner Takes All Detected: TRUE" in report
     assert "Dominance Source: adaptive_reuse" in report
     assert "Compiler Attempted: TRUE" in report

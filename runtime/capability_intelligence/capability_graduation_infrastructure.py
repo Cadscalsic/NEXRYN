@@ -53,6 +53,7 @@ class CapabilityGraduationInfrastructure:
             if row["lifecycle_state"] == "OPERATIONAL_CITIZEN"
         ]
         pipeline = self._pipeline(rows, diagnostics)
+        promotion = self._promotion_interpretation(diagnostics)
         evidence_coverage = self._average(
             row["graduation_evidence_completeness"]
             for row in diagnostics
@@ -132,6 +133,26 @@ class CapabilityGraduationInfrastructure:
             ),
             "graduation_pipeline_stages": pipeline["graduation_pipeline_stages"],
             "graduation_transition_rows": pipeline["graduation_transition_rows"],
+            "capability_promotion_phase_state": promotion[
+                "capability_promotion_phase_state"
+            ],
+            "capability_promotion_candidate_count": promotion[
+                "capability_promotion_candidate_count"
+            ],
+            "capability_promotion_interpretation": promotion[
+                "capability_promotion_interpretation"
+            ],
+            "evidence_acceptance_state": promotion["evidence_acceptance_state"],
+            "evidence_acceptance_bottleneck": promotion[
+                "evidence_acceptance_bottleneck"
+            ],
+            "evidence_acceptance_failure_count": promotion[
+                "evidence_acceptance_failure_count"
+            ],
+            "evidence_acceptance_failure_share": promotion[
+                "evidence_acceptance_failure_share"
+            ],
+            "capability_promotion_rows": promotion["capability_promotion_rows"],
             "capability_graduation_diagnostics": diagnostics,
             "top_graduation_priority": top[0] if top else {},
             "graduation_sprint_recommendations": [
@@ -279,6 +300,87 @@ class CapabilityGraduationInfrastructure:
                 else "none"
             ),
             "recommended_training_signal": self._training_signal(row, missing),
+        }
+
+    def _promotion_interpretation(
+        self,
+        diagnostics: list[Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        promotion_rows = [
+            row for row in diagnostics
+            if row.get("lifecycle_state") in {
+                "SURVIVING_CAPABILITY",
+                "COGNITIVE_CITIZEN",
+            }
+            and row.get("capability_graduation_confidence", 0.0) >= 0.65
+        ]
+        validator_counts = Counter(
+            row.get("validator_gap") for row in diagnostics
+            if row.get("validator_gap") and row.get("validator_gap") != "NONE"
+        )
+        total_failures = sum(validator_counts.values())
+        governed_failures = validator_counts.get(
+            "GOVERNED_VALIDATION_INCOMPLETE",
+            0,
+        )
+        governed_share = self._ratio(governed_failures, total_failures)
+        acceptance_state = (
+            "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK"
+            if governed_share >= 0.50 and governed_failures
+            else "EVIDENCE_ACCEPTANCE_PENDING"
+            if total_failures
+            else "EVIDENCE_ACCEPTANCE_CLEAR"
+        )
+        return {
+            "capability_promotion_phase_state": (
+                "CAPABILITY_PROMOTION_PHASE_DETECTED"
+                if promotion_rows
+                else "NO_PROMOTION_PHASE_PRESSURE"
+            ),
+            "capability_promotion_candidate_count": len(promotion_rows),
+            "capability_promotion_interpretation": (
+                "promotion_interprets_evidence_before_trust_or_graduation"
+            ),
+            "evidence_acceptance_state": acceptance_state,
+            "evidence_acceptance_bottleneck": (
+                "governed_validation_evidence_acceptance"
+                if acceptance_state == "GOVERNED_EVIDENCE_ACCEPTANCE_BOTTLENECK"
+                else "none"
+                if acceptance_state == "EVIDENCE_ACCEPTANCE_CLEAR"
+                else "validation_evidence_acceptance"
+            ),
+            "evidence_acceptance_failure_count": governed_failures,
+            "evidence_acceptance_failure_share": governed_share,
+            "capability_promotion_rows": [
+                {
+                    "capability_id": row.get("capability_id"),
+                    "operation": row.get("operation"),
+                    "domain": row.get("domain"),
+                    "lifecycle_state": row.get("lifecycle_state"),
+                    "graduation_status": row.get("graduation_status"),
+                    "validator_gap": row.get("validator_gap"),
+                    "missing_graduation_evidence": row.get(
+                        "missing_graduation_evidence"
+                    ),
+                    "capability_graduation_confidence": row.get(
+                        "capability_graduation_confidence"
+                    ),
+                    "promotion_interpretation": (
+                        "high_quality_evidence_requires_acceptance_before_trust"
+                        if row.get("validator_gap")
+                        == "GOVERNED_VALIDATION_INCOMPLETE"
+                        else "promotion_review_candidate"
+                    ),
+                    "trusted_for_decision": bool(row.get("trusted_for_decision")),
+                }
+                for row in sorted(
+                    promotion_rows,
+                    key=lambda item: (
+                        -float(item.get("capability_graduation_confidence") or 0.0),
+                        str(item.get("operation") or ""),
+                    ),
+                )[:5]
+            ],
         }
 
     def _pipeline(

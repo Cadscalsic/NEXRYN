@@ -23,7 +23,7 @@ __version__ = "0.1.0"
 # ============================================
 
 PACKAGE_NAME = (
-    "NEXRYN-AMIS Learning Systems"
+    "NEXRYN Learning Systems"
 )
 
 _EXPORTS = {

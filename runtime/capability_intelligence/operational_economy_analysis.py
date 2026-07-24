@@ -35,6 +35,8 @@ class OperationalEconomyAnalysis:
         high_value_knowledge_items: int = 0,
         medium_value_knowledge_items: int = 0,
         low_value_knowledge_items: int = 0,
+        operational_grounding_failure_count: int = 0,
+        operational_grounding_failure_rate: float | None = None,
     ) -> dict[str, Any]:
         attrition = (
             candidate_attrition_summary
@@ -115,6 +117,20 @@ class OperationalEconomyAnalysis:
         cluster_readiness = self._average(
             row.get("cluster_readiness") for row in operational_clusters
         )
+        cluster_operationalization = self._cluster_operationalization(
+            operational_clusters=operational_clusters,
+            materialized_operational_capabilities=materialized_operational_capabilities,
+            operational_citizen_count=operational_citizen_count,
+        )
+        operationalization_choke = self._operationalization_choke_point(
+            conversion_rates=conversion_rates,
+            candidate_count=candidate_count,
+            arena_candidate_count=arena_candidate_count,
+            compiled_programs=compiled_programs,
+            validated_programs=validated_programs,
+            operational_grounding_failure_count=operational_grounding_failure_count,
+            operational_grounding_failure_rate=operational_grounding_failure_rate,
+        )
         economy_health = self._average(
             [
                 lifecycle_efficiency,
@@ -176,6 +192,7 @@ class OperationalEconomyAnalysis:
             ),
             "knowledge_attrition_lifecycle": attrition_rows,
             "operational_lifecycle_conversion_rates": conversion_rates,
+            **operationalization_choke,
             "operational_economy_bottleneck": self._bottleneck(attrition_rows),
             "operational_economy_roadmap": self._roadmap(
                 attrition_rows=attrition_rows,
@@ -183,10 +200,14 @@ class OperationalEconomyAnalysis:
                 population_growth_pressure=population_growth_pressure,
                 crystallization_efficiency=crystallization_efficiency,
                 operational_investment_return=operational_investment_return,
+                cluster_operationalization_state=cluster_operationalization[
+                    "cluster_operationalization_state"
+                ],
             ),
             "operational_capability_clusters": operational_clusters,
             "operational_cluster_readiness": cluster_readiness,
             "operational_cluster_count": len(operational_clusters),
+            **cluster_operationalization,
             "generated_to_citizen_pressure_ratio": generated_to_citizen_pressure_ratio,
             "operational_experience_count": self._int(operational_experience_count),
         }
@@ -219,6 +240,108 @@ class OperationalEconomyAnalysis:
             )
         return rows
 
+    def _operationalization_choke_point(
+        self,
+        *,
+        conversion_rates: Mapping[str, Any],
+        candidate_count: int,
+        arena_candidate_count: int,
+        compiled_programs: int,
+        validated_programs: int,
+        operational_grounding_failure_count: int,
+        operational_grounding_failure_rate: float | None,
+    ) -> dict[str, Any]:
+        stages = [
+            (
+                "candidate_to_arena",
+                "candidate_count",
+                self._int(candidate_count),
+                "arena_candidate_count",
+                self._int(arena_candidate_count),
+                "candidate_admission",
+            ),
+            (
+                "arena_to_compiled",
+                "arena_candidate_count",
+                self._int(arena_candidate_count),
+                "compiled_programs",
+                self._int(compiled_programs),
+                (
+                    "operational_grounding"
+                    if float(operational_grounding_failure_rate or 0.0) >= 0.5
+                    else "compiler_execution_or_support"
+                ),
+            ),
+            (
+                "compiled_to_validated",
+                "compiled_programs",
+                self._int(compiled_programs),
+                "validated_programs",
+                self._int(validated_programs),
+                "validation_infrastructure",
+            ),
+        ]
+        rows = []
+        for stage, input_name, input_count, output_name, output_count, cause in stages:
+            conversion = self._ratio(output_count, input_count)
+            lost_count = max(input_count - output_count, 0)
+            loss_rate = round(1.0 - conversion, 4) if input_count else 0.0
+            rows.append(
+                {
+                    "stage": stage,
+                    "input_stage": input_name,
+                    "input_count": input_count,
+                    "output_stage": output_name,
+                    "output_count": output_count,
+                    "lost_count": lost_count,
+                    "conversion_rate": conversion,
+                    "loss_rate": loss_rate,
+                    "likely_cause": cause,
+                    "action": self._operationalization_action(cause),
+                }
+            )
+        primary = sorted(
+            rows,
+            key=lambda row: (
+                -int(row.get("lost_count") or 0),
+                -float(row.get("loss_rate") or 0.0),
+                str(row.get("stage")),
+            ),
+        )[0]
+        loss_pressure = self._bounded_ratio(
+            sum(int(row.get("lost_count") or 0) for row in rows),
+            max(self._int(candidate_count), 1),
+        )
+        return {
+            "knowledge_operationalization_path": rows,
+            "knowledge_operationalization_choke_point": primary["stage"],
+            "knowledge_operationalization_choke_cause": primary["likely_cause"],
+            "knowledge_operationalization_choke_action": primary["action"],
+            "knowledge_operationalization_loss_count": sum(
+                int(row.get("lost_count") or 0) for row in rows
+            ),
+            "knowledge_operationalization_loss_pressure": loss_pressure,
+            "knowledge_operationalization_state": self._state(
+                loss_pressure,
+                high="SEVERE_KNOWLEDGE_OPERATIONALIZATION_CHOKE",
+                medium="KNOWLEDGE_OPERATIONALIZATION_PRESSURE",
+                low="KNOWLEDGE_OPERATIONALIZATION_CONTROLLED",
+            ),
+            "operational_grounding_failure_count": self._int(
+                operational_grounding_failure_count
+            ),
+            "operational_grounding_failure_rate": operational_grounding_failure_rate,
+        }
+
+    def _operationalization_action(self, cause: str) -> str:
+        if cause == "operational_grounding":
+            return "select_grounding_aligned_validation_tasks"
+        if cause == "validation_infrastructure":
+            return "expand_validation_evidence_capture"
+        if cause == "candidate_admission":
+            return "improve_candidate_arena_admission"
+        return "inspect_compiler_execution_contracts"
+
     def _operational_clusters(
         self,
         composite_candidates: list[Mapping[str, Any]],
@@ -238,6 +361,7 @@ class OperationalEconomyAnalysis:
                     "missing_capabilities": row.get("missing_capabilities") or [],
                     "participating_domains": row.get("participating_domains") or [],
                     "cluster_readiness": readiness,
+                    "required_grounding": self._cluster_required_grounding(row),
                     "cluster_state": (
                         "OPERATIONAL_CLUSTER_READY"
                         if readiness >= 1.0
@@ -248,6 +372,101 @@ class OperationalEconomyAnalysis:
         clusters.sort(key=lambda item: (-item["cluster_readiness"], item["cluster_name"]))
         return clusters
 
+    def _cluster_required_grounding(
+        self,
+        row: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        capabilities = row.get("required_capabilities") or []
+        domains = row.get("participating_domains") or []
+        cluster_name = str(row.get("composite_name") or "unknown_cluster")
+        grounding_rows = []
+        capability_list = capabilities if isinstance(capabilities, list) else []
+        for capability in capability_list:
+            operation = str(capability)
+            grounding_rows.append(
+                {
+                    "cluster_name": cluster_name,
+                    "operation": operation,
+                    "domain": self._domain_for_operation(operation, domains),
+                    "required_evidence": "exact_or_governed_validation_success",
+                    "required_task_property": self._required_grounding_task_property(
+                        operation
+                    ),
+                    "grounding_stage": "cluster_operationalization_grounding",
+                    "action": "select_grounding_aligned_task",
+                }
+            )
+        return grounding_rows
+
+    def _domain_for_operation(self, operation: str, domains: Any) -> str:
+        normalized = str(operation or "")
+        if "topology" in normalized:
+            return "Topology"
+        if normalized in {"translate", "move_object", "preserve_grid"}:
+            return "Spatial"
+        if normalized in {"preserve_shape", "preserve_size", "duplicate_object"}:
+            return "Identity"
+        if "color" in normalized:
+            return "Color"
+        if isinstance(domains, list) and domains:
+            return str(domains[0])
+        return "Transformation"
+
+    def _required_grounding_task_property(self, operation: str) -> str:
+        operation = str(operation or "")
+        if operation in {"translate", "move_object"}:
+            return "unambiguous_directional_translation_ground_truth"
+        if operation in {"preserve_topology", "topological_reasoning"}:
+            return "topology_preserving_transformation_ground_truth"
+        if operation in {"preserve_grid", "preserve_shape", "preserve_size"}:
+            return "paired_identity_preservation_ground_truth"
+        if operation in {"duplicate_object", "replicate_object"}:
+            return "paired_symbolic_object_replication_ground_truth"
+        if operation in {"replace_color", "preserve_colors"}:
+            return "color_invariance_under_transformation"
+        return "paired_source_target_grid_ground_truth"
+
+    def _cluster_operationalization(
+        self,
+        *,
+        operational_clusters: list[Mapping[str, Any]],
+        materialized_operational_capabilities: int,
+        operational_citizen_count: int,
+    ) -> dict[str, Any]:
+        ready_clusters = [
+            row
+            for row in operational_clusters
+            if float(row.get("cluster_readiness") or 0.0) >= 1.0
+        ]
+        ready_count = len(ready_clusters)
+        cluster_count = len(operational_clusters)
+        materialized_count = self._int(materialized_operational_capabilities)
+        citizen_count = self._int(operational_citizen_count)
+        if ready_count == 0:
+            state = "NO_READY_OPERATIONAL_CLUSTERS"
+            action = "CONTINUE_COMPOSITE_EVIDENCE_ACCUMULATION"
+        elif materialized_count == 0 and citizen_count == 0:
+            state = "READY_CLUSTERS_BLOCKED_BY_OPERATIONALIZATION"
+            action = "CLUSTER_OPERATIONALIZATION_REQUIRED"
+        elif materialized_count == 0:
+            state = "READY_CLUSTERS_AWAITING_MATERIALIZATION"
+            action = "TARGET_CLUSTER_VALIDATION_AND_GROUNDING"
+        else:
+            state = "CLUSTER_OPERATIONALIZATION_ACTIVE"
+            action = "MONITOR_CLUSTER_TO_CITIZEN_CONVERSION"
+        return {
+            "ready_operational_cluster_count": ready_count,
+            "cluster_operationalization_candidate_count": ready_count,
+            "cluster_to_materialization_gap": max(ready_count - materialized_count, 0),
+            "cluster_to_citizen_gap": max(ready_count - citizen_count, 0),
+            "cluster_operationalization_state": state,
+            "cluster_operationalization_action": action,
+            "cluster_operationalization_pressure": self._bounded_ratio(
+                max(ready_count - materialized_count, 0),
+                max(cluster_count, 1),
+            ),
+        }
+
     def _roadmap(
         self,
         *,
@@ -256,6 +475,7 @@ class OperationalEconomyAnalysis:
         population_growth_pressure: float,
         crystallization_efficiency: float,
         operational_investment_return: float,
+        cluster_operationalization_state: str,
     ) -> list[dict[str, Any]]:
         recommendations = []
         bottleneck = self._bottleneck(attrition_rows)
@@ -297,6 +517,17 @@ class OperationalEconomyAnalysis:
                     "priority": "compiler_conversion",
                     "target": "arena_to_compiled",
                     "action": "focus_compiler_package_and_primitive_support",
+                }
+            )
+        if cluster_operationalization_state in {
+            "READY_CLUSTERS_BLOCKED_BY_OPERATIONALIZATION",
+            "READY_CLUSTERS_AWAITING_MATERIALIZATION",
+        }:
+            recommendations.append(
+                {
+                    "priority": "cluster_operationalization",
+                    "target": "ready_operational_capability_clusters",
+                    "action": "convert_ready_clusters_into_grounded_validation_targets",
                 }
             )
         return recommendations[:7]

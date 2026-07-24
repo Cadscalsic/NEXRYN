@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from core.concept_lifecycle.unified_concept_lifecycle import (
     unified_concept_lifecycle_builder,
@@ -2482,6 +2482,20 @@ class CanonicalReportBindingEngine:
         )
         rows = diagnostics.get("failure_rows") or []
         rows = rows if isinstance(rows, list) else []
+        grounding_requirement_rows = (
+            diagnostics.get("grounding_requirement_rows") or []
+        )
+        grounding_requirement_rows = (
+            grounding_requirement_rows
+            if isinstance(grounding_requirement_rows, list)
+            else []
+        )
+        grounding_required_for_operations = (
+            diagnostics.get("grounding_required_for_operations") or []
+        )
+        grounding_required_for_domains = (
+            diagnostics.get("grounding_required_for_domains") or {}
+        )
         reported_failures = sum(
             int(value or 0)
             for value in reason_counts.values()
@@ -2498,10 +2512,59 @@ class CanonicalReportBindingEngine:
                 or "compiler_failure_reason_not_reported"
             )
             reason_counts = {str(failure_reason): total_failures}
+        operational_grounding_failure_count = int(
+            self._first_number(
+                diagnostics.get("operational_grounding_failure_count"),
+                reason_counts.get("missing_grid_pair", 0),
+                0,
+            )
+            or 0
+        )
+        compiler_semantic_failure_count = int(
+            self._first_number(
+                diagnostics.get("compiler_semantic_failure_count"),
+                max(total_failures - operational_grounding_failure_count, 0),
+                0,
+            )
+            or 0
+        )
+        operational_grounding_failure_rate = self._first_number(
+            diagnostics.get("operational_grounding_failure_rate"),
+            self._bounded_ratio(
+                operational_grounding_failure_count,
+                total_failures,
+            ),
+        )
+        operational_grounding_state = (
+            diagnostics.get("operational_grounding_state")
+            or (
+                "GROUNDING_FAILURE_DOMINANT"
+                if operational_grounding_failure_count > compiler_semantic_failure_count
+                and operational_grounding_failure_count > 0
+                else "GROUNDING_FAILURE_PRESENT"
+                if operational_grounding_failure_count > 0
+                else "GROUNDED_COMPILER_INPUTS"
+            )
+        )
+        compiler_failure_interpretation = (
+            diagnostics.get("compiler_failure_interpretation")
+            or (
+                "operational_grounding_failure"
+                if operational_grounding_state == "GROUNDING_FAILURE_DOMINANT"
+                else "mixed_grounding_and_compiler_failure"
+                if operational_grounding_failure_count
+                else "compiler_semantic_or_execution_failure"
+            )
+        )
         normalized_rows = self._normalize_compiler_failure_rows(
             rows,
             reason_counts,
             domain_distribution,
+        )
+        normalized_grounding_rows = self._normalize_grounding_requirement_rows(
+            grounding_requirement_rows,
+            grounding_required_for_operations,
+            grounding_required_for_domains,
         )
         compiler_success_rate = self._bounded_ratio(
             compiled_programs,
@@ -2516,14 +2579,32 @@ class CanonicalReportBindingEngine:
                 sorted((str(key), int(value or 0)) for key, value in domain_distribution.items())
             ),
             "compiler_failure_rows": normalized_rows[:10],
+            "grounding_requirement_rows": normalized_grounding_rows[:10],
+            "grounding_required_for_operations": grounding_required_for_operations,
+            "grounding_required_for_domains": grounding_required_for_domains,
             "compiler_failure_detail_capture_state": (
                 self._compiler_failure_detail_capture_state(
                     rows,
                     normalized_rows,
                 )
             ),
+            "operational_grounding_failure_count": (
+                operational_grounding_failure_count
+            ),
+            "compiler_semantic_failure_count": compiler_semantic_failure_count,
+            "operational_grounding_failure_rate": (
+                operational_grounding_failure_rate
+            ),
+            "operational_grounding_state": operational_grounding_state,
+            "compiler_failure_interpretation": compiler_failure_interpretation,
+            "grounding_adjusted_compiler_failure_pressure": self._bounded_ratio(
+                max(total_failures - operational_grounding_failure_count, 0),
+                max(generated_programs, compiler_runtime_activated_programs),
+            ),
             "compiler_diagnostic_state": (
-                "COMPILER_BOTTLENECK_DIAGNOSED"
+                "OPERATIONAL_GROUNDING_BOTTLENECK_DIAGNOSED"
+                if operational_grounding_state == "GROUNDING_FAILURE_DOMINANT"
+                else "COMPILER_BOTTLENECK_DIAGNOSED"
                 if total_failures and reason_counts
                 else "COMPILER_BOTTLENECK_UNEXPLAINED"
                 if total_failures
@@ -2576,6 +2657,137 @@ class CanonicalReportBindingEngine:
             and rule not in unresolved
             and rule != "rule_not_captured"
         )
+
+    def _normalize_grounding_requirement_rows(
+        self,
+        rows: list[Any],
+        operations: Any,
+        domains: Any,
+    ) -> list[dict[str, Any]]:
+        normalized = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            operation = self._grounding_value(row.get("operation"))
+            if not operation:
+                continue
+            normalized.append(
+                self._grounding_requirement_row(
+                    operation=operation,
+                    domain=(
+                        self._grounding_value(row.get("domain"))
+                        or self._grounding_domain_for_operation(operation, domains)
+                    ),
+                    program=self._grounding_value(row.get("program")),
+                    semantic_intent=self._grounding_value(
+                        row.get("semantic_intent")
+                    ),
+                    missing_grounding=self._grounding_value(
+                        row.get("missing_grounding")
+                    ),
+                    required_evidence=self._grounding_value(
+                        row.get("required_evidence")
+                    ),
+                    required_task_property=self._grounding_value(
+                        row.get("required_task_property")
+                    ),
+                    grounding_stage=self._grounding_value(
+                        row.get("grounding_stage")
+                    ),
+                    action=self._grounding_value(row.get("action")),
+                )
+            )
+        if normalized:
+            return normalized
+        return [
+            self._grounding_requirement_row(
+                operation=operation,
+                domain=self._grounding_domain_for_operation(operation, domains),
+            )
+            for operation in [
+                self._grounding_value(operation)
+                for operation in (operations or [])
+                if self._grounding_value(operation)
+            ]
+        ]
+
+    def _grounding_requirement_row(
+        self,
+        *,
+        operation: str,
+        domain: str | None = None,
+        program: str | None = None,
+        semantic_intent: str | None = None,
+        missing_grounding: str | None = None,
+        required_evidence: str | None = None,
+        required_task_property: str | None = None,
+        grounding_stage: str | None = None,
+        action: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "program": program or f"semantic_program_{operation}",
+            "semantic_intent": semantic_intent or operation,
+            "operation": operation,
+            "domain": domain or self._grounding_domain_for_operation(operation, {}),
+            "missing_grounding": missing_grounding or "input_output_grid_pair",
+            "required_evidence": (
+                required_evidence or "exact_or_governed_validation_success"
+            ),
+            "required_task_property": (
+                required_task_property
+                or self._grounding_required_task_property(operation)
+            ),
+            "grounding_stage": grounding_stage or "compiler_input_grounding",
+            "action": action or "select_grounding_aligned_task",
+        }
+
+    def _grounding_value(self, value: Any) -> str:
+        text = str(value or "").strip()
+        if not text or text.lower() in {
+            "not available",
+            "not_available",
+            "none",
+            "unknown",
+        }:
+            return ""
+        return text
+
+    def _grounding_domain_for_operation(self, operation: str, domains: Any) -> str:
+        operation = str(operation or "")
+        if "topology" in operation:
+            return "Topology"
+        if operation in {"translate", "move_object", "preserve_grid"}:
+            return "Spatial"
+        if operation in {"duplicate_object", "replicate_object"}:
+            return "Growth"
+        if operation in {"preserve_shape", "preserve_size"}:
+            return "Identity"
+        if "color" in operation:
+            return "Color"
+        if "symmetry" in operation:
+            return "Geometry"
+        if isinstance(domains, dict) and domains:
+            return str(
+                sorted(
+                    domains.items(),
+                    key=lambda item: (-int(item[1] or 0), str(item[0])),
+                )[0][0]
+            )
+        return "Transformation"
+
+    def _grounding_required_task_property(self, operation: str) -> str:
+        operation = str(operation or "")
+        if operation in {"translate", "move_object"}:
+            return "unambiguous_directional_translation_ground_truth"
+        if operation in {"preserve_topology", "topological_reasoning"}:
+            return "topology_preserving_transformation_ground_truth"
+        if operation in {"preserve_grid", "preserve_shape", "preserve_size"}:
+            return "paired_identity_preservation_ground_truth"
+        if operation in {"duplicate_object", "replicate_object"}:
+            return "paired_symbolic_object_replication_ground_truth"
+        if operation in {"replace_color", "preserve_colors"}:
+            return "color_invariance_under_transformation"
+        return "paired_source_target_grid_ground_truth"
 
     def _normalize_compiler_failure_rows(
         self,
@@ -2977,6 +3189,11 @@ class CanonicalReportBindingEngine:
             if isinstance(top_operational_citizens, list)
             else []
         )
+        top_operational_citizens = [
+            self._operational_citizen_semantics(row)
+            for row in top_operational_citizens
+            if isinstance(row, dict)
+        ]
         capability_stability_regression_count = int(
             self._first_number(
                 materialization.get("capability_stability_regression_count"),
@@ -3265,6 +3482,11 @@ class CanonicalReportBindingEngine:
             if isinstance(validator_failure_distribution, dict)
             else {}
         )
+        governed_validation_diagnostics = (
+            self._governed_validation_diagnostics(
+                validator_failure_distribution,
+            )
+        )
         world_governance_promotion_policy = (
             materialization.get("world_governance_promotion_policy")
             or survival.get("world_governance_promotion_policy")
@@ -3349,6 +3571,12 @@ class CanonicalReportBindingEngine:
             if isinstance(capability_survival_rows, list)
             else []
         )
+        capability_governance_contract = self._capability_governance_contract(
+            top_operational_citizens=top_operational_citizens,
+            capability_survival_rows=capability_survival_rows,
+            trusted_capability_policy=trusted_capability_policy,
+            decision_authority_policy=decision_authority_policy,
+        )
         candidate_retention_rate = self._bounded_ratio(
             arena_simulated_survival_candidate_count,
             generated_survival_candidate_count,
@@ -3371,6 +3599,10 @@ class CanonicalReportBindingEngine:
         operational_citizen_conversion_rate = self._bounded_ratio(
             operational_citizen_count,
             generated_survival_candidate_count,
+        )
+        sandbox_operational_citizen_coverage = self._bounded_ratio(
+            operational_citizen_count,
+            generated_concepts,
         )
         historical_operational_citizen_count = known_operational_capabilities
         knowledge_production_efficiency = self._bounded_ratio(
@@ -3815,6 +4047,7 @@ class CanonicalReportBindingEngine:
                 operational_domain_report.get("domain_collaboration_rows") or []
             ),
             operational_programs=[],
+            compiler_infrastructure_report=compiler_infrastructure,
         )
         operational_economy_report = operational_economy_analysis.analyze(
             generated_concepts=generated_concepts,
@@ -3844,6 +4077,28 @@ class CanonicalReportBindingEngine:
             high_value_knowledge_items=high_value_knowledge_items,
             medium_value_knowledge_items=medium_value_knowledge_items,
             low_value_knowledge_items=low_value_knowledge_items,
+            operational_grounding_failure_count=(
+                compiler_failure_diagnostics.get(
+                    "operational_grounding_failure_count",
+                    0,
+                )
+            ),
+            operational_grounding_failure_rate=(
+                compiler_failure_diagnostics.get(
+                    "operational_grounding_failure_rate",
+                )
+            ),
+        )
+        knowledge_operationalization_root_cause = (
+            "governed_validation_infrastructure"
+            if governed_validation_diagnostics.get("state")
+            == "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK"
+            else operational_economy_report.get(
+                "knowledge_operationalization_choke_cause"
+            )
+        )
+        knowledge_operationalization_symptom = operational_economy_report.get(
+            "knowledge_operationalization_choke_point"
         )
         missing_requirements = program_generation.get("missing_requirements") or []
         if not isinstance(missing_requirements, list):
@@ -3895,6 +4150,15 @@ class CanonicalReportBindingEngine:
             "program_coverage": program_coverage,
             "validated_executable_coverage": validated_executable_coverage,
             "operational_capability_coverage": operational_coverage,
+            "operational_capability_coverage_semantics": (
+                "current_run_materialized_capabilities_per_generated_concept"
+            ),
+            "sandbox_operational_citizen_coverage": (
+                sandbox_operational_citizen_coverage
+            ),
+            "sandbox_operational_citizen_coverage_semantics": (
+                "sandbox_operational_citizens_per_generated_concept"
+            ),
             "operational_capability_materialization_rate": operational_materialization_rate,
             "operational_yield_from_concepts": operational_yield_from_concepts,
             "operational_yield_from_programs": operational_yield_from_programs,
@@ -3910,6 +4174,15 @@ class CanonicalReportBindingEngine:
             "end_to_end_program_lifecycle": end_to_end_lifecycle,
             "cognitive_domain_architecture_summary": domain_architecture,
             "candidate_source_lineage": candidate_lineage,
+            "candidate_source_materialization_rows": (
+                arena.get("candidate_source_materialization_rows") or []
+            )[:8],
+            "candidate_source_materialization_gap_count": arena.get(
+                "candidate_source_materialization_gap_count",
+            ),
+            "candidate_source_materialization_state": arena.get(
+                "candidate_source_materialization_state",
+            ),
             "lowest_coverage_bottlenecks": bottlenecks[:5],
             "knowledge_investment_policy": proposal.get(
                 "knowledge_investment_policy"
@@ -4106,6 +4379,37 @@ class CanonicalReportBindingEngine:
                 capability_ecology_report.get("capability_investment_priorities")
                 or []
             )[:5],
+            "capability_investment_intelligence_phase": (
+                capability_ecology_report.get(
+                    "capability_investment_intelligence_phase"
+                )
+            ),
+            "capability_investment_authority_scope": (
+                capability_ecology_report.get(
+                    "capability_investment_authority_scope"
+                )
+                or []
+            ),
+            "capability_investment_forbidden_authority": (
+                capability_ecology_report.get(
+                    "capability_investment_forbidden_authority"
+                )
+                or []
+            ),
+            "capability_investment_truth_boundary": (
+                capability_ecology_report.get(
+                    "capability_investment_truth_boundary"
+                )
+            ),
+            "capability_investment_governance_principle": (
+                capability_ecology_report.get(
+                    "capability_investment_governance_principle"
+                )
+            ),
+            "capability_promotion_roadmap": (
+                capability_ecology_report.get("capability_promotion_roadmap")
+                or []
+            ),
             "operational_economy_report": operational_economy_report,
             "operational_economy_health": operational_economy_report.get(
                 "operational_economy_health"
@@ -4164,6 +4468,44 @@ class CanonicalReportBindingEngine:
                 )
                 or {}
             ),
+            "knowledge_operationalization_path": (
+                operational_economy_report.get("knowledge_operationalization_path")
+                or []
+            )[:7],
+            "knowledge_operationalization_choke_point": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_choke_point"
+                )
+            ),
+            "knowledge_operationalization_symptom": (
+                knowledge_operationalization_symptom
+            ),
+            "knowledge_operationalization_root_cause": (
+                knowledge_operationalization_root_cause
+            ),
+            "knowledge_operationalization_choke_cause": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_choke_cause"
+                )
+            ),
+            "knowledge_operationalization_choke_action": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_choke_action"
+                )
+            ),
+            "knowledge_operationalization_loss_count": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_loss_count"
+                )
+            ),
+            "knowledge_operationalization_loss_pressure": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_loss_pressure"
+                )
+            ),
+            "knowledge_operationalization_state": (
+                operational_economy_report.get("knowledge_operationalization_state")
+            ),
             "operational_economy_bottleneck": operational_economy_report.get(
                 "operational_economy_bottleneck"
             ),
@@ -4180,6 +4522,29 @@ class CanonicalReportBindingEngine:
             ),
             "operational_cluster_count": operational_economy_report.get(
                 "operational_cluster_count"
+            ),
+            "ready_operational_cluster_count": operational_economy_report.get(
+                "ready_operational_cluster_count"
+            ),
+            "cluster_operationalization_candidate_count": (
+                operational_economy_report.get(
+                    "cluster_operationalization_candidate_count"
+                )
+            ),
+            "cluster_to_materialization_gap": operational_economy_report.get(
+                "cluster_to_materialization_gap"
+            ),
+            "cluster_to_citizen_gap": operational_economy_report.get(
+                "cluster_to_citizen_gap"
+            ),
+            "cluster_operationalization_state": operational_economy_report.get(
+                "cluster_operationalization_state"
+            ),
+            "cluster_operationalization_action": operational_economy_report.get(
+                "cluster_operationalization_action"
+            ),
+            "cluster_operationalization_pressure": operational_economy_report.get(
+                "cluster_operationalization_pressure"
             ),
             "surviving_capability_domain_count": surviving_capability_domain_count,
             "missing_operational_citizen_domains": (
@@ -4252,6 +4617,59 @@ class CanonicalReportBindingEngine:
             ),
             "graduation_pipeline_stages": graduation_pipeline_stages,
             "graduation_transition_rows": graduation_transition_rows[:5],
+            "capability_promotion_phase_state": (
+                materialization.get("capability_promotion_phase_state")
+                or survival.get("capability_promotion_phase_state")
+                or graduation_infrastructure_report.get(
+                    "capability_promotion_phase_state"
+                )
+            ),
+            "capability_promotion_candidate_count": (
+                materialization.get("capability_promotion_candidate_count")
+                or survival.get("capability_promotion_candidate_count")
+                or graduation_infrastructure_report.get(
+                    "capability_promotion_candidate_count"
+                )
+            ),
+            "capability_promotion_interpretation": (
+                materialization.get("capability_promotion_interpretation")
+                or survival.get("capability_promotion_interpretation")
+                or graduation_infrastructure_report.get(
+                    "capability_promotion_interpretation"
+                )
+            ),
+            "evidence_acceptance_state": (
+                materialization.get("evidence_acceptance_state")
+                or survival.get("evidence_acceptance_state")
+                or graduation_infrastructure_report.get("evidence_acceptance_state")
+            ),
+            "evidence_acceptance_bottleneck": (
+                materialization.get("evidence_acceptance_bottleneck")
+                or survival.get("evidence_acceptance_bottleneck")
+                or graduation_infrastructure_report.get(
+                    "evidence_acceptance_bottleneck"
+                )
+            ),
+            "evidence_acceptance_failure_count": (
+                materialization.get("evidence_acceptance_failure_count")
+                or survival.get("evidence_acceptance_failure_count")
+                or graduation_infrastructure_report.get(
+                    "evidence_acceptance_failure_count"
+                )
+            ),
+            "evidence_acceptance_failure_share": (
+                materialization.get("evidence_acceptance_failure_share")
+                or survival.get("evidence_acceptance_failure_share")
+                or graduation_infrastructure_report.get(
+                    "evidence_acceptance_failure_share"
+                )
+            ),
+            "capability_promotion_rows": (
+                materialization.get("capability_promotion_rows")
+                or survival.get("capability_promotion_rows")
+                or graduation_infrastructure_report.get("capability_promotion_rows")
+                or []
+            )[:5],
             "capability_graduation_diagnostics": (
                 capability_graduation_diagnostics[:10]
             ),
@@ -4260,6 +4678,24 @@ class CanonicalReportBindingEngine:
                 graduation_sprint_recommendations[:5]
             ),
             "validator_failure_distribution": validator_failure_distribution,
+            "governed_validation_bottleneck": (
+                governed_validation_diagnostics.get("bottleneck")
+            ),
+            "governed_validation_bottleneck_state": (
+                governed_validation_diagnostics.get("state")
+            ),
+            "governed_validation_failure_count": (
+                governed_validation_diagnostics.get("failure_count")
+            ),
+            "governed_validation_failure_share": (
+                governed_validation_diagnostics.get("failure_share")
+            ),
+            "governed_validation_action": (
+                governed_validation_diagnostics.get("action")
+            ),
+            "governed_validation_required_evidence": (
+                governed_validation_diagnostics.get("required_evidence")
+            ),
             "world_governance_promotion_policy": (
                 world_governance_promotion_policy
             ),
@@ -4269,6 +4705,38 @@ class CanonicalReportBindingEngine:
             "sandbox_citizenship_thresholds": sandbox_citizenship_thresholds,
             "trusted_capability_policy": trusted_capability_policy,
             "decision_authority_policy": decision_authority_policy,
+            "capability_governance_contract": capability_governance_contract,
+            "capability_governance_contract_state": (
+                capability_governance_contract.get("contract_state")
+            ),
+            "capability_rights_policy": capability_governance_contract.get(
+                "rights_policy",
+                {},
+            ),
+            "capability_obligations_policy": capability_governance_contract.get(
+                "obligations_policy",
+                {},
+            ),
+            "capability_governance_rows": (
+                capability_governance_contract.get("capability_governance_rows")
+                or []
+            )[:8],
+            "capability_reputation_average": capability_governance_contract.get(
+                "average_reputation_score"
+            ),
+            "capability_trust_average": capability_governance_contract.get(
+                "average_trust_score"
+            ),
+            "capability_evidence_contamination_state": (
+                capability_governance_contract.get("evidence_contamination_state")
+            ),
+            "capability_evidence_contamination_count": (
+                capability_governance_contract.get("evidence_contamination_count")
+            ),
+            "capability_evidence_contamination_rows": (
+                capability_governance_contract.get("evidence_contamination_rows")
+                or []
+            )[:5],
             "capability_stability_regression_count": (
                 capability_stability_regression_count
             ),
@@ -4321,6 +4789,18 @@ class CanonicalReportBindingEngine:
                 "compiler_failure_rows",
                 [],
             ),
+            "grounding_requirement_rows": compiler_failure_diagnostics.get(
+                "grounding_requirement_rows",
+                [],
+            ),
+            "grounding_required_for_operations": compiler_failure_diagnostics.get(
+                "grounding_required_for_operations",
+                [],
+            ),
+            "grounding_required_for_domains": compiler_failure_diagnostics.get(
+                "grounding_required_for_domains",
+                {},
+            ),
             "compiler_diagnostic_state": compiler_failure_diagnostics.get(
                 "compiler_diagnostic_state",
             ),
@@ -4331,6 +4811,34 @@ class CanonicalReportBindingEngine:
             ),
             "compiler_failure_pressure": compiler_failure_diagnostics.get(
                 "compiler_failure_pressure",
+            ),
+            "operational_grounding_failure_count": (
+                compiler_failure_diagnostics.get(
+                    "operational_grounding_failure_count",
+                    0,
+                )
+            ),
+            "compiler_semantic_failure_count": compiler_failure_diagnostics.get(
+                "compiler_semantic_failure_count",
+                0,
+            ),
+            "operational_grounding_failure_rate": (
+                compiler_failure_diagnostics.get(
+                    "operational_grounding_failure_rate",
+                )
+            ),
+            "operational_grounding_state": compiler_failure_diagnostics.get(
+                "operational_grounding_state",
+            ),
+            "compiler_failure_interpretation": (
+                compiler_failure_diagnostics.get(
+                    "compiler_failure_interpretation",
+                )
+            ),
+            "grounding_adjusted_compiler_failure_pressure": (
+                compiler_failure_diagnostics.get(
+                    "grounding_adjusted_compiler_failure_pressure",
+                )
             ),
             "compiler_success_rate": compiler_failure_diagnostics.get(
                 "compiler_success_rate",
@@ -4363,6 +4871,24 @@ class CanonicalReportBindingEngine:
             ),
             "compiler_infrastructure_readiness": compiler_infrastructure.get(
                 "compiler_infrastructure_readiness",
+            ),
+            "execution_package_inventory_state": compiler_infrastructure.get(
+                "execution_package_inventory_state",
+            ),
+            "primitive_operation_inventory_state": compiler_infrastructure.get(
+                "primitive_operation_inventory_state",
+            ),
+            "execution_package_inventory_count": compiler_infrastructure.get(
+                "execution_package_inventory_count",
+            ),
+            "primitive_operation_inventory_count": compiler_infrastructure.get(
+                "primitive_operation_inventory_count",
+            ),
+            "executable_package_count": compiler_infrastructure.get(
+                "executable_package_count",
+            ),
+            "executable_primitive_count": compiler_infrastructure.get(
+                "executable_primitive_count",
             ),
             "execution_package_inventory": compiler_infrastructure.get(
                 "execution_package_inventory",
@@ -4428,6 +4954,16 @@ class CanonicalReportBindingEngine:
             "unused_execution_packages": compiler_infrastructure.get(
                 "unused_execution_packages",
                 [],
+            ),
+            "package_utilization_gap_rows": (
+                compiler_infrastructure.get("package_utilization_gap_rows")
+                or []
+            )[:8],
+            "package_utilization_gap_count": compiler_infrastructure.get(
+                "package_utilization_gap_count",
+            ),
+            "package_utilization_gap_state": compiler_infrastructure.get(
+                "package_utilization_gap_state",
             ),
             "partial_execution_packages": compiler_infrastructure.get(
                 "partial_execution_packages",
@@ -4507,8 +5043,408 @@ class CanonicalReportBindingEngine:
                 len(row.get("operational_capabilities") or [])
                 for row in registry
                 if isinstance(row, dict)
-            )
+                )
         return 0
+
+    def _operational_citizen_semantics(
+        self,
+        row: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        enriched = dict(row)
+        trusted = bool(enriched.get("trusted_for_decision"))
+        basis = str(enriched.get("citizenship_basis") or "")
+        sandbox_basis = (
+            "sandbox" in basis
+            or enriched.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+            and not trusted
+        )
+        enriched.setdefault(
+            "citizenship_tier",
+            (
+                "TRUSTED_OPERATIONAL_CAPABILITY"
+                if trusted
+                else "SANDBOX_OPERATIONAL_CITIZEN"
+                if sandbox_basis
+                else "OPERATIONAL_CITIZEN_PENDING_TRUST_REVIEW"
+            ),
+        )
+        enriched.setdefault(
+            "authority_scope",
+            "DECISION_AUTHORIZED" if trusted else "SANDBOX_REUSE_ONLY",
+        )
+        enriched.setdefault(
+            "trust_state",
+            (
+                "TRUSTED_FOR_DECISION"
+                if trusted
+                else "NOT_TRUSTED_FOR_DECISION"
+            ),
+        )
+        enriched.setdefault(
+            "graduation_semantics",
+            (
+                "citizenship_is_sandbox_reuse_not_decision_authority"
+                if not trusted
+                else "citizenship_includes_trusted_decision_authority"
+            ),
+        )
+        return enriched
+
+    def _capability_governance_contract(
+        self,
+        *,
+        top_operational_citizens: list[Mapping[str, Any]],
+        capability_survival_rows: list[Mapping[str, Any]],
+        trusted_capability_policy: Mapping[str, Any],
+        decision_authority_policy: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        source_rows = []
+        seen = set()
+        for row in [*top_operational_citizens, *capability_survival_rows]:
+            if not isinstance(row, Mapping):
+                continue
+            capability_id = str(
+                row.get("capability_id")
+                or row.get("operation")
+                or f"capability:{len(source_rows)}"
+            )
+            if capability_id in seen:
+                continue
+            seen.add(capability_id)
+            if row.get("lifecycle_state") not in {
+                "OPERATIONAL_CITIZEN",
+                "SURVIVING_CAPABILITY",
+            } and not row.get("citizenship_tier"):
+                continue
+            source_rows.append(row)
+
+        governance_rows = [
+            self._capability_governance_row(row)
+            for row in source_rows[:12]
+        ]
+        avg_reputation = self._average(
+            row.get("reputation_score") for row in governance_rows
+        )
+        avg_trust = self._average(row.get("trust_score") for row in governance_rows)
+        contamination_rows = [
+            row for row in governance_rows
+            if row.get("evidence_contamination_state")
+            == "ARENA_EXPOSURE_CONTAMINATION_RISK"
+        ]
+        return {
+            "system": "capability_governance_contract",
+            "contract_state": (
+                "CAPABILITY_GOVERNANCE_ACTIVE"
+                if governance_rows
+                else "NO_GOVERNED_CAPABILITIES"
+            ),
+            "rights_policy": {
+                "participate_in_arena": "sandbox_citizens_and_survivors",
+                "accumulate_evidence": "sandbox_citizens_and_survivors",
+                "request_validation": "sandbox_citizens",
+                "join_clusters": "sandbox_citizens",
+                "decision_authority": "trusted_capabilities_only",
+            },
+            "obligations_policy": {
+                "report_failures": True,
+                "preserve_lineage": True,
+                "respect_sandbox_limits": True,
+                "undergo_regression_review": True,
+                "maintain_identity_contract": True,
+            },
+            "trusted_capability_policy": dict(trusted_capability_policy or {}),
+            "decision_authority_policy": dict(decision_authority_policy or {}),
+            "capability_governance_rows": governance_rows,
+            "average_reputation_score": avg_reputation,
+            "average_trust_score": avg_trust,
+            "evidence_contamination_state": (
+                "EVIDENCE_LEDGER_CONTAMINATION_RISK"
+                if contamination_rows
+                else "EVIDENCE_LEDGER_STABLE"
+            ),
+            "evidence_contamination_count": len(contamination_rows),
+            "evidence_contamination_rows": contamination_rows[:5],
+            "governance_summary": {
+                "governed_capability_count": len(governance_rows),
+                "trusted_capability_count": sum(
+                    1 for row in governance_rows
+                    if row.get("trust_state") == "TRUSTED_FOR_DECISION"
+                ),
+                "sandbox_capability_count": sum(
+                    1 for row in governance_rows
+                    if row.get("authority_scope") == "SANDBOX_REUSE_ONLY"
+                ),
+            },
+        }
+
+    def _governed_validation_diagnostics(
+        self,
+        validator_failure_distribution: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        distribution = (
+            validator_failure_distribution
+            if isinstance(validator_failure_distribution, Mapping)
+            else {}
+        )
+        total = sum(
+            int(value or 0)
+            for value in distribution.values()
+            if isinstance(value, int | float)
+        )
+        governed_count = int(
+            distribution.get("GOVERNED_VALIDATION_INCOMPLETE")
+            or distribution.get("Governed Validation Incomplete")
+            or 0
+        )
+        share = self._bounded_ratio(governed_count, total)
+        dominant = bool(total and share is not None and share >= 0.50)
+        return {
+            "bottleneck": (
+                "governed_validation_infrastructure"
+                if governed_count
+                else "none"
+            ),
+            "state": (
+                "GOVERNED_VALIDATION_INFRASTRUCTURE_BOTTLENECK"
+                if dominant
+                else "GOVERNED_VALIDATION_GAP_PRESENT"
+                if governed_count
+                else "NO_GOVERNED_VALIDATION_GAP"
+            ),
+            "failure_count": governed_count,
+            "failure_share": share,
+            "action": (
+                "select_governed_validation_evidence_tasks"
+                if dominant
+                else "monitor_governed_validation_evidence"
+                if governed_count
+                else "monitor"
+            ),
+            "required_evidence": (
+                "exact_or_governed_validation_success"
+                if governed_count
+                else None
+            ),
+        }
+
+    def _capability_evidence_ledger_summary(
+        self,
+        row: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        distinct_tasks = int(
+            self._first_number(
+                row.get("distinct_task_count"),
+                row.get("task_count"),
+                0,
+            )
+            or 0
+        )
+        arena_simulations = int(
+            self._first_number(
+                row.get("arena_simulation_count"),
+                row.get("arena_simulated_count"),
+                row.get("arena_participation_count"),
+                0,
+            )
+            or 0
+        )
+        arena_admissions = int(
+            self._first_number(
+                row.get("arena_admission_count"),
+                row.get("arena_participation_count"),
+                arena_simulations,
+                0,
+            )
+            or 0
+        )
+        relevant_task_attempts = int(
+            self._first_number(
+                row.get("relevant_task_attempt_count"),
+                distinct_tasks,
+                row.get("validation_attempts"),
+                0,
+            )
+            or 0
+        )
+        materialized_executions = int(
+            self._first_number(
+                row.get("materialized_execution_count"),
+                row.get("materialization_count"),
+                0,
+            )
+            or 0
+        )
+        validated_executions = int(
+            self._first_number(
+                row.get("validated_execution_count"),
+                row.get("validated_execution_success_count"),
+                row.get("exact_validation_success_count"),
+                0,
+            )
+            or 0
+        )
+        raw_average = self._first_number(row.get("average_accuracy"), 0.0) or 0.0
+        best_accuracy = self._first_number(row.get("best_accuracy"), 0.0) or 0.0
+        exposure_ratio = self._bounded_ratio(arena_simulations, distinct_tasks)
+        contamination_risk = bool(
+            distinct_tasks
+            and arena_simulations > distinct_tasks * 1.25
+            and best_accuracy >= 0.9
+            and raw_average < 0.5
+        )
+        adjusted_accuracy = raw_average
+        if contamination_risk:
+            adjusted_accuracy = max(
+                raw_average,
+                best_accuracy
+                * self._bounded_ratio(relevant_task_attempts, arena_simulations),
+            )
+        return {
+            "arena_admission_count": arena_admissions,
+            "arena_simulation_count": arena_simulations,
+            "relevant_task_attempt_count": relevant_task_attempts,
+            "materialized_execution_count": materialized_executions,
+            "validated_execution_count": validated_executions,
+            "arena_exposure_to_task_ratio": exposure_ratio,
+            "raw_average_accuracy": round(float(raw_average), 4),
+            "evidence_adjusted_accuracy": round(float(adjusted_accuracy), 4),
+            "average_accuracy_basis": "raw_arena_exposure_average",
+            "recommended_accuracy_basis": "relevant_task_attempt_accuracy",
+            "evidence_contamination_state": (
+                "ARENA_EXPOSURE_CONTAMINATION_RISK"
+                if contamination_risk
+                else "EVIDENCE_LEDGER_STABLE"
+            ),
+            "evidence_contamination_reason": (
+                "arena_simulations_exceed_relevant_task_attempts"
+                if contamination_risk
+                else "none"
+            ),
+        }
+
+    def _capability_governance_row(
+        self,
+        row: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        enriched = self._operational_citizen_semantics(row)
+        lifecycle = str(enriched.get("lifecycle_state") or "UNKNOWN")
+        trusted = bool(enriched.get("trusted_for_decision"))
+        evidence_ledger = self._capability_evidence_ledger_summary(enriched)
+        reputation = self._capability_reputation_score(enriched)
+        trust_score = 1.0 if trusted else min(reputation * 0.5, 0.49)
+        rights = ["participate_in_arena", "accumulate_evidence"]
+        if lifecycle == "OPERATIONAL_CITIZEN":
+            rights.extend(["request_validation", "join_clusters"])
+        if trusted:
+            rights.append("decision_authority")
+        obligations = [
+            "report_failures",
+            "preserve_lineage",
+            "respect_sandbox_limits",
+            "undergo_regression_review",
+        ]
+        if lifecycle == "OPERATIONAL_CITIZEN":
+            obligations.append("maintain_identity_contract")
+        return {
+            "capability_id": enriched.get("capability_id"),
+            "operation": enriched.get("operation"),
+            "domain": enriched.get("domain"),
+            "lifecycle_state": lifecycle,
+            "citizenship_tier": enriched.get("citizenship_tier"),
+            "authority_scope": enriched.get("authority_scope"),
+            "trust_state": enriched.get("trust_state"),
+            "rights": rights,
+            "obligations": obligations,
+            "reputation_score": reputation,
+            "trust_score": round(trust_score, 4),
+            "lineage_required": True,
+            "evidence_ledger": evidence_ledger,
+            "arena_admission_count": evidence_ledger.get("arena_admission_count"),
+            "arena_simulation_count": evidence_ledger.get("arena_simulation_count"),
+            "relevant_task_attempt_count": (
+                evidence_ledger.get("relevant_task_attempt_count")
+            ),
+            "materialized_execution_count": (
+                evidence_ledger.get("materialized_execution_count")
+            ),
+            "validated_execution_count": (
+                evidence_ledger.get("validated_execution_count")
+            ),
+            "arena_exposure_to_task_ratio": (
+                evidence_ledger.get("arena_exposure_to_task_ratio")
+            ),
+            "evidence_contamination_state": (
+                evidence_ledger.get("evidence_contamination_state")
+            ),
+            "evidence_adjusted_accuracy": (
+                evidence_ledger.get("evidence_adjusted_accuracy")
+            ),
+            "recommended_accuracy_basis": (
+                evidence_ledger.get("recommended_accuracy_basis")
+            ),
+            "reputation_basis": {
+                "distinct_tasks": self._first_number(
+                    enriched.get("distinct_task_count"),
+                    0,
+                ),
+                "average_accuracy": self._first_number(
+                    enriched.get("average_accuracy"),
+                    0.0,
+                ),
+                "best_accuracy": self._first_number(
+                    enriched.get("best_accuracy"),
+                    0.0,
+                ),
+                "evidence_adjusted_accuracy": evidence_ledger.get(
+                    "evidence_adjusted_accuracy"
+                ),
+                "average_accuracy_basis": evidence_ledger.get(
+                    "average_accuracy_basis"
+                ),
+                "recommended_accuracy_basis": evidence_ledger.get(
+                    "recommended_accuracy_basis"
+                ),
+                "trend": enriched.get("improvement_trend"),
+            },
+        }
+
+    def _capability_reputation_score(self, row: Mapping[str, Any]) -> float:
+        task_score = self._bounded_ratio(
+            self._first_number(row.get("distinct_task_count"), 0),
+            5,
+        )
+        ledger = self._capability_evidence_ledger_summary(row)
+        accuracy_score = (
+            ledger.get("evidence_adjusted_accuracy")
+            if ledger.get("evidence_contamination_state")
+            == "ARENA_EXPOSURE_CONTAMINATION_RISK"
+            else self._first_number(row.get("average_accuracy"), 0.0)
+        ) or 0.0
+        best_score = self._first_number(row.get("best_accuracy"), 0.0) or 0.0
+        trend = str(row.get("improvement_trend") or "").upper()
+        trend_score = (
+            1.0
+            if "IMPROVING" in trend or "STABLE_HIGH" in trend
+            else 0.75
+            if "STABLE" in trend
+            else 0.35
+            if "DECLINING" in trend
+            else 0.5
+        )
+        return round(
+            self._average([task_score, accuracy_score, best_score, trend_score]),
+            4,
+        )
+
+    def _average(self, values: Iterable[Any]) -> float | None:
+        numeric_values = [
+            float(value)
+            for value in values
+            if isinstance(value, int | float) and not isinstance(value, bool)
+        ]
+        if not numeric_values:
+            return None
+        return round(sum(numeric_values) / len(numeric_values), 4)
 
     def _operational_capability_materialization_summary(
         self,
@@ -4838,6 +5774,14 @@ class CanonicalReportBindingEngine:
             ]
             measured = [score for score in maturity_scores if score is not None]
             readiness = round(sum(measured) / len(measured), 4) if measured else None
+            domain_role = self._cognitive_domain_operational_role(
+                item["domain_name"],
+                operationalization_gap,
+                semantic_count,
+                program_count,
+                candidate_count,
+                arena_count,
+            )
             domain_rows.append({
                 "domain_name": item["domain_name"],
                 "semantic_concept_count": semantic_count,
@@ -4848,6 +5792,9 @@ class CanonicalReportBindingEngine:
                 "validated_program_count": validated_count,
                 "domain_operational_readiness": readiness,
                 "domain_status": self._coverage_status(readiness),
+                "domain_operational_role": domain_role["role"],
+                "domain_arena_relationship": domain_role["arena_relationship"],
+                "domain_operationalization_action": domain_role["action"],
                 "operationalization_gap": operationalization_gap,
                 "missing_execution_packages": sorted(item["missing_execution_packages"]),
                 "missing_compiler_requirements": sorted(item["missing_compiler_requirements"]),
@@ -4897,6 +5844,55 @@ class CanonicalReportBindingEngine:
                     row["domain_name"],
                 ),
             )[:5],
+        }
+
+    def _cognitive_domain_operational_role(
+        self,
+        domain_name: Any,
+        operationalization_gap: str,
+        semantic_count: int,
+        program_count: int,
+        candidate_count: int,
+        arena_count: int,
+    ) -> dict[str, str]:
+        domain = self._canonical_cognitive_domain_name(domain_name)
+        if (
+            domain in {"identity", "Identity Cognitive Domain"}
+            and (semantic_count or program_count or candidate_count)
+        ):
+            return {
+                "role": "ARENA_GOVERNOR_CONSTRAINT_DOMAIN",
+                "arena_relationship": (
+                    "constraint_governor"
+                    if operationalization_gap == "arena_entry_gap"
+                    else "constraint_and_candidate"
+                    if candidate_count or arena_count
+                    else "constraint_provider"
+                ),
+                "action": "bind_identity_constraints_to_arena_validation",
+            }
+        if operationalization_gap == "candidate_generation_gap":
+            return {
+                "role": "CANDIDATE_SOURCE_DOMAIN",
+                "arena_relationship": "candidate_source_missing",
+                "action": "materialize_domain_candidates",
+            }
+        if operationalization_gap == "arena_entry_gap":
+            return {
+                "role": "CANDIDATE_SOURCE_DOMAIN",
+                "arena_relationship": "candidate_not_admitted",
+                "action": "repair_arena_admission",
+            }
+        if operationalization_gap == "validation_gap":
+            return {
+                "role": "EXECUTION_CANDIDATE_DOMAIN",
+                "arena_relationship": "candidate_requires_validation",
+                "action": "select_grounding_aligned_validation_task",
+            }
+        return {
+            "role": "OPERATIONAL_DOMAIN",
+            "arena_relationship": "normal_candidate_participation",
+            "action": "monitor",
         }
 
     def _bootstrap_cognitive_knowledge_domains_from_architecture(
@@ -6417,6 +7413,29 @@ class CanonicalReportBindingEngine:
                 explicit_summary.get("selection_margin"),
                 0.0,
             )
+            source_status = {
+                source: "ENTERED"
+                for source in explicit_summary.get("sources_entered", []) or []
+            }
+            source_outcomes = [
+                {
+                    "source": row.get("source"),
+                    "candidate_id": row.get("candidate_id"),
+                    "operation": row.get("operation"),
+                    "entered_arena": row.get("entered_arena"),
+                    "status": row.get("status"),
+                    "reason": row.get("blocked_reason"),
+                }
+                for row in rows
+                if isinstance(row, dict)
+            ]
+            source_materialization_rows = (
+                self._explicit_arena_source_materialization_rows(
+                    explicit_summary=explicit_summary,
+                    rows=rows,
+                    source_status=source_status,
+                )
+            )
             summary = {
                 "arena_state": explicit_summary.get("arena_state"),
                 "candidate_count": explicit_summary.get("candidate_count"),
@@ -6442,22 +7461,23 @@ class CanonicalReportBindingEngine:
                     row for row in rows
                     if isinstance(row, dict) and str(row.get("status", "")).startswith(("BLOCKED", "REJECTED"))
                 ],
-                "source_outcomes": [
-                    {
-                        "source": row.get("source"),
-                        "candidate_id": row.get("candidate_id"),
-                        "operation": row.get("operation"),
-                        "entered_arena": row.get("entered_arena"),
-                        "status": row.get("status"),
-                        "reason": row.get("blocked_reason"),
-                    }
-                    for row in rows
-                    if isinstance(row, dict)
-                ],
-                "source_status": {
-                    source: "ENTERED"
-                    for source in explicit_summary.get("sources_entered", []) or []
-                },
+                "source_outcomes": source_outcomes,
+                "source_status": source_status,
+                "candidate_source_materialization_rows": (
+                    source_materialization_rows
+                ),
+                "candidate_source_materialization_gap_count": len([
+                    row for row in source_materialization_rows
+                    if row.get("source_materialization_state") != "ENTERED_ARENA"
+                ]),
+                "candidate_source_materialization_state": (
+                    "SOURCE_MATERIALIZATION_GAPS_PRESENT"
+                    if any(
+                        row.get("source_materialization_state") != "ENTERED_ARENA"
+                        for row in source_materialization_rows
+                    )
+                    else "ALL_TARGET_SOURCES_ENTERED_ARENA"
+                ),
                 "missing_competition_reason": explicit_summary.get("no_competition_reason"),
                 "unique_candidate_count": explicit_summary.get("unique_candidate_count"),
                 "source_count": explicit_summary.get("source_count"),
@@ -6542,6 +7562,17 @@ class CanonicalReportBindingEngine:
             repair,
             participants,
         )
+        source_materialization_rows = self._arena_source_materialization_rows(
+            compiler=compiler,
+            adaptive=adaptive,
+            synthesis=synthesis,
+            color=color,
+            search=search,
+            repair=repair,
+            participants=participants,
+            rejected=rejected,
+            source_status=source_status,
+        )
         if any(
             candidate.get("source") == "semantic_to_transformation_compiler"
             for candidate in rejected
@@ -6596,6 +7627,19 @@ class CanonicalReportBindingEngine:
             "rejected_candidate_rows": rejected,
             "source_outcomes": source_outcomes,
             "source_status": source_status,
+            "candidate_source_materialization_rows": source_materialization_rows,
+            "candidate_source_materialization_gap_count": len([
+                row for row in source_materialization_rows
+                if row.get("source_materialization_state") != "ENTERED_ARENA"
+            ]),
+            "candidate_source_materialization_state": (
+                "SOURCE_MATERIALIZATION_GAPS_PRESENT"
+                if any(
+                    row.get("source_materialization_state") != "ENTERED_ARENA"
+                    for row in source_materialization_rows
+                )
+                else "ALL_TARGET_SOURCES_ENTERED_ARENA"
+            ),
             "missing_competition_reason": (
                 "Only one candidate source entered the arena."
                 if participants and len(sources) <= 1
@@ -6939,6 +7983,267 @@ class CanonicalReportBindingEngine:
             "adaptive_search": "ENTERED" if "adaptive_search" in active else "NOT_TRIGGERED" if not search else "NO_EXECUTABLE_CANDIDATE",
             "repair": "ENTERED" if "repair" in active else "NOT_TRIGGERED" if not repair else "NO_EXECUTABLE_CANDIDATE",
         }
+
+    def _explicit_arena_source_materialization_rows(
+        self,
+        *,
+        explicit_summary: dict[str, Any],
+        rows: list[Any],
+        source_status: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        entered_sources = {
+            str(row.get("source"))
+            for row in rows
+            if isinstance(row, dict) and row.get("entered_arena")
+        }
+        explicit_targets = (
+            explicit_summary.get("target_candidate_sources")
+            or explicit_summary.get("eligible_sources")
+        )
+        target_sources = (
+            explicit_targets
+            or [
+                "program_generation",
+                "semantic_to_transformation_compiler",
+                "adaptive_reuse",
+                "counterfactual_reasoning",
+                "execution_memory",
+            ]
+        )
+        missing_sources = set(
+            str(source)
+            for source in explicit_summary.get("missing_candidate_sources", []) or []
+        )
+        outcomes = {
+            str(row.get("source")): row
+            for row in rows
+            if isinstance(row, dict) and row.get("source")
+        }
+        result = []
+        for source in [str(item) for item in target_sources if item]:
+            aliases = self._candidate_source_aliases(source)
+            entered = bool(entered_sources.intersection(aliases | {source}))
+            outcome = next(
+                (
+                    outcomes.get(alias)
+                    for alias in aliases | {source}
+                    if outcomes.get(alias)
+                ),
+                {},
+            )
+            signal = entered or bool(outcome) or (
+                bool(explicit_targets) and source not in missing_sources
+            )
+            state = (
+                "ENTERED_ARENA"
+                if entered
+                else "KNOWLEDGE_SIGNAL_NOT_MATERIALIZED"
+                if signal
+                else "NO_KNOWLEDGE_SIGNAL"
+            )
+            status = (
+                "ENTERED"
+                if entered
+                else outcome.get("status")
+                or source_status.get(source)
+                or (
+                    "NO_EXECUTABLE_CANDIDATE"
+                    if signal
+                    else "NOT_TRIGGERED"
+                )
+            )
+            result.append({
+                "source": source,
+                "knowledge_signal": bool(signal),
+                "candidate_materialized": bool(outcome),
+                "entered_arena": entered,
+                "source_status": status,
+                "source_materialization_state": state,
+                "failure_stage": (
+                    "arena_entry"
+                    if entered
+                    else "candidate_materialization"
+                    if signal
+                    else "source_activation"
+                ),
+                "blocked_reason": (
+                    outcome.get("blocked_reason")
+                    or outcome.get("reason")
+                    if isinstance(outcome, dict)
+                    else None
+                ),
+                "action": self._arena_source_materialization_action(
+                    source,
+                    state,
+                    str(status),
+                ),
+            })
+        return result
+
+    def _candidate_source_aliases(self, source: str) -> set[str]:
+        if source == "program_generation":
+            return {"normalized_program_candidates", "program_generation"}
+        if source == "semantic_to_transformation_compiler":
+            return {"semantic_compiler", "semantic_to_transformation_compiler"}
+        if source == "counterfactual_reasoning":
+            return {"counterfactual_search", "counterfactual_reasoning"}
+        return {source}
+
+    def _arena_source_materialization_rows(
+        self,
+        *,
+        compiler: dict[str, Any],
+        adaptive: dict[str, Any],
+        synthesis: dict[str, Any],
+        color: dict[str, Any],
+        search: dict[str, Any],
+        repair: dict[str, Any],
+        participants: list[dict[str, Any]],
+        rejected: list[dict[str, Any]],
+        source_status: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        entered = {candidate.get("source") for candidate in participants}
+        rejected_by_source: dict[str, list[dict[str, Any]]] = {}
+        for candidate in rejected:
+            rejected_by_source.setdefault(str(candidate.get("source")), []).append(candidate)
+        source_inputs = {
+            "program_generation": {"signal": True, "report": {}},
+            "semantic_to_transformation_compiler": {
+                "signal": bool(compiler),
+                "report": compiler,
+            },
+            "adaptive_reuse": {
+                "signal": self._adaptive_reuse_signal(adaptive),
+                "report": adaptive,
+            },
+            "counterfactual_reasoning": {
+                "signal": self._counterfactual_signal(search),
+                "report": search,
+            },
+            "execution_memory": {
+                "signal": self._execution_memory_signal(search, synthesis, adaptive),
+                "report": search or synthesis or adaptive,
+            },
+        }
+        rows = []
+        for source, payload in source_inputs.items():
+            source_entered = (
+                source in entered
+                or (
+                    source == "program_generation"
+                    and "normalized_program_candidates" in entered
+                )
+                or (
+                    source == "semantic_to_transformation_compiler"
+                    and "semantic_compiler" in entered
+                )
+                or (
+                    source == "counterfactual_reasoning"
+                    and "counterfactual_search" in entered
+                )
+            )
+            status = source_status.get(source)
+            if source == "counterfactual_reasoning":
+                status = "ENTERED" if source_entered else (
+                    "NO_EXECUTABLE_CANDIDATE"
+                    if payload["signal"]
+                    else "NOT_TRIGGERED"
+                )
+            if source == "execution_memory":
+                status = "ENTERED" if source_entered else (
+                    "NO_EXECUTABLE_CANDIDATE"
+                    if payload["signal"]
+                    else "NOT_TRIGGERED"
+                )
+            source_rejections = rejected_by_source.get(source, [])
+            state = (
+                "ENTERED_ARENA"
+                if source_entered
+                else "KNOWLEDGE_SIGNAL_NOT_MATERIALIZED"
+                if payload["signal"]
+                else "NO_KNOWLEDGE_SIGNAL"
+            )
+            failure_stage = (
+                "arena_entry"
+                if source_entered
+                else "candidate_materialization"
+                if payload["signal"]
+                else "source_activation"
+            )
+            rows.append({
+                "source": source,
+                "knowledge_signal": bool(payload["signal"]),
+                "candidate_materialized": bool(source_entered or source_rejections),
+                "entered_arena": bool(source_entered),
+                "source_status": status or "NOT_TRIGGERED",
+                "source_materialization_state": state,
+                "failure_stage": failure_stage,
+                "blocked_reason": (
+                    source_rejections[0].get("blocked_reason")
+                    if source_rejections
+                    else None
+                ),
+                "action": self._arena_source_materialization_action(
+                    source,
+                    state,
+                    status or "NOT_TRIGGERED",
+                ),
+            })
+        return rows
+
+    def _adaptive_reuse_signal(self, adaptive: dict[str, Any]) -> bool:
+        return bool(
+            adaptive
+            and (
+                adaptive.get("reuse_success_rate")
+                or adaptive.get("reuse_rate")
+                or adaptive.get("reused_assets")
+                or adaptive.get("composed_program")
+                or adaptive.get("reused_programs")
+                or adaptive.get("reuse_evidence")
+            )
+        )
+
+    def _counterfactual_signal(self, search: dict[str, Any]) -> bool:
+        if not search:
+            return False
+        return bool(
+            search.get("counterfactual_candidates")
+            or search.get("counterfactual_hypotheses")
+            or search.get("counterfactual_count")
+        )
+
+    def _execution_memory_signal(
+        self,
+        search: dict[str, Any],
+        synthesis: dict[str, Any],
+        adaptive: dict[str, Any],
+    ) -> bool:
+        for report in (search, synthesis, adaptive):
+            if not isinstance(report, dict):
+                continue
+            if (
+                report.get("execution_memory")
+                or report.get("execution_memory_hits")
+                or report.get("memory_reuse_candidates")
+                or report.get("winning_programs")
+            ):
+                return True
+        return False
+
+    def _arena_source_materialization_action(
+        self,
+        source: str,
+        state: str,
+        status: str,
+    ) -> str:
+        if state == "ENTERED_ARENA":
+            return "monitor_source_competitiveness"
+        if state == "KNOWLEDGE_SIGNAL_NOT_MATERIALIZED":
+            return f"materialize_{source}_signal_as_executable_candidate"
+        if status == "NOT_TRIGGERED":
+            return f"activate_{source}_candidate_path_when_relevant"
+        return f"inspect_{source}_candidate_admission"
 
     def _arena_candidate(
         self,

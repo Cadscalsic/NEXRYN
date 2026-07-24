@@ -766,6 +766,7 @@ class SemanticToTransformationCompiler:
         )
         reason_counts = Counter()
         rows = []
+        grounding_requirement_rows = []
         if failure_reason:
             reason_counts[failure_reason] += 1
         if not trace_events:
@@ -852,6 +853,16 @@ class SemanticToTransformationCompiler:
                         failure_stage = "program_execution_validation"
             if reason:
                 reason_counts[reason] += 1
+                if reason == "missing_grid_pair":
+                    grounding_requirement_rows.append(
+                        self._grounding_requirement_row(
+                            operation=operation,
+                            domain=domain,
+                            program=event.get("program"),
+                            semantic_intent=event.get("semantic_intent"),
+                            trace_id=event.get("trace_id"),
+                        )
+                    )
                 deep_diagnostic = self._deep_failure_diagnostic(
                     operation=operation,
                     resolved_operation=resolved_operation,
@@ -875,14 +886,109 @@ class SemanticToTransformationCompiler:
                     **deep_diagnostic,
                     "diagnostic_row_source": "semantic_to_transformation_compiler",
                 })
+        grounding_failure_count = sum(
+            count
+            for reason, count in reason_counts.items()
+            if reason in {"missing_grid_pair"}
+        )
+        semantic_failure_count = sum(
+            count
+            for reason, count in reason_counts.items()
+            if reason in {
+                "operation_semantics_mismatch",
+                "operation_ambiguity",
+                "missing_primitive",
+                "shape_contract_mismatch",
+                "execution_mismatch",
+                "partial_execution_mismatch",
+            }
+        )
+        total_failures = grounding_failure_count + semantic_failure_count
         return {
             "failure_reason_counts": dict(sorted(reason_counts.items())),
             "failure_domain_distribution": dict(sorted(domain_counts.items())),
             "failure_rows": rows[:25],
+            "grounding_requirement_rows": grounding_requirement_rows[:25],
+            "grounding_required_for_operations": sorted(
+                {
+                    str(row.get("operation"))
+                    for row in grounding_requirement_rows
+                    if row.get("operation")
+                }
+            ),
+            "grounding_required_for_domains": dict(
+                sorted(
+                    Counter(
+                        str(row.get("domain"))
+                        for row in grounding_requirement_rows
+                        if row.get("domain")
+                    ).items()
+                )
+            ),
             "expected_operations": expected_operations,
             "compiler_trace_events": trace_events[:25],
             "candidate_count": len(candidates),
+            "operational_grounding_failure_count": grounding_failure_count,
+            "compiler_semantic_failure_count": semantic_failure_count,
+            "operational_grounding_failure_rate": round(
+                grounding_failure_count / max(total_failures, 1),
+                4,
+            ),
+            "operational_grounding_state": (
+                "GROUNDING_FAILURE_DOMINANT"
+                if grounding_failure_count > semantic_failure_count
+                and grounding_failure_count > 0
+                else "GROUNDING_FAILURE_PRESENT"
+                if grounding_failure_count > 0
+                else "GROUNDED_COMPILER_INPUTS"
+            ),
+            "compiler_failure_interpretation": (
+                "operational_grounding_failure"
+                if grounding_failure_count > semantic_failure_count
+                and grounding_failure_count > 0
+                else "mixed_grounding_and_compiler_failure"
+                if grounding_failure_count > 0
+                else "compiler_semantic_or_execution_failure"
+            ),
         }
+
+    def _grounding_requirement_row(
+        self,
+        *,
+        operation: str,
+        domain: str,
+        program: Any,
+        semantic_intent: Any,
+        trace_id: Any,
+    ) -> dict[str, Any]:
+        return {
+            "trace_id": trace_id,
+            "program": program,
+            "semantic_intent": semantic_intent,
+            "operation": operation,
+            "domain": domain,
+            "missing_grounding": "input_output_grid_pair",
+            "required_evidence": "exact_or_governed_validation_success",
+            "required_task_property": self._required_grounding_task_property(
+                operation
+            ),
+            "grounding_stage": "compiler_input_grounding",
+            "action": "select_grounding_aligned_task",
+        }
+
+    def _required_grounding_task_property(self, operation: str) -> str:
+        operation = str(operation or "")
+        if operation in {"translate", "move_object"}:
+            return "unambiguous_directional_translation_ground_truth"
+        if operation in {"preserve_topology", "topological_reasoning"}:
+            return "topology_preserving_transformation_ground_truth"
+        if operation in {"preserve_grid", "preserve_shape", "preserve_size"}:
+            return "paired_identity_preservation_ground_truth"
+        if operation in {"duplicate_object", "replicate_object"}:
+            return "paired_symbolic_object_replication_ground_truth"
+        if operation in {"replace_color", "preserve_colors"}:
+            return "color_invariance_under_transformation"
+        return "paired_source_target_grid_ground_truth"
 
     def _candidate_failure_diagnostics(
         self,

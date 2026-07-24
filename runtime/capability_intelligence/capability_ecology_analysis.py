@@ -116,6 +116,7 @@ class CapabilityEcologyAnalysis:
         graduation_diagnostics: list[Mapping[str, Any]] | None = None,
         domain_collaboration_rows: list[Mapping[str, Any]] | None = None,
         operational_programs: list[Mapping[str, Any]] | None = None,
+        compiler_infrastructure_report: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         rows = self._capability_rows(
             known_operations=known_operations or [],
@@ -123,6 +124,9 @@ class CapabilityEcologyAnalysis:
             survival_rows=survival_rows or [],
             graduation_diagnostics=graduation_diagnostics or [],
             operational_programs=operational_programs or [],
+            compiler_infrastructure_report=(
+                compiler_infrastructure_report or {}
+            ),
         )
         present = set(rows)
         composite_candidates = self._composite_candidates(present)
@@ -213,6 +217,24 @@ class CapabilityEcologyAnalysis:
             "capability_investment_priorities": economy[
                 "capability_investment_priorities"
             ],
+            "capability_investment_intelligence_phase": economy[
+                "capability_investment_intelligence_phase"
+            ],
+            "capability_investment_authority_scope": economy[
+                "capability_investment_authority_scope"
+            ],
+            "capability_investment_forbidden_authority": economy[
+                "capability_investment_forbidden_authority"
+            ],
+            "capability_investment_truth_boundary": economy[
+                "capability_investment_truth_boundary"
+            ],
+            "capability_investment_governance_principle": economy[
+                "capability_investment_governance_principle"
+            ],
+            "capability_promotion_roadmap": economy[
+                "capability_promotion_roadmap"
+            ],
         }
 
     def _capability_rows(
@@ -223,6 +245,7 @@ class CapabilityEcologyAnalysis:
         survival_rows: list[Mapping[str, Any]],
         graduation_diagnostics: list[Mapping[str, Any]],
         operational_programs: list[Mapping[str, Any]],
+        compiler_infrastructure_report: Mapping[str, Any],
     ) -> dict[str, dict[str, Any]]:
         rows: dict[str, dict[str, Any]] = {}
 
@@ -293,7 +316,47 @@ class CapabilityEcologyAnalysis:
                     if step_op:
                         self._ensure(rows, step_op, source="program_step")
 
+        self._add_compiler_infrastructure_capabilities(
+            rows,
+            compiler_infrastructure_report,
+        )
+
         return rows
+
+    def _add_compiler_infrastructure_capabilities(
+        self,
+        rows: dict[str, dict[str, Any]],
+        compiler_infrastructure_report: Mapping[str, Any],
+    ) -> None:
+        if not isinstance(compiler_infrastructure_report, Mapping):
+            return
+        primitives = compiler_infrastructure_report.get(
+            "primitive_operation_inventory",
+        ) or []
+        primitives = primitives if isinstance(primitives, list) else []
+        executable_operations = {
+            self._operation(row.get("operation"))
+            for row in primitives
+            if isinstance(row, Mapping) and row.get("executable")
+        }
+        for operation in executable_operations:
+            if operation:
+                self._ensure(rows, operation, source="compiler_infrastructure")
+        package_rows = compiler_infrastructure_report.get(
+            "execution_package_inventory",
+        ) or []
+        package_rows = package_rows if isinstance(package_rows, list) else []
+        for package in package_rows:
+            if not isinstance(package, Mapping):
+                continue
+            if package.get("package") != "growth_execution_package":
+                continue
+            if package.get("package_present"):
+                self._ensure(
+                    rows,
+                    "growth_detection",
+                    source="compiler_infrastructure",
+                )
 
     def _ensure(
         self,
@@ -593,6 +656,35 @@ class CapabilityEcologyAnalysis:
             "capability_economy_rows": economy_rows,
             "high_value_capabilities": high_value,
             "capability_investment_priorities": economy_rows[:5],
+            "capability_investment_intelligence_phase": "ROADMAP_ONLY",
+            "capability_investment_authority_scope": [
+                "validation_prioritization",
+                "compute_allocation",
+                "curriculum_selection",
+                "investment_decisions",
+            ],
+            "capability_investment_forbidden_authority": [
+                "validation_outcomes",
+                "trust_scores",
+                "graduation_authority",
+                "governed_validation_contracts",
+                "truth_governance",
+            ],
+            "capability_investment_truth_boundary": (
+                "INVESTMENT_NEVER_INFLUENCES_TRUTH_FORMATION"
+            ),
+            "capability_investment_governance_principle": (
+                "investment_allocates_validation_opportunities_only"
+            ),
+            "capability_promotion_roadmap": [
+                "capability_discovery",
+                "capability_validation",
+                "capability_promotion",
+                "trust_formation",
+                "graduation_intelligence",
+                "operational_capability_population",
+                "capability_economy",
+            ],
         }
 
     def _specialization(self, operation: str, domain: Any, collaborator_count: int) -> str:

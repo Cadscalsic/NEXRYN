@@ -1,6 +1,9 @@
 from runtime.capability_intelligence.capability_ecology_analysis import (
     CapabilityEcologyAnalysis,
 )
+from runtime.transformation_compilation.compiler_infrastructure import (
+    CompilerInfrastructureAnalyzer,
+)
 
 
 def test_capability_ecology_detects_composite_candidates_and_synergy():
@@ -72,6 +75,26 @@ def test_capability_ecology_detects_composite_candidates_and_synergy():
     )
     assert report["capability_synergy_matrix"]
     assert report["capability_investment_priorities"][0]["operation"]
+    assert report["capability_investment_intelligence_phase"] == "ROADMAP_ONLY"
+    assert report["capability_investment_truth_boundary"] == (
+        "INVESTMENT_NEVER_INFLUENCES_TRUTH_FORMATION"
+    )
+    assert "validation_prioritization" in (
+        report["capability_investment_authority_scope"]
+    )
+    assert "trust_scores" in report["capability_investment_forbidden_authority"]
+    assert "graduation_authority" in (
+        report["capability_investment_forbidden_authority"]
+    )
+    assert report["capability_promotion_roadmap"] == [
+        "capability_discovery",
+        "capability_validation",
+        "capability_promotion",
+        "trust_formation",
+        "graduation_intelligence",
+        "operational_capability_population",
+        "capability_economy",
+    ]
 
 
 def test_capability_ecology_reports_partial_composition_opportunities():
@@ -98,3 +121,50 @@ def test_capability_ecology_reports_partial_composition_opportunities():
     assert opportunities["Topology Preserving Translation"]["missing_capabilities"] == [
         "preserve_colors"
     ]
+
+
+def test_capability_ecology_uses_compiler_infrastructure_for_arc_core_intelligence():
+    infrastructure = CompilerInfrastructureAnalyzer().build_report(
+        compiler_report={},
+        expected_operations=[
+            "bridge_creation",
+            "pattern_completion",
+            "duplicate_object",
+            "translate",
+            "preserve_colors",
+            "preserve_topology",
+            "spatial_reasoning",
+            "topological_reasoning",
+        ],
+    )
+    report = CapabilityEcologyAnalysis().analyze(
+        known_operations=[
+            "translate",
+            "preserve_colors",
+            "preserve_topology",
+            "spatial_reasoning",
+            "topological_reasoning",
+        ],
+        compiler_infrastructure_report=infrastructure,
+    )
+    candidates = {
+        row["composite_name"]: row
+        for row in report["composite_capability_candidates"]
+    }
+    rows = {
+        row["operation"]: row
+        for row in report["capability_reports"]
+    }
+
+    assert "pattern_completion" not in candidates[
+        "Pattern Completion Intelligence"
+    ]["missing_capabilities"]
+    assert "bridge_creation" not in candidates[
+        "Structural Bridge Intelligence"
+    ]["missing_capabilities"]
+    assert "growth_detection" not in candidates[
+        "Spatial Growth Intelligence"
+    ]["missing_capabilities"]
+    assert "compiler_infrastructure" in rows["pattern_completion"]["sources"]
+    assert "compiler_infrastructure" in rows["bridge_creation"]["sources"]
+    assert "compiler_infrastructure" in rows["growth_detection"]["sources"]
