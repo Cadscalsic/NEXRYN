@@ -267,6 +267,8 @@ def test_validation_probe_uses_arena_grounding_context_when_runtime_input_is_emp
     assert report["object_grounding_blocked_stage"] == "none"
     assert report["validation_probe_grounding_context_received"] is True
     assert report["validation_probe_grounding_context_input_available"] is True
+    assert report["validation_probe_grounding_missing_payload_keys"] == []
+    assert report["validation_probe_grounding_empty_payload_keys"] == []
     assert report["object_grounding_input_source"] == (
         "validation_probe_grounding_context"
     )
@@ -315,6 +317,11 @@ def test_validation_probe_without_arena_grounding_context_remains_insufficient()
     )
     assert report["validation_probe_grounding_context_received"] is False
     assert report["validation_probe_grounding_context_input_available"] is False
+    assert report["validation_probe_grounding_missing_payload_keys"] == [
+        "input_grid",
+        "target_grid",
+        "predicted_output",
+    ]
     assert report["object_grounding_input_source"] == "missing_input_grid"
     assert report["grounded_target_object_count"] == 0
     assert report["validation_probe_evidence_acceptance_state"] == "INSUFFICIENT"
@@ -330,6 +337,41 @@ def test_validation_probe_without_arena_grounding_context_remains_insufficient()
     assert report["compiled_to_validated_probe_state"] == (
         "SANDBOX_VALIDATION_EVIDENCE_INSUFFICIENT"
     )
+
+
+def test_validation_probe_reports_empty_grounding_payload_keys():
+    result = ExecutableIntelligenceEngine(memory=ExecutionMemory()).run(
+        semantic_intent="replace_color",
+        operation="replace_color",
+        input_grid=[],
+        predicted_output=[],
+        target_grid=[],
+        arena_execution_recommendation={
+            "validation_probe_candidate": _proposal(
+                "semantic_compiler",
+                "replace_color",
+                [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+            ),
+            "validation_probe_mode": "sandbox_validation_only",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "validation_probe_grounding_context": {
+                "input_grid": [],
+                "target_grid": [[2]],
+                "predicted_output": [],
+            },
+        },
+    )
+
+    report = result["EXECUTABLE_INTELLIGENCE_REPORT"]
+
+    assert report["validation_probe_grounding_context_received"] is True
+    assert report["validation_probe_grounding_context_input_available"] is False
+    assert report["validation_probe_grounding_missing_payload_keys"] == []
+    assert report["validation_probe_grounding_empty_payload_keys"] == [
+        "input_grid",
+        "predicted_output",
+    ]
+    assert report["object_grounding_flow_state"] == "GROUNDING_INPUT_MISSING"
 
 
 def test_executable_intelligence_report_is_compact_and_rendered():

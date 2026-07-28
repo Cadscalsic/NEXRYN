@@ -83,6 +83,9 @@ class ExecutableIntelligenceEngine:
             else {}
         )
         grounding_context_received = bool(probe_grounding_context)
+        grounding_payload = self._grounding_context_payload_diagnostic(
+            probe_grounding_context,
+        )
         effective_input_grid = (
             input_grid
             if self._grid_available(input_grid)
@@ -192,6 +195,7 @@ class ExecutableIntelligenceEngine:
                 "validation_probe_grounding_context_received": (
                     grounding_context_received
                 ),
+                **grounding_payload,
                 "validation_probe_grounding_context_input_available": (
                     self._grid_available(probe_grounding_context.get("input_grid"))
                 ),
@@ -277,6 +281,37 @@ class ExecutableIntelligenceEngine:
         return isinstance(grid, list) and any(
             isinstance(row, list) and row for row in grid
         )
+
+    def _grounding_context_payload_diagnostic(
+        self,
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
+        expected = ["input_grid", "target_grid", "predicted_output"]
+        received = sorted(str(key) for key in context)
+        missing = [key for key in expected if key not in context]
+        empty = [
+            key for key in expected
+            if key in context and not self._grid_available(context.get(key))
+        ]
+        aliases = {
+            "input_grid": ["input", "source_grid", "source"],
+            "target_grid": ["output", "target", "output_grid"],
+            "predicted_output": ["prediction", "predicted_grid", "output_grid"],
+        }
+        alias_hits = {
+            key: [
+                alias for alias in alias_list
+                if alias in context and alias not in expected
+            ]
+            for key, alias_list in aliases.items()
+        }
+        return {
+            "validation_probe_grounding_expected_payload_keys": expected,
+            "validation_probe_grounding_received_payload_keys": received,
+            "validation_probe_grounding_missing_payload_keys": missing,
+            "validation_probe_grounding_empty_payload_keys": empty,
+            "validation_probe_grounding_payload_alias_hits": alias_hits,
+        }
 
     def _report(self, **parts: dict[str, Any]) -> dict[str, Any]:
         grounding = parts["grounding"]

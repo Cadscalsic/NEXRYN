@@ -456,6 +456,36 @@ def test_no_safe_winner_can_emit_validation_probe_without_prediction_authority()
     assert probe_row["selected"] is False
 
 
+def test_validation_probe_grounding_context_uses_shared_payload_when_direct_grids_empty():
+    report = _arena().run(
+        [
+            _proposal(
+                "semantic_compiler",
+                "replace_color",
+                [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+                confidence=0.55,
+            )
+        ],
+        input_grid=[],
+        target_grid=[],
+        runtime_context={
+            "shared_state_inputs": {
+                "input_grid": [[1, 0], [0, 0]],
+                "target_grid": [[2, 0], [0, 0]],
+                "predicted_output": [[2, 0], [0, 0]],
+            }
+        },
+        analysis_only=True,
+    )
+
+    context = report["execution_recommendation"]["validation_probe_grounding_context"]
+
+    assert report["validation_probe_candidate_id"]
+    assert context["input_grid"] == [[1, 0], [0, 0]]
+    assert context["target_grid"] == [[2, 0], [0, 0]]
+    assert context["predicted_output"] == [[2, 0], [0, 0]]
+
+
 def test_single_valid_source_reports_single_source_only():
     report = _arena().run(
         [
@@ -609,6 +639,61 @@ def test_arena_traces_source_flow_from_proposal_runtime_to_competition():
     assert flow["semantic_compiler"]["arena_proposal_built"] is True
     assert flow["semantic_compiler"]["gateway_accepted"] is True
     assert flow["semantic_compiler"]["entered_arena"] is True
+    assert flow["semantic_compiler"]["build_failure_reason"] == "none"
+
+
+def test_arena_source_flow_reports_direct_build_failure_reason():
+    report = _arena().run(
+        [
+            _proposal(
+                "program_generation",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+            ),
+        ],
+        input_grid=[[1]],
+        target_grid=[[1]],
+        runtime_context={
+            "candidate_proposal_report": {
+                "sources_with_proposals": [
+                    "program_generation",
+                    "semantic_to_transformation_compiler",
+                ],
+                "candidate_proposals": [
+                    {
+                        "source": "program_generation",
+                        "proposal_status": "PROPOSED",
+                        "operation": "preserve_grid",
+                        "program": {
+                            "step_count": 1,
+                            "steps": [
+                                {"operation": "preserve_grid", "parameters": {}}
+                            ],
+                        },
+                    }
+                ],
+            },
+            "expected_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+        },
+    )
+
+    flow = {
+        row["normalized_source"]: row
+        for row in report["candidate_source_flow_trace"]
+    }
+
+    assert flow["semantic_compiler"]["flow_state"] == (
+        "PROPOSAL_NOT_BUILT_FOR_ARENA"
+    )
+    assert flow["semantic_compiler"]["build_failure_reason"] == (
+        "proposal_row_missing"
+    )
+    assert flow["semantic_compiler"]["build_failure_detail"] == (
+        "source_listed_in_sources_with_proposals_but_no_row_found"
+    )
 
 
 def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():

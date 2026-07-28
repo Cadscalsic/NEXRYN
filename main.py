@@ -1310,23 +1310,77 @@ def _adaptive_reuse_cognitive_evidence_present(report):
     return bool(report.get("reuse_success_rate") or report.get("reuse_rate"))
 
 
+def _candidate_program_fields(record):
+    if not isinstance(record, dict):
+        return []
+    fields = []
+    for key in (
+        "program",
+        "compiled_program",
+        "selected_program",
+        "composed_program",
+        "transformation_plan",
+    ):
+        value = record.get(key)
+        if isinstance(value, dict):
+            fields.append((key, value))
+    fields.append(("record", record))
+    return fields
+
+
+def _candidate_steps_from_program(program):
+    if not isinstance(program, dict):
+        return [], None
+    for key in ("steps", "program_steps", "operation_sequence", "operations"):
+        value = program.get(key)
+        if isinstance(value, (list, tuple)) and value:
+            return [_normalize_candidate_step(step) for step in value], key
+    return [], None
+
+
+def _normalize_candidate_step(step):
+    if not isinstance(step, dict):
+        return {"operation": str(step), "parameters": {}}
+    normalized = dict(step)
+    operation = (
+        normalized.get("operation")
+        or normalized.get("primitive")
+        or normalized.get("operator")
+    )
+    if operation and not normalized.get("operation"):
+        normalized["operation"] = operation
+    parameters = normalized.get("parameters")
+    if not isinstance(parameters, dict):
+        reserved = {"operation", "primitive", "operator"}
+        normalized["parameters"] = {
+            key: value for key, value in normalized.items() if key not in reserved
+        }
+    return normalized
+
+
+def _candidate_program_from_record(record):
+    if not isinstance(record, dict):
+        return {}, [], "none"
+    for field_name, program in _candidate_program_fields(record):
+        steps, representation = _candidate_steps_from_program(program)
+        if steps:
+            return (
+                {
+                    "step_count": int(program.get("step_count", len(steps)) or 0),
+                    "steps": steps,
+                },
+                steps,
+                f"{field_name}.{representation}",
+            )
+    return {}, [], "none"
+
+
 def _candidate_record_has_executable_payload(record):
     if not isinstance(record, dict):
         return False
-    program = (
-        record.get("program")
-        or record.get("compiled_program")
-        or record.get("selected_program")
-        or record
-    )
-    if isinstance(program, dict):
-        steps = (
-            program.get("steps")
-            or program.get("program_steps")
-            or program.get("operation_sequence")
-        )
-        if isinstance(steps, list) and steps:
-            return True
+    _program, steps, _representation = _candidate_program_from_record(record)
+    if steps:
+        return True
     return bool(
         record.get("operation")
         or record.get("primitive")
@@ -1375,16 +1429,9 @@ def _candidate_source_records(source):
 def _candidate_record_has_signal(record):
     if not isinstance(record, dict):
         return record is not None
-    program = (
-        record.get("program")
-        or record.get("compiled_program")
-        or record.get("selected_program")
-        or record
-    )
-    if isinstance(program, dict):
-        steps = program.get("steps") or program.get("program_steps")
-        if isinstance(steps, list) and steps:
-            return True
+    _program, steps, _representation = _candidate_program_from_record(record)
+    if steps:
+        return True
     return bool(
         record.get("candidate_id")
         or record.get("operation")
@@ -1397,36 +1444,12 @@ def _arena_proposal_from_source_record(source_name, record, index):
     if not isinstance(record, dict):
         return None
     proposal = dict(record)
-    program = (
-        proposal.get("program")
-        or proposal.get("compiled_program")
-        or proposal.get("selected_program")
-    )
-    if not isinstance(program, dict) and isinstance(proposal.get("steps"), list):
-        program = {
-            "step_count": int(proposal.get("step_count", len(proposal["steps"])) or 0),
-            "steps": proposal["steps"],
-        }
-    if not isinstance(program, dict) and isinstance(proposal.get("program_steps"), list):
-        program = {
-            "step_count": int(
-                proposal.get("step_count", len(proposal["program_steps"])) or 0
-            ),
-            "steps": proposal["program_steps"],
-        }
-    if not isinstance(program, dict):
-        program = {}
-    steps = (
-        program.get("steps")
-        if isinstance(program.get("steps"), list)
-        else program.get("program_steps")
-        if isinstance(program.get("program_steps"), list)
-        else []
-    )
+    program, steps, program_representation = _candidate_program_from_record(proposal)
     operation = (
         proposal.get("operation")
         or (steps[0].get("operation") if steps and isinstance(steps[0], dict) else None)
         or (steps[0].get("primitive") if steps and isinstance(steps[0], dict) else None)
+        or (steps[0].get("operator") if steps and isinstance(steps[0], dict) else None)
     )
     if not operation:
         return None
@@ -1455,16 +1478,7 @@ def _arena_proposal_from_source_record(source_name, record, index):
     metadata = dict(metadata) if isinstance(metadata, dict) else {}
     metadata.setdefault("arena_source_diversification", True)
     metadata.setdefault("source_diversity_policy", "MULTI_SOURCE_ARENA_ENTRY")
-    metadata.setdefault(
-        "program_representation",
-        "program_steps"
-        if isinstance(proposal.get("program_steps"), list)
-        else "compiled_program"
-        if isinstance(proposal.get("compiled_program"), dict)
-        else "selected_program"
-        if isinstance(proposal.get("selected_program"), dict)
-        else "program",
-    )
+    metadata.setdefault("program_representation", program_representation)
     if _runtime_token(source_name) == "adaptive_reuse":
         metadata.setdefault("reuse_evidence", "historical_reuse_candidate")
     proposal["metadata"] = metadata

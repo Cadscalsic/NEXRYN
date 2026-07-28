@@ -272,6 +272,8 @@ def test_render_includes_cognitive_capability_coverage_map():
                     "entered_arena": False,
                     "flow_state": "PROPOSAL_NOT_BUILT_FOR_ARENA",
                     "blocked_stage": "arena_proposal_builder",
+                    "build_failure_reason": "missing_program_representation",
+                    "build_failure_detail": "program_field_missing_or_not_mapping",
                     "action": "preserve_proposal_runtime_source_in_arena_builder",
                 }
             ],
@@ -1114,6 +1116,8 @@ def test_render_includes_cognitive_capability_coverage_map():
         in report
     )
     assert "Candidate Source Flow Trace:" in report
+    assert "reason=missing_program_representation" in report
+    assert "detail=program_field_missing_or_not_mapping" in report
     assert "Arena To Compiled Bridge State: VALIDATION_PROBE_AVAILABLE" in report
     assert (
         "Arena To Compiled Bridge Action: "
@@ -1123,6 +1127,10 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Validation Probe Authority: SANDBOX_VALIDATION_ONLY" in report
     assert "Object Grounding Flow State:" in report
     assert "Validation Probe Grounding Context Received:" in report
+    assert "Validation Probe Grounding Expected Payload Keys:" in report
+    assert "Validation Probe Grounding Received Payload Keys:" in report
+    assert "Validation Probe Grounding Missing Payload Keys:" in report
+    assert "Validation Probe Grounding Empty Payload Keys:" in report
     assert "Object Grounding Input Source:" in report
     assert "Arena Execution Recommendation Forwarded: TRUE" in report
     assert "Selected Arena Candidate Forwarded: FALSE" in report

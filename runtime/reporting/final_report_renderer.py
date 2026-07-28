@@ -3436,6 +3436,8 @@ class DeterministicFinalReportRenderer:
                     f"arena={self._value(row.get('entered_arena'))} "
                     f"state={self._value(row.get('flow_state'))} "
                     f"blocked={self._value(row.get('blocked_stage'))} "
+                    f"reason={self._value(row.get('build_failure_reason'))} "
+                    f"detail={self._value(row.get('build_failure_detail'))} "
                     f"action={self._value(row.get('action'))}"
                 )
         if source_outcomes:
@@ -3765,6 +3767,14 @@ class DeterministicFinalReportRenderer:
             f"{self._value(report.get('validation_probe_grounding_context_received'))}",
             "Validation Probe Grounding Context Input Available: "
             f"{self._value(report.get('validation_probe_grounding_context_input_available'))}",
+            "Validation Probe Grounding Expected Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_expected_payload_keys'))}",
+            "Validation Probe Grounding Received Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_received_payload_keys'))}",
+            "Validation Probe Grounding Missing Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_missing_payload_keys'))}",
+            "Validation Probe Grounding Empty Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_empty_payload_keys'))}",
             "Object Grounding Input Source: "
             f"{self._value(report.get('object_grounding_input_source'))}",
             "Grounded Target Object Count: "

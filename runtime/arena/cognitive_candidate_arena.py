@@ -227,12 +227,22 @@ class CognitiveCandidateArena:
             "validation_probe_mode": "sandbox_validation_only" if validation_probe else "none",
             "validation_probe_grounding_context": (
                 {
-                    "input_grid": self._grid_payload(input_grid),
-                    "target_grid": self._grid_payload(target_grid),
-                    "predicted_output": deepcopy(
+                    "input_grid": self._context_grid_payload(
+                        input_grid,
+                        runtime_context,
+                        ("input_grid", "input", "source_grid", "source"),
+                    ),
+                    "target_grid": self._context_grid_payload(
+                        target_grid,
+                        runtime_context,
+                        ("target_grid", "output_grid", "target", "output"),
+                    ),
+                    "predicted_output": self._context_grid_payload(
                         simulations.get(validation_probe.get("candidate_id"), {}).get(
                             "predicted_output"
-                        )
+                        ),
+                        runtime_context,
+                        ("predicted_output", "predicted_grid", "prediction"),
                     ),
                 }
                 if validation_probe
@@ -285,6 +295,11 @@ class CognitiveCandidateArena:
             for source in proposal_report.get("sources_with_proposals", []) or []
             if source
         ]
+        proposal_rows = [
+            item
+            for item in proposal_report.get("candidate_proposals", []) or []
+            if isinstance(item, Mapping)
+        ]
         raw_arena = (
             list(arena_proposals)
             if isinstance(arena_proposals, (list, tuple))
@@ -300,6 +315,11 @@ class CognitiveCandidateArena:
         gateway_sources = {
             self._source_alias(item.get("source"))
             for item in gateway_report.get("proposals", []) or []
+            if isinstance(item, Mapping) and item.get("source")
+        }
+        gateway_rejections = {
+            self._source_alias(item.get("source")): item
+            for item in gateway_report.get("rejected_proposals", []) or []
             if isinstance(item, Mapping) and item.get("source")
         }
         entered = {self._source_alias(source) for source in sources_entered}
@@ -318,6 +338,16 @@ class CognitiveCandidateArena:
             built = alias in arena_builder_sources
             gateway_accepted = alias in gateway_sources
             arena_entered = alias in entered
+            source_proposal_rows = [
+                row for row in proposal_rows
+                if self._source_alias(row.get("source")) == alias
+            ]
+            build_failure = self._arena_build_failure_reason(
+                proposed=proposed,
+                built=built,
+                proposal_rows=source_proposal_rows,
+                gateway_rejection=gateway_rejections.get(alias, {}),
+            )
             if arena_entered:
                 state = "ENTERED_ARENA"
                 blocked_stage = "none"
@@ -347,9 +377,74 @@ class CognitiveCandidateArena:
                 "entered_arena": arena_entered,
                 "flow_state": state,
                 "blocked_stage": blocked_stage,
+                "build_failure_reason": build_failure["reason"],
+                "build_failure_detail": build_failure["detail"],
+                "expected_candidate_fields": build_failure["expected_fields"],
+                "received_candidate_fields": build_failure["received_fields"],
                 "action": action,
             })
         return rows
+
+    def _arena_build_failure_reason(
+        self,
+        *,
+        proposed: bool,
+        built: bool,
+        proposal_rows: list[Mapping[str, Any]],
+        gateway_rejection: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        expected_fields = ["source", "operation", "program.steps"]
+        if built:
+            return {
+                "reason": "none",
+                "detail": "arena_proposal_built",
+                "expected_fields": expected_fields,
+                "received_fields": [],
+            }
+        if not proposed:
+            return {
+                "reason": "source_not_proposed",
+                "detail": "candidate_source_did_not_emit_proposal",
+                "expected_fields": expected_fields,
+                "received_fields": [],
+            }
+        if not proposal_rows:
+            return {
+                "reason": "proposal_row_missing",
+                "detail": "source_listed_in_sources_with_proposals_but_no_row_found",
+                "expected_fields": expected_fields,
+                "received_fields": [],
+            }
+        row = dict(proposal_rows[0])
+        program = row.get("program") if isinstance(row.get("program"), Mapping) else {}
+        steps = program.get("steps") if isinstance(program.get("steps"), list) else []
+        received_fields = sorted(str(key) for key in row)
+        if gateway_rejection:
+            reasons = gateway_rejection.get("rejection_reasons") or []
+            return {
+                "reason": "candidate_schema_validation_failed",
+                "detail": ",".join(str(item) for item in reasons) or "gateway_rejected",
+                "expected_fields": expected_fields,
+                "received_fields": received_fields,
+            }
+        if not isinstance(program, Mapping) or not program:
+            reason = "missing_program_representation"
+            detail = "program_field_missing_or_not_mapping"
+        elif not steps:
+            reason = "missing_program_steps"
+            detail = "program.steps_empty_or_not_list"
+        elif not row.get("operation"):
+            reason = "missing_operation"
+            detail = "operation_missing_after_proposal_runtime"
+        else:
+            reason = "arena_builder_dropped_valid_proposal"
+            detail = "proposal_has_required_candidate_shape_but_was_not_built"
+        return {
+            "reason": reason,
+            "detail": detail,
+            "expected_fields": expected_fields,
+            "received_fields": received_fields,
+        }
 
     def _source_alias(self, source: Any) -> str:
         token = str(source or "").strip().lower().replace("-", "_").replace(" ", "_")
@@ -375,6 +470,43 @@ class CognitiveCandidateArena:
             except Exception:
                 return deepcopy(grid)
         return deepcopy(grid)
+
+    def _context_grid_payload(
+        self,
+        primary: Any,
+        runtime_context: Mapping[str, Any],
+        keys: tuple[str, ...],
+    ) -> Any:
+        payload = self._grid_payload(primary)
+        if self._grid_payload_available(payload):
+            return payload
+        for container in (
+            runtime_context.get("shared_state_inputs"),
+            runtime_context,
+        ):
+            if not isinstance(container, Mapping):
+                continue
+            for key in keys:
+                payload = self._grid_payload(container.get(key))
+                if self._grid_payload_available(payload):
+                    return payload
+        return payload
+
+    def _grid_payload_available(self, payload: Any) -> bool:
+        if payload is None:
+            return False
+        if isinstance(payload, list):
+            if not payload:
+                return False
+            if all(isinstance(row, list) for row in payload):
+                return any(row for row in payload)
+            return True
+        if hasattr(payload, "size"):
+            try:
+                return int(payload.size) > 0
+            except Exception:
+                return True
+        return True
 
     def _governance(self, candidate: Mapping[str, Any], runtime_context: Mapping[str, Any]) -> dict[str, Any]:
         reasons = []
