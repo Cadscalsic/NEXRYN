@@ -3542,6 +3542,38 @@ class CanonicalReportBindingEngine:
             if isinstance(decision_authority_policy, dict)
             else {}
         )
+        validation_sponsorship_contract = (
+            materialization.get("validation_sponsorship_contract")
+            or survival.get("validation_sponsorship_contract")
+            or world_governance_promotion_policy.get(
+                "validation_sponsorship_contract",
+                {},
+            )
+        )
+        validation_sponsorship_contract = (
+            validation_sponsorship_contract
+            if isinstance(validation_sponsorship_contract, dict)
+            else {}
+        )
+        evidence_contribution = self._evidence_contribution_summary(
+            validator_failure_distribution=validator_failure_distribution,
+            reuse_evidence_count=reuse_evidence_count,
+            independent_reuse_success_count=independent_reuse_success_count,
+            operational_experience_count=operational_experience_count,
+            capability_stability_regression_count=capability_stability_regression_count,
+            graduation_sprint_recommendations=graduation_sprint_recommendations,
+            top_graduation_candidates=top_graduation_candidates,
+            operational_citizen_count=operational_citizen_count,
+            known_operational_domain_count=known_operational_domain_count,
+            previous_rows=(
+                materialization.get("previous_evidence_contribution_rows")
+                or survival.get("previous_evidence_contribution_rows")
+                or graduation_infrastructure_report.get(
+                    "previous_evidence_contribution_rows"
+                )
+                or []
+            ),
+        )
         operational_citizen_domain_distribution = (
             materialization.get("operational_citizen_domain_distribution")
             or survival.get("operational_citizen_domain_distribution")
@@ -4088,6 +4120,8 @@ class CanonicalReportBindingEngine:
                     "operational_grounding_failure_rate",
                 )
             ),
+            executable_intelligence_report=executable,
+            candidate_arena_report=arena,
         )
         knowledge_operationalization_root_cause = (
             "governed_validation_infrastructure"
@@ -4150,6 +4184,9 @@ class CanonicalReportBindingEngine:
             "program_coverage": program_coverage,
             "validated_executable_coverage": validated_executable_coverage,
             "operational_capability_coverage": operational_coverage,
+            "materialized_operational_capabilities": (
+                materialized_operational_capabilities
+            ),
             "operational_capability_coverage_semantics": (
                 "current_run_materialized_capabilities_per_generated_concept"
             ),
@@ -4183,6 +4220,25 @@ class CanonicalReportBindingEngine:
             "candidate_source_materialization_state": arena.get(
                 "candidate_source_materialization_state",
             ),
+            "arena_source_diversity_state": arena.get(
+                "arena_source_diversity_state",
+            ),
+            "arena_source_diversity_action": arena.get(
+                "arena_source_diversity_action",
+            ),
+            "target_candidate_sources": arena.get("target_candidate_sources") or [],
+            "missing_candidate_sources": arena.get("missing_candidate_sources") or [],
+            "package_utilization_gap_rows": (
+                compiler_infrastructure.get("package_utilization_gap_rows")
+                or []
+            )[:8],
+            "package_utilization_gap_count": compiler_infrastructure.get(
+                "package_utilization_gap_count",
+            ),
+            "package_utilization_gap_state": compiler_infrastructure.get(
+                "package_utilization_gap_state",
+            ),
+            "missing_compiler_requirements": missing_requirements,
             "lowest_coverage_bottlenecks": bottlenecks[:5],
             "knowledge_investment_policy": proposal.get(
                 "knowledge_investment_policy"
@@ -4472,6 +4528,54 @@ class CanonicalReportBindingEngine:
                 operational_economy_report.get("knowledge_operationalization_path")
                 or []
             )[:7],
+            "arena_to_compiled_admission_summary": (
+                operational_economy_report.get(
+                    "arena_to_compiled_admission_summary"
+                )
+                or {}
+            ),
+            "arena_to_compiled_admission_state": (
+                operational_economy_report.get(
+                    "arena_to_compiled_admission_state"
+                )
+            ),
+            "arena_to_compiled_admission_action": (
+                operational_economy_report.get(
+                    "arena_to_compiled_admission_action"
+                )
+            ),
+            "execution_compilation_admission_state": (
+                operational_economy_report.get(
+                    "execution_compilation_admission_state"
+                )
+            ),
+            "execution_compilation_admission_reason": (
+                operational_economy_report.get(
+                    "execution_compilation_admission_reason"
+                )
+            ),
+            "execution_compilation_admission_action": (
+                operational_economy_report.get(
+                    "execution_compilation_admission_action"
+                )
+            ),
+            "execution_compilation_blockers": (
+                operational_economy_report.get("execution_compilation_blockers")
+                or []
+            )[:10],
+            "execution_compiled_program_count": (
+                operational_economy_report.get("execution_compiled_program_count")
+            ),
+            "validation_probe_compiled_program_count": (
+                operational_economy_report.get(
+                    "validation_probe_compiled_program_count"
+                )
+            ),
+            "arena_to_validation_compilation_rate": (
+                operational_economy_report.get(
+                    "arena_to_validation_compilation_rate"
+                )
+            ),
             "knowledge_operationalization_choke_point": (
                 operational_economy_report.get(
                     "knowledge_operationalization_choke_point"
@@ -4491,6 +4595,16 @@ class CanonicalReportBindingEngine:
             "knowledge_operationalization_choke_action": (
                 operational_economy_report.get(
                     "knowledge_operationalization_choke_action"
+                )
+            ),
+            "knowledge_operationalization_evidence_responsibility": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_evidence_responsibility"
+                )
+            ),
+            "knowledge_operationalization_required_evidence": (
+                operational_economy_report.get(
+                    "knowledge_operationalization_required_evidence"
                 )
             ),
             "knowledge_operationalization_loss_count": (
@@ -4664,6 +4778,47 @@ class CanonicalReportBindingEngine:
                     "evidence_acceptance_failure_share"
                 )
             ),
+            "evidence_sufficiency_state": (
+                materialization.get("evidence_sufficiency_state")
+                or survival.get("evidence_sufficiency_state")
+                or graduation_infrastructure_report.get(
+                    "evidence_sufficiency_state"
+                )
+                or "EVIDENCE_SUFFICIENCY_REVIEW_REQUIRED"
+            ),
+            "evidence_sufficiency_question": (
+                materialization.get("evidence_sufficiency_question")
+                or survival.get("evidence_sufficiency_question")
+                or graduation_infrastructure_report.get(
+                    "evidence_sufficiency_question"
+                )
+                or "when_is_evidence_sufficient_for_trust_update_and_graduation"
+            ),
+            "evidence_sufficiency_contract": (
+                materialization.get("evidence_sufficiency_contract")
+                or survival.get("evidence_sufficiency_contract")
+                or graduation_infrastructure_report.get(
+                    "evidence_sufficiency_contract"
+                )
+                or "evidence_sufficiency_precedes_trust_update_and_graduation"
+            ),
+            "evidence_contribution_state": evidence_contribution.get("state"),
+            "evidence_contribution_rows": evidence_contribution.get("rows"),
+            "highest_remaining_evidence_deficit": evidence_contribution.get(
+                "highest_remaining_evidence_deficit"
+            ),
+            "highest_remaining_evidence_deficit_action": evidence_contribution.get(
+                "highest_remaining_evidence_deficit_action"
+            ),
+            "evidence_deficit_progress_state": evidence_contribution.get(
+                "progress_state"
+            ),
+            "overall_evidence_progress": evidence_contribution.get(
+                "overall_progress"
+            ),
+            "evidence_deficit_progress_rows": evidence_contribution.get(
+                "progress_rows"
+            ),
             "capability_promotion_rows": (
                 materialization.get("capability_promotion_rows")
                 or survival.get("capability_promotion_rows")
@@ -4705,6 +4860,20 @@ class CanonicalReportBindingEngine:
             "sandbox_citizenship_thresholds": sandbox_citizenship_thresholds,
             "trusted_capability_policy": trusted_capability_policy,
             "decision_authority_policy": decision_authority_policy,
+            "validation_sponsorship_contract": validation_sponsorship_contract,
+            "validation_sponsorship_contract_state": (
+                validation_sponsorship_contract.get("contract_state")
+            ),
+            "truth_preparation_gate": (
+                validation_sponsorship_contract.get("truth_preparation_gate")
+            ),
+            "capability_merit_system": (
+                validation_sponsorship_contract.get("capability_merit_system")
+            ),
+            "validation_sponsorship_truth_boundary": (
+                validation_sponsorship_contract.get("truth_boundary_contract")
+                or []
+            ),
             "capability_governance_contract": capability_governance_contract,
             "capability_governance_contract_state": (
                 capability_governance_contract.get("contract_state")
@@ -5226,6 +5395,220 @@ class CanonicalReportBindingEngine:
                 else None
             ),
         }
+
+    def _evidence_contribution_summary(
+        self,
+        *,
+        validator_failure_distribution: Mapping[str, Any],
+        reuse_evidence_count: int,
+        independent_reuse_success_count: int,
+        operational_experience_count: int,
+        capability_stability_regression_count: int,
+        graduation_sprint_recommendations: list[Mapping[str, Any]],
+        top_graduation_candidates: list[Mapping[str, Any]],
+        operational_citizen_count: int,
+        known_operational_domain_count: int,
+        previous_rows: list[Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        distribution = (
+            validator_failure_distribution
+            if isinstance(validator_failure_distribution, Mapping)
+            else {}
+        )
+        total_failures = sum(
+            int(value or 0)
+            for value in distribution.values()
+            if isinstance(value, int | float)
+        )
+        governed_failures = int(
+            distribution.get("GOVERNED_VALIDATION_INCOMPLETE")
+            or distribution.get("Governed Validation Incomplete")
+            or 0
+        )
+        independent_failures = int(
+            distribution.get("MISSING_INDEPENDENT_EVIDENCE")
+            or distribution.get("Missing Independent Evidence")
+            or 0
+        )
+        stability_failures = int(
+            distribution.get("OPERATIONAL_STABILITY_INSUFFICIENT")
+            or distribution.get("Operational Stability Insufficient")
+            or distribution.get("ACCURACY_STABILITY_INSUFFICIENT")
+            or distribution.get("Accuracy Stability Insufficient")
+            or capability_stability_regression_count
+            or 0
+        )
+        cross_domain_signal = min(known_operational_domain_count, 5)
+        governed_deficit = self._safe_ratio(governed_failures, total_failures)
+        independent_deficit = self._safe_ratio(independent_failures, total_failures)
+        reuse_contribution = self._safe_ratio(
+            independent_reuse_success_count,
+            max(reuse_evidence_count, 1),
+        )
+        stability_deficit = self._safe_ratio(
+            stability_failures,
+            max(total_failures, 1),
+        )
+        cross_domain_contribution = self._safe_ratio(cross_domain_signal, 5)
+        operational_contribution = self._safe_ratio(
+            operational_citizen_count,
+            max(operational_experience_count, 1),
+        )
+        rows = [
+            self._evidence_contribution_row(
+                "ground_truth",
+                contribution=1.0 - governed_deficit,
+                deficit=governed_deficit,
+                action="select_ground_truth_aligned_validation_tasks",
+            ),
+            self._evidence_contribution_row(
+                "independent_validation",
+                contribution=1.0 - independent_deficit,
+                deficit=independent_deficit,
+                action="select_independent_validation_tasks",
+            ),
+            self._evidence_contribution_row(
+                "operational_reuse",
+                contribution=reuse_contribution,
+                deficit=1.0 - reuse_contribution,
+                action="collect_independent_operational_reuse_evidence",
+            ),
+            self._evidence_contribution_row(
+                "stability",
+                contribution=1.0 - stability_deficit,
+                deficit=stability_deficit,
+                action="select_stability_recovery_validation_tasks",
+            ),
+            self._evidence_contribution_row(
+                "cross_domain",
+                contribution=cross_domain_contribution,
+                deficit=1.0 - cross_domain_contribution,
+                action="select_cross_domain_validation_tasks",
+            ),
+            self._evidence_contribution_row(
+                "operational",
+                contribution=operational_contribution,
+                deficit=1.0 - operational_contribution,
+                action="collect_materialized_operational_validation_evidence",
+            ),
+        ]
+        if graduation_sprint_recommendations or top_graduation_candidates:
+            rows.append(self._evidence_contribution_row(
+                "graduation_specific",
+                contribution=0.0 if governed_failures else 1.0,
+                deficit=1.0 if governed_failures else 0.0,
+                action="complete_highest_priority_graduation_evidence",
+            ))
+        highest = max(rows, key=lambda row: row["remaining_deficit"])
+        progress = self._evidence_deficit_progress(rows, previous_rows or [])
+        return {
+            "state": "EVIDENCE_CONTRIBUTION_DIAGNOSTIC_AVAILABLE",
+            "rows": rows,
+            "highest_remaining_evidence_deficit": highest["evidence_type"],
+            "highest_remaining_evidence_deficit_action": highest["recommended_action"],
+            "progress_state": progress["progress_state"],
+            "overall_progress": progress["overall_progress"],
+            "progress_rows": progress["progress_rows"],
+        }
+
+    def _safe_ratio(self, numerator: Any, denominator: Any) -> float:
+        value = self._bounded_ratio(numerator, denominator)
+        return float(value if value is not None else 0.0)
+
+    def _evidence_contribution_row(
+        self,
+        evidence_type: str,
+        *,
+        contribution: float | None,
+        deficit: float | None,
+        action: str,
+    ) -> dict[str, Any]:
+        contribution_value = self._bounded_ratio(contribution, 1.0)
+        deficit_value = self._bounded_ratio(deficit, 1.0)
+        return {
+            "evidence_type": evidence_type,
+            "contribution": contribution_value,
+            "remaining_deficit": deficit_value,
+            "recommended_action": action,
+        }
+
+    def _evidence_deficit_progress(
+        self,
+        current_rows: list[Mapping[str, Any]],
+        previous_rows: list[Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        previous = {
+            str(row.get("evidence_type")): row
+            for row in previous_rows
+            if isinstance(row, Mapping) and row.get("evidence_type")
+        }
+        if not previous:
+            return {
+                "progress_state": "NO_PRIOR_EVIDENCE_DEFICIT_BASELINE",
+                "overall_progress": "BASELINE",
+                "progress_rows": [
+                    {
+                        "evidence_type": row.get("evidence_type"),
+                        "previous_deficit": None,
+                        "current_deficit": row.get("remaining_deficit"),
+                        "deficit_delta": None,
+                        "progress": "BASELINE",
+                    }
+                    for row in current_rows
+                    if isinstance(row, Mapping)
+                ],
+            }
+        progress_rows = []
+        for row in current_rows:
+            if not isinstance(row, Mapping):
+                continue
+            evidence_type = str(row.get("evidence_type"))
+            previous_row = previous.get(evidence_type, {})
+            previous_deficit = self._number_or_none(
+                previous_row.get("remaining_deficit")
+            )
+            current_deficit = self._number_or_none(row.get("remaining_deficit"))
+            if previous_deficit is None or current_deficit is None:
+                delta = None
+                progress = "BASELINE"
+            else:
+                delta = round(current_deficit - previous_deficit, 4)
+                progress = (
+                    "IMPROVING"
+                    if delta < -0.0001
+                    else "REGRESSING"
+                    if delta > 0.0001
+                    else "UNCHANGED"
+                )
+            progress_rows.append({
+                "evidence_type": evidence_type,
+                "previous_deficit": previous_deficit,
+                "current_deficit": current_deficit,
+                "deficit_delta": delta,
+                "progress": progress,
+            })
+        states = {row["progress"] for row in progress_rows}
+        if "REGRESSING" in states:
+            overall = "REGRESSING"
+        elif "IMPROVING" in states:
+            overall = "IMPROVING"
+        elif states == {"UNCHANGED"} or "UNCHANGED" in states:
+            overall = "STAGNATING"
+        else:
+            overall = "BASELINE"
+        return {
+            "progress_state": "EVIDENCE_DEFICIT_PROGRESS_AVAILABLE",
+            "overall_progress": overall,
+            "progress_rows": progress_rows,
+        }
+
+    def _number_or_none(self, value: Any) -> float | None:
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     def _capability_evidence_ledger_summary(
         self,
@@ -7442,6 +7825,12 @@ class CanonicalReportBindingEngine:
                 "attempted_candidate_count": explicit_summary.get("unique_candidate_count", explicit_summary.get("candidate_count")),
                 "explicit_rejection_count": explicit_summary.get("governance_blocked_count", 0),
                 "competitor_sources": explicit_summary.get("sources_entered") or [],
+                "proposal_sources_with_proposals": (
+                    explicit_summary.get("proposal_sources_with_proposals") or []
+                ),
+                "candidate_source_flow_trace": (
+                    explicit_summary.get("candidate_source_flow_trace") or []
+                )[:10],
                 "winner_source": explicit_summary.get("winner_source"),
                 "arena_winner": explicit_summary.get("winner_candidate_id"),
                 "winner_takes_all_detected": bool(
@@ -7516,7 +7905,26 @@ class CanonicalReportBindingEngine:
                 "selection_state": selection_state,
                 "source_dominance_detected": explicit_summary.get("source_dominance_detected"),
                 "selection_explanation": explicit_summary.get("selection_explanation"),
+                "validation_probe_candidate_id": explicit_summary.get(
+                    "validation_probe_candidate_id"
+                ),
+                "validation_probe_operation": explicit_summary.get(
+                    "validation_probe_operation"
+                ),
+                "validation_probe_source": explicit_summary.get(
+                    "validation_probe_source"
+                ),
+                "validation_probe_authority": explicit_summary.get(
+                    "validation_probe_authority"
+                ),
+                "arena_to_compiled_bridge_state": explicit_summary.get(
+                    "arena_to_compiled_bridge_state"
+                ),
+                "arena_to_compiled_bridge_action": explicit_summary.get(
+                    "arena_to_compiled_bridge_action"
+                ),
             }
+            summary.update(self._prediction_quality_calibration(summary))
             return {
                 "candidate_arena_summary": summary,
                 "candidate_arena_diagnostics": {
@@ -7648,6 +8056,7 @@ class CanonicalReportBindingEngine:
                 else None
             ),
         }
+        summary.update(self._prediction_quality_calibration(summary))
         return {
             "candidate_arena_summary": summary,
             "candidate_arena_diagnostics": {
@@ -7657,6 +8066,38 @@ class CanonicalReportBindingEngine:
                 "explicit_arena_report": explicit,
             },
             **summary,
+        }
+
+    def _prediction_quality_calibration(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        explanation = str(summary.get("selection_explanation") or "")
+        selection_state = summary.get("selection_state") or summary.get("arena_state")
+        simulation_success_count = self._first_number(
+            summary.get("simulation_success_count"),
+            0,
+        )
+        if (
+            selection_state == "NO_SAFE_WINNER"
+            and (simulation_success_count or 0) > 0
+            and "Prediction quality below minimum threshold" in explanation
+        ):
+            return {
+                "prediction_quality_calibration_state": (
+                    "PREDICTION_QUALITY_CALIBRATION_GAP"
+                ),
+                "prediction_quality_calibration_cause": (
+                    "simulation_success_below_final_decision_confidence"
+                ),
+                "prediction_quality_calibration_action": (
+                    "review_prediction_quality_thresholds_and_evidence_basis"
+                ),
+            }
+        return {
+            "prediction_quality_calibration_state": "CALIBRATION_NOT_TRIGGERED",
+            "prediction_quality_calibration_cause": None,
+            "prediction_quality_calibration_action": None,
         }
 
     def _build_candidate_proposal_visibility(

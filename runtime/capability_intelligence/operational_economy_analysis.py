@@ -37,6 +37,8 @@ class OperationalEconomyAnalysis:
         low_value_knowledge_items: int = 0,
         operational_grounding_failure_count: int = 0,
         operational_grounding_failure_rate: float | None = None,
+        executable_intelligence_report: Mapping[str, Any] | None = None,
+        candidate_arena_report: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         attrition = (
             candidate_attrition_summary
@@ -130,6 +132,8 @@ class OperationalEconomyAnalysis:
             validated_programs=validated_programs,
             operational_grounding_failure_count=operational_grounding_failure_count,
             operational_grounding_failure_rate=operational_grounding_failure_rate,
+            executable_intelligence_report=executable_intelligence_report,
+            candidate_arena_report=candidate_arena_report,
         )
         economy_health = self._average(
             [
@@ -250,7 +254,26 @@ class OperationalEconomyAnalysis:
         validated_programs: int,
         operational_grounding_failure_count: int,
         operational_grounding_failure_rate: float | None,
+        executable_intelligence_report: Mapping[str, Any] | None,
+        candidate_arena_report: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        executable = (
+            executable_intelligence_report
+            if isinstance(executable_intelligence_report, Mapping)
+            else {}
+        )
+        arena = (
+            candidate_arena_report
+            if isinstance(candidate_arena_report, Mapping)
+            else {}
+        )
+        probe_override = self._validation_probe_choke_override(executable)
+        admission_summary = self._arena_to_compiled_admission_summary(
+            arena_candidate_count=arena_candidate_count,
+            compiled_programs=compiled_programs,
+            executable=executable,
+            arena=arena,
+        )
         stages = [
             (
                 "candidate_to_arena",
@@ -286,6 +309,15 @@ class OperationalEconomyAnalysis:
             conversion = self._ratio(output_count, input_count)
             lost_count = max(input_count - output_count, 0)
             loss_rate = round(1.0 - conversion, 4) if input_count else 0.0
+            effective_cause = cause
+            effective_action = self._operationalization_action(cause)
+            responsibility = self._evidence_responsibility(cause)
+            required_evidence = "Not Available"
+            if probe_override and stage == "compiled_to_validated":
+                effective_cause = probe_override["cause"]
+                effective_action = probe_override["action"]
+                responsibility = probe_override["responsibility"]
+                required_evidence = probe_override["required_evidence"]
             rows.append(
                 {
                     "stage": stage,
@@ -296,8 +328,10 @@ class OperationalEconomyAnalysis:
                     "lost_count": lost_count,
                     "conversion_rate": conversion,
                     "loss_rate": loss_rate,
-                    "likely_cause": cause,
-                    "action": self._operationalization_action(cause),
+                    "likely_cause": effective_cause,
+                    "action": effective_action,
+                    "evidence_responsibility": responsibility,
+                    "required_evidence": required_evidence,
                 }
             )
         primary = sorted(
@@ -308,15 +342,56 @@ class OperationalEconomyAnalysis:
                 str(row.get("stage")),
             ),
         )[0]
+        if probe_override:
+            primary = {
+                **primary,
+                "stage": probe_override["stage"],
+                "likely_cause": probe_override["cause"],
+                "action": probe_override["action"],
+            }
         loss_pressure = self._bounded_ratio(
             sum(int(row.get("lost_count") or 0) for row in rows),
             max(self._int(candidate_count), 1),
         )
         return {
             "knowledge_operationalization_path": rows,
+            "arena_to_compiled_admission_summary": admission_summary,
+            "arena_to_compiled_admission_state": admission_summary["state"],
+            "arena_to_compiled_admission_action": admission_summary["action"],
+            "execution_compilation_admission_state": admission_summary[
+                "execution_compilation_admission_state"
+            ],
+            "execution_compilation_admission_reason": admission_summary[
+                "execution_compilation_admission_reason"
+            ],
+            "execution_compilation_admission_action": admission_summary[
+                "execution_compilation_admission_action"
+            ],
+            "execution_compilation_blockers": admission_summary[
+                "execution_compilation_blockers"
+            ],
+            "execution_compiled_program_count": admission_summary[
+                "execution_compiled_program_count"
+            ],
+            "validation_probe_compiled_program_count": admission_summary[
+                "validation_probe_compiled_program_count"
+            ],
+            "arena_to_validation_compilation_rate": admission_summary[
+                "arena_to_validation_compilation_rate"
+            ],
             "knowledge_operationalization_choke_point": primary["stage"],
             "knowledge_operationalization_choke_cause": primary["likely_cause"],
             "knowledge_operationalization_choke_action": primary["action"],
+            "knowledge_operationalization_evidence_responsibility": (
+                probe_override.get("responsibility")
+                if probe_override
+                else self._evidence_responsibility(primary["likely_cause"])
+            ),
+            "knowledge_operationalization_required_evidence": (
+                probe_override.get("required_evidence")
+                if probe_override
+                else "Not Available"
+            ),
             "knowledge_operationalization_loss_count": sum(
                 int(row.get("lost_count") or 0) for row in rows
             ),
@@ -333,7 +408,148 @@ class OperationalEconomyAnalysis:
             "operational_grounding_failure_rate": operational_grounding_failure_rate,
         }
 
+    def _arena_to_compiled_admission_summary(
+        self,
+        *,
+        arena_candidate_count: int,
+        compiled_programs: int,
+        executable: Mapping[str, Any],
+        arena: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        arena = arena if isinstance(arena, Mapping) else {}
+        execution_compiled = self._int(
+            executable.get("compiled_execution_programs")
+        )
+        probe_compiled = self._int(
+            executable.get("validation_probe_compiled_programs")
+        )
+        compiler_participation = self._int(
+            executable.get("compiler_participation")
+        )
+        probe_participation = self._int(
+            executable.get("validation_probe_compiler_participation")
+        )
+        if not executable:
+            execution_compiled = self._int(compiled_programs)
+        official_rate = self._ratio(compiled_programs, arena_candidate_count)
+        probe_rate = self._ratio(probe_compiled, arena_candidate_count)
+        if execution_compiled > 0:
+            state = "EXECUTION_COMPILATION_AVAILABLE"
+            action = "continue_execution_compilation_monitoring"
+        elif probe_compiled > 0:
+            state = "VALIDATION_PROBE_COMPILATION_AVAILABLE"
+            action = "separate_probe_compilation_from_execution_compilation"
+        elif compiler_participation or probe_participation:
+            state = "COMPILER_PARTICIPATED_WITHOUT_COMPILED_OUTPUT"
+            action = "inspect_compilation_admission_contract"
+        elif self._int(arena_candidate_count) > 0:
+            state = "ARENA_CANDIDATES_NOT_REACHING_COMPILER"
+            action = "inspect_runtime_orchestration_to_compiler_wiring"
+        else:
+            state = "NO_ARENA_CANDIDATES_FOR_COMPILATION"
+            action = "restore_arena_candidate_admission"
+        execution_admission = self._execution_compilation_admission(
+            arena_candidate_count=arena_candidate_count,
+            execution_compiled=execution_compiled,
+            probe_compiled=probe_compiled,
+            executable=executable,
+            arena=arena,
+        )
+        return {
+            "state": state,
+            "action": action,
+            **execution_admission,
+            "arena_candidate_count": self._int(arena_candidate_count),
+            "official_compiled_program_count": self._int(compiled_programs),
+            "execution_compiled_program_count": execution_compiled,
+            "validation_probe_compiled_program_count": probe_compiled,
+            "compiler_participation_count": compiler_participation,
+            "validation_probe_compiler_participation_count": probe_participation,
+            "official_arena_to_compiled_rate": official_rate,
+            "arena_to_validation_compilation_rate": probe_rate,
+        }
+
+    def _execution_compilation_admission(
+        self,
+        *,
+        arena_candidate_count: int,
+        execution_compiled: int,
+        probe_compiled: int,
+        executable: Mapping[str, Any],
+        arena: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        selection_state = str(arena.get("selection_state") or "")
+        selection_explanation = str(arena.get("selection_explanation") or "")
+        winner_selected = arena.get("winner_selected_from_evidence")
+        probe_authority = str(
+            arena.get("validation_probe_authority")
+            or executable.get("validation_probe_authority")
+            or ""
+        )
+        calibration_state = str(arena.get("prediction_quality_calibration_state") or "")
+        evidence_state = str(
+            executable.get("validation_probe_evidence_acceptance_state") or ""
+        )
+        blockers: list[str] = []
+        if selection_state:
+            blockers.append(f"selection_state={selection_state}")
+        if winner_selected is False:
+            blockers.append("winner_selected_from_evidence=FALSE")
+        if probe_authority:
+            blockers.append(f"validation_probe_authority={probe_authority}")
+        if calibration_state:
+            blockers.append(f"prediction_quality_calibration_state={calibration_state}")
+        if "Prediction quality below minimum threshold" in selection_explanation:
+            blockers.append("prediction_quality_below_threshold")
+        blockers.append(f"execution_compiled_programs={execution_compiled}")
+        if probe_compiled:
+            blockers.append(f"validation_probe_compiled_programs={probe_compiled}")
+        if evidence_state and evidence_state != "ACCEPTED":
+            blockers.append(f"evidence_acceptance={evidence_state}")
+
+        if execution_compiled > 0:
+            return {
+                "execution_compilation_admission_state": (
+                    "EXECUTION_COMPILATION_COMPILED"
+                ),
+                "execution_compilation_admission_reason": (
+                    "execution_candidate_compiled"
+                ),
+                "execution_compilation_admission_action": (
+                    "continue_execution_validation"
+                ),
+                "execution_compilation_blockers": [],
+            }
+        if self._int(arena_candidate_count) <= 0:
+            reason = "no_arena_candidates"
+            action = "restore_arena_candidate_admission"
+        elif selection_state == "NO_SAFE_WINNER":
+            reason = "no_safe_winner"
+            action = "calibrate_prediction_quality_before_execution_admission"
+        elif winner_selected is False:
+            reason = "no_evidence_selected_winner"
+            action = "require_evidence_selected_winner_before_execution_admission"
+        elif probe_authority == "SANDBOX_VALIDATION_ONLY" or probe_compiled > 0:
+            reason = "validation_probe_only_no_execution_authority"
+            action = "keep_probe_isolated_until_evidence_acceptance"
+        elif evidence_state and evidence_state != "ACCEPTED":
+            reason = "evidence_acceptance_unsatisfied"
+            action = "complete_evidence_acceptance_before_execution_admission"
+        else:
+            reason = "execution_candidate_not_admitted"
+            action = "inspect_arena_winner_selection_and_authority_contract"
+        return {
+            "execution_compilation_admission_state": (
+                "NO_EXECUTION_CANDIDATE_ADMITTED"
+            ),
+            "execution_compilation_admission_reason": reason,
+            "execution_compilation_admission_action": action,
+            "execution_compilation_blockers": blockers,
+        }
+
     def _operationalization_action(self, cause: str) -> str:
+        if cause == "validation_evidence_grounding":
+            return "select_object_grounded_validation_task"
         if cause == "operational_grounding":
             return "select_grounding_aligned_validation_tasks"
         if cause == "validation_infrastructure":
@@ -341,6 +557,71 @@ class OperationalEconomyAnalysis:
         if cause == "candidate_admission":
             return "improve_candidate_arena_admission"
         return "inspect_compiler_execution_contracts"
+
+    def _validation_probe_choke_override(
+        self,
+        executable: Mapping[str, Any],
+    ) -> dict[str, str]:
+        if not executable:
+            return {}
+        probe_compiled = self._int(
+            executable.get("validation_probe_compiled_programs")
+        ) > 0 or executable.get("validation_probe_admission_state") == (
+            "VALIDATION_PROBE_COMPILED"
+        )
+        probe_evaluated = executable.get(
+            "validation_probe_evidence_acceptance_evaluated"
+        ) is True
+        acceptance_state = executable.get(
+            "validation_probe_evidence_acceptance_state"
+        )
+        if not (probe_compiled and probe_evaluated and acceptance_state == "INSUFFICIENT"):
+            return {}
+        cause = str(
+            executable.get("validation_probe_evidence_insufficiency_cause")
+            or "evidence_strength_below_acceptance_threshold"
+        )
+        return {
+            "stage": self._choke_stage_for_evidence_cause(cause),
+            "cause": cause,
+            "action": str(
+                executable.get("validation_probe_recommended_validation_action")
+                or self._operationalization_action(cause)
+            ),
+            "responsibility": self._evidence_responsibility(cause),
+            "required_evidence": str(
+                executable.get("validation_probe_required_evidence")
+                or "additional_governed_validation_evidence"
+            ),
+        }
+
+    def _choke_stage_for_evidence_cause(self, cause: str) -> str:
+        if cause in {"missing_object_grounding", "weak_grounding_context"}:
+            return "validation_evidence_grounding"
+        if cause == "missing_comparable_output":
+            return "validation_comparable_output"
+        if cause == "execution_residual_remaining":
+            return "sandbox_validation_result_quality"
+        return "evidence_sufficiency"
+
+    def _evidence_responsibility(self, cause: str) -> str:
+        if cause in {"missing_object_grounding", "weak_grounding_context"}:
+            return "OBJECT_GROUNDING_LAYER"
+        if cause == "missing_comparable_output":
+            return "VALIDATION_TASK_GROUND_TRUTH"
+        if cause == "execution_residual_remaining":
+            return "SANDBOX_EXECUTION_AND_RESIDUAL_REPAIR"
+        if cause in {"governance_blocked", "evidence_contract_rejected"}:
+            return "GOVERNED_VALIDATION_CONTRACT"
+        if cause == "candidate_admission":
+            return "CANDIDATE_ARENA"
+        if cause == "validation_infrastructure":
+            return "PROGRAM_VALIDATION_INFRASTRUCTURE"
+        if cause == "operational_grounding":
+            return "OPERATIONAL_GROUNDING"
+        if cause == "compiler_execution_or_support":
+            return "COMPILER_INFRASTRUCTURE"
+        return "EVIDENCE_SUFFICIENCY_REVIEW"
 
     def _operational_clusters(
         self,

@@ -580,7 +580,7 @@ def test_domain_interaction_bootstrap_composes_cognitive_domains_when_large_stat
             {"source": "program_generation", "proposal_status": "PROPOSED", "operation": "replace_color"},
         ],
     }
-    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+    state["candidate_arena_report"] = {
         "candidate_arena_summary": {
             "selection_mode": "EVIDENCE_BASED_ARENA",
             "arena_state": "SINGLE_SOURCE_ONLY",
@@ -2038,6 +2038,16 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
             "policy_state": "SEPARATE_AUTHORITY_REVIEW_REQUIRED",
             "automatic_authority_transfer": False,
         },
+        "validation_sponsorship_contract": {
+            "contract_state": "WORLD_GOVERNANCE_VALIDATION_SPONSOR",
+            "truth_preparation_gate": "OPPORTUNITY_PERMISSION_ONLY",
+            "capability_merit_system": "VALIDATION_PRIORITY_ONLY",
+            "truth_boundary_contract": [
+                "MERIT_NEVER_INFLUENCES_TRUTH_FORMATION",
+                "VALIDATION_SPONSORSHIP_NEVER_INFLUENCES_TRUST_FORMATION",
+            ],
+            "validation_requirements_changed": False,
+        },
         "generated_survival_candidate_count": 8,
         "arena_simulated_survival_candidate_count": 7,
         "arena_quality_survival_candidate_count": 2,
@@ -2324,6 +2334,39 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["world_governance_promotion_policy_state"] == (
         "RELAX_SANDBOX_CITIZENSHIP"
     )
+    assert coverage["validation_sponsorship_contract_state"] == (
+        "WORLD_GOVERNANCE_VALIDATION_SPONSOR"
+    )
+    assert coverage["truth_preparation_gate"] == "OPPORTUNITY_PERMISSION_ONLY"
+    assert coverage["capability_merit_system"] == "VALIDATION_PRIORITY_ONLY"
+    assert "MERIT_NEVER_INFLUENCES_TRUTH_FORMATION" in (
+        coverage["validation_sponsorship_truth_boundary"]
+    )
+    assert coverage["evidence_sufficiency_state"] == (
+        "EVIDENCE_SUFFICIENCY_REVIEW_REQUIRED"
+    )
+    assert coverage["evidence_sufficiency_question"] == (
+        "when_is_evidence_sufficient_for_trust_update_and_graduation"
+    )
+    assert coverage["evidence_sufficiency_contract"] == (
+        "evidence_sufficiency_precedes_trust_update_and_graduation"
+    )
+    assert coverage["evidence_contribution_state"] == (
+        "EVIDENCE_CONTRIBUTION_DIAGNOSTIC_AVAILABLE"
+    )
+    contribution = {
+        row["evidence_type"]: row for row in coverage["evidence_contribution_rows"]
+    }
+    assert contribution["ground_truth"]["remaining_deficit"] == 1.0
+    assert contribution["independent_validation"]["contribution"] == 1.0
+    assert coverage["highest_remaining_evidence_deficit"] == "ground_truth"
+    assert coverage["highest_remaining_evidence_deficit_action"] == (
+        "select_ground_truth_aligned_validation_tasks"
+    )
+    assert coverage["evidence_deficit_progress_state"] == (
+        "NO_PRIOR_EVIDENCE_DEFICIT_BASELINE"
+    )
+    assert coverage["overall_evidence_progress"] == "BASELINE"
     assert coverage["sandbox_citizenship_thresholds"][
         "min_average_accuracy"
     ] == 0.8
@@ -2349,6 +2392,7 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["top_operational_citizens"][0]["citizenship_tier"] == (
         "SANDBOX_OPERATIONAL_CITIZEN"
     )
+
     assert coverage["top_operational_citizens"][0]["authority_scope"] == (
         "SANDBOX_REUSE_ONLY"
     )
@@ -2402,6 +2446,112 @@ def test_capability_survival_metrics_are_bound_from_materialization_report():
     assert coverage["top_stability_regressions"][0]["next_required_evidence"] == (
         "stability_recovery_evidence"
     )
+
+
+def test_candidate_arena_reports_prediction_quality_calibration_gap():
+    state = _state()
+    state["candidate_arena_report"] = {
+        "candidate_arena_summary": {
+            "arena_state": "NO_SAFE_WINNER",
+            "candidate_count": 2,
+            "unique_candidate_count": 2,
+            "source_count": 1,
+            "sources_entered": ["normalized_program_candidates"],
+            "simulation_count": 2,
+            "simulation_success_count": 2,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "NO_SAFE_WINNER",
+            "selection_explanation": (
+                "Prediction quality below minimum threshold."
+            ),
+            "validation_probe_candidate_id": "semantic_program:duplicate_object",
+            "validation_probe_operation": "duplicate_object",
+            "validation_probe_source": "normalized_program_candidates",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "arena_to_compiled_bridge_state": "VALIDATION_PROBE_AVAILABLE",
+            "arena_to_compiled_bridge_action": (
+                "route_validation_probe_to_compiler_without_prediction_authority"
+            ),
+            "candidate_summary": [
+                {
+                    "source": "normalized_program_candidates",
+                    "candidate_id": "semantic_program:duplicate_object",
+                    "operation": "duplicate_object",
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["prediction_quality_calibration_state"] == (
+        "PREDICTION_QUALITY_CALIBRATION_GAP"
+    )
+    assert summary["prediction_quality_calibration_cause"] == (
+        "simulation_success_below_final_decision_confidence"
+    )
+    assert summary["prediction_quality_calibration_action"] == (
+        "review_prediction_quality_thresholds_and_evidence_basis"
+    )
+    assert summary["arena_to_compiled_bridge_state"] == (
+        "VALIDATION_PROBE_AVAILABLE"
+    )
+    assert summary["validation_probe_authority"] == "SANDBOX_VALIDATION_ONLY"
+
+
+def test_evidence_deficit_progress_compares_previous_deficit_rows():
+    state = _state()
+    state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {
+        "materialized_operational_capabilities": 0,
+        "known_operational_capability_count": 1,
+        "known_operational_domain_count": 1,
+        "operational_citizen_count": 1,
+        "operational_experience_count": 4,
+        "reuse_evidence_count": 2,
+        "independent_reuse_success_count": 2,
+        "validator_failure_distribution": {
+            "GOVERNED_VALIDATION_INCOMPLETE": 1,
+            "MISSING_INDEPENDENT_EVIDENCE": 1,
+        },
+        "previous_evidence_contribution_rows": [
+            {
+                "evidence_type": "ground_truth",
+                "remaining_deficit": 0.75,
+            },
+            {
+                "evidence_type": "independent_validation",
+                "remaining_deficit": 0.75,
+            },
+        ],
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    coverage = result["field_bindings"][
+        "cognitive_capability_coverage_summary"
+    ]["value"]
+    rows = {
+        row["evidence_type"]: row
+        for row in coverage["evidence_deficit_progress_rows"]
+    }
+
+    assert coverage["evidence_deficit_progress_state"] == (
+        "EVIDENCE_DEFICIT_PROGRESS_AVAILABLE"
+    )
+    assert coverage["overall_evidence_progress"] == "IMPROVING"
+    assert rows["ground_truth"]["previous_deficit"] == 0.75
+    assert rows["ground_truth"]["current_deficit"] == 0.5
+    assert rows["ground_truth"]["deficit_delta"] == -0.25
+    assert rows["ground_truth"]["progress"] == "IMPROVING"
 
 
 def test_canonical_timing_bindings_use_existing_timing_sources():

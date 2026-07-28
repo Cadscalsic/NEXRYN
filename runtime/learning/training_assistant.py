@@ -109,6 +109,7 @@ class TrainingAssistant:
             "previous_batch": [],
             "recent_runs": [],
             "tasks": {},
+            "last_evidence_remediation": {},
         }
 
     def _load_selection_memory(self):
@@ -125,6 +126,9 @@ class TrainingAssistant:
                 "previous_batch": list(memory.get("previous_batch", [])),
                 "recent_runs": list(memory.get("recent_runs", [])),
                 "tasks": dict(memory.get("tasks", {})),
+                "last_evidence_remediation": dict(
+                    memory.get("last_evidence_remediation", {})
+                ),
             }
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return self._default_selection_memory()
@@ -257,6 +261,12 @@ class TrainingAssistant:
             "trust_objective",
             "graduation_objective",
             "operationalization_objective",
+            "responsibility_targets",
+            "candidate_source_targets",
+            "source_diversity_targets",
+            "arena_source_targets",
+            "composition_opportunity_targets",
+            "missing_composite_capabilities",
         ):
             visit(metadata.get(key))
         return terms
@@ -311,6 +321,38 @@ class TrainingAssistant:
                 self._term(row.get("required_task_property")),
                 self._term(row.get("required_evidence")),
             ])
+        composition_rows = [
+            row for row in report.get("capability_composition_opportunities", []) or []
+            if isinstance(row, dict)
+        ]
+        composition_targets = []
+        missing_composition_targets = []
+        for row in composition_rows[:8]:
+            composition_targets.append(self._term(row.get("composite_name")))
+            composition_targets.append(self._term(row.get("composition_name")))
+            for capability in row.get("required_capabilities") or []:
+                composition_targets.append(self._term(capability))
+            for capability in row.get("missing_capabilities") or []:
+                missing_composition_targets.append(self._term(capability))
+            for blocker in row.get("composition_blockers") or []:
+                missing_composition_targets.append(self._term(blocker))
+        source_materialization_rows = [
+            row for row in report.get("candidate_source_materialization_rows", []) or []
+            if isinstance(row, dict)
+        ]
+        source_targets = [
+            self._term(source)
+            for source in report.get("missing_candidate_sources", []) or []
+            if source
+        ]
+        source_targets.extend(
+            self._term(source)
+            for source in report.get("target_candidate_sources", []) or []
+            if source
+        )
+        for row in source_materialization_rows[:8]:
+            if row.get("source_materialization_state") != "ENTERED_ARENA":
+                source_targets.append(self._term(row.get("source")))
         return {
             "source_available": bool(report),
             "operational_economy_health": report.get("operational_economy_health"),
@@ -329,13 +371,39 @@ class TrainingAssistant:
             "governed_validation_required_evidence": report.get(
                 "governed_validation_required_evidence"
             ),
+            "knowledge_operationalization_choke_point": report.get(
+                "knowledge_operationalization_choke_point"
+            ),
+            "knowledge_operationalization_choke_action": report.get(
+                "knowledge_operationalization_choke_action"
+            ),
+            "knowledge_operationalization_choke_cause": report.get(
+                "knowledge_operationalization_choke_cause"
+            ),
+            "knowledge_operationalization_evidence_responsibility": report.get(
+                "knowledge_operationalization_evidence_responsibility"
+            ),
+            "knowledge_operationalization_required_evidence": report.get(
+                "knowledge_operationalization_required_evidence"
+            ),
+            "arena_source_diversity_state": report.get(
+                "arena_source_diversity_state"
+            ),
+            "arena_source_diversity_action": report.get(
+                "arena_source_diversity_action"
+            ),
             "investment_targets": sorted(set(filter(None, capability_targets))),
             "cluster_targets": sorted(set(filter(None, cluster_targets))),
+            "composition_targets": sorted(set(filter(None, composition_targets))),
+            "missing_composition_targets": sorted(set(filter(None, missing_composition_targets))),
+            "source_diversity_targets": sorted(set(filter(None, source_targets))),
             "roadmap_targets": sorted(set(filter(None, roadmap_targets))),
             "grounding_targets": sorted(set(filter(None, grounding_targets))),
             "grounding_properties": sorted(set(filter(None, grounding_properties))),
             "investment_rows": investment_rows[:8],
             "cluster_rows": clusters[:8],
+            "composition_opportunity_rows": composition_rows[:8],
+            "source_materialization_rows": source_materialization_rows[:8],
             "roadmap_rows": roadmap[:7],
             "grounding_requirement_rows": grounding_rows[:12],
         }
@@ -391,6 +459,49 @@ class TrainingAssistant:
                     "target": target,
                 }
                 for target in cluster_matches[:6]
+            )
+
+        composition_matches = matched_targets(
+            economy_context.get("composition_targets", [])
+        )
+        missing_composition_matches = matched_targets(
+            economy_context.get("missing_composition_targets", [])
+        )
+        if composition_matches or missing_composition_matches:
+            priority += (
+                38
+                + min(len(composition_matches), 4) * 5
+                + min(len(missing_composition_matches), 4) * 12
+            )
+            reasons.append("composition_opportunity_alignment")
+            matches.extend(
+                {
+                    "match_type": "composition_opportunity",
+                    "target": target,
+                }
+                for target in composition_matches[:6]
+            )
+            matches.extend(
+                {
+                    "match_type": "missing_composite_capability",
+                    "target": target,
+                }
+                for target in missing_composition_matches[:6]
+            )
+
+        source_matches = matched_targets(
+            economy_context.get("source_diversity_targets", [])
+        )
+        source_action = economy_context.get("arena_source_diversity_action")
+        if source_matches or source_action == "SOURCE_DIVERSITY_SPRINT_REQUIRED":
+            priority += 32 + min(len(source_matches), 4) * 8
+            reasons.append("arena_source_diversity_alignment")
+            matches.extend(
+                {
+                    "match_type": "arena_source_diversity",
+                    "target": target,
+                }
+                for target in source_matches[:6]
             )
 
         roadmap_matches = matched_targets(economy_context.get("roadmap_targets", []))
@@ -459,7 +570,122 @@ class TrainingAssistant:
                 "target": bottleneck,
             })
 
+        choke_action = self._term(
+            economy_context.get("knowledge_operationalization_choke_action")
+        )
+        required_evidence = self._term(
+            economy_context.get("knowledge_operationalization_required_evidence")
+        )
+        responsibility = self._term(
+            economy_context.get(
+                "knowledge_operationalization_evidence_responsibility"
+            )
+        )
+        choke_point = self._term(
+            economy_context.get("knowledge_operationalization_choke_point")
+        )
+        evidence_task_match = bool(
+            required_evidence and required_evidence in terms
+        )
+        action_task_match = bool(
+            choke_action and any(part in terms for part in choke_action.split("_"))
+        )
+        responsibility_match = bool(
+            responsibility
+            and any(part in terms for part in responsibility.split("_"))
+        )
+        if evidence_task_match or action_task_match or responsibility_match:
+            priority += 45
+            reasons.append("evidence_responsibility_alignment")
+            matches.append({
+                "match_type": "evidence_responsibility",
+                "target": responsibility or choke_point,
+            })
+            matches.append({
+                "match_type": "required_evidence",
+                "target": required_evidence or choke_action,
+            })
+
         return round(priority, 4), reasons, matches[:12]
+
+    def _evidence_remediation_progress(
+        self,
+        *,
+        previous: dict,
+        economy_context: dict,
+    ) -> dict:
+        previous = previous if isinstance(previous, dict) else {}
+        current_deficit = economy_context.get(
+            "knowledge_operationalization_required_evidence"
+        )
+        current_cause = economy_context.get("knowledge_operationalization_choke_cause")
+        current_responsibility = economy_context.get(
+            "knowledge_operationalization_evidence_responsibility"
+        )
+        if not previous:
+            return {
+                "evidence_remediation_progress_state": (
+                    "NO_PRIOR_REMEDIATION_BASELINE"
+                ),
+                "required_evidence_produced": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+                "insufficiency_cause_before": current_cause,
+                "insufficiency_cause_after": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+                "evidence_acceptance_before": (
+                    "INSUFFICIENT" if current_deficit else "Not Available"
+                ),
+                "evidence_acceptance_after": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+                "previous_remediation_task": "Not Available",
+                "previous_evidence_deficit": "Not Available",
+                "current_evidence_deficit": current_deficit,
+            }
+        previous_deficit = previous.get("evidence_remediation_deficit")
+        previous_cause = previous.get("insufficiency_cause_before")
+        previous_task = previous.get("evidence_remediation_task")
+        if not current_deficit or str(current_deficit) == "Not Available":
+            progress_state = "EVIDENCE_DEFICIT_CLEARED"
+            produced = True
+            acceptance_after = "ACCEPTED_OR_NO_ACTIVE_DEFICIT"
+            outcome = "REMEDIATION_IMPROVED"
+        elif current_deficit != previous_deficit:
+            progress_state = "EVIDENCE_DEFICIT_SHIFTED"
+            produced = "PARTIAL_OR_DIFFERENT_EVIDENCE_PRODUCED"
+            acceptance_after = "INSUFFICIENT_DIFFERENT_DEFICIT"
+            outcome = "REMEDIATION_SHIFTED_DEFICIT"
+        elif current_cause != previous_cause:
+            progress_state = "INSUFFICIENCY_CAUSE_SHIFTED"
+            produced = "PARTIAL_OR_DIFFERENT_EVIDENCE_PRODUCED"
+            acceptance_after = "INSUFFICIENT_DIFFERENT_CAUSE"
+            outcome = "REMEDIATION_SHIFTED_CAUSE"
+        else:
+            progress_state = "EVIDENCE_DEFICIT_UNCHANGED"
+            produced = False
+            acceptance_after = "INSUFFICIENT"
+            outcome = "REMEDIATION_UNCHANGED"
+        return {
+            "evidence_remediation_progress_state": progress_state,
+            "required_evidence_produced": produced,
+            "insufficiency_cause_before": previous_cause,
+            "insufficiency_cause_after": current_cause,
+            "evidence_acceptance_before": previous.get(
+                "evidence_acceptance_before",
+                "INSUFFICIENT",
+            ),
+            "evidence_acceptance_after": acceptance_after,
+            "previous_remediation_task": previous_task,
+            "previous_evidence_deficit": previous_deficit,
+            "current_evidence_deficit": current_deficit,
+            "previous_responsible_area": previous.get(
+                "evidence_remediation_responsible_area"
+            ),
+            "current_responsible_area": current_responsibility,
+            "remediation_progress_outcome": outcome,
+        }
 
     def _validation_academy_priority(
         self,
@@ -611,6 +837,24 @@ class TrainingAssistant:
             match for match in match_rows
             if str(match.get("match_type", "")).startswith("grounding")
         ]
+        evidence_remediation_rows = [
+            match for match in match_rows
+            if match.get("match_type") in {
+                "evidence_responsibility",
+                "required_evidence",
+            }
+        ]
+        composition_match_rows = [
+            match for match in match_rows
+            if match.get("match_type") in {
+                "composition_opportunity",
+                "missing_composite_capability",
+            }
+        ]
+        source_diversity_match_rows = [
+            match for match in match_rows
+            if match.get("match_type") == "arena_source_diversity"
+        ]
         selected_grounding_aligned_tasks = [
             row.get("task_file")
             for row in selected_rows
@@ -625,6 +869,18 @@ class TrainingAssistant:
             for row in selected_rows
             if row.get("training_economy_matches")
         ]
+        remediation_progress = self._evidence_remediation_progress(
+            previous=self.selection_memory.get("last_evidence_remediation", {}),
+            economy_context=economy_context,
+        )
+        remediation_outcome = (
+            remediation_progress.get("remediation_progress_outcome")
+            if remediation_progress.get("evidence_remediation_progress_state")
+            != "NO_PRIOR_REMEDIATION_BASELINE"
+            else "REMEDIATION_ATTEMPT_QUEUED"
+            if evidence_remediation_rows
+            else "REMEDIATION_NOT_ATTEMPTED"
+        )
         return {
             "system": "training_economy_alignment",
             "operational_economy_source_available": bool(
@@ -660,12 +916,58 @@ class TrainingAssistant:
             "roadmap_targets": economy_context.get("roadmap_targets", []),
             "grounding_targets": economy_context.get("grounding_targets", []),
             "grounding_properties": economy_context.get("grounding_properties", []),
+            "composition_targets": economy_context.get("composition_targets", []),
+            "missing_composition_targets": economy_context.get(
+                "missing_composition_targets",
+                [],
+            ),
+            "source_diversity_targets": economy_context.get(
+                "source_diversity_targets",
+                [],
+            ),
+            "arena_source_diversity_state": economy_context.get(
+                "arena_source_diversity_state"
+            ),
+            "arena_source_diversity_action": economy_context.get(
+                "arena_source_diversity_action"
+            ),
             "selected_economy_aligned_tasks": selected_with_matches,
             "selected_grounding_aligned_tasks": selected_grounding_aligned_tasks,
+            "selected_composition_aligned_tasks": sorted({
+                row.get("task_file")
+                for row in selected_rows
+                if any(
+                    isinstance(match, dict)
+                    and match.get("match_type") in {
+                        "composition_opportunity",
+                        "missing_composite_capability",
+                    }
+                    for match in row.get("training_economy_matches", []) or []
+                )
+            }),
+            "selected_source_diversity_aligned_tasks": sorted({
+                row.get("task_file")
+                for row in selected_rows
+                if any(
+                    isinstance(match, dict)
+                    and match.get("match_type") == "arena_source_diversity"
+                    for match in row.get("training_economy_matches", []) or []
+                )
+            }),
             "matched_economy_targets": matched_targets[:12],
             "matched_grounding_targets": [
                 match.get("target")
                 for match in grounding_match_rows[:12]
+                if match.get("target")
+            ],
+            "matched_composition_targets": [
+                match.get("target")
+                for match in composition_match_rows[:12]
+                if match.get("target")
+            ],
+            "matched_source_diversity_targets": [
+                match.get("target")
+                for match in source_diversity_match_rows[:12]
                 if match.get("target")
             ],
             "grounding_economy_alignment": (
@@ -689,6 +991,53 @@ class TrainingAssistant:
                 if isinstance(match, dict)
                 and str(match.get("match_type", "")).startswith("grounding")
             ][:12],
+            "composition_opportunity_alignment": (
+                "COMPOSITION_OPPORTUNITY_ALIGNED"
+                if composition_match_rows
+                else "COMPOSITION_OPPORTUNITY_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("composition_opportunity_rows")
+                else "NO_COMPOSITION_OPPORTUNITY_SIGNAL"
+            ),
+            "arena_source_diversity_alignment": (
+                "SOURCE_DIVERSITY_ALIGNED"
+                if source_diversity_match_rows
+                else "SOURCE_DIVERSITY_SIGNAL_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("arena_source_diversity_action")
+                == "SOURCE_DIVERSITY_SPRINT_REQUIRED"
+                else "NO_SOURCE_DIVERSITY_SIGNAL"
+            ),
+            "evidence_driven_task_selection_state": (
+                "ALIGNED_TASK_SELECTED"
+                if evidence_remediation_rows
+                else "EVIDENCE_DEFICIT_AVAILABLE_WITHOUT_ALIGNED_TASK"
+                if economy_context.get("knowledge_operationalization_required_evidence")
+                or economy_context.get(
+                    "knowledge_operationalization_evidence_responsibility"
+                )
+                else "NO_EVIDENCE_DEFICIT_SIGNAL"
+            ),
+            "evidence_remediation_attempted": bool(evidence_remediation_rows),
+            "evidence_remediation_task": (
+                selected_rows[0].get("task_file")
+                if evidence_remediation_rows and selected_rows
+                else "Not Available"
+            ),
+            "evidence_remediation_alignment": (
+                1.0 if evidence_remediation_rows else 0.0
+            ),
+            "evidence_remediation_deficit": economy_context.get(
+                "knowledge_operationalization_required_evidence"
+            ),
+            "evidence_remediation_responsible_area": economy_context.get(
+                "knowledge_operationalization_evidence_responsibility"
+            ),
+            "evidence_remediation_selection_reason": (
+                "validation_probe_evidence_remediation"
+                if evidence_remediation_rows
+                else "Not Available"
+            ),
+            **remediation_progress,
+            "remediation_outcome": remediation_outcome,
             "validation_academy_alignment": (
                 "VALIDATION_ACADEMY_ALIGNED"
                 if academy_match_rows
@@ -1901,7 +2250,7 @@ class TrainingAssistant:
             "dataset_large": dataset_large,
         }
 
-    def _record_selection(self, selected, run_id):
+    def _record_selection(self, selected, run_id, alignment_report=None):
         now = datetime.utcnow().isoformat()
         recent_runs = list(self.selection_memory.get("recent_runs", []))
         recent_task_ids = self._recent_task_ids()
@@ -1929,6 +2278,29 @@ class TrainingAssistant:
                 "selected_at": now,
             },
         ]
+        alignment_report = (
+            alignment_report if isinstance(alignment_report, dict) else {}
+        )
+        if alignment_report.get("evidence_remediation_attempted"):
+            self.selection_memory["last_evidence_remediation"] = {
+                "run_id": run_id,
+                "selected_at": now,
+                "evidence_remediation_task": alignment_report.get(
+                    "evidence_remediation_task"
+                ),
+                "evidence_remediation_deficit": alignment_report.get(
+                    "evidence_remediation_deficit"
+                ),
+                "evidence_remediation_responsible_area": alignment_report.get(
+                    "evidence_remediation_responsible_area"
+                ),
+                "insufficiency_cause_before": alignment_report.get(
+                    "insufficiency_cause_before"
+                ),
+                "evidence_acceptance_before": alignment_report.get(
+                    "evidence_acceptance_before"
+                ),
+            }
         self._persist_selection_memory()
 
     def select_batch(
@@ -2233,12 +2605,15 @@ class TrainingAssistant:
             self.state["curriculum_report"] = curriculum_report
             self.state["selection_diversity_report"] = selection_report
             self.state["elite_selection_report"] = elite_selection_report
-            self.state["training_economy_alignment_report"] = (
+            training_economy_alignment_report = (
                 self._training_economy_alignment_report(
                     selected,
                     elite_selection_report,
                     operational_economy_context,
                 )
+            )
+            self.state["training_economy_alignment_report"] = (
+                training_economy_alignment_report
             )
             self.state["pending_next_task_index"] = (
                 (start + len([
@@ -2255,7 +2630,11 @@ class TrainingAssistant:
                 )
             )
             self._persist()
-            self._record_selection(selected, run_id)
+            self._record_selection(
+                selected,
+                run_id,
+                training_economy_alignment_report,
+            )
 
         if random_seed is not None:
             self.random_seed = original_random_seed
@@ -2304,6 +2683,79 @@ class TrainingAssistant:
                 "grounding_economy_alignment": (
                     training_economy_alignment_report.get(
                         "grounding_economy_alignment"
+                    )
+                ),
+                "composition_opportunity_alignment": (
+                    training_economy_alignment_report.get(
+                        "composition_opportunity_alignment"
+                    )
+                ),
+                "arena_source_diversity_alignment": (
+                    training_economy_alignment_report.get(
+                        "arena_source_diversity_alignment"
+                    )
+                ),
+                "selected_composition_aligned_tasks": (
+                    training_economy_alignment_report.get(
+                        "selected_composition_aligned_tasks"
+                    )
+                ),
+                "selected_source_diversity_aligned_tasks": (
+                    training_economy_alignment_report.get(
+                        "selected_source_diversity_aligned_tasks"
+                    )
+                ),
+                "evidence_driven_task_selection_state": (
+                    training_economy_alignment_report.get(
+                        "evidence_driven_task_selection_state"
+                    )
+                ),
+                "evidence_remediation_attempted": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_attempted"
+                    )
+                ),
+                "evidence_remediation_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_task"
+                    )
+                ),
+                "evidence_remediation_deficit": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_deficit"
+                    )
+                ),
+                "evidence_remediation_responsible_area": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_responsible_area"
+                    )
+                ),
+                "remediation_outcome": (
+                    training_economy_alignment_report.get("remediation_outcome")
+                ),
+                "evidence_remediation_progress_state": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_progress_state"
+                    )
+                ),
+                "previous_remediation_task": (
+                    training_economy_alignment_report.get(
+                        "previous_remediation_task"
+                    )
+                ),
+                "previous_evidence_deficit": (
+                    training_economy_alignment_report.get(
+                        "previous_evidence_deficit"
+                    )
+                ),
+                "current_evidence_deficit": (
+                    training_economy_alignment_report.get(
+                        "current_evidence_deficit"
+                    )
+                ),
+                "required_evidence_produced": (
+                    training_economy_alignment_report.get(
+                        "required_evidence_produced"
                     )
                 ),
             })

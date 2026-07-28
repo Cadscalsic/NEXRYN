@@ -25,6 +25,7 @@ REPORT_END_MARKER = "<<< NEXRYN_REPORT_END >>>"
 SECTION_ORDER = [
     "REPORT HEADER",
     "EXECUTION SUMMARY",
+    "CONSTITUTIONAL CONTRACTS",
     "COGNITIVE OUTPUTS",
     "PROGRAM QUALITY",
     "UNIFIED CONCEPT LIFECYCLE REPORT",
@@ -526,6 +527,7 @@ class DeterministicFinalReportRenderer:
             self._render_lifecycle_start("VALID"),
             self._render_header(canonical),
             self._render_execution_summary(canonical),
+            self._render_constitutional_contracts(canonical),
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
             self._render_unified_concept_lifecycle(canonical),
@@ -578,6 +580,7 @@ class DeterministicFinalReportRenderer:
             self._render_lifecycle_start("TRUNCATED"),
             self._render_header(canonical),
             self._render_execution_summary(canonical),
+            self._render_constitutional_contracts(canonical),
             self._render_cognitive_outputs(canonical),
             self._render_program_quality(canonical),
             self._render_unified_concept_lifecycle(canonical),
@@ -690,6 +693,47 @@ class DeterministicFinalReportRenderer:
             f"{self._value(coverage_summary.get('capability_evidence_contamination_state'))}",
             "Capability Evidence Contamination Count: "
             f"{self._value(coverage_summary.get('capability_evidence_contamination_count'))}",
+        ])
+
+    def _render_constitutional_contracts(self, canonical: dict[str, Any]) -> str:
+        summary = self._binding_value(
+            canonical,
+            "cognitive_capability_coverage_summary",
+        )
+        summary = summary if isinstance(summary, dict) else {}
+        validation_boundary = (
+            summary.get("validation_sponsorship_truth_boundary") or []
+        )
+        if not isinstance(validation_boundary, list):
+            validation_boundary = [validation_boundary]
+        investment_boundary = summary.get(
+            "capability_investment_truth_boundary",
+        )
+        boundaries = [
+            "TRUTH_IS_EVIDENCE_GOVERNED",
+            "TRUST_IS_EVIDENCE_GOVERNED",
+            "GRADUATION_IS_EVIDENCE_GOVERNED",
+        ]
+        if investment_boundary:
+            boundaries.append(str(investment_boundary))
+        boundaries.extend(str(item) for item in validation_boundary if item)
+        boundaries = list(dict.fromkeys(boundaries))
+        return self._section("CONSTITUTIONAL CONTRACTS", [
+            "Truth Contract: TRUTH_IS_EVIDENCE_GOVERNED",
+            "Trust Contract: TRUST_IS_EVIDENCE_GOVERNED",
+            "Graduation Contract: GRADUATION_IS_EVIDENCE_GOVERNED",
+            "Capability Investment Contract: "
+            f"{self._value(investment_boundary)}",
+            "Validation Sponsorship Contract: "
+            f"{self._value(summary.get('validation_sponsorship_contract_state'))}",
+            "Truth Preparation Gate: "
+            f"{self._value(summary.get('truth_preparation_gate'))}",
+            "Capability Merit Scope: "
+            f"{self._value(summary.get('capability_merit_system'))}",
+            "Evidence Sufficiency Contract: "
+            "evidence_sufficiency_precedes_trust_update_and_graduation",
+            "Constitutional Truth Boundaries: "
+            f"{self._value(boundaries)}",
         ])
 
     def _render_cognitive_outputs(self, canonical: dict[str, Any]) -> str:
@@ -1854,6 +1898,22 @@ class DeterministicFinalReportRenderer:
             if isinstance(top_stability_regressions, list)
             else []
         )
+        evidence_contribution_rows = (
+            summary.get("evidence_contribution_rows") or []
+        )
+        evidence_contribution_rows = (
+            evidence_contribution_rows
+            if isinstance(evidence_contribution_rows, list)
+            else []
+        )
+        evidence_deficit_progress_rows = (
+            summary.get("evidence_deficit_progress_rows") or []
+        )
+        evidence_deficit_progress_rows = (
+            evidence_deficit_progress_rows
+            if isinstance(evidence_deficit_progress_rows, list)
+            else []
+        )
         compiler_failure_reasons = (
             summary.get("compiler_failure_reason_distribution") or {}
         )
@@ -2247,6 +2307,14 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('trusted_capability_policy'))}",
             "Decision Authority Policy: "
             f"{self._value(summary.get('decision_authority_policy'))}",
+            "Validation Sponsorship Contract State: "
+            f"{self._value(summary.get('validation_sponsorship_contract_state'))}",
+            "Truth Preparation Gate: "
+            f"{self._value(summary.get('truth_preparation_gate'))}",
+            "Capability Merit System: "
+            f"{self._value(summary.get('capability_merit_system'))}",
+            "Validation Sponsorship Truth Boundary: "
+            f"{self._value(summary.get('validation_sponsorship_truth_boundary'))}",
             "Capability Governance Contract State: "
             f"{self._value(summary.get('capability_governance_contract_state'))}",
             "Capability Rights Policy: "
@@ -2696,7 +2764,48 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('evidence_acceptance_failure_count'))}",
             "Evidence Acceptance Failure Share: "
             f"{self._percent(summary.get('evidence_acceptance_failure_share'))}",
+            "Evidence Sufficiency State: "
+            f"{self._value(summary.get('evidence_sufficiency_state'))}",
+            "Evidence Sufficiency Question: "
+            f"{self._value(summary.get('evidence_sufficiency_question'))}",
+            "Evidence Sufficiency Contract: "
+            f"{self._value(summary.get('evidence_sufficiency_contract'))}",
+            "Evidence Contribution State: "
+            f"{self._value(summary.get('evidence_contribution_state'))}",
+            "Highest Remaining Evidence Deficit: "
+            f"{self._value(summary.get('highest_remaining_evidence_deficit'))}",
+            "Highest Remaining Evidence Deficit Action: "
+            f"{self._value(summary.get('highest_remaining_evidence_deficit_action'))}",
+            "Evidence Deficit Progress State: "
+            f"{self._value(summary.get('evidence_deficit_progress_state'))}",
+            "Overall Evidence Progress: "
+            f"{self._value(summary.get('overall_evidence_progress'))}",
         ])
+        if evidence_contribution_rows:
+            lines.append("Evidence Contribution:")
+            for row in evidence_contribution_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('evidence_type'))}: "
+                    f"contribution={self._percent(row.get('contribution'))} "
+                    f"deficit={self._percent(row.get('remaining_deficit'))} "
+                    f"action={self._value(row.get('recommended_action'))}"
+                )
+        if evidence_deficit_progress_rows:
+            lines.append("Evidence Deficit Progress:")
+            for row in evidence_deficit_progress_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('evidence_type'))}: "
+                    f"previous={self._percent(row.get('previous_deficit'))} "
+                    f"current={self._percent(row.get('current_deficit'))} "
+                    f"delta={self._value(row.get('deficit_delta'))} "
+                    f"progress={self._value(row.get('progress'))}"
+                )
         if capability_promotion_rows:
             lines.append("Capability Promotion Candidates:")
             for row in capability_promotion_rows[:5]:
@@ -2978,13 +3087,38 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('knowledge_operationalization_choke_cause'))}",
             "Knowledge Operationalization Choke Action: "
             f"{self._value(summary.get('knowledge_operationalization_choke_action'))}",
+            "Knowledge Operationalization Evidence Responsibility: "
+            f"{self._value(summary.get('knowledge_operationalization_evidence_responsibility'))}",
+            "Knowledge Operationalization Required Evidence: "
+            f"{self._value(summary.get('knowledge_operationalization_required_evidence'))}",
             "Knowledge Operationalization Loss Count: "
             f"{self._value(summary.get('knowledge_operationalization_loss_count'))}",
             "Knowledge Operationalization Loss Pressure: "
             f"{self._percent(summary.get('knowledge_operationalization_loss_pressure'))}",
             "Knowledge Operationalization State: "
             f"{self._value(summary.get('knowledge_operationalization_state'))}",
+            "Arena To Compiled Admission State: "
+            f"{self._value(summary.get('arena_to_compiled_admission_state'))}",
+            "Arena To Compiled Admission Action: "
+            f"{self._value(summary.get('arena_to_compiled_admission_action'))}",
+            "Execution Compilation Admission State: "
+            f"{self._value(summary.get('execution_compilation_admission_state'))}",
+            "Execution Compilation Admission Reason: "
+            f"{self._value(summary.get('execution_compilation_admission_reason'))}",
+            "Execution Compilation Admission Action: "
+            f"{self._value(summary.get('execution_compilation_admission_action'))}",
+            "Execution Compiled Program Count: "
+            f"{self._value(summary.get('execution_compiled_program_count'))}",
+            "Validation Probe Compiled Program Count: "
+            f"{self._value(summary.get('validation_probe_compiled_program_count'))}",
+            "Arena To Validation Compilation Rate: "
+            f"{self._percent(summary.get('arena_to_validation_compilation_rate'))}",
         ])
+        blockers = summary.get("execution_compilation_blockers") or []
+        if blockers:
+            lines.append("Execution Compilation Blockers:")
+            for blocker in blockers[:8]:
+                lines.append(f"  {self._value(blocker)}")
         if knowledge_operationalization_path:
             lines.append("Knowledge Operationalization Path:")
             for row in knowledge_operationalization_path[:5]:
@@ -2998,7 +3132,10 @@ class DeterministicFinalReportRenderer:
                     f"lost={self._value(row.get('lost_count'))} "
                     f"conversion={self._percent(row.get('conversion_rate'))} "
                     f"cause={self._value(row.get('likely_cause'))} "
-                    f"action={self._value(row.get('action'))}"
+                    f"action={self._value(row.get('action'))} "
+                    "responsibility="
+                    f"{self._value(row.get('evidence_responsibility'))} "
+                    f"required_evidence={self._value(row.get('required_evidence'))}"
                 )
         if operational_capability_clusters:
             lines.append("Operational Capability Clusters:")
@@ -3158,6 +3295,10 @@ class DeterministicFinalReportRenderer:
         source_status = source_status if isinstance(source_status, dict) else {}
         source_outcomes = summary.get("source_outcomes") or []
         source_outcomes = source_outcomes if isinstance(source_outcomes, list) else []
+        source_flow_trace = summary.get("candidate_source_flow_trace") or []
+        source_flow_trace = (
+            source_flow_trace if isinstance(source_flow_trace, list) else []
+        )
         source_materialization_rows = (
             summary.get("candidate_source_materialization_rows") or []
         )
@@ -3186,6 +3327,8 @@ class DeterministicFinalReportRenderer:
             f"Attempted Candidates: {self._value(summary.get('attempted_candidate_count'))}",
             f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
             f"Competitor Sources: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            "Proposal Sources With Proposals: "
+            f"{self._value(summary.get('proposal_sources_with_proposals'))}",
             "Cross Source Consensus State: "
             f"{self._value(summary.get('cross_source_consensus_state'))}",
             "Cross Source Consensus Count: "
@@ -3219,6 +3362,24 @@ class DeterministicFinalReportRenderer:
             f"Validation Coverage: {self._percent(summary.get('validation_coverage'))}",
             f"Missing Competition Reason: {self._value(summary.get('missing_competition_reason'))}",
             f"Selection Explanation: {self._value(summary.get('selection_explanation'))}",
+            "Arena To Compiled Bridge State: "
+            f"{self._value(summary.get('arena_to_compiled_bridge_state'))}",
+            "Arena To Compiled Bridge Action: "
+            f"{self._value(summary.get('arena_to_compiled_bridge_action'))}",
+            "Validation Probe Candidate: "
+            f"{self._value(summary.get('validation_probe_candidate_id'))}",
+            "Validation Probe Operation: "
+            f"{self._value(summary.get('validation_probe_operation'))}",
+            "Validation Probe Source: "
+            f"{self._value(summary.get('validation_probe_source'))}",
+            "Validation Probe Authority: "
+            f"{self._value(summary.get('validation_probe_authority'))}",
+            "Prediction Quality Calibration State: "
+            f"{self._value(summary.get('prediction_quality_calibration_state'))}",
+            "Prediction Quality Calibration Cause: "
+            f"{self._value(summary.get('prediction_quality_calibration_cause'))}",
+            "Prediction Quality Calibration Action: "
+            f"{self._value(summary.get('prediction_quality_calibration_action'))}",
         ]
         if rows:
             lines.append("Top Arena Candidates:")
@@ -3259,6 +3420,22 @@ class DeterministicFinalReportRenderer:
                     f"arena={self._value(row.get('entered_arena'))} "
                     f"state={self._value(row.get('source_materialization_state'))} "
                     f"stage={self._value(row.get('failure_stage'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
+        if source_flow_trace:
+            lines.append("Candidate Source Flow Trace:")
+            for row in source_flow_trace[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('source'))}: "
+                    f"proposal={self._value(row.get('proposal_runtime_proposed'))} "
+                    f"built={self._value(row.get('arena_proposal_built'))} "
+                    f"gateway={self._value(row.get('gateway_accepted'))} "
+                    f"arena={self._value(row.get('entered_arena'))} "
+                    f"state={self._value(row.get('flow_state'))} "
+                    f"blocked={self._value(row.get('blocked_stage'))} "
                     f"action={self._value(row.get('action'))}"
                 )
         if source_outcomes:
@@ -3506,6 +3683,18 @@ class DeterministicFinalReportRenderer:
                     "executable_intelligence_engine_report",
                 )
             report = self._first_dict(engine, "EXECUTABLE_INTELLIGENCE_REPORT") or engine
+        activation = {
+            **self._first_dict(
+                performance,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+            **self._first_dict(
+                state,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+        }
         def _count(value: Any) -> int | None:
             if isinstance(value, list | tuple | set | dict):
                 return len(value)
@@ -3562,6 +3751,24 @@ class DeterministicFinalReportRenderer:
         lines = [
             f"Semantic Intent Operational: {self._value(report.get('semantic_intent_operational'))}",
             f"Object Grounding Operational: {self._value(report.get('object_grounding_operational'))}",
+            "Object Grounding Infrastructure Operational: "
+            f"{self._value(report.get('object_grounding_infrastructure_operational'))}",
+            "Object Grounding Produced: "
+            f"{self._value(report.get('object_grounding_produced'))}",
+            "Object Grounding Flow State: "
+            f"{self._value(report.get('object_grounding_flow_state'))}",
+            "Object Grounding Blocked Stage: "
+            f"{self._value(report.get('object_grounding_blocked_stage'))}",
+            "Object Grounding Flow Action: "
+            f"{self._value(report.get('object_grounding_flow_action'))}",
+            "Validation Probe Grounding Context Received: "
+            f"{self._value(report.get('validation_probe_grounding_context_received'))}",
+            "Validation Probe Grounding Context Input Available: "
+            f"{self._value(report.get('validation_probe_grounding_context_input_available'))}",
+            "Object Grounding Input Source: "
+            f"{self._value(report.get('object_grounding_input_source'))}",
+            "Grounded Target Object Count: "
+            f"{self._value(report.get('grounded_target_object_count'))}",
             f"Localized Execution Planning Operational: {self._value(report.get('localized_execution_planning_operational'))}",
             f"Primitive Selection Operational: {self._value(report.get('primitive_selection_operational'))}",
             f"Program Synthesis Operational: {self._value(report.get('program_synthesis_operational'))}",
@@ -3588,7 +3795,45 @@ class DeterministicFinalReportRenderer:
             f"Target Objects: {self._value(report.get('target_objects'))}",
             f"Synthesized Programs: {self._value(report.get('synthesized_programs'))}",
             f"Compiled Programs: {self._value(report.get('compiled_programs'))}",
+            "Compiled Execution Programs: "
+            f"{self._value(report.get('compiled_execution_programs'))}",
+            "Validation Probe Compiled Programs: "
+            f"{self._value(report.get('validation_probe_compiled_programs'))}",
             f"Validated Programs: {self._value(report.get('validated_programs'))}",
+            "Validation Probe Consumed: "
+            f"{self._value(report.get('validation_probe_consumed', activation.get('validation_probe_consumed')))}",
+            "Validation Probe Compiler Participation: "
+            f"{self._value(report.get('validation_probe_compiler_participation', activation.get('validation_probe_compiler_participation')))}",
+            "Validation Probe Admission State: "
+            f"{self._value(report.get('validation_probe_admission_state', activation.get('validation_probe_admission_state')))}",
+            "Validation Probe Authority: "
+            f"{self._value(report.get('validation_probe_authority', activation.get('validation_probe_authority')))}",
+            "Validation Probe Sandbox Validation Invoked: "
+            f"{self._value(report.get('validation_probe_sandbox_validation_invoked', activation.get('validation_probe_sandbox_validation_invoked')))}",
+            "Validation Probe Result Captured: "
+            f"{self._value(report.get('validation_probe_validation_result_captured', activation.get('validation_probe_validation_result_captured')))}",
+            "Validation Probe Comparable Output Captured: "
+            f"{self._value(report.get('validation_probe_comparable_output_captured', activation.get('validation_probe_comparable_output_captured')))}",
+            "Validation Probe Evidence Acceptance Evaluated: "
+            f"{self._value(report.get('validation_probe_evidence_acceptance_evaluated', activation.get('validation_probe_evidence_acceptance_evaluated')))}",
+            "Validation Probe Evidence Acceptance State: "
+            f"{self._value(report.get('validation_probe_evidence_acceptance_state', activation.get('validation_probe_evidence_acceptance_state')))}",
+            "Validation Probe Evidence Insufficiency Cause: "
+            f"{self._value(report.get('validation_probe_evidence_insufficiency_cause', activation.get('validation_probe_evidence_insufficiency_cause')))}",
+            "Validation Probe Required Evidence: "
+            f"{self._value(report.get('validation_probe_required_evidence', activation.get('validation_probe_required_evidence')))}",
+            "Validation Probe Recommended Validation Action: "
+            f"{self._value(report.get('validation_probe_recommended_validation_action', activation.get('validation_probe_recommended_validation_action')))}",
+            "Compiled To Validated Probe State: "
+            f"{self._value(report.get('compiled_to_validated_probe_state', activation.get('compiled_to_validated_probe_state')))}",
+            "Arena Execution Recommendation Forwarded: "
+            f"{self._value(activation.get('arena_execution_recommendation_forwarded'))}",
+            "Selected Arena Candidate Forwarded: "
+            f"{self._value(activation.get('selected_arena_candidate_forwarded'))}",
+            "Validation Probe Forwarded: "
+            f"{self._value(activation.get('validation_probe_forwarded'))}",
+            "Forwarded Validation Probe Candidate: "
+            f"{self._value(activation.get('validation_probe_candidate_id'))}",
             f"Residual Regions: {self._value(report.get('residual_regions'))}",
             f"Generated Repairs: {self._value(report.get('generated_repairs'))}",
             f"Execution Success Rate: {self._value(report.get('execution_success_rate'))}",
@@ -3632,6 +3877,33 @@ class DeterministicFinalReportRenderer:
         top_consumers = top_consumers if isinstance(top_consumers, list) else []
         reporting_timing = self._binding_value(canonical, "reporting_timing_summary")
         reporting_timing = reporting_timing if isinstance(reporting_timing, dict) else {}
+        task_selection_row = next(
+            (
+                row for row in top_consumers
+                if isinstance(row, dict)
+                and row.get("stage_name") == "Task Selection"
+            ),
+            {},
+        )
+        task_selection_percent = self._number(
+            task_selection_row.get("percentage_of_active_compute")
+        )
+        task_selection_cost_state = (
+            "TASK_SELECTION_COST_PRESSURE"
+            if task_selection_percent is not None and task_selection_percent >= 10.0
+            else "TASK_SELECTION_COST_MONITOR"
+            if task_selection_percent is not None and task_selection_percent >= 5.0
+            else "TASK_SELECTION_COST_WITHIN_BOUNDS"
+            if task_selection_percent is not None
+            else "TASK_SELECTION_COST_NOT_MEASURED"
+        )
+        task_selection_cost_action = (
+            "profile_training_signal_loading_and_cache_reuse"
+            if task_selection_cost_state == "TASK_SELECTION_COST_PRESSURE"
+            else "monitor_task_selection_cost"
+            if task_selection_cost_state == "TASK_SELECTION_COST_MONITOR"
+            else "no_action_required"
+        )
         lines = [
             f"Total Wall Time: {self._seconds(runtime_summary.get('total_wall_time') or self._field(canonical, 'total_wall_time'))}",
             f"Active Compute Time: {self._seconds(runtime_summary.get('active_compute_time') or self._field(canonical, 'active_compute_time'))}",
@@ -3642,6 +3914,8 @@ class DeterministicFinalReportRenderer:
             f"Final Report Rendering Time: {self._seconds(reporting_timing.get('final_report_rendering_time') or self._field(canonical, 'final_report_rendering_time'))}",
             f"Report Timing Status: {self._value(reporting_timing.get('report_timing_status'))}",
             f"Finalization Time: {self._seconds(runtime_summary.get('finalization_time') or self._field(canonical, 'finalization_time'))}",
+            f"Task Selection Cost State: {task_selection_cost_state}",
+            f"Task Selection Cost Action: {task_selection_cost_action}",
         ]
         if canonical["report_level"] != "minimal":
             lines.extend([

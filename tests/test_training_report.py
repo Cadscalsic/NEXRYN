@@ -168,6 +168,62 @@ def test_training_report_minimal_prints_compact_concept_report(capsys):
     assert "effective_contradiction=" not in output
 
 
+def test_training_report_prints_evidence_remediation_trace(capsys):
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 1,
+            "training_diversity_report": {
+                "training_economy_alignment_state": "ECONOMY_ALIGNED_TRAINING",
+                "training_economy_alignment_score": 1.0,
+                "training_economy_match_count": 2,
+                "training_economy_bottleneck": "validation_evidence_grounding",
+                "composition_opportunity_alignment": (
+                    "COMPOSITION_OPPORTUNITY_ALIGNED"
+                ),
+                "selected_composition_aligned_tasks": [
+                    "elite_cognitive_task_02.json",
+                ],
+                "arena_source_diversity_alignment": "SOURCE_DIVERSITY_ALIGNED",
+                "selected_source_diversity_aligned_tasks": [
+                    "elite_cognitive_task_02.json",
+                ],
+                "evidence_driven_task_selection_state": "ALIGNED_TASK_SELECTED",
+                "evidence_remediation_attempted": True,
+                "evidence_remediation_task": "elite_cognitive_task_02.json",
+                "evidence_remediation_deficit": "grounded_target_object_evidence",
+                "evidence_remediation_responsible_area": "OBJECT_GROUNDING_LAYER",
+                "remediation_outcome": "REMEDIATION_ATTEMPT_QUEUED",
+                "evidence_remediation_progress_state": (
+                    "NO_PRIOR_REMEDIATION_BASELINE"
+                ),
+                "previous_remediation_task": "Not Available",
+                "previous_evidence_deficit": "Not Available",
+                "current_evidence_deficit": "grounded_target_object_evidence",
+                "required_evidence_produced": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+            },
+        },
+        multi_task_results=[],
+    )
+
+    print_training_report(report, report_level="diagnostic")
+    output = capsys.readouterr().out
+
+    assert "evidence_driven_task_selection_state=ALIGNED_TASK_SELECTED" in output
+    assert "evidence_remediation_task=elite_cognitive_task_02.json" in output
+    assert "evidence_remediation_deficit=grounded_target_object_evidence" in output
+    assert "evidence_remediation_responsible_area=OBJECT_GROUNDING_LAYER" in output
+    assert "composition_opportunity_alignment=COMPOSITION_OPPORTUNITY_ALIGNED" in output
+    assert "arena_source_diversity_alignment=SOURCE_DIVERSITY_ALIGNED" in output
+    assert (
+        "evidence_remediation_progress_state=NO_PRIOR_REMEDIATION_BASELINE"
+        in output
+    )
+    assert "previous_evidence_deficit=Not Available" in output
+    assert "current_evidence_deficit=grounded_target_object_evidence" in output
+
+
 def test_introspection_compacts_semantic_attribution_evidence():
     engine = IntrospectionEngine()
     evidence = engine._compact_semantic_evidence({
@@ -226,7 +282,9 @@ def test_final_renderer_minimal_projects_before_binding():
         write_artifact=False,
     )
 
-    assert rendered.startswith("<<< NEXRYN_REPORT_BEGIN >>>")
+    assert rendered.startswith(
+        "==================================================\n<<< NEXRYN_REPORT_START >>>"
+    )
     assert "large_runtime_context" not in rendered
     assert "raw_python_structure_detected" not in final_report_renderer.report()["report_validation_errors"]
 

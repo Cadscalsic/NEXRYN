@@ -411,6 +411,51 @@ def test_weak_candidates_produce_no_safe_winner():
     assert report["arena_state"] == "NO_SAFE_WINNER"
 
 
+def test_no_safe_winner_can_emit_validation_probe_without_prediction_authority():
+    report = _arena().run(
+        [
+            _proposal(
+                "semantic_compiler",
+                "replace_color",
+                [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+            ),
+            _proposal(
+                "rule_engine",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+                confidence=0.6,
+            ),
+        ],
+        input_grid=[[1, 1], [0, 0]],
+        target_grid=[[2, 2], [2, 2]],
+    )
+
+    recommendation = report["execution_recommendation"]
+
+    assert report["selection_state"] == "NO_SAFE_WINNER"
+    assert report["winner_selected_from_evidence"] is False
+    assert report["winner_candidate_id"] is None
+    assert recommendation["selected_candidate"] is None
+    assert recommendation["execution_mode"] == "blocked"
+    assert recommendation["validation_probe_candidate"] is not None
+    assert recommendation["validation_probe_mode"] == "sandbox_validation_only"
+    assert report["validation_probe_candidate_id"] == recommendation[
+        "validation_probe_candidate"
+    ]["candidate_id"]
+    assert report["validation_probe_operation"] == "replace_color"
+    assert report["validation_probe_authority"] == "SANDBOX_VALIDATION_ONLY"
+    assert report["arena_to_compiled_bridge_state"] == "VALIDATION_PROBE_AVAILABLE"
+    assert report["arena_to_compiled_bridge_action"] == (
+        "route_validation_probe_to_compiler_without_prediction_authority"
+    )
+    probe_row = next(
+        row for row in report["candidate_summary"]
+        if row["candidate_id"] == report["validation_probe_candidate_id"]
+    )
+    assert probe_row["validation_probe"] is True
+    assert probe_row["selected"] is False
+
+
 def test_single_valid_source_reports_single_source_only():
     report = _arena().run(
         [
@@ -517,6 +562,53 @@ def test_arena_reports_multi_source_state_when_competitive_sources_enter():
     assert report["source_count"] == 2
     assert report["arena_source_diversity_state"] == "MULTI_SOURCE_ARENA"
     assert report["arena_source_diversity_action"] == "MONITOR_SOURCE_DIVERSITY"
+
+
+def test_arena_traces_source_flow_from_proposal_runtime_to_competition():
+    report = _arena().run(
+        [
+            _proposal(
+                "program_generation",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+            ),
+            _proposal(
+                "semantic_to_transformation_compiler",
+                "replace_color",
+                [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+            ),
+        ],
+        input_grid=[[1]],
+        target_grid=[[2]],
+        runtime_context={
+            "candidate_proposal_report": {
+                "sources_with_proposals": [
+                    "program_generation",
+                    "semantic_to_transformation_compiler",
+                ],
+            },
+            "expected_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+        },
+    )
+
+    flow = {
+        row["normalized_source"]: row
+        for row in report["candidate_source_flow_trace"]
+    }
+
+    assert report["proposal_sources_with_proposals"] == [
+        "program_generation",
+        "semantic_to_transformation_compiler",
+    ]
+    assert flow["normalized_program_candidates"]["proposal_runtime_proposed"] is True
+    assert flow["normalized_program_candidates"]["entered_arena"] is True
+    assert flow["semantic_compiler"]["proposal_runtime_proposed"] is True
+    assert flow["semantic_compiler"]["arena_proposal_built"] is True
+    assert flow["semantic_compiler"]["gateway_accepted"] is True
+    assert flow["semantic_compiler"]["entered_arena"] is True
 
 
 def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():

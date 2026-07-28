@@ -1015,7 +1015,34 @@ def build_semantic_compiler_execution_intents(candidate_proposals):
     return intents
 
 
-def build_candidate_arena_proposals(candidate_sources, *, max_per_source=8):
+def build_candidate_arena_proposals(
+    candidate_sources,
+    *,
+    max_per_source=8,
+    proposal_report=None,
+):
+    proposal = proposal_report if isinstance(proposal_report, dict) else {}
+    proposed_rows = [
+        item
+        for item in proposal.get("candidate_proposals", []) or []
+        if isinstance(item, dict) and item.get("proposal_status") == "PROPOSED"
+    ]
+    if proposed_rows:
+        proposals = []
+        per_source_counts = {}
+        for index, record in enumerate(proposed_rows):
+            source_name = str(record.get("source") or "unknown")
+            per_source_counts[source_name] = per_source_counts.get(source_name, 0) + 1
+            if per_source_counts[source_name] > max_per_source:
+                continue
+            proposal_row = _arena_proposal_from_source_record(
+                source_name,
+                record,
+                index,
+            )
+            if proposal_row:
+                proposals.append(proposal_row)
+        return proposals
     sources = candidate_sources if isinstance(candidate_sources, dict) else {}
     proposals = []
     for source_name in sorted(sources):
@@ -1028,6 +1055,67 @@ def build_candidate_arena_proposals(candidate_sources, *, max_per_source=8):
             )
             if proposal:
                 proposals.append(proposal)
+    return proposals
+
+
+def ensure_proposal_sources_enter_arena(arena_proposals, proposal_report):
+    return ensure_proposal_sources_enter_arena_from_sources(
+        arena_proposals,
+        proposal_report,
+        {},
+    )
+
+
+def ensure_proposal_sources_enter_arena_from_sources(
+    arena_proposals,
+    proposal_report,
+    candidate_sources,
+):
+    proposals = [
+        item for item in arena_proposals or []
+        if isinstance(item, dict)
+    ]
+    proposal = proposal_report if isinstance(proposal_report, dict) else {}
+    sources = candidate_sources if isinstance(candidate_sources, dict) else {}
+    rows = [
+        item
+        for item in proposal.get("candidate_proposals", []) or []
+        if isinstance(item, dict) and item.get("proposal_status") == "PROPOSED"
+    ]
+    entered_sources = {
+        _runtime_token(item.get("source"))
+        for item in proposals
+        if item.get("source")
+    }
+    for source in proposal.get("sources_with_proposals", []) or []:
+        source_token = _runtime_token(source)
+        if not source_token or source_token in entered_sources:
+            continue
+        source_rows = [
+            row for row in rows
+            if _runtime_token(row.get("source")) == source_token
+        ]
+        if not source_rows:
+            source_rows = _candidate_source_records(sources.get(source))
+        if not source_rows:
+            source_rows = _candidate_source_records(sources.get(source_token))
+        for index, row in enumerate(source_rows):
+            proposal_row = _arena_proposal_from_source_record(
+                source_token,
+                row,
+                index,
+            )
+            if not proposal_row:
+                continue
+            proposal_row.setdefault("metadata", {})
+            if isinstance(proposal_row["metadata"], dict):
+                proposal_row["metadata"].setdefault(
+                    "arena_source_preservation",
+                    "proposal_runtime_source_preserved",
+                )
+            proposals.append(proposal_row)
+            entered_sources.add(source_token)
+            break
     return proposals
 
 
@@ -6215,6 +6303,12 @@ try:
         )
         candidate_arena_proposals = build_candidate_arena_proposals(
             candidate_source_map,
+            proposal_report=candidate_proposal_report,
+        )
+        candidate_arena_proposals = ensure_proposal_sources_enter_arena_from_sources(
+            candidate_arena_proposals,
+            candidate_proposal_report,
+            candidate_source_map,
         )
         adaptive_reuse_admission_trace.append(
             build_adaptive_reuse_admission_snapshot(
@@ -6234,6 +6328,7 @@ try:
                     "semantic_compiler",
                     "adaptive_reuse",
                 ],
+                "candidate_proposal_report": candidate_proposal_report,
                 "shared_state_inputs": executable_shared_inputs,
             },
             analysis_only=True,
@@ -6247,17 +6342,31 @@ try:
                 candidate_arena_report=cognitive_candidate_arena_report,
             )
         )
-        executable_candidate = (
-            (
-                cognitive_candidate_arena_report.get(
-                    "execution_recommendation",
-                    {},
-                ).get("selected_candidate")
+        arena_execution_recommendation = (
+            cognitive_candidate_arena_report.get("execution_recommendation", {})
+            if isinstance(
+                cognitive_candidate_arena_report.get("execution_recommendation"),
+                dict,
             )
-            or (cognitive_candidate_arena_report.get("normalized_candidates") or [{}])[0]
-            if cognitive_candidate_arena_report.get("normalized_candidates")
             else {}
         )
+        selected_arena_candidate = (
+            arena_execution_recommendation.get("selected_candidate")
+            if isinstance(
+                arena_execution_recommendation.get("selected_candidate"),
+                dict,
+            )
+            else {}
+        )
+        validation_probe_candidate = (
+            arena_execution_recommendation.get("validation_probe_candidate")
+            if isinstance(
+                arena_execution_recommendation.get("validation_probe_candidate"),
+                dict,
+            )
+            else {}
+        )
+        executable_candidate = selected_arena_candidate or validation_probe_candidate
         executable_intelligence_result = {}
         if executable_candidate:
             executable_intelligence_result = executable_intelligence_engine.run(
@@ -6270,12 +6379,27 @@ try:
                 input_grid=executable_task_io.get("input_grid"),
                 target_grid=executable_task_io.get("target_grid"),
                 predicted_output=executable_task_io.get("predicted_output"),
-                validated_candidate=dict(executable_candidate),
+                validated_candidate=(
+                    dict(selected_arena_candidate)
+                    if selected_arena_candidate
+                    else None
+                ),
+                arena_execution_recommendation=dict(
+                    arena_execution_recommendation,
+                ),
                 governance_context={
                     "analysis_only": True,
                     "real_execution_authorized": False,
                 },
             )
+        executable_intelligence_report = (
+            executable_intelligence_result.get(
+                "EXECUTABLE_INTELLIGENCE_REPORT",
+                {},
+            )
+            if isinstance(executable_intelligence_result, dict)
+            else {}
+        )
         executable_activation_report = {
             "system": "executable_intelligence_activation_bridge",
             "activation_phase_entered": True,
@@ -6311,6 +6435,76 @@ try:
             ),
             "selected_candidate_source": executable_candidate.get("source"),
             "selected_candidate_operation": executable_candidate.get("operation"),
+            "arena_execution_recommendation_forwarded": bool(
+                arena_execution_recommendation
+            ),
+            "selected_arena_candidate_forwarded": bool(selected_arena_candidate),
+            "validation_probe_forwarded": bool(validation_probe_candidate),
+            "validation_probe_candidate_id": validation_probe_candidate.get(
+                "candidate_id"
+            ),
+            "validation_probe_authority": (
+                arena_execution_recommendation.get("validation_probe_authority")
+                or cognitive_candidate_arena_report.get(
+                    "validation_probe_authority",
+                )
+            ),
+            "validation_probe_consumed": executable_intelligence_report.get(
+                "validation_probe_consumed",
+            ),
+            "validation_probe_compiler_participation": (
+                executable_intelligence_report.get(
+                    "validation_probe_compiler_participation",
+                )
+            ),
+            "validation_probe_admission_state": executable_intelligence_report.get(
+                "validation_probe_admission_state",
+            ),
+            "validation_probe_sandbox_validation_invoked": (
+                executable_intelligence_report.get(
+                    "validation_probe_sandbox_validation_invoked",
+                )
+            ),
+            "validation_probe_validation_result_captured": (
+                executable_intelligence_report.get(
+                    "validation_probe_validation_result_captured",
+                )
+            ),
+            "validation_probe_comparable_output_captured": (
+                executable_intelligence_report.get(
+                    "validation_probe_comparable_output_captured",
+                )
+            ),
+            "validation_probe_evidence_acceptance_evaluated": (
+                executable_intelligence_report.get(
+                    "validation_probe_evidence_acceptance_evaluated",
+                )
+            ),
+            "validation_probe_evidence_acceptance_state": (
+                executable_intelligence_report.get(
+                    "validation_probe_evidence_acceptance_state",
+                )
+            ),
+            "compiled_to_validated_probe_state": (
+                executable_intelligence_report.get(
+                    "compiled_to_validated_probe_state",
+                )
+            ),
+            "validation_probe_evidence_insufficiency_cause": (
+                executable_intelligence_report.get(
+                    "validation_probe_evidence_insufficiency_cause",
+                )
+            ),
+            "validation_probe_required_evidence": (
+                executable_intelligence_report.get(
+                    "validation_probe_required_evidence",
+                )
+            ),
+            "validation_probe_recommended_validation_action": (
+                executable_intelligence_report.get(
+                    "validation_probe_recommended_validation_action",
+                )
+            ),
             "prediction_authority_preserved": "adaptive_search",
         }
         executable_execution.capture(executable_activation_report)

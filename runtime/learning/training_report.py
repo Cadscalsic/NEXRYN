@@ -5360,6 +5360,51 @@ def print_training_report(report, report_level="normal"):
                 "training_economy_bottleneck="
                 f"{training_diversity_report.get('training_economy_bottleneck')}",
             )
+            if training_diversity_report.get("composition_opportunity_alignment"):
+                print(
+                    "composition_opportunity_alignment="
+                    f"{training_diversity_report.get('composition_opportunity_alignment')}",
+                    "selected_composition_aligned_tasks="
+                    f"{training_diversity_report.get('selected_composition_aligned_tasks')}",
+                )
+            if training_diversity_report.get("arena_source_diversity_alignment"):
+                print(
+                    "arena_source_diversity_alignment="
+                    f"{training_diversity_report.get('arena_source_diversity_alignment')}",
+                    "selected_source_diversity_aligned_tasks="
+                    f"{training_diversity_report.get('selected_source_diversity_aligned_tasks')}",
+                )
+            if training_diversity_report.get("evidence_driven_task_selection_state"):
+                print(
+                    "evidence_driven_task_selection_state="
+                    f"{training_diversity_report.get('evidence_driven_task_selection_state')}",
+                    "evidence_remediation_attempted="
+                    f"{training_diversity_report.get('evidence_remediation_attempted')}",
+                    "evidence_remediation_task="
+                    f"{training_diversity_report.get('evidence_remediation_task')}",
+                    "evidence_remediation_deficit="
+                    f"{training_diversity_report.get('evidence_remediation_deficit')}",
+                )
+                print(
+                    "evidence_remediation_responsible_area="
+                    f"{training_diversity_report.get('evidence_remediation_responsible_area')}",
+                    "remediation_outcome="
+                    f"{training_diversity_report.get('remediation_outcome')}",
+                )
+                print(
+                    "evidence_remediation_progress_state="
+                    f"{training_diversity_report.get('evidence_remediation_progress_state')}",
+                    "previous_remediation_task="
+                    f"{training_diversity_report.get('previous_remediation_task')}",
+                    "previous_evidence_deficit="
+                    f"{training_diversity_report.get('previous_evidence_deficit')}",
+                    "current_evidence_deficit="
+                    f"{training_diversity_report.get('current_evidence_deficit')}",
+                )
+                print(
+                    "required_evidence_produced="
+                    f"{training_diversity_report.get('required_evidence_produced')}",
+                )
 
     curriculum_coverage_report = report.get("curriculum_coverage_report", {})
     if not curriculum_coverage_report:

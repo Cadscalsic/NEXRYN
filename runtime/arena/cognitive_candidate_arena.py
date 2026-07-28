@@ -80,8 +80,19 @@ class CognitiveCandidateArena:
 
         selection = self.winner_policy.select(scores, simulations, analysis_only=analysis_only)
         winner_score = selection.get("winner_candidate") or {}
-        winner = self._candidate_by_id(eligible, winner_score.get("candidate_id"))
+        selected_states = {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}
+        winner = (
+            self._candidate_by_id(eligible, winner_score.get("candidate_id"))
+            if selection.get("selection_state") in selected_states
+            else {}
+        )
         second_score = selection.get("second_best_candidate") or {}
+        validation_probe = self._validation_probe_candidate(
+            eligible,
+            scores,
+            simulations,
+            selection,
+        )
         dominance = self.dominance_guard.review(
             eligible,
             scores=scores,
@@ -102,7 +113,15 @@ class CognitiveCandidateArena:
             selection,
             dominance,
         )
-        rows = self._candidate_rows(candidates, blocked, simulations, scores, selection, governance)
+        rows = self._candidate_rows(
+            candidates,
+            blocked,
+            simulations,
+            scores,
+            selection,
+            governance,
+            validation_probe.get("candidate_id") if validation_probe else None,
+        )
         sources_entered = sorted({
             source
             for candidate in eligible
@@ -114,6 +133,17 @@ class CognitiveCandidateArena:
             for candidate in blocked + gateway_report["rejected_proposals"]
             if candidate.get("source")
         })
+        proposal_report = (
+            runtime_context.get("candidate_proposal_report")
+            if isinstance(runtime_context.get("candidate_proposal_report"), Mapping)
+            else {}
+        )
+        source_flow_trace = self._source_flow_trace(
+            proposal_report=proposal_report,
+            arena_proposals=proposals,
+            sources_entered=sources_entered,
+            gateway_report=gateway_report,
+        )
         compact = {
             "arena_state": arena_state,
             "candidate_count": len(eligible),
@@ -134,6 +164,10 @@ class CognitiveCandidateArena:
             "source_count": len(sources_entered),
             "sources_entered": sources_entered,
             "sources_rejected": sources_rejected,
+            "proposal_sources_with_proposals": (
+                proposal_report.get("sources_with_proposals") or []
+            ),
+            "candidate_source_flow_trace": source_flow_trace,
             "competition_diversity": diversity.get("competition_diversity", 0.0),
             "operational_diversity": diversity.get("operational_diversity", 0.0),
             "source_diversity": diversity.get("source_diversity", 0.0),
@@ -154,9 +188,23 @@ class CognitiveCandidateArena:
             "missing_candidate_sources": source_policy["missing_sources"],
             "no_competition_reason": self._no_competition_reason(eligible, diversity, gateway_report, blocked),
             "selection_explanation": selection.get("selection_explanation"),
+            "validation_probe_candidate_id": validation_probe.get("candidate_id") if validation_probe else None,
+            "validation_probe_operation": validation_probe.get("operation") if validation_probe else None,
+            "validation_probe_source": validation_probe.get("source") if validation_probe else None,
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY" if validation_probe else "NONE",
+            "arena_to_compiled_bridge_state": (
+                "VALIDATION_PROBE_AVAILABLE"
+                if validation_probe
+                else "NO_VALIDATION_PROBE"
+            ),
+            "arena_to_compiled_bridge_action": (
+                "route_validation_probe_to_compiler_without_prediction_authority"
+                if validation_probe
+                else "wait_for_safe_winner_or_better_grounding"
+            ),
             "candidate_scores_fully_explained": True,
             "source_dominance_guard_active": True,
-            "winner_selected_from_evidence": bool(winner and selection.get("selection_state") in {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}),
+            "winner_selected_from_evidence": bool(winner),
             "direct_source_to_executor_access": False,
             "arena_memory_operational": True,
             "candidate_summary": rows,
@@ -175,6 +223,21 @@ class CognitiveCandidateArena:
         }
         recommendation = {
             "selected_candidate": deepcopy(winner) if winner else None,
+            "validation_probe_candidate": deepcopy(validation_probe) if validation_probe else None,
+            "validation_probe_mode": "sandbox_validation_only" if validation_probe else "none",
+            "validation_probe_grounding_context": (
+                {
+                    "input_grid": self._grid_payload(input_grid),
+                    "target_grid": self._grid_payload(target_grid),
+                    "predicted_output": deepcopy(
+                        simulations.get(validation_probe.get("candidate_id"), {}).get(
+                            "predicted_output"
+                        )
+                    ),
+                }
+                if validation_probe
+                else {}
+            ),
             "selection_state": selection.get("selection_state"),
             "execution_mode": self._execution_mode(selection, winner),
             "selection_evidence": {
@@ -208,6 +271,110 @@ class CognitiveCandidateArena:
         report["winner_program_signature"] = winner.get("program_signature") if winner else None
         self.memory.record_competition(report)
         return report
+
+    def _source_flow_trace(
+        self,
+        *,
+        proposal_report: Mapping[str, Any],
+        arena_proposals: list[Mapping[str, Any]] | Mapping[str, Any] | None,
+        sources_entered: list[str],
+        gateway_report: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        proposal_sources = [
+            str(source)
+            for source in proposal_report.get("sources_with_proposals", []) or []
+            if source
+        ]
+        raw_arena = (
+            list(arena_proposals)
+            if isinstance(arena_proposals, (list, tuple))
+            else [arena_proposals]
+            if isinstance(arena_proposals, Mapping)
+            else []
+        )
+        arena_builder_sources = {
+            self._source_alias(item.get("source"))
+            for item in raw_arena
+            if isinstance(item, Mapping) and item.get("source")
+        }
+        gateway_sources = {
+            self._source_alias(item.get("source"))
+            for item in gateway_report.get("proposals", []) or []
+            if isinstance(item, Mapping) and item.get("source")
+        }
+        entered = {self._source_alias(source) for source in sources_entered}
+        target_sources = sorted(
+            set(proposal_sources)
+            | set(arena_builder_sources)
+            | set(gateway_sources)
+            | entered
+        )
+        rows = []
+        for source in target_sources:
+            alias = self._source_alias(source)
+            proposed = source in proposal_sources or alias in {
+                self._source_alias(item) for item in proposal_sources
+            }
+            built = alias in arena_builder_sources
+            gateway_accepted = alias in gateway_sources
+            arena_entered = alias in entered
+            if arena_entered:
+                state = "ENTERED_ARENA"
+                blocked_stage = "none"
+                action = "monitor_source_competitiveness"
+            elif gateway_accepted:
+                state = "GATEWAY_ACCEPTED_NOT_ELIGIBLE"
+                blocked_stage = "arena_governance_or_normalization"
+                action = "inspect_gateway_to_arena_eligibility"
+            elif built:
+                state = "BUILT_NOT_ACCEPTED_BY_GATEWAY"
+                blocked_stage = "candidate_proposal_gateway"
+                action = "inspect_source_alias_and_program_shape"
+            elif proposed:
+                state = "PROPOSAL_NOT_BUILT_FOR_ARENA"
+                blocked_stage = "arena_proposal_builder"
+                action = "preserve_proposal_runtime_source_in_arena_builder"
+            else:
+                state = "NO_PROPOSAL_SIGNAL"
+                blocked_stage = "source_materialization"
+                action = "activate_candidate_source_materialization"
+            rows.append({
+                "source": source,
+                "normalized_source": alias,
+                "proposal_runtime_proposed": proposed,
+                "arena_proposal_built": built,
+                "gateway_accepted": gateway_accepted,
+                "entered_arena": arena_entered,
+                "flow_state": state,
+                "blocked_stage": blocked_stage,
+                "action": action,
+            })
+        return rows
+
+    def _source_alias(self, source: Any) -> str:
+        token = str(source or "").strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "program_generation": "normalized_program_candidates",
+            "semantic_to_transformation_compiler": "semantic_compiler",
+            "compiler": "semantic_compiler",
+            "adaptive_reuse_layer": "adaptive_reuse",
+            "repair": "repair_engine",
+        }
+        return aliases.get(token, token)
+
+    def _grid_payload(self, grid: Any) -> Any:
+        if grid is None:
+            return None
+        if isinstance(grid, list):
+            return deepcopy(grid)
+        if hasattr(grid, "grid"):
+            return self._grid_payload(getattr(grid, "grid"))
+        if hasattr(grid, "tolist"):
+            try:
+                return grid.tolist()
+            except Exception:
+                return deepcopy(grid)
+        return deepcopy(grid)
 
     def _governance(self, candidate: Mapping[str, Any], runtime_context: Mapping[str, Any]) -> dict[str, Any]:
         reasons = []
@@ -307,7 +474,29 @@ class CognitiveCandidateArena:
             return "NO_SAFE_WINNER"
         return "COMPETITION_ACTIVE"
 
-    def _candidate_rows(self, candidates, blocked, simulations, scores, selection, governance):
+    def _validation_probe_candidate(self, eligible, scores, simulations, selection):
+        state = selection.get("selection_state")
+        if state in {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}:
+            return {}
+        top = selection.get("winner_candidate") or {}
+        top_id = top.get("candidate_id")
+        if top_id and simulations.get(top_id, {}).get("simulation_success"):
+            return self._candidate_by_id(eligible, top_id)
+        ranked_scores = sorted(
+            [
+                item for item in scores
+                if item.get("candidate_id")
+                and item.get("eligible_for_selection")
+                and simulations.get(item.get("candidate_id"), {}).get("simulation_success")
+            ],
+            key=lambda item: item.get("final_score", 0.0),
+            reverse=True,
+        )
+        if not ranked_scores:
+            return {}
+        return self._candidate_by_id(eligible, ranked_scores[0].get("candidate_id"))
+
+    def _candidate_rows(self, candidates, blocked, simulations, scores, selection, governance, validation_probe_id=None):
         score_by_id = {item.get("candidate_id"): item for item in scores}
         winner_id = (selection.get("winner_candidate") or {}).get("candidate_id")
         second_id = (selection.get("second_best_candidate") or {}).get("candidate_id")
@@ -349,6 +538,12 @@ class CognitiveCandidateArena:
                 "status": status,
                 "entered_arena": status != "BLOCKED_BY_GOVERNANCE",
                 "selected": status == "WINNER",
+                "validation_probe": candidate_id == validation_probe_id,
+                "validation_probe_authority": (
+                    "SANDBOX_VALIDATION_ONLY"
+                    if candidate_id == validation_probe_id
+                    else None
+                ),
                 "validation_status": governance[candidate_id]["decision"],
                 "blocked_reason": ";".join(governance[candidate_id].get("reasons", [])) or None,
                 "semantic_intent": candidate.get("intent"),

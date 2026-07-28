@@ -122,6 +122,26 @@ def test_world_governance_relaxes_only_sandbox_citizenship_policy():
     }
     assert policy["authority_boundary"]["citizenship_authority"] == "SANDBOX_ONLY"
     assert policy["authority_boundary"]["trusted_for_decision"] is False
+    assert policy["authority_boundary"]["world_governance_role"] == (
+        "VALIDATION_SPONSOR"
+    )
+    assert policy["authority_boundary"]["truth_authority"] is False
+    assert policy["authority_boundary"]["trust_authority"] is False
+    assert policy["authority_boundary"]["graduation_authority"] is False
+    sponsorship = policy["validation_sponsorship_contract"]
+    assert sponsorship["contract_state"] == (
+        "WORLD_GOVERNANCE_VALIDATION_SPONSOR"
+    )
+    assert sponsorship["truth_preparation_gate"] == (
+        "OPPORTUNITY_PERMISSION_ONLY"
+    )
+    assert sponsorship["validation_requirements_changed"] is False
+    assert "elite_validation_priority" in sponsorship["allowed_outputs"]
+    assert "trust_score" in sponsorship["forbidden_outputs"]
+    assert "graduation_score" in sponsorship["forbidden_outputs"]
+    assert "MERIT_NEVER_INFLUENCES_TRUTH_FORMATION" in (
+        sponsorship["truth_boundary_contract"]
+    )
     assert policy["trusted_capability_policy"]["policy_state"] == (
         "STRICT_REVIEW_REQUIRED"
     )

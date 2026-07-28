@@ -1218,3 +1218,231 @@ def test_training_assistant_uses_validation_academy_opportunity_matching(tmp_pat
     assert alignment["validation_academy_alignment_trace"][0][
         "academy_task_id"
     ] == "elite_validation_task_27"
+
+
+def test_training_assistant_uses_evidence_responsibility_for_task_selection(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["general_validation"],
+            "required_evidence": ["independent_validation_evidence"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": [
+                "object_grounding",
+                "validation_evidence_grounding",
+            ],
+            "required_evidence": ["grounded_target_object_evidence"],
+            "task_properties": ["select_object_grounded_validation_task"],
+            "responsibility_targets": ["OBJECT_GROUNDING_LAYER"],
+        },
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=1,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        ["elite_cognitive_task_01.json", "elite_cognitive_task_02.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "knowledge_operationalization_choke_point": (
+                "validation_evidence_grounding"
+            ),
+            "knowledge_operationalization_choke_action": (
+                "select_object_grounded_validation_task"
+            ),
+            "knowledge_operationalization_evidence_responsibility": (
+                "OBJECT_GROUNDING_LAYER"
+            ),
+            "knowledge_operationalization_required_evidence": (
+                "grounded_target_object_evidence"
+            ),
+        },
+    )
+
+    assert selected["selected_task_files"] == ["elite_cognitive_task_02.json"]
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["evidence_driven_task_selection_state"] == (
+        "ALIGNED_TASK_SELECTED"
+    )
+    assert alignment["evidence_remediation_attempted"] is True
+    assert alignment["evidence_remediation_task"] == "elite_cognitive_task_02.json"
+    assert alignment["evidence_remediation_deficit"] == (
+        "grounded_target_object_evidence"
+    )
+    assert alignment["evidence_remediation_responsible_area"] == (
+        "OBJECT_GROUNDING_LAYER"
+    )
+    assert alignment["remediation_outcome"] == "REMEDIATION_ATTEMPT_QUEUED"
+    report = selected["elite_selection_report"]
+    assert "evidence_responsibility_alignment" in report["priority_reasons"]
+    assert any(
+        match["match_type"] == "evidence_responsibility"
+        and match["target"] == "object_grounding_layer"
+        for row in report["elite_task_priorities"]
+        for match in row.get("training_economy_matches", [])
+        if row["task_file"] == "elite_cognitive_task_02.json"
+    )
+
+
+def test_training_assistant_tracks_evidence_remediation_across_runs(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["object_grounding"],
+            "required_evidence": ["grounded_target_object_evidence"],
+            "task_properties": ["select_object_grounded_validation_task"],
+            "responsibility_targets": ["OBJECT_GROUNDING_LAYER"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["general_validation"],
+        },
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=1,
+        selection_mode="curriculum",
+    )
+
+    first = assistant.select_batch(
+        ["elite_cognitive_task_01.json", "elite_cognitive_task_02.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "knowledge_operationalization_choke_cause": (
+                "missing_object_grounding"
+            ),
+            "knowledge_operationalization_choke_action": (
+                "select_object_grounded_validation_task"
+            ),
+            "knowledge_operationalization_evidence_responsibility": (
+                "OBJECT_GROUNDING_LAYER"
+            ),
+            "knowledge_operationalization_required_evidence": (
+                "grounded_target_object_evidence"
+            ),
+        },
+    )
+    assert first["training_economy_alignment_report"]["remediation_outcome"] == (
+        "REMEDIATION_ATTEMPT_QUEUED"
+    )
+    assistant.complete_cycle(successful_tasks=1)
+
+    second = assistant.select_batch(
+        ["elite_cognitive_task_01.json", "elite_cognitive_task_02.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "knowledge_operationalization_choke_point": "evidence_sufficiency",
+            "knowledge_operationalization_choke_cause": "evidence_sufficient",
+        },
+    )
+
+    alignment = second["training_economy_alignment_report"]
+    assert alignment["evidence_remediation_progress_state"] == (
+        "EVIDENCE_DEFICIT_CLEARED"
+    )
+    assert alignment["previous_remediation_task"] == "elite_cognitive_task_01.json"
+    assert alignment["previous_evidence_deficit"] == (
+        "grounded_target_object_evidence"
+    )
+    assert alignment["current_evidence_deficit"] is None
+    assert alignment["required_evidence_produced"] is True
+    assert alignment["remediation_outcome"] == "REMEDIATION_IMPROVED"
+
+
+def test_training_assistant_prioritizes_composition_and_source_diversity(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["color_validation"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["pattern_completion", "adaptive_reuse"],
+            "composition_opportunity_targets": [
+                "Pattern Completion Intelligence",
+            ],
+            "missing_composite_capabilities": ["pattern_completion"],
+            "candidate_source_targets": ["adaptive_reuse"],
+            "source_diversity_targets": ["adaptive_reuse"],
+        },
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=1,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        ["elite_cognitive_task_01.json", "elite_cognitive_task_02.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "arena_source_diversity_state": "LOW_SOURCE_DIVERSITY",
+            "arena_source_diversity_action": "SOURCE_DIVERSITY_SPRINT_REQUIRED",
+            "missing_candidate_sources": ["adaptive_reuse"],
+            "candidate_source_materialization_rows": [
+                {
+                    "source": "adaptive_reuse",
+                    "source_materialization_state": (
+                        "NO_EXECUTABLE_CANDIDATE"
+                    ),
+                }
+            ],
+            "capability_composition_opportunities": [
+                {
+                    "composite_name": "Pattern Completion Intelligence",
+                    "required_capabilities": [
+                        "pattern_completion",
+                        "translate",
+                    ],
+                    "missing_capabilities": ["pattern_completion"],
+                    "composition_state": "PARTIAL_COMPOSITION",
+                }
+            ],
+        },
+    )
+
+    assert selected["selected_task_files"] == ["elite_cognitive_task_02.json"]
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["composition_opportunity_alignment"] == (
+        "COMPOSITION_OPPORTUNITY_ALIGNED"
+    )
+    assert alignment["arena_source_diversity_alignment"] == (
+        "SOURCE_DIVERSITY_ALIGNED"
+    )
+    assert alignment["selected_composition_aligned_tasks"] == [
+        "elite_cognitive_task_02.json"
+    ]
+    assert alignment["selected_source_diversity_aligned_tasks"] == [
+        "elite_cognitive_task_02.json"
+    ]
+    assert "composition_opportunity_alignment" in selected[
+        "elite_selection_report"
+    ]["priority_reasons"]
+    assert "arena_source_diversity_alignment" in selected[
+        "elite_selection_report"
+    ]["priority_reasons"]

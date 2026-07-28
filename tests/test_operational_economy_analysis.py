@@ -182,3 +182,97 @@ def test_ready_clusters_without_citizens_require_operationalization():
         "SEVERE_KNOWLEDGE_OPERATIONALIZATION_CHOKE"
     )
     assert report["knowledge_operationalization_path"][1]["lost_count"] == 7
+
+
+def test_validation_probe_insufficiency_overrides_raw_arena_to_compiled_choke():
+    report = OperationalEconomyAnalysis().analyze(
+        generated_concepts=18,
+        generated_programs=15,
+        candidate_count=13,
+        arena_candidate_count=8,
+        compiled_programs=1,
+        validated_programs=0,
+        materialized_operational_capabilities=0,
+        operational_citizen_count=0,
+        operational_grounding_failure_count=13,
+        operational_grounding_failure_rate=1.0,
+        executable_intelligence_report={
+            "validation_probe_admission_state": "VALIDATION_PROBE_COMPILED",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "validation_probe_compiled_programs": 1,
+            "validation_probe_evidence_acceptance_evaluated": True,
+            "validation_probe_evidence_acceptance_state": "INSUFFICIENT",
+            "validation_probe_evidence_insufficiency_cause": (
+                "missing_object_grounding"
+            ),
+            "validation_probe_required_evidence": (
+                "grounded_target_object_evidence"
+            ),
+            "validation_probe_recommended_validation_action": (
+                "select_object_grounded_validation_task"
+            ),
+        },
+        candidate_arena_report={
+            "selection_state": "NO_SAFE_WINNER",
+            "selection_explanation": (
+                "Prediction quality below minimum threshold."
+            ),
+            "winner_selected_from_evidence": False,
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "prediction_quality_calibration_state": (
+                "PREDICTION_QUALITY_CALIBRATION_GAP"
+            ),
+        },
+    )
+
+    assert report["knowledge_operationalization_choke_point"] == (
+        "validation_evidence_grounding"
+    )
+    assert report["knowledge_operationalization_choke_cause"] == (
+        "missing_object_grounding"
+    )
+    assert report["knowledge_operationalization_choke_action"] == (
+        "select_object_grounded_validation_task"
+    )
+    assert report["knowledge_operationalization_evidence_responsibility"] == (
+        "OBJECT_GROUNDING_LAYER"
+    )
+    assert report["knowledge_operationalization_required_evidence"] == (
+        "grounded_target_object_evidence"
+    )
+    assert report["arena_to_compiled_admission_state"] == (
+        "VALIDATION_PROBE_COMPILATION_AVAILABLE"
+    )
+    assert report["execution_compiled_program_count"] == 0
+    assert report["validation_probe_compiled_program_count"] == 1
+    assert report["arena_to_validation_compilation_rate"] == 0.125
+    assert report["execution_compilation_admission_state"] == (
+        "NO_EXECUTION_CANDIDATE_ADMITTED"
+    )
+    assert report["execution_compilation_admission_reason"] == "no_safe_winner"
+    assert report["execution_compilation_admission_action"] == (
+        "calibrate_prediction_quality_before_execution_admission"
+    )
+    assert "selection_state=NO_SAFE_WINNER" in report[
+        "execution_compilation_blockers"
+    ]
+    assert "winner_selected_from_evidence=FALSE" in report[
+        "execution_compilation_blockers"
+    ]
+    assert "validation_probe_authority=SANDBOX_VALIDATION_ONLY" in report[
+        "execution_compilation_blockers"
+    ]
+    assert "execution_compiled_programs=0" in report[
+        "execution_compilation_blockers"
+    ]
+    assert "validation_probe_compiled_programs=1" in report[
+        "execution_compilation_blockers"
+    ]
+    compiled_to_validated = report["knowledge_operationalization_path"][2]
+    assert compiled_to_validated["stage"] == "compiled_to_validated"
+    assert compiled_to_validated["likely_cause"] == "missing_object_grounding"
+    assert compiled_to_validated["action"] == "select_object_grounded_validation_task"
+    assert compiled_to_validated["evidence_responsibility"] == "OBJECT_GROUNDING_LAYER"
+    assert compiled_to_validated["required_evidence"] == (
+        "grounded_target_object_evidence"
+    )

@@ -259,10 +259,34 @@ def test_render_includes_cognitive_capability_coverage_map():
             "candidate_count": 1,
             "source_count": 1,
             "sources_entered": ["normalized_program_candidates"],
+            "proposal_sources_with_proposals": [
+                "program_generation",
+                "semantic_to_transformation_compiler",
+            ],
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": False,
+                    "gateway_accepted": False,
+                    "entered_arena": False,
+                    "flow_state": "PROPOSAL_NOT_BUILT_FOR_ARENA",
+                    "blocked_stage": "arena_proposal_builder",
+                    "action": "preserve_proposal_runtime_source_in_arena_builder",
+                }
+            ],
             "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
             "cross_source_consensus_count": 0,
             "arena_source_diversity_state": "LOW_SOURCE_DIVERSITY",
             "arena_source_diversity_action": "SOURCE_DIVERSITY_SPRINT_REQUIRED",
+            "arena_to_compiled_bridge_state": "VALIDATION_PROBE_AVAILABLE",
+            "arena_to_compiled_bridge_action": (
+                "route_validation_probe_to_compiler_without_prediction_authority"
+            ),
+            "validation_probe_candidate_id": "semantic_program:path_finding",
+            "validation_probe_operation": "construct_path",
+            "validation_probe_source": "normalized_program_candidates",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
             "target_candidate_sources": [
                 "normalized_program_candidates",
                 "semantic_compiler",
@@ -283,6 +307,25 @@ def test_render_includes_cognitive_capability_coverage_map():
             ],
             "selection_mode": "EVIDENCE_BASED_ARENA",
         }
+    }
+    state["EXECUTABLE_ACTIVATION_REPORT"] = {
+        "arena_execution_recommendation_forwarded": True,
+        "selected_arena_candidate_forwarded": False,
+        "validation_probe_forwarded": True,
+        "validation_probe_candidate_id": "semantic_program:path_finding",
+        "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+        "validation_probe_consumed": True,
+        "validation_probe_compiler_participation": 1,
+        "validation_probe_admission_state": "VALIDATION_PROBE_COMPILED",
+        "validation_probe_sandbox_validation_invoked": True,
+        "validation_probe_validation_result_captured": True,
+        "validation_probe_comparable_output_captured": True,
+        "validation_probe_evidence_acceptance_evaluated": True,
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "validation_probe_evidence_insufficiency_cause": "NONE",
+        "validation_probe_required_evidence": "evidence_contract_satisfied",
+        "validation_probe_recommended_validation_action": "retain_validation_evidence",
+        "compiled_to_validated_probe_state": "VALIDATION_PROBE_VALIDATED",
     }
     state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {
         "materialized_operational_capabilities": 0,
@@ -443,7 +486,17 @@ def test_render_includes_cognitive_capability_coverage_map():
             "policy_state": "SEPARATE_AUTHORITY_REVIEW_REQUIRED",
             "automatic_authority_transfer": False,
         },
-        "capability_survival_store_path": "runtime/test_survival.json",
+            "validation_sponsorship_contract": {
+                "contract_state": "WORLD_GOVERNANCE_VALIDATION_SPONSOR",
+                "truth_preparation_gate": "OPPORTUNITY_PERMISSION_ONLY",
+                "capability_merit_system": "VALIDATION_PRIORITY_ONLY",
+                "truth_boundary_contract": [
+                    "MERIT_NEVER_INFLUENCES_TRUTH_FORMATION",
+                    "VALIDATION_SPONSORSHIP_NEVER_INFLUENCES_TRUST_FORMATION",
+                ],
+                "validation_requirements_changed": False,
+            },
+            "capability_survival_store_path": "runtime/test_survival.json",
         "capability_survival_state_distribution": {
             "GENERATED_CANDIDATE": 1,
             "ARENA_SIMULATED": 1,
@@ -672,6 +725,12 @@ def test_render_includes_cognitive_capability_coverage_map():
     )
 
     assert "COGNITIVE CAPABILITY COVERAGE" in report
+    assert "CONSTITUTIONAL CONTRACTS" in report
+    assert "Truth Contract: TRUTH_IS_EVIDENCE_GOVERNED" in report
+    assert "Trust Contract: TRUST_IS_EVIDENCE_GOVERNED" in report
+    assert "Graduation Contract: GRADUATION_IS_EVIDENCE_GOVERNED" in report
+    assert "Validation Sponsorship Contract:" in report
+    assert "Evidence Sufficiency Contract:" in report
     assert "Overall Cognitive Capability Coverage:" in report
     assert "Architecture Freeze State:" in report
     assert "Execution Package Coverage Target:" in report
@@ -850,6 +909,9 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Knowledge Operationalization Loss Count:" in report
     assert "Knowledge Operationalization Loss Pressure:" in report
     assert "Knowledge Operationalization State:" in report
+    assert "Execution Compilation Admission State:" in report
+    assert "Execution Compilation Admission Reason:" in report
+    assert "Execution Compilation Admission Action:" in report
     assert "Knowledge Operationalization Path:" in report
     assert "Operational Cluster Readiness:" in report
     assert "Operational Cluster Count:" in report
@@ -891,6 +953,14 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Sandbox Citizenship Thresholds:" in report
     assert "Trusted Capability Policy:" in report
     assert "Decision Authority Policy:" in report
+    assert "Validation Sponsorship Contract State:" in report
+    assert "WORLD_GOVERNANCE_VALIDATION_SPONSOR" in report
+    assert "Truth Preparation Gate:" in report
+    assert "OPPORTUNITY_PERMISSION_ONLY" in report
+    assert "Capability Merit System:" in report
+    assert "VALIDATION_PRIORITY_ONLY" in report
+    assert "Validation Sponsorship Truth Boundary:" in report
+    assert "MERIT_NEVER_INFLUENCES_TRUTH_FORMATION" in report
     assert "Capability Governance Contract State:" in report
     assert "Capability Rights Policy:" in report
     assert "Capability Obligations Policy:" in report
@@ -964,6 +1034,25 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "governed_validation_evidence_acceptance" in report
     assert "Evidence Acceptance Failure Count:" in report
     assert "Evidence Acceptance Failure Share:" in report
+    assert "Evidence Sufficiency State:" in report
+    assert "EVIDENCE_SUFFICIENCY_REVIEW_REQUIRED" in report
+    assert "Evidence Sufficiency Question:" in report
+    assert "when_is_evidence_sufficient_for_trust_update_and_graduation" in report
+    assert "Evidence Sufficiency Contract:" in report
+    assert "Evidence Contribution State:" in report
+    assert "EVIDENCE_CONTRIBUTION_DIAGNOSTIC_AVAILABLE" in report
+    assert "Highest Remaining Evidence Deficit:" in report
+    assert "ground_truth" in report
+    assert "Highest Remaining Evidence Deficit Action:" in report
+    assert "select_ground_truth_aligned_validation_tasks" in report
+    assert "Evidence Deficit Progress State:" in report
+    assert "NO_PRIOR_EVIDENCE_DEFICIT_BASELINE" in report
+    assert "Overall Evidence Progress:" in report
+    assert "BASELINE" in report
+    assert "Evidence Deficit Progress:" in report
+    assert "Evidence Contribution:" in report
+    assert "independent_validation:" in report
+    assert "operational_reuse:" in report
     assert "Capability Promotion Candidates:" in report
     assert "operation=preserve_size" in report
     assert "promotion=high_quality_evidence_requires_acceptance_before_trust" in report
@@ -1019,10 +1108,38 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "Cross Source Consensus State: NO_CROSS_SOURCE_CONSENSUS" in report
     assert "Cross Source Consensus Count: 0" in report
     assert "Arena Source Diversity State: LOW_SOURCE_DIVERSITY" in report
+    assert "Proposal Sources With Proposals:" in report
     assert (
         "Arena Source Diversity Action: SOURCE_DIVERSITY_SPRINT_REQUIRED"
         in report
     )
+    assert "Candidate Source Flow Trace:" in report
+    assert "Arena To Compiled Bridge State: VALIDATION_PROBE_AVAILABLE" in report
+    assert (
+        "Arena To Compiled Bridge Action: "
+        "route_validation_probe_to_compiler_without_prediction_authority"
+    ) in report
+    assert "Validation Probe Candidate: semantic_program:path_finding" in report
+    assert "Validation Probe Authority: SANDBOX_VALIDATION_ONLY" in report
+    assert "Object Grounding Flow State:" in report
+    assert "Validation Probe Grounding Context Received:" in report
+    assert "Object Grounding Input Source:" in report
+    assert "Arena Execution Recommendation Forwarded: TRUE" in report
+    assert "Selected Arena Candidate Forwarded: FALSE" in report
+    assert "Validation Probe Forwarded: TRUE" in report
+    assert "Forwarded Validation Probe Candidate: semantic_program:path_finding" in report
+    assert "Validation Probe Sandbox Validation Invoked: TRUE" in report
+    assert "Validation Probe Result Captured: TRUE" in report
+    assert "Validation Probe Comparable Output Captured: TRUE" in report
+    assert "Validation Probe Evidence Acceptance Evaluated: TRUE" in report
+    assert "Validation Probe Evidence Acceptance State: ACCEPTED" in report
+    assert "Validation Probe Evidence Insufficiency Cause: NONE" in report
+    assert "Validation Probe Required Evidence: evidence_contract_satisfied" in report
+    assert (
+        "Validation Probe Recommended Validation Action: retain_validation_evidence"
+        in report
+    )
+    assert "Compiled To Validated Probe State: VALIDATION_PROBE_VALIDATED" in report
     assert "value=0.82 tier=HIGH_VALUE" in report
     assert "reason=concrete_task_execution_signal" in report
     assert (
@@ -1191,6 +1308,27 @@ def test_normal_report_restores_per_stage_timing_visibility():
     assert "ACTIVE_COMPUTE_TIME" in report
     assert "REPORTING TIMING SUMMARY" in report
     assert "Report Lifecycle Total Time:" in report
+
+
+def test_timing_summary_flags_task_selection_cost_pressure():
+    state = _report_state()
+    state["performance_report"]["stage_metrics"].append({
+        "stage_name": "task_selection",
+        "total_duration": 4.0,
+        "execution_count": 1,
+    })
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+
+    assert "Task Selection Cost State: TASK_SELECTION_COST_PRESSURE" in report
+    assert (
+        "Task Selection Cost Action: profile_training_signal_loading_and_cache_reuse"
+        in report
+    )
 
 
 def test_normal_report_exposes_semantic_compilation_observability():

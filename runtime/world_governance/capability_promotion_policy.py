@@ -40,6 +40,7 @@ class CapabilityPromotionPolicyDecision:
     policy_state: str
     rationale: list[str]
     sandbox_citizenship_thresholds: SandboxCitizenshipThresholds
+    validation_sponsorship_contract: dict[str, Any]
     trusted_capability_policy: dict[str, Any]
     decision_authority_policy: dict[str, Any]
     authority_boundary: dict[str, Any]
@@ -50,6 +51,9 @@ class CapabilityPromotionPolicyDecision:
             "rationale": list(self.rationale),
             "sandbox_citizenship_thresholds": (
                 self.sandbox_citizenship_thresholds.as_dict()
+            ),
+            "validation_sponsorship_contract": dict(
+                self.validation_sponsorship_contract
             ),
             "trusted_capability_policy": dict(self.trusted_capability_policy),
             "decision_authority_policy": dict(self.decision_authority_policy),
@@ -132,6 +136,50 @@ class CapabilityPromotionPolicyEngine:
             policy_state=policy_state,
             rationale=rationale,
             sandbox_citizenship_thresholds=thresholds,
+            validation_sponsorship_contract={
+                "contract_state": "WORLD_GOVERNANCE_VALIDATION_SPONSOR",
+                "truth_preparation_gate": "OPPORTUNITY_PERMISSION_ONLY",
+                "capability_merit_system": "VALIDATION_PRIORITY_ONLY",
+                "philosophical_principle": (
+                    "governance_may_open_the_road_to_truth_but_never_grant_truth"
+                ),
+                "allowed_outputs": [
+                    "validation_opportunity_priority",
+                    "validation_opportunity_count",
+                    "elite_validation_priority",
+                    "capability_merit_score",
+                    "ground_truth_priority",
+                    "validation_sprint_allocation",
+                    "cluster_validation_priority",
+                    "cross_domain_validation_priority",
+                ],
+                "forbidden_outputs": [
+                    "trust_score",
+                    "truth_score",
+                    "graduation_score",
+                    "promotion_decision",
+                    "truth_decision",
+                    "governed_validation_decision",
+                ],
+                "allowed_opportunity_types": [
+                    "elite_validation_opportunities",
+                    "cross_domain_validation_opportunities",
+                    "cluster_validation_opportunities",
+                    "independent_validation_opportunities",
+                    "ground_truth_opportunities",
+                    "validation_sprint_opportunities",
+                ],
+                "truth_boundary_contract": [
+                    "INVESTMENT_NEVER_INFLUENCES_TRUTH_FORMATION",
+                    "MERIT_NEVER_INFLUENCES_TRUTH_FORMATION",
+                    "VALIDATION_PRIORITY_NEVER_INFLUENCES_TRUTH_FORMATION",
+                    "VALIDATION_SPONSORSHIP_NEVER_INFLUENCES_TRUST_FORMATION",
+                ],
+                "promotion_philosophy": (
+                    "importance_allocates_opportunities_evidence_decides_promotion"
+                ),
+                "validation_requirements_changed": False,
+            },
             trusted_capability_policy={
                 "policy_state": "STRICT_REVIEW_REQUIRED",
                 "min_distinct_tasks": 10,
@@ -149,6 +197,10 @@ class CapabilityPromotionPolicyEngine:
                 "sandbox_citizenship_is_not_trust": True,
                 "trusted_for_decision": False,
                 "citizenship_authority": "SANDBOX_ONLY",
+                "world_governance_role": "VALIDATION_SPONSOR",
+                "truth_authority": False,
+                "trust_authority": False,
+                "graduation_authority": False,
             },
         )
 
