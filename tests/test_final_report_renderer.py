@@ -673,6 +673,18 @@ def test_render_includes_cognitive_capability_coverage_map():
     state["semantic_to_transformation_compilation_report"] = {
         "semantic_to_transformation_compilation_success": False,
         "failure_reason": "no_supported_compiler_for_execution_intents",
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "unsupported_semantic",
+                "operation": "density_modulation",
+                "resolved_operation": "density_modulation",
+                "resolved_compiler": "NONE",
+                "compiler_found": False,
+                "compilation_attempted": False,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_NOT_FOUND",
+            }
+        ],
         "compiler_failure_diagnostics": {
             "failure_reason_counts": {
                 "operation_semantics_mismatch": 2,
@@ -794,6 +806,10 @@ def test_render_includes_cognitive_capability_coverage_map():
     assert "operation=preserve_grid" in report
     assert "rule=RULE_GRID_PRESERVATION_01" in report
     assert "source=compiler_failure_diagnostics" in report
+    assert "Compiler Resolution Trace:" in report
+    assert "operation=density_modulation" in report
+    assert "compiler=NONE" in report
+    assert "state=RESOLVED_COMPILER_NOT_FOUND" in report
     assert "Validation Success Rate:" in report
     assert "Capability Materialization Rate:" in report
     assert "Operational Yield From Concepts:" in report

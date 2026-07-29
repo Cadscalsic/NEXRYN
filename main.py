@@ -710,8 +710,9 @@ def build_passive_math_reasoning_report(
 
 
 def latest_completed_task_io(all_results, tasks_dir):
+    fallback = None
     for item in reversed(all_results or []):
-        if not isinstance(item, dict) or item.get("status") != "completed":
+        if not isinstance(item, dict):
             continue
         task_name = item.get("task")
         candidates = [
@@ -731,7 +732,7 @@ def latest_completed_task_io(all_results, tasks_dir):
             continue
         pair = (payload.get("train") or [{}])[0]
         result = item.get("result") if isinstance(item.get("result"), dict) else {}
-        return {
+        task_io = {
             "task": task_name,
             "input_grid": pair.get("input"),
             "target_grid": pair.get("output"),
@@ -740,12 +741,23 @@ def latest_completed_task_io(all_results, tasks_dir):
                 or result.get("predicted_output")
                 or result.get("output_grid")
             ),
+            "io_source_status": item.get("status"),
         }
+        if item.get("status") == "completed":
+            return task_io
+        if fallback is None and task_io.get("input_grid") is not None:
+            fallback = task_io
+    if fallback is not None:
+        fallback["io_source_status"] = (
+            f"{fallback.get('io_source_status')}_task_io_fallback"
+        )
+        return fallback
     return {
         "task": None,
         "input_grid": None,
         "target_grid": None,
         "predicted_output": None,
+        "io_source_status": "no_task_io_available",
     }
 
 
@@ -6191,6 +6203,17 @@ try:
         "executable_intelligence_runtime",
         ("concept_store", "program_store", "evidence_store", "context_store"),
         required=("concept_store",),
+    )
+    executable_shared_inputs = (
+        dict(executable_shared_inputs)
+        if isinstance(executable_shared_inputs, dict)
+        else {}
+    )
+    for key in ("input_grid", "target_grid", "predicted_output"):
+        if executable_task_io.get(key) is not None:
+            executable_shared_inputs[key] = executable_task_io.get(key)
+    executable_shared_inputs["task_io_source_status"] = executable_task_io.get(
+        "io_source_status",
     )
     with cognitive_runtime_execution_engine.execution(
         "executable_intelligence_runtime",

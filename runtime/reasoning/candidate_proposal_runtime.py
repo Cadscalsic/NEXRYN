@@ -99,7 +99,7 @@ class CandidateProposalRuntime:
             if source.get("semantic_to_transformation_compilation_success"):
                 return [source]
             if source.get("selected_program") or source.get("compiled_program"):
-                return [source]
+                return [source] if self._has_executable_candidate(source) else []
             if source.get("reuse_success_rate") or source.get("reuse_rate"):
                 return [source] if self._has_executable_candidate(source) else []
         return []

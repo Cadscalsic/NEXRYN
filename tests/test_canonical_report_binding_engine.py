@@ -2468,6 +2468,13 @@ def test_candidate_arena_reports_prediction_quality_calibration_gap():
             "validation_probe_operation": "duplicate_object",
             "validation_probe_source": "normalized_program_candidates",
             "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "validation_probe_shared_input_trace": {
+                "input_population_state": "SHARED_TASK_IO_AVAILABLE",
+                "task_io_source_status": "completed",
+                "present_keys": ["input_grid", "target_grid"],
+                "empty_keys": [],
+                "non_empty_keys": ["input_grid", "target_grid"],
+            },
             "arena_to_compiled_bridge_state": "VALIDATION_PROBE_AVAILABLE",
             "arena_to_compiled_bridge_action": (
                 "route_validation_probe_to_compiler_without_prediction_authority"
@@ -2503,6 +2510,13 @@ def test_candidate_arena_reports_prediction_quality_calibration_gap():
         "VALIDATION_PROBE_AVAILABLE"
     )
     assert summary["validation_probe_authority"] == "SANDBOX_VALIDATION_ONLY"
+    assert summary["validation_probe_shared_input_trace"] == {
+        "input_population_state": "SHARED_TASK_IO_AVAILABLE",
+        "task_io_source_status": "completed",
+        "present_keys": ["input_grid", "target_grid"],
+        "empty_keys": [],
+        "non_empty_keys": ["input_grid", "target_grid"],
+    }
 
 
 def test_evidence_deficit_progress_compares_previous_deficit_rows():

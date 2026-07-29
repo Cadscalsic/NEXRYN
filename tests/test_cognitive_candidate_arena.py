@@ -224,6 +224,29 @@ def test_candidate_proposal_runtime_accepts_adaptive_reuse_operation_sequence():
     ]
 
 
+def test_candidate_proposal_runtime_rejects_empty_semantic_compiler_program():
+    report = CandidateProposalRuntime().collect(
+        candidate_sources={
+            "semantic_to_transformation_compiler": {
+                "system": "semantic_to_transformation_compiler",
+                "semantic_to_transformation_compilation_success": False,
+                "failure_reason": "missing_grid_pair",
+                "compiled_program": {
+                    "program_type": "transformation_program",
+                    "step_count": 0,
+                    "steps": [],
+                },
+            }
+        }
+    )
+
+    assert report["proposal_count"] == 0
+    assert report["sources_with_proposals"] == []
+    assert report["sources_rejected"] == ["semantic_to_transformation_compiler"]
+    assert report["candidate_proposals"][0]["proposal_status"] == "REJECTED"
+    assert report["candidate_proposals"][0]["rejection_reason"] == "missing_grid_pair"
+
+
 def test_candidate_proposal_runtime_reports_empty_steps_with_cognitive_reuse_mode():
     report = CandidateProposalRuntime().collect(
         candidate_sources={
@@ -479,11 +502,19 @@ def test_validation_probe_grounding_context_uses_shared_payload_when_direct_grid
     )
 
     context = report["execution_recommendation"]["validation_probe_grounding_context"]
+    shared_trace = report["validation_probe_shared_input_trace"]
 
     assert report["validation_probe_candidate_id"]
     assert context["input_grid"] == [[1, 0], [0, 0]]
     assert context["target_grid"] == [[2, 0], [0, 0]]
     assert context["predicted_output"] == [[2, 0], [0, 0]]
+    assert shared_trace["input_population_state"] == "SHARED_TASK_IO_AVAILABLE"
+    assert shared_trace["empty_keys"] == []
+    assert shared_trace["non_empty_keys"] == [
+        "input_grid",
+        "target_grid",
+        "predicted_output",
+    ]
 
 
 def test_single_valid_source_reports_single_source_only():
@@ -694,6 +725,75 @@ def test_arena_source_flow_reports_direct_build_failure_reason():
     assert flow["semantic_compiler"]["build_failure_detail"] == (
         "source_listed_in_sources_with_proposals_but_no_row_found"
     )
+
+
+def test_arena_source_flow_keeps_proposal_runtime_rejections_visible():
+    report = _arena().run(
+        [
+            _proposal(
+                "program_generation",
+                "preserve_grid",
+                [{"operation": "preserve_grid", "parameters": {}}],
+            ),
+        ],
+        input_grid=[[1]],
+        target_grid=[[1]],
+        runtime_context={
+            "candidate_proposal_report": {
+                "sources_with_proposals": ["program_generation"],
+                "sources_rejected": ["semantic_to_transformation_compiler"],
+                "candidate_proposals": [
+                    {
+                        "source": "program_generation",
+                        "proposal_status": "PROPOSED",
+                        "operation": "preserve_grid",
+                        "program": {
+                            "step_count": 1,
+                            "steps": [
+                                {"operation": "preserve_grid", "parameters": {}}
+                            ],
+                        },
+                    },
+                    {
+                        "source": "semantic_to_transformation_compiler",
+                        "proposal_status": "REJECTED",
+                        "rejection_reason": "missing_grid_pair",
+                        "program": {"step_count": 0, "steps": []},
+                    },
+                ],
+                "source_diagnostics": {
+                    "semantic_to_transformation_compiler": {
+                        "candidate_detected": False,
+                        "program_steps_present": False,
+                    }
+                },
+            },
+            "expected_candidate_sources": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+        },
+    )
+
+    flow = {
+        row["normalized_source"]: row
+        for row in report["candidate_source_flow_trace"]
+    }
+
+    assert flow["semantic_compiler"]["flow_state"] == (
+        "REJECTED_BY_PROPOSAL_RUNTIME"
+    )
+    assert flow["semantic_compiler"]["proposal_runtime_rejected"] is True
+    assert flow["semantic_compiler"]["proposal_runtime_rejection_reason"] == (
+        "missing_grid_pair"
+    )
+    assert flow["semantic_compiler"]["blocked_stage"] == (
+        "candidate_proposal_runtime"
+    )
+    assert flow["semantic_compiler"]["source_diagnostic"] == {
+        "candidate_detected": False,
+        "program_steps_present": False,
+    }
 
 
 def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():

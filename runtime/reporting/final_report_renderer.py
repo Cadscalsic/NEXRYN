@@ -1553,6 +1553,10 @@ class DeterministicFinalReportRenderer:
         if not isinstance(concepts, list):
             concepts = [concepts]
         parameters = summary.get("parameter_inference") or {}
+        resolution_trace = summary.get("compiler_resolution_trace") or []
+        resolution_trace = (
+            resolution_trace if isinstance(resolution_trace, list) else []
+        )
         parameter_bits = []
         if isinstance(parameters, dict):
             for key in sorted(parameters.keys(), key=str):
@@ -1584,6 +1588,22 @@ class DeterministicFinalReportRenderer:
         ]
         if parameter_bits:
             lines.append(f"Parameter Inference: {'; '.join(parameter_bits[:8])}")
+        if resolution_trace:
+            lines.append("Compiler Resolution Trace:")
+            for row in resolution_trace[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"intent={self._value(row.get('semantic_intent'))} "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"resolved={self._value(row.get('resolved_operation'))} "
+                    f"compiler={self._value(row.get('resolved_compiler'))} "
+                    f"found={self._value(row.get('compiler_found'))} "
+                    f"attempted={self._value(row.get('compilation_attempted'))} "
+                    f"emitted={self._value(row.get('candidate_emitted'))} "
+                    f"state={self._value(row.get('resolution_state'))}"
+                )
         if canonical["report_level"] == "diagnostic":
             compiler = diagnostics.get("compiler_report", {})
             graph = compiler.get("transformation_graph", {}) if isinstance(compiler, dict) else {}
@@ -3299,6 +3319,10 @@ class DeterministicFinalReportRenderer:
         source_flow_trace = (
             source_flow_trace if isinstance(source_flow_trace, list) else []
         )
+        shared_input_trace = summary.get("validation_probe_shared_input_trace")
+        shared_input_trace = (
+            shared_input_trace if isinstance(shared_input_trace, dict) else {}
+        )
         source_materialization_rows = (
             summary.get("candidate_source_materialization_rows") or []
         )
@@ -3374,6 +3398,16 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('validation_probe_source'))}",
             "Validation Probe Authority: "
             f"{self._value(summary.get('validation_probe_authority'))}",
+            "Validation Probe Shared Input State: "
+            f"{self._value(shared_input_trace.get('input_population_state'))}",
+            "Validation Probe Shared Input Source Status: "
+            f"{self._value(shared_input_trace.get('task_io_source_status'))}",
+            "Validation Probe Shared Input Present Keys: "
+            f"{self._value(shared_input_trace.get('present_keys'))}",
+            "Validation Probe Shared Input Empty Keys: "
+            f"{self._value(shared_input_trace.get('empty_keys'))}",
+            "Validation Probe Shared Input Non Empty Keys: "
+            f"{self._value(shared_input_trace.get('non_empty_keys'))}",
             "Prediction Quality Calibration State: "
             f"{self._value(summary.get('prediction_quality_calibration_state'))}",
             "Prediction Quality Calibration Cause: "
@@ -3431,6 +3465,9 @@ class DeterministicFinalReportRenderer:
                     "  "
                     f"{self._value(row.get('source'))}: "
                     f"proposal={self._value(row.get('proposal_runtime_proposed'))} "
+                    f"rejected={self._value(row.get('proposal_runtime_rejected'))} "
+                    "rejection_reason="
+                    f"{self._value(row.get('proposal_runtime_rejection_reason'))} "
                     f"built={self._value(row.get('arena_proposal_built'))} "
                     f"gateway={self._value(row.get('gateway_accepted'))} "
                     f"arena={self._value(row.get('entered_arena'))} "

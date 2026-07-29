@@ -143,6 +143,7 @@ class CognitiveCandidateArena:
             arena_proposals=proposals,
             sources_entered=sources_entered,
             gateway_report=gateway_report,
+            expected_sources=runtime_context.get("expected_candidate_sources", []),
         )
         compact = {
             "arena_state": arena_state,
@@ -192,6 +193,9 @@ class CognitiveCandidateArena:
             "validation_probe_operation": validation_probe.get("operation") if validation_probe else None,
             "validation_probe_source": validation_probe.get("source") if validation_probe else None,
             "validation_probe_authority": "SANDBOX_VALIDATION_ONLY" if validation_probe else "NONE",
+            "validation_probe_shared_input_trace": self._shared_input_trace(
+                runtime_context
+            ),
             "arena_to_compiled_bridge_state": (
                 "VALIDATION_PROBE_AVAILABLE"
                 if validation_probe
@@ -289,10 +293,16 @@ class CognitiveCandidateArena:
         arena_proposals: list[Mapping[str, Any]] | Mapping[str, Any] | None,
         sources_entered: list[str],
         gateway_report: Mapping[str, Any],
+        expected_sources: list[str] | tuple[str, ...],
     ) -> list[dict[str, Any]]:
         proposal_sources = [
             str(source)
             for source in proposal_report.get("sources_with_proposals", []) or []
+            if source
+        ]
+        rejected_sources = [
+            str(source)
+            for source in proposal_report.get("sources_rejected", []) or []
             if source
         ]
         proposal_rows = [
@@ -300,6 +310,11 @@ class CognitiveCandidateArena:
             for item in proposal_report.get("candidate_proposals", []) or []
             if isinstance(item, Mapping)
         ]
+        source_diagnostics = (
+            proposal_report.get("source_diagnostics")
+            if isinstance(proposal_report.get("source_diagnostics"), Mapping)
+            else {}
+        )
         raw_arena = (
             list(arena_proposals)
             if isinstance(arena_proposals, (list, tuple))
@@ -323,17 +338,26 @@ class CognitiveCandidateArena:
             if isinstance(item, Mapping) and item.get("source")
         }
         entered = {self._source_alias(source) for source in sources_entered}
-        target_sources = sorted(
-            set(proposal_sources)
-            | set(arena_builder_sources)
-            | set(gateway_sources)
-            | entered
-        )
-        rows = []
-        for source in target_sources:
+        target_sources_by_alias = {}
+        for source in (
+            list(proposal_sources)
+            + list(rejected_sources)
+            + [str(source) for source in expected_sources if source]
+            + list(arena_builder_sources)
+            + list(gateway_sources)
+            + list(entered)
+        ):
             alias = self._source_alias(source)
+            if alias and alias not in target_sources_by_alias:
+                target_sources_by_alias[alias] = source
+        rows = []
+        for alias in sorted(target_sources_by_alias):
+            source = target_sources_by_alias[alias]
             proposed = source in proposal_sources or alias in {
                 self._source_alias(item) for item in proposal_sources
+            }
+            rejected = source in rejected_sources or alias in {
+                self._source_alias(item) for item in rejected_sources
             }
             built = alias in arena_builder_sources
             gateway_accepted = alias in gateway_sources
@@ -342,10 +366,17 @@ class CognitiveCandidateArena:
                 row for row in proposal_rows
                 if self._source_alias(row.get("source")) == alias
             ]
+            rejected_rows = [
+                row for row in source_proposal_rows
+                if row.get("proposal_status") == "REJECTED"
+            ]
+            diagnostic = self._source_diagnostic_for_alias(source_diagnostics, alias)
             build_failure = self._arena_build_failure_reason(
                 proposed=proposed,
+                rejected=rejected,
                 built=built,
                 proposal_rows=source_proposal_rows,
+                rejected_rows=rejected_rows,
                 gateway_rejection=gateway_rejections.get(alias, {}),
             )
             if arena_entered:
@@ -364,6 +395,10 @@ class CognitiveCandidateArena:
                 state = "PROPOSAL_NOT_BUILT_FOR_ARENA"
                 blocked_stage = "arena_proposal_builder"
                 action = "preserve_proposal_runtime_source_in_arena_builder"
+            elif rejected:
+                state = "REJECTED_BY_PROPOSAL_RUNTIME"
+                blocked_stage = "candidate_proposal_runtime"
+                action = "inspect_source_materialization_payload"
             else:
                 state = "NO_PROPOSAL_SIGNAL"
                 blocked_stage = "source_materialization"
@@ -372,6 +407,10 @@ class CognitiveCandidateArena:
                 "source": source,
                 "normalized_source": alias,
                 "proposal_runtime_proposed": proposed,
+                "proposal_runtime_rejected": rejected,
+                "proposal_runtime_rejection_reason": build_failure[
+                    "proposal_rejection_reason"
+                ],
                 "arena_proposal_built": built,
                 "gateway_accepted": gateway_accepted,
                 "entered_arena": arena_entered,
@@ -381,6 +420,7 @@ class CognitiveCandidateArena:
                 "build_failure_detail": build_failure["detail"],
                 "expected_candidate_fields": build_failure["expected_fields"],
                 "received_candidate_fields": build_failure["received_fields"],
+                "source_diagnostic": diagnostic,
                 "action": action,
             })
         return rows
@@ -389,17 +429,34 @@ class CognitiveCandidateArena:
         self,
         *,
         proposed: bool,
+        rejected: bool,
         built: bool,
         proposal_rows: list[Mapping[str, Any]],
+        rejected_rows: list[Mapping[str, Any]],
         gateway_rejection: Mapping[str, Any],
     ) -> dict[str, Any]:
         expected_fields = ["source", "operation", "program.steps"]
+        rejection_reason = (
+            str(rejected_rows[0].get("rejection_reason"))
+            if rejected_rows and rejected_rows[0].get("rejection_reason")
+            else None
+        )
         if built:
             return {
                 "reason": "none",
                 "detail": "arena_proposal_built",
                 "expected_fields": expected_fields,
                 "received_fields": [],
+                "proposal_rejection_reason": rejection_reason,
+            }
+        if rejected:
+            row = dict(rejected_rows[0]) if rejected_rows else {}
+            return {
+                "reason": "proposal_runtime_rejected",
+                "detail": rejection_reason or "source_rejected_before_arena_builder",
+                "expected_fields": expected_fields,
+                "received_fields": sorted(str(key) for key in row),
+                "proposal_rejection_reason": rejection_reason,
             }
         if not proposed:
             return {
@@ -407,6 +464,7 @@ class CognitiveCandidateArena:
                 "detail": "candidate_source_did_not_emit_proposal",
                 "expected_fields": expected_fields,
                 "received_fields": [],
+                "proposal_rejection_reason": rejection_reason,
             }
         if not proposal_rows:
             return {
@@ -414,6 +472,7 @@ class CognitiveCandidateArena:
                 "detail": "source_listed_in_sources_with_proposals_but_no_row_found",
                 "expected_fields": expected_fields,
                 "received_fields": [],
+                "proposal_rejection_reason": rejection_reason,
             }
         row = dict(proposal_rows[0])
         program = row.get("program") if isinstance(row.get("program"), Mapping) else {}
@@ -426,6 +485,7 @@ class CognitiveCandidateArena:
                 "detail": ",".join(str(item) for item in reasons) or "gateway_rejected",
                 "expected_fields": expected_fields,
                 "received_fields": received_fields,
+                "proposal_rejection_reason": rejection_reason,
             }
         if not isinstance(program, Mapping) or not program:
             reason = "missing_program_representation"
@@ -444,7 +504,18 @@ class CognitiveCandidateArena:
             "detail": detail,
             "expected_fields": expected_fields,
             "received_fields": received_fields,
+            "proposal_rejection_reason": rejection_reason,
         }
+
+    def _source_diagnostic_for_alias(
+        self,
+        source_diagnostics: Mapping[str, Any],
+        alias: str,
+    ) -> dict[str, Any]:
+        for source, diagnostic in source_diagnostics.items():
+            if self._source_alias(source) == alias and isinstance(diagnostic, Mapping):
+                return dict(diagnostic)
+        return {}
 
     def _source_alias(self, source: Any) -> str:
         token = str(source or "").strip().lower().replace("-", "_").replace(" ", "_")
@@ -491,6 +562,30 @@ class CognitiveCandidateArena:
                 if self._grid_payload_available(payload):
                     return payload
         return payload
+
+    def _shared_input_trace(self, runtime_context: Mapping[str, Any]) -> dict[str, Any]:
+        shared = runtime_context.get("shared_state_inputs")
+        shared = shared if isinstance(shared, Mapping) else {}
+        expected = ["input_grid", "target_grid", "predicted_output"]
+        present = [key for key in expected if key in shared]
+        non_empty = [
+            key
+            for key in expected
+            if self._grid_payload_available(self._grid_payload(shared.get(key)))
+        ]
+        empty = [key for key in present if key not in non_empty]
+        return {
+            "expected_keys": expected,
+            "present_keys": present,
+            "empty_keys": empty,
+            "non_empty_keys": non_empty,
+            "task_io_source_status": shared.get("task_io_source_status"),
+            "input_population_state": (
+                "SHARED_TASK_IO_AVAILABLE"
+                if {"input_grid", "target_grid"}.issubset(set(non_empty))
+                else "SHARED_TASK_IO_EMPTY"
+            ),
+        }
 
     def _grid_payload_available(self, payload: Any) -> bool:
         if payload is None:

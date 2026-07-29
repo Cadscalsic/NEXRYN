@@ -1210,7 +1210,9 @@ class CanonicalReportBindingEngine:
         )
         compiler = self._merge_dicts(
             self._first_dict(report_state, "SEMANTIC_COMPILATION_REPORT", "semantic_compilation_report"),
+            self._first_dict(report_state, "semantic_to_transformation_compilation_report"),
             self._first_dict(performance, "SEMANTIC_COMPILATION_REPORT", "semantic_compilation_report"),
+            self._first_dict(performance, "semantic_to_transformation_compilation_report"),
             self._first_dict(synthesis, "semantic_to_transformation_compilation_report"),
         )
         compiler_selected = self._tool_selected(
@@ -1333,6 +1335,9 @@ class CanonicalReportBindingEngine:
             ),
             "execution_intents": execution_intents,
             "execution_intent_count": len(execution_intents),
+            "compiler_resolution_trace": (
+                compiler.get("compiler_resolution_trace") or []
+            ),
             "semantic_intent_routing_success": semantic_intent_success,
             "compiler_activation_source": compiler_activation_source,
             "semantic_intent_router_integration_status": router_integration_status,
@@ -7917,6 +7922,9 @@ class CanonicalReportBindingEngine:
                 "validation_probe_authority": explicit_summary.get(
                     "validation_probe_authority"
                 ),
+                "validation_probe_shared_input_trace": explicit_summary.get(
+                    "validation_probe_shared_input_trace"
+                ) or {},
                 "arena_to_compiled_bridge_state": explicit_summary.get(
                     "arena_to_compiled_bridge_state"
                 ),

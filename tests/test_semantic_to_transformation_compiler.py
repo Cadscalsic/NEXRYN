@@ -79,6 +79,91 @@ def test_compiles_noise_removal_into_explicit_filter_program():
     assert report["validation"]["exact_match"] is True
 
 
+def test_compiles_translation_from_execution_operation_intent():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [0, 1, 0],
+            [0, 0, 0],
+            [0, 0, 0],
+        ],
+        output_grid=[
+            [0, 0, 0],
+            [0, 1, 0],
+            [0, 0, 0],
+        ],
+        detected_concepts=["spatial_reasoning"],
+        execution_intents=[
+            {
+                "intent": "spatial_reasoning",
+                "operation": "translate",
+                "matched_concepts": ["directional_motion"],
+            }
+        ],
+    )
+
+    step = report["compiled_program"]["steps"][0]
+
+    assert report["semantic_to_transformation_compilation_success"] is True
+    assert report["selected_intent"] == "translation"
+    assert step["operation"] == "translate"
+    assert step["parameters"]["delta_row"] == 1
+    assert step["parameters"]["delta_col"] == 0
+    assert report["validation"]["exact_match"] is True
+
+
+def test_compiles_color_replacement_from_execution_operation_intent():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 1],
+            [0, 0],
+        ],
+        output_grid=[
+            [2, 2],
+            [0, 0],
+        ],
+        detected_concepts=["color_reasoning"],
+        execution_intents=[
+            {
+                "intent": "color_reasoning",
+                "operation": "replace_color",
+                "matched_concepts": ["symbolic_remapping"],
+            }
+        ],
+    )
+
+    step = report["compiled_program"]["steps"][0]
+
+    assert report["semantic_to_transformation_compilation_success"] is True
+    assert step["operation"] == "replace_color"
+    assert step["parameters"]["color_mapping"] == {1: 2}
+    assert report["validation"]["exact_match"] is True
+
+
+def test_reports_compiler_resolution_trace_for_unsupported_execution_intent():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[[1]],
+        output_grid=[[1]],
+        detected_concepts=["unsupported_semantic"],
+        execution_intents=[
+            {
+                "intent": "unsupported_semantic",
+                "operation": "density_modulation",
+            }
+        ],
+    )
+
+    trace = report["compiler_resolution_trace"][0]
+
+    assert report["failure_reason"] == "no_supported_compiler_for_execution_intents"
+    assert trace["semantic_intent"] == "unsupported_semantic"
+    assert trace["operation"] == "density_modulation"
+    assert trace["resolved_compiler"] == "NONE"
+    assert trace["compiler_found"] is False
+    assert trace["compilation_attempted"] is False
+    assert trace["candidate_emitted"] is False
+    assert trace["resolution_state"] == "RESOLVED_COMPILER_NOT_FOUND"
+
+
 def test_compiler_reports_failure_diagnostics_by_reason_and_domain():
     report = SemanticToTransformationCompiler().compile(
         input_grid=[

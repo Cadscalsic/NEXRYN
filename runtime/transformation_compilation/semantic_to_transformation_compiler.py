@@ -96,6 +96,14 @@ class SemanticToTransformationCompiler:
         "object_identity_preservation",
         "position_preservation",
     }
+    TRANSLATION_CONCEPTS = {
+        "translation",
+        "translate",
+        "directional_motion",
+        "spatial_translation",
+        "move_object",
+        "object_motion",
+    }
     TOPOLOGY_PRESERVATION_CONCEPTS = {
         "topology_preservation",
         "preserve_topology",
@@ -116,6 +124,7 @@ class SemanticToTransformationCompiler:
         "remove_object": "RULE_ARTIFACT_FILTERING_01",
         "replace_color": "RULE_SYMBOLIC_REMAP_01",
         "duplicate_object": "RULE_GROWTH_DUPLICATION_01",
+        "translate": "RULE_DIRECTIONAL_TRANSLATION_01",
         "preserve_grid": "RULE_GRID_PRESERVATION_01",
         "preserve_colors": "RULE_COLOR_PRESERVATION_01",
         "preserve_topology": "RULE_TOPOLOGY_PRESERVATION_01",
@@ -161,19 +170,23 @@ class SemanticToTransformationCompiler:
             )
 
         candidates = []
-        if concepts.intersection(self.ROTATION_CONCEPTS) or self._has_intent(execution_intents, {"rotation", "rotation_reflection"}):
+        if concepts.intersection(self.ROTATION_CONCEPTS) or self._has_intent(execution_intents, {"rotation", "rotation_reflection", "rotate"}):
             candidates.extend(self._compile_rotation(source, target, execution_intents))
-        if concepts.intersection(self.REFLECTION_CONCEPTS) or self._has_intent(execution_intents, {"reflection", "rotation_reflection"}):
+        if concepts.intersection(self.REFLECTION_CONCEPTS) or self._has_intent(execution_intents, {"reflection", "rotation_reflection", "mirror_horizontal", "mirror_vertical"}):
             candidates.extend(self._compile_reflection(source, target))
-        if concepts.intersection(self.SCALING_CONCEPTS):
+        if concepts.intersection(self.TRANSLATION_CONCEPTS) or self._has_intent(execution_intents, {"translation", "translate", "directional_motion", "move_object"}):
+            candidate = self._compile_translation(source, target)
+            if candidate:
+                candidates.append(candidate)
+        if concepts.intersection(self.SCALING_CONCEPTS) or self._has_intent(execution_intents, {"scaling", "scale_up", "scale_down"}):
             candidate = self._compile_scaling(source, target)
             if candidate:
                 candidates.append(candidate)
-        if concepts.intersection(self.PATH_CONCEPTS):
+        if concepts.intersection(self.PATH_CONCEPTS) or self._has_intent(execution_intents, {"construct_path", "connect_components", "path_construction", "component_connection"}):
             candidate = self._compile_path(source, target, concepts)
             if candidate:
                 candidates.append(candidate)
-        if concepts.intersection(self.FILTER_CONCEPTS):
+        if concepts.intersection(self.FILTER_CONCEPTS) or self._has_intent(execution_intents, {"remove_object", "object_removal"}):
             candidate = self._compile_filter(source, target)
             if candidate:
                 candidates.append(candidate)
@@ -181,7 +194,7 @@ class SemanticToTransformationCompiler:
             candidate = self._compile_topology_repair(source, target)
             if candidate:
                 candidates.append(candidate)
-        if concepts.intersection(self.COLOR_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_color_mapping"}):
+        if concepts.intersection(self.COLOR_PRESERVATION_CONCEPTS) or self._has_intent(execution_intents, {"preserve_color_mapping", "preserve_colors"}):
             candidate = self._compile_preservation(source, target, "color_preservation", "preserve_colors")
             if candidate:
                 candidates.append(candidate)
@@ -209,7 +222,7 @@ class SemanticToTransformationCompiler:
             candidate = self._compile_preservation(source, target, "grid_preservation", "preserve_grid")
             if candidate:
                 candidates.append(candidate)
-        if concepts.intersection(self.COLOR_REMAP_CONCEPTS) or self._has_intent(execution_intents, {"replace_color_mapping", "remap_symbols"}):
+        if concepts.intersection(self.COLOR_REMAP_CONCEPTS) or self._has_intent(execution_intents, {"replace_color_mapping", "remap_symbols", "replace_color"}):
             candidate = self._compile_color_remap(source, target)
             if candidate:
                 candidates.append(candidate)
@@ -274,6 +287,11 @@ class SemanticToTransformationCompiler:
                 target,
                 candidates,
             ),
+            "compiler_resolution_trace": self._compiler_resolution_trace(
+                concepts,
+                execution_intents,
+                candidates,
+            ),
             "timestamp": str(datetime.utcnow()),
         }
         report["compiler_infrastructure_report"] = (
@@ -317,6 +335,8 @@ class SemanticToTransformationCompiler:
                 output = output.copy()
             elif operation == "duplicate_object":
                 output = self._execute_cell_writes(output, parameters)
+            elif operation == "translate":
+                output = self._execute_translate(output, parameters)
         return output
 
     def _compile_scaling(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
@@ -405,6 +425,44 @@ class SemanticToTransformationCompiler:
                 rationale=f"semantic_reflection_intent_to_{rationale}",
             ))
         return candidates
+
+    def _compile_translation(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
+        if source.ndim != 2 or target.ndim != 2 or source.shape != target.shape:
+            return None
+        source_cells = np.argwhere(source != 0)
+        target_cells = np.argwhere(target != 0)
+        if len(source_cells) == 0 or len(source_cells) != len(target_cells):
+            return None
+        source_values = sorted(int(source[tuple(cell)]) for cell in source_cells)
+        target_values = sorted(int(target[tuple(cell)]) for cell in target_cells)
+        if source_values != target_values:
+            return None
+        source_anchor = source_cells.min(axis=0)
+        target_anchor = target_cells.min(axis=0)
+        delta_row = int(target_anchor[0] - source_anchor[0])
+        delta_col = int(target_anchor[1] - source_anchor[1])
+        if delta_row == 0 and delta_col == 0:
+            return None
+        predicted = self._execute_translate(
+            source,
+            {"delta_row": delta_row, "delta_col": delta_col},
+        )
+        validation = self._validation(predicted, target)
+        if validation["accuracy"] < 0.75:
+            return None
+        return self._candidate(
+            "translation",
+            "translate",
+            {
+                "delta_row": delta_row,
+                "delta_col": delta_col,
+                "translation": [delta_row, delta_col],
+                "translation_policy": "observed_nonzero_object_delta",
+            },
+            confidence=0.90,
+            support=validation["accuracy"],
+            rationale="semantic_directional_motion_to_translate_program",
+        )
 
     def _compile_preservation(
         self,
@@ -667,6 +725,21 @@ class SemanticToTransformationCompiler:
                 output[row, col] = int(cell.get("value", output[row, col]))
         return output
 
+    def _execute_translate(self, grid: np.ndarray, parameters: Mapping[str, Any]) -> np.ndarray:
+        output = np.zeros_like(grid)
+        translation = parameters.get("translation") or [
+            parameters.get("delta_row", 0),
+            parameters.get("delta_col", 0),
+        ]
+        delta_row = int(translation[0]) if len(translation) > 0 else 0
+        delta_col = int(translation[1]) if len(translation) > 1 else 0
+        for row, col in np.argwhere(grid != 0):
+            target_row = int(row) + delta_row
+            target_col = int(col) + delta_col
+            if 0 <= target_row < output.shape[0] and 0 <= target_col < output.shape[1]:
+                output[target_row, target_col] = int(grid[row, col])
+        return output
+
     def _path_anchors(self, source: np.ndarray, path_cells: list[list[int]], path_color: int) -> tuple[list[int], list[int]]:
         colored = [point.tolist() for point in np.argwhere(source == path_color)]
         if len(colored) >= 2:
@@ -727,6 +800,11 @@ class SemanticToTransformationCompiler:
                 target,
                 [],
                 failure_reason=reason,
+            ),
+            "compiler_resolution_trace": self._compiler_resolution_trace(
+                concepts,
+                execution_intents or [],
+                [],
             ),
             "timestamp": str(datetime.utcnow()),
         }
@@ -951,6 +1029,95 @@ class SemanticToTransformationCompiler:
                 else "compiler_semantic_or_execution_failure"
             ),
         }
+
+    def _compiler_resolution_trace(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+        candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        trace_events = self._expected_operation_traces(concepts, execution_intents)
+        candidate_operations = {
+            self._candidate_operation(candidate)
+            for candidate in candidates
+            if isinstance(candidate, Mapping)
+        }
+        rows = []
+        for event in trace_events:
+            operation = str(event.get("expected_operation") or "unknown")
+            resolved_operation = str(event.get("resolved_operation") or operation)
+            gate = self._compiler_gate_for_operation(operation)
+            compiler_found = bool(gate and self._operation_has_primitive(operation))
+            candidate_emitted = operation in candidate_operations
+            rows.append({
+                "semantic_intent": event.get("semantic_intent"),
+                "operation": operation,
+                "resolved_operation": resolved_operation,
+                "resolved_compiler": gate or "NONE",
+                "compiler_found": compiler_found,
+                "compilation_attempted": compiler_found,
+                "candidate_emitted": candidate_emitted,
+                "compiler_rule": event.get("compiler_rule"),
+                "resolution_state": self._compiler_resolution_state(
+                    compiler_found,
+                    candidate_emitted,
+                ),
+            })
+        if not rows and execution_intents:
+            for intent in execution_intents:
+                if not isinstance(intent, Mapping):
+                    continue
+                operation = str(intent.get("operation") or "unknown")
+                gate = self._compiler_gate_for_operation(operation)
+                compiler_found = bool(gate and self._operation_has_primitive(operation))
+                rows.append({
+                    "semantic_intent": intent.get("intent"),
+                    "operation": operation,
+                    "resolved_operation": operation,
+                    "resolved_compiler": gate or "NONE",
+                    "compiler_found": compiler_found,
+                    "compilation_attempted": compiler_found,
+                    "candidate_emitted": False,
+                    "compiler_rule": self._compiler_rule_for(operation),
+                    "resolution_state": self._compiler_resolution_state(
+                        compiler_found,
+                        False,
+                    ),
+                })
+        return rows[:25]
+
+    def _compiler_resolution_state(
+        self,
+        compiler_found: bool,
+        candidate_emitted: bool,
+    ) -> str:
+        if not compiler_found:
+            return "RESOLVED_COMPILER_NOT_FOUND"
+        if candidate_emitted:
+            return "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+        return "RESOLVED_COMPILER_FOUND_NO_CANDIDATE"
+
+    def _compiler_gate_for_operation(self, operation: str) -> str | None:
+        return {
+            "scale_up": "ScalingCompiler",
+            "scale_down": "ScalingCompiler",
+            "rotate": "RotationCompiler",
+            "mirror_horizontal": "ReflectionCompiler",
+            "mirror_vertical": "ReflectionCompiler",
+            "translate": "TranslationCompiler",
+            "construct_path": "PathConstructionCompiler",
+            "connect_components": "PathConstructionCompiler",
+            "remove_object": "ObjectFilterCompiler",
+            "replace_color": "ColorRemapCompiler",
+            "duplicate_object": "DuplicationCompiler",
+            "preserve_grid": "PreservationCompiler",
+            "preserve_colors": "PreservationCompiler",
+            "preserve_topology": "PreservationCompiler",
+            "preserve_shape": "PreservationCompiler",
+            "preserve_size": "PreservationCompiler",
+            "preserve_density": "PreservationCompiler",
+            "preserve_symmetry": "PreservationCompiler",
+        }.get(str(operation or ""))
 
     def _grounding_requirement_row(
         self,
@@ -1214,6 +1381,7 @@ class SemanticToTransformationCompiler:
         return [
             (self.ROTATION_CONCEPTS, "rotate"),
             (self.REFLECTION_CONCEPTS, "mirror_horizontal"),
+            (self.TRANSLATION_CONCEPTS, "translate"),
             (self.SCALING_CONCEPTS, "scale_up"),
             (self.PATH_CONCEPTS, "construct_path"),
             (self.FILTER_CONCEPTS, "remove_object"),
@@ -1271,6 +1439,7 @@ class SemanticToTransformationCompiler:
             "remove_object",
             "replace_color",
             "duplicate_object",
+            "translate",
             "preserve_grid",
             "preserve_colors",
             "preserve_topology",
@@ -1338,10 +1507,17 @@ class SemanticToTransformationCompiler:
         return abs(int(left[0]) - int(right[0])) + abs(int(left[1]) - int(right[1]))
 
     def _has_intent(self, intents: list[Mapping[str, Any]], names: set[str]) -> bool:
-        return any(
-            isinstance(intent, Mapping) and str(intent.get("intent")) in names
-            for intent in intents
-        )
+        for intent in intents:
+            if not isinstance(intent, Mapping):
+                continue
+            values = {
+                str(intent.get("intent") or ""),
+                str(intent.get("operation") or ""),
+            }
+            values.update(str(item) for item in intent.get("matched_concepts", []) or [])
+            if any(value in names for value in values):
+                return True
+        return False
 
     def _preferred_degrees(self, intents: list[Mapping[str, Any]]) -> int | None:
         for intent in intents:
