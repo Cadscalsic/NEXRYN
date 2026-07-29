@@ -5327,6 +5327,12 @@ class DeterministicFinalReportRenderer:
     ) -> str:
         state = canonical.get("report_state", {})
         performance = canonical.get("performance", {})
+        timestamp = (
+            metadata.get("timestamp")
+            or self._field(canonical, "timestamp")
+            or (state.get("timestamp") if isinstance(state, dict) else None)
+            or (performance.get("timestamp") if isinstance(performance, dict) else None)
+        )
         return self._first_meaningful(
             metadata.get("run_id"),
             metadata.get("execution_id"),
@@ -5337,8 +5343,17 @@ class DeterministicFinalReportRenderer:
             performance.get("run_id") if isinstance(performance, dict) else None,
             performance.get("execution_id") if isinstance(performance, dict) else None,
             self._field(canonical, "execution_identifier"),
+            self._run_id_from_timestamp(timestamp),
             default="current_run_unidentified",
         )
+
+    def _run_id_from_timestamp(self, timestamp: Any) -> str | None:
+        if timestamp is None:
+            return None
+        digits = re.sub(r"\D", "", str(timestamp))
+        if len(digits) < 14:
+            return None
+        return f"run_{digits[:8]}_{digits[8:14]}"
 
     def _conclusion_task_id(
         self,

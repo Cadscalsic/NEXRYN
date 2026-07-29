@@ -8135,6 +8135,12 @@ class CanonicalReportBindingEngine:
             "validation_probe_evidence_acceptance_state"
         )
         source_count = self._first_number(summary.get("source_count"), 0)
+        consensus_count = self._first_number(
+            summary.get("cross_source_consensus_count"),
+            0,
+        )
+        consensus_state = str(summary.get("cross_source_consensus_state") or "")
+        source_dominance_detected = summary.get("source_dominance_detected") is True
         execution_success_rate = self._first_number(
             summary.get("execution_success_rate")
         )
@@ -8186,9 +8192,15 @@ class CanonicalReportBindingEngine:
                 or summary.get("arena_winner")
                 or "tie_candidate"
             )
+            needs_cross_source_consensus = (
+                (source_count or 0) < 2
+                or (consensus_count or 0) <= 0
+                or consensus_state == "NO_CROSS_SOURCE_CONSENSUS"
+                or source_dominance_detected
+            )
             tie_break_strategy = (
                 "cross_source_consensus"
-                if (source_count or 0) < 2
+                if needs_cross_source_consensus
                 else "independent_repeat_validation"
             )
             required_evidence_category = (

@@ -1771,6 +1771,8 @@ def test_engineering_conclusion_uses_current_successful_compiler_path():
             "candidate_count": 2,
             "unique_candidate_count": 2,
             "source_count": 2,
+            "cross_source_consensus_count": 1,
+            "cross_source_consensus_state": "CROSS_SOURCE_CONSENSUS",
             "sources_entered": [
                 "normalized_program_candidates",
                 "semantic_to_transformation_compiler",
@@ -1990,6 +1992,38 @@ def test_engineering_conclusion_derives_ids_when_metadata_is_incomplete():
     assert "Conclusion Task Id: semantic_program:replace_color" in conclusion
     assert "Conclusion Run Id: Not Available" not in conclusion
     assert "Conclusion Task Id: Not Available" not in conclusion
+
+
+def test_engineering_conclusion_generates_run_id_from_timestamp_when_ids_missing():
+    state = _report_state()
+    state.pop("execution_id", None)
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata={"timestamp": "2026-07-29 13:34:26.116468"},
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "Conclusion Run Id: run_20260729_133426" in conclusion
+    assert "Conclusion Run Id: current_run_unidentified" not in conclusion
 
 
 def test_critical_trace_reports_consistent_operation_identity_chain():

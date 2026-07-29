@@ -2527,6 +2527,8 @@ def test_candidate_arena_explains_untriggered_calibration_after_probe_evidence()
             "candidate_count": 2,
             "unique_candidate_count": 2,
             "source_count": 2,
+            "cross_source_consensus_count": 1,
+            "cross_source_consensus_state": "CROSS_SOURCE_CONSENSUS",
             "sources_entered": [
                 "normalized_program_candidates",
                 "semantic_to_transformation_compiler",
@@ -2676,6 +2678,67 @@ def test_candidate_arena_evidence_acquisition_asks_cross_source_when_source_dive
                     "source": "normalized_program_candidates",
                     "candidate_id": "semantic_program:duplicate_object",
                     "operation": "duplicate_object",
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["evidence_acquisition_required_category"] == (
+        "CROSS_SOURCE_CONSENSUS"
+    )
+    assert summary["evidence_acquisition_required_evidence"] == (
+        "cross_source_consensus_evidence"
+    )
+    assert summary["evidence_acquisition_tie_break_strategy"] == (
+        "cross_source_consensus"
+    )
+    assert summary["evidence_acquisition_validation_task"] == (
+        "select_cross_source_tie_break_validation_task"
+    )
+
+
+def test_candidate_arena_evidence_acquisition_asks_cross_source_when_consensus_missing():
+    state = _state()
+    state["candidate_arena_report"] = {
+        "candidate_arena_summary": {
+            "arena_state": "TIE_REQUIRES_REVIEW",
+            "candidate_count": 7,
+            "unique_candidate_count": 7,
+            "source_count": 2,
+            "cross_source_consensus_count": 0,
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "source_dominance_detected": True,
+            "sources_entered": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+            "simulation_count": 7,
+            "simulation_success_count": 7,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "validation_probe_candidate_id": "semantic_to_transformation_compiler_0",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_summary": [
+                {
+                    "source": "semantic_compiler",
+                    "candidate_id": "semantic_to_transformation_compiler_0",
+                    "operation": "replace_color",
                     "entered_arena": True,
                 }
             ],
