@@ -370,6 +370,12 @@ class CognitiveCandidateArena:
                 row for row in source_proposal_rows
                 if row.get("proposal_status") == "REJECTED"
             ]
+            gateway_rejection = gateway_rejections.get(alias, {})
+            arena_source_rows = [
+                item for item in raw_arena
+                if isinstance(item, Mapping)
+                and self._source_alias(item.get("source")) == alias
+            ]
             diagnostic = self._source_diagnostic_for_alias(source_diagnostics, alias)
             build_failure = self._arena_build_failure_reason(
                 proposed=proposed,
@@ -377,7 +383,7 @@ class CognitiveCandidateArena:
                 built=built,
                 proposal_rows=source_proposal_rows,
                 rejected_rows=rejected_rows,
-                gateway_rejection=gateway_rejections.get(alias, {}),
+                gateway_rejection=gateway_rejection,
             )
             if arena_entered:
                 state = "ENTERED_ARENA"
@@ -406,6 +412,15 @@ class CognitiveCandidateArena:
             rows.append({
                 "source": source,
                 "normalized_source": alias,
+                "operation": (
+                    source_proposal_rows[0].get("operation")
+                    if source_proposal_rows
+                    else arena_source_rows[0].get("operation")
+                    if arena_source_rows
+                    else gateway_rejection.get("operation")
+                    if gateway_rejection
+                    else None
+                ),
                 "proposal_runtime_proposed": proposed,
                 "proposal_runtime_rejected": rejected,
                 "proposal_runtime_rejection_reason": build_failure[

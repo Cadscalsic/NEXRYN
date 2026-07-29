@@ -69,6 +69,38 @@ def test_multiple_independent_candidates_enter_arena_and_best_wins():
     assert report["direct_source_to_executor_access"] is False
 
 
+def test_candidate_simulator_applies_localized_replace_color_positions():
+    report = CandidateSimulator().simulate(
+        {
+            "candidate_id": "candidate:localized-remap",
+            "program": {
+                "steps": [
+                    {
+                        "operation": "replace_color",
+                        "parameters": {
+                            "color_mapping": {0: 6, 1: 3},
+                            "application_scope": "localized_changed_cells",
+                            "affected_positions": [[0, 1], [1, 0]],
+                        },
+                    }
+                ]
+            },
+        },
+        input_grid=[
+            [0, 0, 0],
+            [1, 2, 2],
+        ],
+        target_grid=[
+            [0, 6, 0],
+            [3, 2, 2],
+        ],
+    )
+
+    assert report["simulation_success"] is True
+    assert report["prediction_accuracy"] == 1.0
+    assert report["difference_count"] == 0
+
+
 def test_same_source_duplicate_candidates_are_collapsed():
     gateway = CandidateProposalGateway().submit([
         _proposal("semantic_compiler", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),

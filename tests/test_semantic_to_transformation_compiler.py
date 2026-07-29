@@ -164,6 +164,219 @@ def test_reports_compiler_resolution_trace_for_unsupported_execution_intent():
     assert trace["resolution_state"] == "RESOLVED_COMPILER_NOT_FOUND"
 
 
+def test_reports_resolved_color_compiler_without_candidate_reason():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 1],
+            [1, 0],
+        ],
+        output_grid=[
+            [2, 3],
+            [2, 0],
+        ],
+        detected_concepts=["symbolic_remapping"],
+        execution_intents=[
+            {
+                "intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "matched_concepts": ["replace_color_mapping"],
+            }
+        ],
+    )
+
+    trace = report["compiler_resolution_trace"][0]
+
+    assert report["failure_reason"] == "AMBIGUOUS_COLOR_MAPPING"
+    assert trace["resolved_compiler"] == "ColorRemapCompiler"
+    assert trace["compiler_found"] is True
+    assert trace["compilation_attempted"] is True
+    assert trace["candidate_emitted"] is False
+    assert trace["resolution_state"] == "RESOLVED_COMPILER_FOUND_NO_CANDIDATE"
+    assert trace["candidate_rejection_reason"] == "AMBIGUOUS_COLOR_MAPPING"
+    assert trace["compiler_entry_payload"]["operation"] == "replace_color"
+    assert trace["compiler_entry_payload"]["input_grid_available"] is True
+    assert trace["compiler_entry_payload"]["target_grid_available"] is True
+    assert trace["compiler_entry_payload"]["source_color"] == 1
+    assert trace["compiler_entry_payload"]["target_color"] == 3
+    assert trace["compiler_entry_payload"]["mapping_count"] == 1
+    assert trace["compiler_exit_payload"]["candidate_count"] == 0
+    assert trace["compiler_exit_payload"]["rejected_candidate_count"] == 1
+    assert trace["compiler_exit_payload"]["rejection_reason"] == (
+        "AMBIGUOUS_COLOR_MAPPING"
+    )
+    op_diag = report["compiler_operation_diagnostics"][0]
+    assert op_diag["operation"] == "replace_color"
+    assert op_diag["composition_diagnostic_type"] == "color_remap"
+    assert op_diag["mapping_extraction_state"] == "MAPPING_EXTRACTED"
+    assert op_diag["source_color"] == 1
+    assert op_diag["target_color"] == 3
+    assert op_diag["mapping_count"] == 1
+    assert op_diag["affected_cell_count"] == 3
+    assert op_diag["rejection_reason"] == "AMBIGUOUS_COLOR_MAPPING"
+
+
+def test_reports_missing_color_mapping_when_remap_has_no_delta():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 1],
+            [0, 0],
+        ],
+        output_grid=[
+            [1, 1],
+            [0, 0],
+        ],
+        detected_concepts=["symbolic_remapping"],
+        execution_intents=[
+            {
+                "intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "matched_concepts": ["replace_color_mapping"],
+            }
+        ],
+    )
+
+    trace = report["compiler_resolution_trace"][0]
+
+    assert report["failure_reason"] == "MISSING_COLOR_MAPPING"
+    assert trace["resolved_compiler"] == "ColorRemapCompiler"
+    assert trace["candidate_emitted"] is False
+    assert trace["candidate_rejection_reason"] == "MISSING_COLOR_MAPPING"
+    assert trace["compiler_entry_payload"]["mapping_count"] == 0
+    assert trace["compiler_exit_payload"]["rejection_reason"] == (
+        "MISSING_COLOR_MAPPING"
+    )
+    op_diag = report["compiler_operation_diagnostics"][0]
+    assert op_diag["mapping_extraction_state"] == "MAPPING_NOT_EXTRACTED"
+    assert op_diag["affected_cell_count"] == 0
+    assert op_diag["rejection_reason"] == "MISSING_COLOR_MAPPING"
+
+
+def test_color_remap_emits_localized_candidate_when_global_remap_has_collateral_loss():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [0, 0, 0],
+            [1, 2, 2],
+        ],
+        output_grid=[
+            [0, 6, 0],
+            [3, 2, 2],
+        ],
+        detected_concepts=["symbolic_remapping"],
+        execution_intents=[
+            {
+                "intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "matched_concepts": ["replace_color_mapping"],
+            }
+        ],
+    )
+
+    trace = report["compiler_resolution_trace"][0]
+    exit_payload = trace["compiler_exit_payload"]
+    op_diag = report["compiler_operation_diagnostics"][0]
+    step = report["compiled_program"]["steps"][0]
+    parameters = step["parameters"]
+
+    assert report["semantic_to_transformation_compilation_success"] is True
+    assert "failure_reason" not in report
+    assert trace["candidate_emitted"] is True
+    assert trace["candidate_rejection_reason"] == "none"
+    assert exit_payload["composition_step_count"] == 1
+    assert exit_payload["candidate_schema_valid"] is True
+    assert exit_payload["candidate_count"] == 1
+    assert exit_payload["candidate_object_created"] is True
+    assert exit_payload["candidate_registered"] is True
+    assert exit_payload["candidate_count_incremented"] is True
+    assert exit_payload["proposal_emission_ready"] is True
+    assert exit_payload["materialization_outcome"] == "CANDIDATE_EMITTED"
+    assert exit_payload["materialization_completion_stage"] == "candidate_registered"
+    assert exit_payload["materialization_blocked_stage"] == "none"
+    assert exit_payload["materialization_rejection_reason"] == "none"
+    assert exit_payload["predicted_accuracy"] >= exit_payload["validation_threshold"]
+    assert exit_payload["application_scope"] == "localized_changed_cells"
+    assert exit_payload["affected_position_count"] == 2
+    breakdown = exit_payload["predicted_accuracy_breakdown"]
+    assert breakdown["estimator"] == "exact_grid_cell_match_after_global_color_remap"
+    assert breakdown["accuracy_basis"] == "correct_cells / total_cells"
+    assert breakdown["correct_cell_count"] == 4
+    assert breakdown["total_cell_count"] == 6
+    assert breakdown["collateral_remap_cell_count"] == 2
+    assert breakdown["localized_accuracy"] == 1.0
+    assert breakdown["localized_affected_position_count"] == 2
+    assert breakdown["selected_execution_scope"] == "localized_changed_cells"
+    assert breakdown["dominant_accuracy_loss_cause"] == (
+        "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+    )
+    assert exit_payload["accuracy_estimator"] == (
+        "exact_grid_cell_match_after_global_color_remap"
+    )
+    assert exit_payload["correct_cell_count"] == 4
+    assert exit_payload["incorrect_cell_count"] == 2
+    assert exit_payload["total_cell_count"] == 6
+    assert exit_payload["changed_target_cell_count"] == 2
+    assert exit_payload["mapped_source_cell_count"] == 4
+    assert exit_payload["collateral_remap_cell_count"] == 2
+    assert parameters["application_scope"] == "localized_changed_cells"
+    assert parameters["affected_positions"] == [[0, 1], [1, 0]]
+    assert parameters["color_mapping"] == {0: 6, 1: 3}
+    assert op_diag["mapping_extraction_state"] == "MAPPING_EXTRACTED"
+    assert op_diag["mapping_count"] == 2
+    assert op_diag["composition_step_count"] == 1
+    assert op_diag["candidate_schema_valid"] is True
+    assert op_diag["application_scope"] == "localized_changed_cells"
+    assert op_diag["materialization_outcome"] == "CANDIDATE_EMITTED"
+    assert op_diag["materialization_completion_stage"] == "candidate_registered"
+    assert op_diag["materialization_blocked_stage"] == "none"
+    assert op_diag["materialization_rejection_reason"] == "none"
+    assert op_diag["dominant_accuracy_loss_cause"] == (
+        "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+    )
+    assert op_diag["composition_validation_state"] == "CANDIDATE_VALID"
+
+
+def test_preservation_compiler_reports_target_changed_contract_failure():
+    report = SemanticToTransformationCompiler().compile(
+        input_grid=[
+            [1, 0],
+            [0, 1],
+        ],
+        output_grid=[
+            [1, 2],
+            [0, 1],
+        ],
+        detected_concepts=["symmetry_preservation"],
+        execution_intents=[
+            {
+                "intent": "symmetry_reasoning",
+                "operation": "preserve_symmetry",
+                "matched_concepts": ["symmetry_preservation"],
+            }
+        ],
+    )
+
+    trace = report["compiler_resolution_trace"][0]
+    exit_payload = trace["compiler_exit_payload"]
+    op_diag = report["compiler_operation_diagnostics"][0]
+
+    assert report["failure_reason"] == "operation_semantics_mismatch"
+    assert trace["resolved_compiler"] == "PreservationCompiler"
+    assert trace["candidate_emitted"] is False
+    assert trace["candidate_rejection_reason"] == "operation_semantics_mismatch"
+    assert exit_payload["preservation_contract_state"] == (
+        "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+    )
+    assert exit_payload["changed_cell_count"] == 1
+    assert exit_payload["composition_step_count"] == 0
+    assert exit_payload["candidate_schema_valid"] is False
+    assert exit_payload["composition_validation_state"] == (
+        "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+    )
+    assert op_diag["composition_diagnostic_type"] == "preservation"
+    assert op_diag["preservation_contract_state"] == (
+        "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+    )
+
+
 def test_compiler_reports_failure_diagnostics_by_reason_and_domain():
     report = SemanticToTransformationCompiler().compile(
         input_grid=[

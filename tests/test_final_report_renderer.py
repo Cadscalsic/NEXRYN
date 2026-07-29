@@ -1201,6 +1201,849 @@ def test_render_has_single_final_status_and_no_raw_dict_repr():
     assert "raw_nested_report" not in report
 
 
+def test_full_report_includes_critical_execution_trace_before_conclusion():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "failure_reason": "no_supported_compiler_for_execution_intents",
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "translate",
+                "operation": "translate",
+                "resolved_operation": "translate",
+                "resolved_compiler": "TranslationCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "compiler_entry_payload": {
+                    "operation": "translate",
+                    "semantic_match_count": 2,
+                    "execution_intent_count": 1,
+                },
+                "compiler_exit_payload": {
+                    "candidate_count": 0,
+                    "total_candidate_count": 0,
+                    "best_accuracy": None,
+                },
+                "candidate_rejection_reason": "shape_contract_mismatch",
+            }
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "CRITICAL EXECUTION TRACE" in report
+    assert "Intent: translate" in report
+    assert "Operation: translate" in report
+    assert "Resolved Compiler: TranslationCompiler" in report
+    assert "Candidate Emitted: FALSE" in report
+    assert "Compiler Entry Payload: operation=translate" in report
+    assert "Compiler Exit Payload: candidate_count=0" in report
+    assert "Candidate Rejection Reason: shape_contract_mismatch" in report
+    assert report.index("CRITICAL EXECUTION TRACE") < report.index(
+        "ENGINEERING CONCLUSION"
+    )
+
+
+def test_engineering_conclusion_attributes_compiler_emission_failure():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "failure_reason": "AMBIGUOUS_COLOR_MAPPING",
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "candidate_rejection_reason": "AMBIGUOUS_COLOR_MAPPING",
+                "compiler_entry_payload": {
+                    "operation": "replace_color",
+                    "semantic_match_count": 3,
+                    "execution_intent_count": 1,
+                    "input_grid_available": True,
+                    "target_grid_available": True,
+                    "source_color": 1,
+                    "target_color": 3,
+                    "mapping_count": 1,
+                    "affected_cell_count": 2,
+                },
+                "compiler_exit_payload": {
+                    "candidate_count": 0,
+                    "valid_candidate_count": 0,
+                    "rejected_candidate_count": 1,
+                    "total_candidate_count": 0,
+                    "composition_step_count": 0,
+                    "mapping_count": 1,
+                    "candidate_schema_valid": False,
+                    "best_candidate_confidence": None,
+                    "best_accuracy": None,
+                    "rejection_reason": "AMBIGUOUS_COLOR_MAPPING",
+                },
+            }
+        ],
+        "compiler_operation_diagnostics": [
+            {
+                "operation": "replace_color",
+                "composition_diagnostic_type": "color_remap",
+                "mapping_extraction_state": "MAPPING_EXTRACTED",
+                "relevant_execution_intent_count": 1,
+                "relevant_semantic_matches": [
+                    "symbolic_remapping",
+                    "replace_color",
+                    "replace_color_mapping",
+                ],
+                "source_color": 1,
+                "target_color": 3,
+                "mapping_count": 1,
+                "affected_cell_count": 2,
+                "preserved_color_count": 1,
+                "composition_step_count": 0,
+                "candidate_schema_valid": False,
+                "parameter_source": "grid_delta",
+                "rejection_reason": "COMPOSITION_VALIDATION_FAILED",
+                "predicted_accuracy": 0.5,
+                "predicted_accuracy_breakdown": {
+                    "estimator": "exact_grid_cell_match_after_global_color_remap",
+                    "accuracy_basis": "correct_cells / total_cells",
+                    "correct_cell_count": 2,
+                    "incorrect_cell_count": 2,
+                    "total_cell_count": 4,
+                    "changed_target_cell_count": 2,
+                    "mapped_source_cell_count": 3,
+                    "collateral_remap_cell_count": 1,
+                    "dominant_accuracy_loss_cause": (
+                        "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+                    ),
+                },
+                "validation_threshold": 0.75,
+                "dominant_accuracy_loss_cause": (
+                    "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+                ),
+                "composition_validation_state": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+                "candidate_object_created": False,
+                "candidate_registered": False,
+                "candidate_count_incremented": False,
+                "proposal_emission_ready": False,
+                "materialization_blocked_stage": "composition_validation",
+                "materialization_rejection_reason": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+            }
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Current Bottleneck: semantic_compiler_candidate_emission" in report
+    assert "Root Cause: AMBIGUOUS_COLOR_MAPPING" in report
+    assert "Exact Responsible Component: ColorRemapCompiler" in report
+    assert "CANDIDATE_ARENA" not in report[
+        report.index("ENGINEERING CONCLUSION"):
+    ]
+
+
+def test_critical_trace_backfills_missing_compiler_payload_from_resolution_row():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "failure_reason": "COMPOSITION_VALIDATION_FAILED",
+        "execution_intents": [
+            {
+                "intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "matched_concepts": ["replace_color_mapping"],
+            }
+        ],
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "candidate_rejection_reason": "COMPOSITION_VALIDATION_FAILED",
+                "compiler_entry_payload": {
+                    "operation": "Not Available",
+                    "semantic_match_count": None,
+                    "execution_intent_count": "Not Available",
+                    "input_grid_available": None,
+                    "target_grid_available": None,
+                },
+                "compiler_exit_payload": {
+                    "candidate_count": "Not Available",
+                    "valid_candidate_count": None,
+                    "rejected_candidate_count": None,
+                    "candidate_schema_valid": None,
+                },
+            }
+        ],
+        "compiler_operation_diagnostics": [
+            {
+                "operation": "replace_color",
+                "composition_diagnostic_type": "color_remap",
+                "mapping_extraction_state": "MAPPING_EXTRACTED",
+                "relevant_execution_intent_count": 1,
+                "relevant_semantic_matches": [
+                    "symbolic_remapping",
+                    "replace_color",
+                    "replace_color_mapping",
+                ],
+                "source_color": 1,
+                "target_color": 3,
+                "mapping_count": 1,
+                "affected_cell_count": 2,
+                "preserved_color_count": 1,
+                "composition_step_count": 0,
+                "candidate_schema_valid": False,
+                "parameter_source": "grid_delta",
+                "rejection_reason": "COMPOSITION_VALIDATION_FAILED",
+                "predicted_accuracy": 0.5,
+                "predicted_accuracy_breakdown": {
+                    "estimator": "exact_grid_cell_match_after_global_color_remap",
+                    "accuracy_basis": "correct_cells / total_cells",
+                    "correct_cell_count": 2,
+                    "incorrect_cell_count": 2,
+                    "total_cell_count": 4,
+                    "changed_target_cell_count": 2,
+                    "mapped_source_cell_count": 3,
+                    "collateral_remap_cell_count": 1,
+                    "dominant_accuracy_loss_cause": (
+                        "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+                    ),
+                },
+                "validation_threshold": 0.75,
+                "dominant_accuracy_loss_cause": (
+                    "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+                ),
+                "composition_validation_state": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+                "candidate_object_created": False,
+                "candidate_registered": False,
+                "candidate_count_incremented": False,
+                "proposal_emission_ready": False,
+                "materialization_blocked_stage": "composition_validation",
+                "materialization_rejection_reason": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "validation_probe_shared_input_trace": {
+                "input_population_state": "SHARED_TASK_IO_AVAILABLE",
+                "non_empty_keys": ["input_grid", "target_grid"],
+            }
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Compiler Entry Payload: operation=replace_color" in report
+    assert "execution_intents=1" in report
+    assert "input_grid=TRUE" in report
+    assert "target_grid=TRUE" in report
+    assert "source_color=1" in report
+    assert "target_color=3" in report
+    assert "mapping_count=1" in report
+    assert "affected_cells=2" in report
+    assert "Mapping Extraction State: MAPPING_EXTRACTED" in report
+    assert "Compiler Exit Payload: candidate_count=0" in report
+    assert "predicted_accuracy=0.5" in report
+    assert "validation_threshold=0.75" in report
+    assert "Predicted Accuracy Breakdown: estimator=exact_grid_cell_match_after_global_color_remap" in report
+    assert "correct=2/4" in report
+    assert "collateral_remap_cells=1" in report
+    assert "dominant_loss=GLOBAL_REMAP_COLLATERAL_MISMATCH" in report
+    assert "Candidate Materialization:" in report
+    assert "Composition Validation: PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD" in report
+    assert "Candidate Object Created: FALSE" in report
+    assert "Candidate Registered: FALSE" in report
+    assert "Candidate Count Incremented: FALSE" in report
+    assert "Proposal Emission Ready: FALSE" in report
+    assert "Blocked Stage: composition_validation" in report
+    assert "Materialization Rejection: PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD" in report
+    critical_section = report[
+        report.index("CRITICAL EXECUTION TRACE"):
+        report.index("ENGINEERING CONCLUSION")
+    ]
+    assert "operation=Not Available" not in critical_section
+    assert "semantic_matches=Not Available" not in critical_section
+    assert "input_grid=Not Available" not in critical_section
+    assert "target_grid=Not Available" not in critical_section
+
+
+def test_critical_trace_renders_flat_predicted_accuracy_breakdown_fields():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "failure_reason": "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD",
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "candidate_rejection_reason": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+                "compiler_exit_payload": {
+                    "candidate_count": 0,
+                    "predicted_accuracy": 0.0903,
+                    "validation_threshold": 0.75,
+                    "accuracy_estimator": (
+                        "exact_grid_cell_match_after_global_color_remap"
+                    ),
+                    "correct_cell_count": 9,
+                    "incorrect_cell_count": 91,
+                    "total_cell_count": 100,
+                    "changed_target_cell_count": 6,
+                    "mapped_source_cell_count": 97,
+                    "collateral_remap_cell_count": 91,
+                    "dominant_accuracy_loss_cause": (
+                        "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+                    ),
+                },
+            }
+        ],
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Predicted Accuracy Breakdown:" in report
+    assert "estimator=exact_grid_cell_match_after_global_color_remap" in report
+    assert "correct=9/100" in report
+    assert "incorrect=91" in report
+    assert "changed_cells=6" in report
+    assert "mapped_source_cells=97" in report
+    assert "collateral_remap_cells=91" in report
+    assert "dominant_loss=GLOBAL_REMAP_COLLATERAL_MISMATCH" in report
+
+
+def test_critical_trace_distinguishes_compiler_row_from_entered_source_flow():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symmetry_reasoning",
+                "operation": "preserve_symmetry",
+                "resolved_compiler": "PreservationCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "candidate_rejection_reason": "operation_semantics_mismatch",
+                "compiler_exit_payload": {
+                    "candidate_count": 0,
+                    "composition_step_count": 0,
+                    "candidate_schema_valid": False,
+                    "preservation_contract_state": (
+                        "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+                    ),
+                    "changed_cell_count": 6,
+                    "preserved_cell_count": 138,
+                    "composition_validation_state": (
+                        "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+                    ),
+                },
+            }
+        ],
+        "compiler_operation_diagnostics": [
+            {
+                "operation": "preserve_symmetry",
+                "composition_diagnostic_type": "preservation",
+                "preservation_contract_state": (
+                    "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+                ),
+                "changed_cell_count": 6,
+                "preserved_cell_count": 138,
+                "composition_step_count": 0,
+                "candidate_schema_valid": False,
+                "composition_validation_state": (
+                    "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+                ),
+                "rejection_reason": "operation_semantics_mismatch",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "normalized_source": "semantic_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                    "flow_state": "ENTERED_ARENA",
+                    "blocked_stage": "none",
+                    "build_failure_reason": "none",
+                }
+            ]
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Operation: preserve_symmetry" in report
+    assert "Failure Reason: operation_semantics_mismatch" in report
+    assert (
+        "Compiler/Flow Alignment: SOURCE_ENTERED_ARENA_WITH_DIFFERENT_OPERATION "
+        "source_operation=replace_color"
+    ) in report
+    assert (
+        "Preservation Contract: PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED "
+        "changed_cells=6 preserved_cells=138"
+    ) in report
+    assert "Operation Identity Chain:" in report
+    assert "Identity State: OPERATION_IDENTITY_DRIFT" in report
+    assert "Compiler Operation: preserve_symmetry" in report
+    assert "Proposal Operation: replace_color" in report
+    assert "First Drift Stage: compiler_to_proposal" in report
+    assert "Drift Detail: compiler_to_proposal: preserve_symmetry != replace_color" in report
+
+
+def test_critical_trace_prefers_selected_successful_compiler_operation():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "selected_intent": "symbolic_remapping",
+        "compiled_program": {
+            "steps": [
+                {"operation": "replace_color", "parameters": {"color_mapping": {0: 6}}}
+            ]
+        },
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symmetry_reasoning",
+                "operation": "preserve_symmetry",
+                "resolved_compiler": "PreservationCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "candidate_rejection_reason": "operation_semantics_mismatch",
+            },
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            },
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "winner_operation": "replace_color",
+            "validation_probe_operation": "replace_color",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "normalized_source": "semantic_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                    "flow_state": "ENTERED_ARENA",
+                    "blocked_stage": "none",
+                    "build_failure_reason": "none",
+                }
+            ],
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Intent: symbolic_remapping" in report
+    assert "Operation: replace_color" in report
+    assert "Resolved Compiler: ColorRemapCompiler" in report
+    assert "Candidate Emitted: TRUE" in report
+    assert "Identity State: CONSISTENT" in report
+    assert "Compiler Operation: replace_color" in report
+    assert "Proposal Operation: replace_color" in report
+    assert "operation_semantics_mismatch" not in report[
+        report.index("CRITICAL EXECUTION TRACE"):
+        report.index("ENGINEERING CONCLUSION")
+    ]
+
+
+def test_engineering_conclusion_uses_current_successful_compiler_path():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "selected_intent": "symbolic_remapping",
+        "compiled_program": {
+            "steps": [
+                {
+                    "operation": "replace_color",
+                    "parameters": {
+                        "color_mapping": {0: 6},
+                        "application_scope": "localized_changed_cells",
+                        "affected_positions": [(1, 1), (1, 2)],
+                    },
+                }
+            ]
+        },
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symmetry_reasoning",
+                "operation": "preserve_symmetry",
+                "resolved_compiler": "PreservationCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_FOUND_NO_CANDIDATE",
+                "candidate_rejection_reason": "operation_semantics_mismatch",
+            },
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+                "compiler_exit_payload": {
+                    "candidate_count": 1,
+                    "valid_candidate_count": 1,
+                    "rejected_candidate_count": 0,
+                    "composition_step_count": 1,
+                    "candidate_schema_valid": True,
+                    "predicted_accuracy": 1.0,
+                    "selected_scope": "localized_changed_cells",
+                    "candidate_object_created": True,
+                    "candidate_registered": True,
+                    "candidate_count_incremented": True,
+                    "proposal_emission_ready": True,
+                    "materialization_outcome": "CANDIDATE_EMITTED",
+                    "materialization_completion_stage": "candidate_registered",
+                    "materialization_blocked_stage": "none",
+                    "materialization_rejection_reason": "none",
+                },
+            },
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "arena_state": "TIE_REQUIRES_REVIEW",
+            "candidate_count": 2,
+            "unique_candidate_count": 2,
+            "source_count": 2,
+            "sources_entered": [
+                "normalized_program_candidates",
+                "semantic_to_transformation_compiler",
+            ],
+            "simulation_count": 2,
+            "simulation_success_count": 2,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "prediction_quality_calibration_state": "CALIBRATION_NOT_TRIGGERED",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "selection_explanation": "Top candidates are within tie margin.",
+            "winner_operation": "replace_color",
+            "validation_probe_candidate_id": "semantic_program:replace_color",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_source": "semantic_to_transformation_compiler",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "normalized_source": "semantic_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                    "flow_state": "ENTERED_ARENA",
+                    "blocked_stage": "none",
+                    "build_failure_reason": "none",
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_consumed": True,
+        "validation_probe_evidence_acceptance_evaluated": True,
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["COGNITIVE_CAPABILITY_COVERAGE_REPORT"] = {
+        "knowledge_operationalization_choke_point": (
+            "semantic_compiler_candidate_emission"
+        ),
+        "knowledge_operationalization_choke_cause": "operation_semantics_mismatch",
+        "knowledge_operationalization_evidence_responsibility": (
+            "PreservationCompiler"
+        ),
+        "knowledge_operationalization_choke_action": (
+            "repair_preservationcompiler_candidate_composition"
+        ),
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata={
+            **_metadata(),
+            "run_id": "run-current",
+            "task_id": "task-localized-remap",
+            "timestamp": "2026-07-29T00:00:00Z",
+        },
+    )
+
+    critical = report[
+        report.index("CRITICAL EXECUTION TRACE"):
+        report.index("ENGINEERING CONCLUSION")
+    ]
+    assert "Materialization Outcome: CANDIDATE_EMITTED" in critical
+    assert "Completion Stage: candidate_registered" in critical
+    assert "Blocked Stage: none" in critical
+    assert "Materialization Rejection: none" in critical
+    assert "Candidate Outcome: CANDIDATE_EMITTED" in critical
+    assert "Candidate Rejection Reason: none" in critical
+    assert (
+        "Prediction Quality Calibration Cause: "
+        "TIE_WITH_ACCEPTED_VALIDATION_PROBE_EVIDENCE"
+    ) in report
+    assert (
+        "Prediction Quality Calibration Action: "
+        "perform_sandbox_evidence_ranking_recalibration"
+    ) in report
+    assert (
+        "Prediction Quality Calibration Trigger: "
+        "TIE_WITH_ACCEPTED_VALIDATION_PROBE_EVIDENCE"
+    ) in report
+    assert (
+        "Prediction Quality Calibration Authority Boundary: "
+        "SANDBOX_EVIDENCE_MAY_SUPPORT_RANKING_REVIEW_NOT_TRUTH"
+    ) in report
+    assert "Prediction Quality Calibration Invoked: TRUE" in report
+    assert (
+        "Prediction Quality Calibration Review Outcome: "
+        "RANKING_REVIEW_ELIGIBLE_NO_TRUTH_AUTHORITY"
+    ) in report
+    assert "Prediction Quality Calibration Truth Authority: NONE" in report
+    assert (
+        "Arena Decision Resolution State: "
+        "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+    ) in report
+    assert "Arena Decision Resolution Outcome: TIE_CONFIRMED" in report
+    assert "Arena Decision Ranking Changed: FALSE" in report
+    assert (
+        "Arena Decision Final State: "
+        "SANDBOX_VALIDATION_COMPLETE_EXECUTION_DECISION_PENDING"
+    ) in report
+    assert (
+        "Arena Decision Execution Recommendation: "
+        "continue_sandbox_validation_or_escalate_governed_review"
+    ) in report
+    assert "Evidence Acquisition State: EVIDENCE_ACQUISITION_PLAN_READY" in report
+    assert "Required Evidence Category: INDEPENDENT_GOVERNED_VALIDATION" in report
+    assert (
+        "Required Evidence: repeatable_independent_validation_evidence"
+    ) in report
+    assert "Tie-Break Strategy: independent_repeat_validation" in report
+    assert (
+        "Required Validation Task: "
+        "select_independent_tie_break_validation_task"
+    ) in report
+    assert "Expected Tie-Break Impact: HIGH" in report
+    assert "Evidence Acquisition Truth Authority: NONE" in report
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+    assert "Largest Success: validated_program_produced" in conclusion
+    assert "Largest Regression: none" in conclusion
+    assert (
+        "Current Open Decision: "
+        "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+    ) in conclusion
+    assert (
+        "Next Decision Gate: "
+        "select_independent_tie_break_validation_task"
+    ) in conclusion
+    assert "Current Bottleneck: arena_decision_finalization" in conclusion
+    assert (
+        "Root Cause: "
+        "accepted_sandbox_probe_evidence_does_not_grant_execution_authority"
+    ) in conclusion
+    assert (
+        "Exact Responsible Component: "
+        "CANDIDATE_ARENA_DECISION_RESOLUTION"
+    ) in conclusion
+    assert (
+        "Immediate Next Development Task: "
+        "select_independent_tie_break_validation_task"
+    ) in conclusion
+    assert "Engineering Conclusion Integrity: VALID" in conclusion
+    assert "Conclusion Scope: current_run" in conclusion
+    assert "Conclusion Run Id: run-current" in conclusion
+    assert "Conclusion Task Id: task-localized-remap" in conclusion
+    assert "Conclusion Source Stage: current_successful_critical_execution_trace" in conclusion
+    assert "Conclusion Is Current: TRUE" in conclusion
+    assert "Conclusion Historical Issue Count: 1" in conclusion
+    assert "PreservationCompiler" not in conclusion
+    assert "operation_semantics_mismatch" not in conclusion
+    assert "repair_preservationcompiler_candidate_composition" not in conclusion
+
+
+def test_engineering_conclusion_derives_ids_when_metadata_is_incomplete():
+    state = _report_state()
+    state["execution_id"] = "exec-from-state"
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "validation_probe_candidate_id": "semantic_program:replace_color",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata={"timestamp": "2026-07-29T00:00:00Z"},
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "Conclusion Run Id: exec-from-state" in conclusion
+    assert "Conclusion Task Id: semantic_program:replace_color" in conclusion
+    assert "Conclusion Run Id: Not Available" not in conclusion
+    assert "Conclusion Task Id: Not Available" not in conclusion
+
+
+def test_critical_trace_reports_consistent_operation_identity_chain():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "winner_operation": "replace_color",
+            "validation_probe_operation": "replace_color",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "normalized_source": "semantic_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                    "flow_state": "ENTERED_ARENA",
+                    "blocked_stage": "none",
+                    "build_failure_reason": "none",
+                }
+            ],
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Operation Identity Chain:" in report
+    assert "Identity State: CONSISTENT" in report
+    assert "Compiler Operation: replace_color" in report
+    assert "Proposal Operation: replace_color" in report
+    assert "Arena Operation: replace_color" in report
+    assert "Validation Probe Operation: replace_color" in report
+    assert "First Drift Stage: none" in report
+
+
 def test_report_lifecycle_contract_boundaries_and_metadata_are_emitted():
     renderer = DeterministicFinalReportRenderer(console_budget_chars=100_000)
     report = renderer.render(_report_state(), runtime_metadata=_metadata())
@@ -1251,6 +2094,22 @@ def test_identical_inputs_render_identically():
 def test_console_budget_fallback_remains_complete():
     state = _report_state()
     state["huge_diagnostic"] = "x" * 5000
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": False,
+        "failure_reason": "no_supported_compiler_for_execution_intents",
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "unsupported_semantic",
+                "operation": "density_modulation",
+                "resolved_operation": "density_modulation",
+                "resolved_compiler": "NONE",
+                "compiler_found": False,
+                "compilation_attempted": False,
+                "candidate_emitted": False,
+                "resolution_state": "RESOLVED_COMPILER_NOT_FOUND",
+            }
+        ],
+    }
     renderer = DeterministicFinalReportRenderer(console_budget_chars=200)
 
     report = renderer.render(state, runtime_metadata=_metadata())
@@ -1262,6 +2121,23 @@ def test_console_budget_fallback_remains_complete():
     assert renderer.report()["report_truncated"] is True
     assert renderer.report()["report_complete"] is True
     assert renderer.report()["report_integrity"] == "TRUNCATED"
+    assert "EXECUTIVE RUNTIME SUMMARY" in report
+    assert "CANDIDATE PIPELINE" in report
+    assert "RUNTIME CHOKE POINT" in report
+    assert "SOURCE COMPETITION SUMMARY" in report
+    assert "CRITICAL EXECUTION TRACE" in report
+    assert "Compiler Resolution Trace:" in report
+    assert "Resolved Compiler: NONE" in report
+    assert "Resolution State: RESOLVED_COMPILER_NOT_FOUND" in report
+    assert report.index("CRITICAL EXECUTION TRACE") < report.index(
+        "ENGINEERING CONCLUSION"
+    )
+    assert "KNOWLEDGE OPERATIONALIZATION" in report
+    assert "VALIDATION SUMMARY" in report
+    assert "EXECUTION SUMMARY DASHBOARD" in report
+    assert "RUNTIME HEALTH" in report
+    assert "ENGINEERING CONCLUSION" in report
+    assert "PROGRAM GENERATION REPORT" not in report
 
 
 def test_console_budget_writes_full_text_artifact(tmp_path):

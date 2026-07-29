@@ -60,6 +60,26 @@ SECTION_ORDER = [
     "FINAL STATUS",
 ]
 
+EXECUTIVE_SECTION_ORDER = [
+    "REPORT HEADER",
+    "EXECUTIVE RUNTIME SUMMARY",
+    "CANDIDATE PIPELINE",
+    "RUNTIME CHOKE POINT",
+    "SOURCE COMPETITION SUMMARY",
+    "SEMANTIC COMPILATION",
+    "KNOWLEDGE OPERATIONALIZATION",
+    "VALIDATION SUMMARY",
+    "EXECUTION SUMMARY DASHBOARD",
+    "RUNTIME HEALTH",
+    "CONSTITUTIONAL CONTRACTS",
+    "TIMING SUMMARY",
+    "WARNINGS AND GAPS",
+    "CRITICAL EXECUTION TRACE",
+    "ENGINEERING CONCLUSION",
+    "OPTIONAL TECHNICAL APPENDIX",
+    "FINAL STATUS",
+]
+
 RAW_STRUCTURE_PATTERN = re.compile(
     r"(^|\s)(\{'.*':|\['.*'\]|\{'[^'\n]+':|\[[{]\s*')",
     re.DOTALL,
@@ -69,8 +89,8 @@ RAW_STRUCTURE_PATTERN = re.compile(
 class DeterministicFinalReportRenderer:
     """Single owner for final human-readable NEXRYN reports."""
 
-    def __init__(self, console_budget_chars: int = 34000):
-        self.console_budget_chars = int(console_budget_chars or 34000)
+    def __init__(self, console_budget_chars: int = 160000):
+        self.console_budget_chars = int(console_budget_chars or 160000)
         self.metrics = self._empty_metrics()
 
     def render(
@@ -269,8 +289,10 @@ class DeterministicFinalReportRenderer:
         if "\nFINAL STATUS\n" in rendered_report:
             errors.append("duplicate_section:FINAL STATUS")
 
+        truncated = "Report Integrity: TRUNCATED" in rendered_report
+        required_sections = EXECUTIVE_SECTION_ORDER if truncated else SECTION_ORDER
         section_positions = []
-        for section in SECTION_ORDER:
+        for section in required_sections:
             marker = self._section_title(section)
             count = rendered_report.count(marker)
             if count == 0:
@@ -526,6 +548,14 @@ class DeterministicFinalReportRenderer:
         sections = [
             self._render_lifecycle_start("VALID"),
             self._render_header(canonical),
+            self._render_executive_runtime_summary(canonical),
+            self._render_candidate_pipeline_dashboard(canonical),
+            self._render_runtime_choke_point(canonical),
+            self._render_source_competition_summary(canonical),
+            self._render_knowledge_operationalization_summary(canonical),
+            self._render_validation_summary(canonical),
+            self._render_human_execution_summary(canonical),
+            self._render_runtime_health_dashboard(canonical),
             self._render_execution_summary(canonical),
             self._render_constitutional_contracts(canonical),
             self._render_cognitive_outputs(canonical),
@@ -560,6 +590,8 @@ class DeterministicFinalReportRenderer:
             self._render_warnings(canonical),
             self._render_runtime_metadata(canonical),
             self._render_technical_appendix(canonical),
+            self._render_critical_execution_trace(canonical),
+            self._render_human_engineering_conclusion(canonical),
             self._render_final_status(canonical, report_integrity="VALID"),
             self._render_lifecycle_end(),
         ]
@@ -579,41 +611,23 @@ class DeterministicFinalReportRenderer:
         text = "\n".join([
             self._render_lifecycle_start("TRUNCATED"),
             self._render_header(canonical),
-            self._render_execution_summary(canonical),
-            self._render_constitutional_contracts(canonical),
-            self._render_cognitive_outputs(canonical),
-            self._render_program_quality(canonical),
-            self._render_unified_concept_lifecycle(canonical),
-            self._render_program_generation(canonical),
-            self._render_program_blueprint_intelligence(canonical),
-            self._render_cognitive_program_lifecycle(canonical),
-            self._render_cognitive_knowledge_domains(canonical),
-            self._render_cognitive_domain_intelligence(canonical),
-            self._render_cognitive_domain_lifecycle(canonical),
-            self._render_cognitive_domain_interaction(canonical),
-            self._render_cognitive_domain_governance(canonical),
-            self._render_cognitive_domain_ecosystem(canonical),
-            self._render_cognitive_domain_constitution(canonical),
+            self._render_executive_runtime_summary(canonical),
+            self._render_candidate_pipeline_dashboard(canonical),
+            self._render_runtime_choke_point(canonical),
+            self._render_source_competition_summary(canonical),
             self._render_semantic_compilation(canonical),
-            self._render_executable_semantic_coverage(canonical),
-            self._render_cognitive_capability_coverage(canonical),
-            self._render_transformation_decision(canonical),
-            self._render_multi_hypothesis_report(canonical),
-            self._render_candidate_proposal(canonical),
-            self._render_candidate_arena(canonical),
-            self._render_counterfactual_reasoning(canonical),
-            self._render_executable_intelligence(canonical),
-            self._render_search_quality(canonical),
-            self._render_knowledge_pipeline(canonical),
-            self._render_system_health(canonical),
+            self._render_knowledge_operationalization_summary(canonical),
+            self._render_validation_summary(canonical),
+            self._render_human_execution_summary(canonical),
+            self._render_runtime_health_dashboard(canonical),
+            self._render_constitutional_contracts(canonical),
             self._render_timing_summary(canonical),
-            self._render_stage_timing(canonical),
-            self._render_resource_summary(canonical),
-            self._render_diagnostic_timing_detail(canonical),
             self._render_warnings(canonical),
-            self._render_runtime_metadata(canonical),
+            self._render_critical_execution_trace(canonical),
+            self._render_human_engineering_conclusion(canonical),
             self._section("OPTIONAL TECHNICAL APPENDIX", [
                 "Console Appendix: omitted",
+                "Extended Diagnostics: omitted unless full/debug/audit report artifacts are enabled",
                 f"Full Report Characters: {len(full_report)}",
                 canonical["technical_appendix_note"],
             ]),
@@ -694,6 +708,578 @@ class DeterministicFinalReportRenderer:
             "Capability Evidence Contamination Count: "
             f"{self._value(coverage_summary.get('capability_evidence_contamination_count'))}",
         ])
+
+    def _render_executive_runtime_summary(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, activation = self._executable_report_pair(canonical)
+        validation_success_count = self._count_value(
+            executable.get("validated_programs"),
+            executable.get("program_validation_success_count"),
+        )
+        execution_compiled_count = self._count_value(
+            executable.get("compiled_execution_programs"),
+            executable.get("execution_compiled_program_count"),
+        )
+        probe_compiled_count = self._count_value(
+            executable.get("validation_probe_compiled_programs"),
+            executable.get("validation_probe_compiled_program_count"),
+            coverage.get("validation_probe_compiled_program_count"),
+        )
+        successes = []
+        if arena.get("arena_winner"):
+            successes.append(f"arena_winner={self._value(arena.get('arena_winner'))}")
+        if executable.get("object_grounding_produced") is True:
+            successes.append("object_grounding_produced")
+        if validation_success_count:
+            successes.append(f"validated_programs={validation_success_count}")
+        if activation.get("validation_probe_forwarded"):
+            successes.append("validation_probe_forwarded")
+        failures = []
+        for key in (
+            "knowledge_operationalization_choke_cause",
+            "execution_compilation_admission_reason",
+            "validation_probe_evidence_insufficiency_cause",
+        ):
+            value = coverage.get(key) or executable.get(key) or arena.get(key)
+            if value:
+                failures.append(str(value))
+        stage = self._development_stage(coverage, arena, executable)
+        return self._section("EXECUTIVE RUNTIME SUMMARY", [
+            f"Overall Runtime State: {self._field(canonical, 'runtime_status')}",
+            f"Major Successes: {', '.join(successes) if successes else 'Not Available'}",
+            f"Major Failures: {', '.join(list(dict.fromkeys(failures))) if failures else 'Not Available'}",
+            "Primary Bottleneck: "
+            f"{self._value(coverage.get('knowledge_operationalization_choke_point'))}",
+            "Secondary Bottleneck: "
+            f"{self._value(coverage.get('secondary_operationalization_bottleneck'))}",
+            f"Current Development Stage: {stage}",
+            "Next Recommended Engineering Action: "
+            f"{self._value(coverage.get('knowledge_operationalization_choke_action') or executable.get('validation_probe_recommended_validation_action') or arena.get('arena_source_diversity_action'))}",
+            f"Execution Compiled Programs: {self._value(execution_compiled_count)}",
+            f"Validation Probe Compiled Programs: {self._value(probe_compiled_count)}",
+        ])
+
+    def _render_candidate_pipeline_dashboard(self, canonical: dict[str, Any]) -> str:
+        proposal = self._proposal_summary(canonical)
+        arena = self._arena_summary(canonical)
+        coverage = self._coverage_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        candidate_rows = arena.get("candidate_rows") or []
+        candidate_rows = candidate_rows if isinstance(candidate_rows, list) else []
+        proposal_count = self._count_value(proposal.get("proposal_count"))
+        built_count = sum(
+            1
+            for row in source_trace
+            if isinstance(row, dict) and row.get("arena_proposal_built") is True
+        )
+        gateway_count = sum(
+            1
+            for row in source_trace
+            if isinstance(row, dict) and row.get("gateway_accepted") is True
+        )
+        arena_count = self._count_value(arena.get("candidate_count"), len(candidate_rows))
+        execution_compiled = self._count_value(
+            executable.get("compiled_execution_programs"),
+            executable.get("execution_compiled_program_count"),
+        )
+        validated = self._count_value(executable.get("validated_programs"))
+        materialized = self._count_value(
+            coverage.get("materialized_operational_capabilities"),
+            executable.get("materialized_operational_capabilities"),
+        )
+        stages = [
+            ("Proposal Runtime", self._stage_from_count(proposal_count)),
+            ("Candidate Builder", self._stage_from_count(built_count, blocked=proposal_count and not built_count)),
+            ("Arena Gateway", self._stage_from_count(gateway_count, blocked=built_count and not gateway_count)),
+            ("Arena Admission", self._stage_from_count(arena_count)),
+            ("Arena Winner", self._stage_from_winner(arena)),
+            ("Execution", self._stage_from_count(execution_compiled, blocked=arena.get("execution_compilation_admission_state") or coverage.get("execution_compilation_admission_state"))),
+            ("Validation", self._stage_from_count(validated, blocked=executable.get("program_validation_contract_state") or executable.get("validation_probe_evidence_acceptance_state"))),
+            ("Materialization", self._stage_from_count(materialized, blocked=validated and not materialized)),
+        ]
+        lines = [
+            f"{name}: {status}"
+            for name, status in stages
+        ]
+        lines.extend([
+            f"Arena Winner: {self._value(arena.get('arena_winner'))}",
+            f"Selection State: {self._value(arena.get('selection_state'))}",
+            "Execution Admission Reason: "
+            f"{self._value(coverage.get('execution_compilation_admission_reason') or arena.get('execution_compilation_admission_reason'))}",
+        ])
+        return self._section("CANDIDATE PIPELINE", lines)
+
+    def _render_runtime_choke_point(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        choke = (
+            coverage.get("knowledge_operationalization_choke_point")
+            or arena.get("arena_to_compiled_bridge_state")
+            or executable.get("compiled_to_validated_probe_state")
+        )
+        cause = (
+            coverage.get("knowledge_operationalization_choke_cause")
+            or executable.get("validation_probe_evidence_insufficiency_cause")
+            or arena.get("prediction_quality_calibration_cause")
+        )
+        action = (
+            coverage.get("knowledge_operationalization_choke_action")
+            or executable.get("validation_probe_recommended_validation_action")
+            or arena.get("prediction_quality_calibration_action")
+        )
+        path = [
+            ("Candidate Proposal Runtime", self._value(self._proposal_summary(canonical).get("proposal_phase_status"))),
+            ("Semantic Compiler", self._value(self._semantic_summary(canonical).get("compilation_status"))),
+            ("Compiler Resolution", self._compiler_resolution_state(canonical)),
+            ("Candidate Builder", self._candidate_builder_state(arena)),
+            ("Arena", self._value(arena.get("selection_state") or arena.get("arena_state"))),
+            ("Validation", self._value(executable.get("program_validation_contract_state") or executable.get("validation_probe_evidence_acceptance_state"))),
+            ("Materialization", self._value(coverage.get("capability_materialization_state") or coverage.get("operational_capability_coverage_semantics"))),
+        ]
+        lines = [
+            f"Execution stopped at: {self._value(choke)}",
+            f"Root Cause: {self._value(cause)}",
+            f"Recommended Action: {self._value(action)}",
+            "Choke Path:",
+        ]
+        lines.extend(f"  {name}: {state}" for name, state in path)
+        return self._section("RUNTIME CHOKE POINT", lines)
+
+    def _render_source_competition_summary(self, canonical: dict[str, Any]) -> str:
+        proposal = self._proposal_summary(canonical)
+        arena = self._arena_summary(canonical)
+        rejected = proposal.get("sources_rejected") or []
+        rejected = rejected if isinstance(rejected, list) else [rejected]
+        source_flow = arena.get("candidate_source_flow_trace") or []
+        source_flow = source_flow if isinstance(source_flow, list) else []
+        rejection_lines = []
+        for row in source_flow[:8]:
+            if not isinstance(row, dict) or not row.get("proposal_runtime_rejected"):
+                continue
+            rejection_lines.append(
+                "  "
+                f"{self._value(row.get('source'))}: "
+                f"{self._value(row.get('proposal_runtime_rejection_reason') or row.get('build_failure_reason'))} "
+                f"detail={self._value(row.get('build_failure_detail'))}"
+            )
+        lines = [
+            f"Source Count: {self._value(arena.get('source_count'))}",
+            f"Proposal Count: {self._value(proposal.get('proposal_count'))}",
+            f"Rejected Sources: {', '.join(str(item) for item in rejected) if rejected else 'Not Available'}",
+            f"Winning Source: {self._value(arena.get('winner_source'))}",
+            "Cross Source Consensus: "
+            f"{self._value(arena.get('cross_source_consensus_state'))}",
+            f"Arena Diversity: {self._value(arena.get('source_diversity'))}",
+            "Source Coverage: "
+            f"{self._percent(arena.get('arena_source_coverage') or arena.get('source_coverage'))}",
+            "Arena State: "
+            f"{self._value(arena.get('arena_state'))}",
+        ]
+        if rejection_lines:
+            lines.append("Rejected Reasons:")
+            lines.extend(rejection_lines)
+        return self._section("SOURCE COMPETITION SUMMARY", lines)
+
+    def _render_knowledge_operationalization_summary(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        coverage = self._coverage_summary(canonical)
+        attrition = coverage.get("knowledge_attrition_lifecycle") or []
+        attrition = attrition if isinstance(attrition, list) else []
+        largest = None
+        for row in attrition:
+            if not isinstance(row, dict):
+                continue
+            if largest is None or (self._number(row.get("lost_count")) or 0) > (
+                self._number(largest.get("lost_count")) or 0
+            ):
+                largest = row
+        lines = [
+            "Largest Attrition Point: "
+            f"{self._value((largest or {}).get('from_stage'))}->{self._value((largest or {}).get('to_stage'))}",
+            f"Loss %: {self._percent((largest or {}).get('loss_rate'))}",
+            "Root Cause: "
+            f"{self._value(coverage.get('knowledge_operationalization_root_cause') or coverage.get('knowledge_operationalization_choke_cause') or (largest or {}).get('likely_cause'))}",
+            "Responsible Module: "
+            f"{self._value(coverage.get('knowledge_operationalization_evidence_responsibility') or (largest or {}).get('evidence_responsibility'))}",
+            "Required Evidence: "
+            f"{self._value(coverage.get('knowledge_operationalization_required_evidence') or (largest or {}).get('required_evidence'))}",
+            "Recommended Action: "
+            f"{self._value(coverage.get('knowledge_operationalization_choke_action') or (largest or {}).get('action'))}",
+            "Knowledge Operationalization State: "
+            f"{self._value(coverage.get('knowledge_operationalization_state'))}",
+        ]
+        return self._section("KNOWLEDGE OPERATIONALIZATION", lines)
+
+    def _render_validation_summary(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        executable, activation = self._executable_report_pair(canonical)
+        validated = self._count_value(executable.get("validated_programs"))
+        failures = (
+            executable.get("program_validation_failure_count")
+            or coverage.get("governed_validation_failure_count")
+            or activation.get("validation_failure_count")
+        )
+        lines = [
+            f"Validation Success Count: {self._value(validated)}",
+            f"Validation Failures: {self._value(failures)}",
+            "Evidence Missing: "
+            f"{self._value(executable.get('validation_probe_evidence_insufficiency_cause') or coverage.get('highest_remaining_evidence_deficit'))}",
+            "Validation Contract: "
+            f"{self._value(executable.get('program_validation_contract_state'))}",
+            "Validation Probe: "
+            f"{self._value(executable.get('compiled_to_validated_probe_state') or activation.get('compiled_to_validated_probe_state'))}",
+            "Grounding State: "
+            f"{self._value(executable.get('object_grounding_flow_state') or executable.get('object_grounding_produced'))}",
+            "Validation Probe Evidence Acceptance State: "
+            f"{self._value(executable.get('validation_probe_evidence_acceptance_state') or activation.get('validation_probe_evidence_acceptance_state'))}",
+            "Validation Probe Required Evidence: "
+            f"{self._value(executable.get('validation_probe_required_evidence') or activation.get('validation_probe_required_evidence'))}",
+        ]
+        return self._section("VALIDATION SUMMARY", lines)
+
+    def _render_human_execution_summary(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        compiled = self._count_value(executable.get("compiled_programs"))
+        validated = self._count_value(executable.get("validated_programs"))
+        materialized = self._count_value(
+            coverage.get("materialized_operational_capabilities"),
+            executable.get("materialized_operational_capabilities"),
+        )
+        return self._section("EXECUTION SUMMARY DASHBOARD", [
+            f"Compiled Programs: {self._value(compiled)}",
+            f"Validated Programs: {self._value(validated)}",
+            f"Materialized Capabilities: {self._value(materialized)}",
+            "Operational Citizens: "
+            f"{self._value(coverage.get('operational_citizen_count') or coverage.get('sandbox_operational_citizen_count'))}",
+            "Execution Success Rate: "
+            f"{self._value(executable.get('execution_success_rate'))}",
+            f"Repair Count: {self._value(executable.get('generated_repairs'))}",
+            "Compiled Execution Programs: "
+            f"{self._value(executable.get('compiled_execution_programs'))}",
+            "Validation Probe Compiled Programs: "
+            f"{self._value(executable.get('validation_probe_compiled_programs'))}",
+        ])
+
+    def _render_runtime_health_dashboard(self, canonical: dict[str, Any]) -> str:
+        arena = self._arena_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        semantic = self._semantic_summary(canonical)
+        runtime_timing = self._binding_value(canonical, "runtime_timing_summary")
+        runtime_timing = runtime_timing if isinstance(runtime_timing, dict) else {}
+        health = {
+            "Task IO": "HEALTHY"
+            if self._value(
+                arena.get("validation_probe_shared_input_trace", {}).get("input_population_state")
+                if isinstance(arena.get("validation_probe_shared_input_trace"), dict)
+                else None
+            )
+            in {"SHARED_TASK_IO_AVAILABLE", "Not Available"}
+            else "WARNING",
+            "Grounding": "HEALTHY"
+            if executable.get("object_grounding_produced") is True
+            else "WARNING",
+            "Compiler": "HEALTHY"
+            if self._count_value(executable.get("compiled_programs")) > 0
+            else "WARNING",
+            "Arena": "HEALTHY"
+            if arena.get("selection_state") not in {"NO_SAFE_WINNER", "NO_CANDIDATES"}
+            else "WARNING",
+            "Validation": "HEALTHY"
+            if self._count_value(executable.get("validated_programs")) > 0
+            else "WARNING",
+            "Execution": "HEALTHY"
+            if self._number(executable.get("execution_success_rate")) not in (None, 0.0)
+            else "WARNING",
+            "Reporting": "HEALTHY"
+            if self._binding_status(canonical) not in {"FAILED", "INVALID"}
+            else "FAILED",
+            "Timing": "HEALTHY"
+            if runtime_timing.get("timing_coverage") in (None, "Not Available")
+            or (self._number(runtime_timing.get("timing_coverage")) or 0) >= 0.8
+            else "WARNING",
+        }
+        return self._section(
+            "RUNTIME HEALTH",
+            [f"{name}: {state}" for name, state in health.items()],
+        )
+
+    def _render_critical_execution_trace(self, canonical: dict[str, Any]) -> str:
+        semantic = self._semantic_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, activation = self._executable_report_pair(canonical)
+        resolution_trace = semantic.get("compiler_resolution_trace") or []
+        resolution_trace = (
+            resolution_trace if isinstance(resolution_trace, list) else []
+        )
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        resolution_row = self._critical_resolution_row(resolution_trace, semantic)
+        semantic_source = self._source_trace_row_for_operation(
+            source_trace,
+            "semantic_to_transformation_compiler",
+            resolution_row.get("operation"),
+        )
+        source_alignment = self._compiler_source_flow_alignment(
+            semantic_source,
+            resolution_row,
+        )
+        identity_chain = self._operation_identity_chain(
+            resolution_row,
+            semantic_source,
+            arena,
+        )
+        entry_payload = resolution_row.get("compiler_entry_payload")
+        entry_payload = entry_payload if isinstance(entry_payload, dict) else {}
+        operation_diagnostic = self._operation_diagnostic_for_resolution(
+            semantic,
+            resolution_row,
+        )
+        entry_payload = self._hydrate_payload(
+            entry_payload,
+            self._hydrate_payload(
+                self._operation_diagnostic_entry_payload(
+                    operation_diagnostic,
+                ),
+                self._fallback_compiler_entry_payload(
+                    resolution_row,
+                    semantic,
+                    arena,
+                ),
+            ),
+        )
+        exit_payload = resolution_row.get("compiler_exit_payload")
+        exit_payload = exit_payload if isinstance(exit_payload, dict) else {}
+        exit_payload = self._hydrate_payload(
+            exit_payload,
+            self._hydrate_payload(
+                self._operation_diagnostic_exit_payload(
+                    operation_diagnostic,
+                ),
+                self._fallback_compiler_exit_payload(
+                    resolution_row,
+                    semantic,
+                ),
+            ),
+        )
+        exit_payload = self._normalize_materialization_payload(exit_payload)
+        candidate_emitted = resolution_row.get("candidate_emitted")
+        raw_rejection_reason = (
+            resolution_row.get("candidate_rejection_reason")
+            or operation_diagnostic.get("rejection_reason")
+        )
+        if candidate_emitted is True:
+            candidate_outcome = "CANDIDATE_EMITTED"
+            candidate_rejection_reason = "none"
+            failure_reason = "none"
+        elif candidate_emitted is False:
+            candidate_outcome = "CANDIDATE_REJECTED"
+            candidate_rejection_reason = raw_rejection_reason
+            failure_reason = (
+                raw_rejection_reason
+                or semantic.get("failure_reason")
+                or semantic_source.get("proposal_runtime_rejection_reason")
+                or semantic_source.get("build_failure_reason")
+            )
+        else:
+            candidate_outcome = "Not Available"
+            candidate_rejection_reason = raw_rejection_reason
+            failure_reason = (
+                raw_rejection_reason
+                or semantic.get("failure_reason")
+                or semantic_source.get("proposal_runtime_rejection_reason")
+                or semantic_source.get("build_failure_reason")
+            )
+        lines = [
+            "Semantic Compiler:",
+            f"  Intent: {self._value(resolution_row.get('semantic_intent') or semantic.get('selected_intent'))}",
+            f"  Operation: {self._value(resolution_row.get('operation') or semantic.get('selected_operation') or semantic.get('compiled_operation'))}",
+            f"  Resolved Compiler: {self._value(resolution_row.get('resolved_compiler'))}",
+            f"  Compiler Found: {self._value(resolution_row.get('compiler_found'))}",
+            f"  Attempted: {self._value(resolution_row.get('compilation_attempted'))}",
+            f"  Candidate Emitted: {self._value(resolution_row.get('candidate_emitted'))}",
+            f"  Candidate Outcome: {self._value(candidate_outcome)}",
+            "  Resolution State: "
+            f"{self._value(resolution_row.get('resolution_state'))}",
+            f"  Failure Reason: {self._value(failure_reason)}",
+            "  Failure Detail: "
+            f"{self._value(semantic_source.get('build_failure_detail'))}",
+            "  Compiler Entry Payload: "
+            f"operation={self._value(entry_payload.get('operation'))} "
+            f"semantic_matches={self._value(entry_payload.get('semantic_match_count'))} "
+            f"execution_intents={self._value(entry_payload.get('execution_intent_count'))} "
+            f"input_grid={self._value(entry_payload.get('input_grid_available'))} "
+            f"target_grid={self._value(entry_payload.get('target_grid_available'))} "
+            f"source_color={self._value(entry_payload.get('source_color'))} "
+            f"target_color={self._value(entry_payload.get('target_color'))} "
+            f"scope={self._value(entry_payload.get('application_scope'))} "
+            f"mapping_count={self._value(entry_payload.get('mapping_count'))} "
+            f"affected_cells={self._value(entry_payload.get('affected_cell_count'))} "
+            f"affected_positions={self._value(entry_payload.get('affected_position_count'))} "
+            f"parameter_source={self._value(entry_payload.get('parameter_source'))}",
+            "  Compiler Exit Payload: "
+            f"candidate_count={self._value(exit_payload.get('candidate_count'))} "
+            f"valid_candidate_count={self._value(exit_payload.get('valid_candidate_count'))} "
+            f"rejected_candidate_count={self._value(exit_payload.get('rejected_candidate_count'))} "
+            f"total_candidate_count={self._value(exit_payload.get('total_candidate_count'))} "
+            f"composition_steps={self._value(exit_payload.get('composition_step_count'))} "
+            f"scope={self._value(exit_payload.get('application_scope'))} "
+            f"mapping_count={self._value(exit_payload.get('mapping_count'))} "
+            f"affected_positions={self._value(exit_payload.get('affected_position_count'))} "
+            f"schema_valid={self._value(exit_payload.get('candidate_schema_valid'))} "
+            f"predicted_accuracy={self._value(exit_payload.get('predicted_accuracy'))} "
+            f"validation_threshold={self._value(exit_payload.get('validation_threshold'))} "
+            f"best_confidence={self._value(exit_payload.get('best_candidate_confidence'))} "
+            f"best_accuracy={self._value(exit_payload.get('best_accuracy'))}",
+            "  Predicted Accuracy Breakdown: "
+            f"{self._color_remap_accuracy_breakdown_line(exit_payload, operation_diagnostic)}",
+            "  Mapping Extraction State: "
+            f"{self._value(operation_diagnostic.get('mapping_extraction_state'))}",
+            "  Preservation Contract: "
+            f"{self._value(exit_payload.get('preservation_contract_state') or operation_diagnostic.get('preservation_contract_state'))} "
+            f"changed_cells={self._value(exit_payload.get('changed_cell_count') or operation_diagnostic.get('changed_cell_count'))} "
+            f"preserved_cells={self._value(exit_payload.get('preserved_cell_count') or operation_diagnostic.get('preserved_cell_count'))}",
+            "  Candidate Rejection Reason: "
+            f"{self._value(candidate_rejection_reason)}",
+            "Operation Identity Chain:",
+            "  Identity State: "
+            f"{self._value(identity_chain.get('identity_state'))}",
+            "  Semantic Intent: "
+            f"{self._value(identity_chain.get('semantic_intent'))}",
+            "  Compiler Operation: "
+            f"{self._value(identity_chain.get('compiler_operation'))}",
+            "  Proposal Operation: "
+            f"{self._value(identity_chain.get('proposal_operation'))}",
+            "  Arena Operation: "
+            f"{self._value(identity_chain.get('arena_operation'))}",
+            "  Validation Probe Operation: "
+            f"{self._value(identity_chain.get('validation_probe_operation'))}",
+            "  First Drift Stage: "
+            f"{self._value(identity_chain.get('first_drift_stage'))}",
+            "  Drift Detail: "
+            f"{self._value(identity_chain.get('drift_detail'))}",
+            "Candidate Materialization:",
+            "  Materialization Outcome: "
+            f"{self._value(exit_payload.get('materialization_outcome'))}",
+            "  Composition Validation: "
+            f"{self._value(exit_payload.get('composition_validation_state') or operation_diagnostic.get('composition_validation_state'))}",
+            "  Candidate Object Created: "
+            f"{self._value(exit_payload.get('candidate_object_created'))}",
+            "  Candidate Registered: "
+            f"{self._value(exit_payload.get('candidate_registered'))}",
+            "  Candidate Count Incremented: "
+            f"{self._value(exit_payload.get('candidate_count_incremented'))}",
+            "  Proposal Emission Ready: "
+            f"{self._value(exit_payload.get('proposal_emission_ready'))}",
+            "  Completion Stage: "
+            f"{self._value(exit_payload.get('materialization_completion_stage'))}",
+            "  Blocked Stage: "
+            f"{self._value(exit_payload.get('materialization_blocked_stage'))}",
+            "  Materialization Rejection: "
+            f"{self._value(exit_payload.get('materialization_rejection_reason'))}",
+            "Candidate Flow:",
+            "  Compiler/Flow Alignment: "
+            f"{source_alignment}",
+            "  Proposal Generated: "
+            f"{self._value(semantic_source.get('proposal_runtime_proposed'))}",
+            "  Proposal Rejected: "
+            f"{self._value(semantic_source.get('proposal_runtime_rejected'))}",
+            "  Proposal Built: "
+            f"{self._value(semantic_source.get('arena_proposal_built'))}",
+            f"  Gateway Accepted: {self._value(semantic_source.get('gateway_accepted'))}",
+            f"  Arena Admitted: {self._value(semantic_source.get('entered_arena'))}",
+            f"  Final State: {self._value(semantic_source.get('flow_state'))}",
+            f"  Failure Stage: {self._value(semantic_source.get('blocked_stage'))}",
+            "Validation Probe:",
+            "  Forwarded: "
+            f"{self._value(activation.get('validation_probe_forwarded'))}",
+            "  Consumed: "
+            f"{self._value(executable.get('validation_probe_consumed', activation.get('validation_probe_consumed')))}",
+            "  Compiler Participation: "
+            f"{self._value(executable.get('validation_probe_compiler_participation', activation.get('validation_probe_compiler_participation')))}",
+            "  Admission State: "
+            f"{self._value(executable.get('validation_probe_admission_state', activation.get('validation_probe_admission_state')))}",
+            "  Evidence Acceptance: "
+            f"{self._value(executable.get('validation_probe_evidence_acceptance_state', activation.get('validation_probe_evidence_acceptance_state')))}",
+            "  Evidence Cause: "
+            f"{self._value(executable.get('validation_probe_evidence_insufficiency_cause', activation.get('validation_probe_evidence_insufficiency_cause')))}",
+            "Execution Admission:",
+            "  Selection State: "
+            f"{self._value(arena.get('selection_state'))}",
+            "  Execution Admission State: "
+            f"{self._value(arena.get('execution_compilation_admission_state'))}",
+            "  Execution Admission Reason: "
+            f"{self._value(arena.get('execution_compilation_admission_reason'))}",
+            "Decision Resolution:",
+            "  Resolution State: "
+            f"{self._value(arena.get('arena_decision_resolution_state'))}",
+            "  Outcome: "
+            f"{self._value(arena.get('arena_decision_resolution_outcome'))}",
+            "  Ranking Changed: "
+            f"{self._value(arena.get('arena_decision_ranking_changed'))}",
+            "  Final Decision State: "
+            f"{self._value(arena.get('arena_decision_final_state'))}",
+            "  Execution Recommendation: "
+            f"{self._value(arena.get('arena_decision_execution_recommendation'))}",
+            "Evidence Acquisition:",
+            "  State: "
+            f"{self._value(arena.get('evidence_acquisition_state'))}",
+            "  Required Evidence: "
+            f"{self._value(arena.get('evidence_acquisition_required_evidence'))}",
+            "  Required Validation Task: "
+            f"{self._value(arena.get('evidence_acquisition_validation_task'))}",
+            "  Expected Tie-Break Impact: "
+            f"{self._value(arena.get('evidence_acquisition_expected_tie_break_impact'))}",
+            "  Governed Re-entry: "
+            f"{self._value(arena.get('evidence_acquisition_governed_reentry_action'))}",
+        ]
+        return self._section("CRITICAL EXECUTION TRACE", lines)
+
+    def _render_human_engineering_conclusion(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        conclusion = self._engineering_conclusion(canonical)
+        lines = [
+            f"Largest Success: {self._value(conclusion.get('largest_success'))}",
+            f"Largest Regression: {self._value(conclusion.get('largest_regression'))}",
+            "Current Open Decision: "
+            f"{self._value(conclusion.get('current_open_decision'))}",
+            "Next Decision Gate: "
+            f"{self._value(conclusion.get('next_decision_gate'))}",
+            "Current Bottleneck: "
+            f"{self._value(conclusion.get('current_bottleneck'))}",
+            f"Root Cause: {self._value(conclusion.get('root_cause'))}",
+            "Exact Responsible Component: "
+            f"{self._value(conclusion.get('responsible_component'))}",
+            "Immediate Next Development Task: "
+            f"{self._value(conclusion.get('next_task'))}",
+            "Estimated Engineering Priority: "
+            f"{self._value(conclusion.get('engineering_priority'))}",
+            "Engineering Conclusion Integrity: "
+            f"{self._value(conclusion.get('integrity'))}",
+            f"Conclusion Scope: {self._value(conclusion.get('conclusion_scope'))}",
+            f"Conclusion Run Id: {self._value(conclusion.get('conclusion_run_id'))}",
+            f"Conclusion Task Id: {self._value(conclusion.get('conclusion_task_id'))}",
+            "Conclusion Source Stage: "
+            f"{self._value(conclusion.get('conclusion_source_stage'))}",
+            "Conclusion Source Timestamp: "
+            f"{self._value(conclusion.get('conclusion_source_timestamp'))}",
+            f"Conclusion Is Current: {self._value(conclusion.get('conclusion_is_current'))}",
+            "Conclusion Historical Issue Count: "
+            f"{self._value(conclusion.get('conclusion_historical_issue_count'))}",
+        ]
+        conflicts = conclusion.get("integrity_conflicts") or []
+        if conflicts:
+            lines.append("Conclusion Integrity Conflicts:")
+            lines.extend(f"  {self._value(item)}" for item in conflicts)
+        return self._section("ENGINEERING CONCLUSION", lines)
 
     def _render_constitutional_contracts(self, canonical: dict[str, Any]) -> str:
         summary = self._binding_value(
@@ -3414,6 +4000,58 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('prediction_quality_calibration_cause'))}",
             "Prediction Quality Calibration Action: "
             f"{self._value(summary.get('prediction_quality_calibration_action'))}",
+            "Prediction Quality Calibration Trigger: "
+            f"{self._value(summary.get('prediction_quality_calibration_trigger'))}",
+            "Prediction Quality Calibration Evidence State: "
+            f"{self._value(summary.get('prediction_quality_calibration_evidence_state'))}",
+            "Prediction Quality Calibration Authority Boundary: "
+            f"{self._value(summary.get('prediction_quality_calibration_authority_boundary'))}",
+            "Prediction Quality Calibration Invoked: "
+            f"{self._value(summary.get('prediction_quality_calibration_invoked'))}",
+            "Prediction Quality Calibration Review Outcome: "
+            f"{self._value(summary.get('prediction_quality_calibration_review_outcome'))}",
+            "Prediction Quality Calibration Score Authority: "
+            f"{self._value(summary.get('prediction_quality_calibration_score_update_authority'))}",
+            "Prediction Quality Calibration Truth Authority: "
+            f"{self._value(summary.get('prediction_quality_calibration_truth_authority'))}",
+            "Arena Decision Resolution State: "
+            f"{self._value(summary.get('arena_decision_resolution_state'))}",
+            "Arena Decision Resolution Outcome: "
+            f"{self._value(summary.get('arena_decision_resolution_outcome'))}",
+            "Arena Decision Resolution Reason: "
+            f"{self._value(summary.get('arena_decision_resolution_reason'))}",
+            "Arena Decision Resolution Action: "
+            f"{self._value(summary.get('arena_decision_resolution_action'))}",
+            "Arena Decision Ranking Changed: "
+            f"{self._value(summary.get('arena_decision_ranking_changed'))}",
+            "Arena Decision Ranking Change Reason: "
+            f"{self._value(summary.get('arena_decision_ranking_change_reason'))}",
+            "Arena Decision Final State: "
+            f"{self._value(summary.get('arena_decision_final_state'))}",
+            "Arena Decision Execution Recommendation: "
+            f"{self._value(summary.get('arena_decision_execution_recommendation'))}",
+            "Evidence Acquisition State: "
+            f"{self._value(summary.get('evidence_acquisition_state'))}",
+            "Evidence Acquisition Trigger: "
+            f"{self._value(summary.get('evidence_acquisition_trigger'))}",
+            "Evidence Acquisition Target Candidate: "
+            f"{self._value(summary.get('evidence_acquisition_target_candidate'))}",
+            "Evidence Acquisition Target Operation: "
+            f"{self._value(summary.get('evidence_acquisition_target_operation'))}",
+            "Required Evidence Category: "
+            f"{self._value(summary.get('evidence_acquisition_required_category'))}",
+            "Required Evidence: "
+            f"{self._value(summary.get('evidence_acquisition_required_evidence'))}",
+            "Tie-Break Strategy: "
+            f"{self._value(summary.get('evidence_acquisition_tie_break_strategy'))}",
+            "Required Validation Task: "
+            f"{self._value(summary.get('evidence_acquisition_validation_task'))}",
+            "Expected Tie-Break Impact: "
+            f"{self._value(summary.get('evidence_acquisition_expected_tie_break_impact'))}",
+            "Governed Re-entry Action: "
+            f"{self._value(summary.get('evidence_acquisition_governed_reentry_action'))}",
+            "Evidence Acquisition Truth Authority: "
+            f"{self._value(summary.get('evidence_acquisition_truth_authority'))}",
         ]
         if rows:
             lines.append("Top Arena Candidates:")
@@ -4275,6 +4913,1112 @@ class DeterministicFinalReportRenderer:
                 return value
         return {}
 
+    def _coverage_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(
+            canonical,
+            "cognitive_capability_coverage_summary",
+        )
+        return summary if isinstance(summary, dict) else {}
+
+    def _proposal_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(canonical, "candidate_proposal_summary")
+        return summary if isinstance(summary, dict) else {}
+
+    def _arena_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(canonical, "candidate_arena_summary")
+        summary = dict(summary) if isinstance(summary, dict) else {}
+        raw = self._first_dict(
+            canonical["report_state"],
+            "COGNITIVE_CANDIDATE_ARENA_REPORT",
+            "candidate_arena_report",
+        )
+        raw_summary = self._first_dict(raw, "candidate_arena_summary")
+        if isinstance(raw_summary, dict):
+            summary = {**raw_summary, **summary}
+        return summary
+
+    def _semantic_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(canonical, "semantic_compilation_summary")
+        summary = dict(summary) if isinstance(summary, dict) else {}
+        raw = self._first_dict(
+            canonical["report_state"],
+            "semantic_to_transformation_compilation_report",
+        )
+        if not raw:
+            raw = self._first_dict(
+                canonical.get("performance", {}),
+                "semantic_to_transformation_compilation_report",
+            )
+        if not raw:
+            raw = self._first_dict(
+                canonical.get("synthesis", {}),
+                "semantic_to_transformation_compilation_report",
+            )
+        if isinstance(raw, dict):
+            summary = {**raw, **summary}
+        return summary
+
+    def _executable_report_pair(
+        self,
+        canonical: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "EXECUTABLE_INTELLIGENCE_REPORT",
+            "executable_intelligence_report",
+        )
+        if not report:
+            engine = self._first_dict(
+                state,
+                "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                "executable_intelligence_engine_report",
+            )
+            if not engine:
+                engine = self._first_dict(
+                    performance,
+                    "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                    "executable_intelligence_engine_report",
+                )
+            report = self._first_dict(engine, "EXECUTABLE_INTELLIGENCE_REPORT") or engine
+        activation = {
+            **self._first_dict(
+                performance,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+            **self._first_dict(
+                state,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+        }
+        return (
+            report if isinstance(report, dict) else {},
+            activation if isinstance(activation, dict) else {},
+        )
+
+    def _count_value(self, *values: Any) -> int:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, dict | list | tuple | set):
+                return len(value)
+            if isinstance(value, int | float):
+                return int(value)
+            number = self._number(value)
+            if number is not None:
+                return int(number)
+        return 0
+
+    def _stage_from_count(self, count: Any, *, blocked: Any = None) -> str:
+        count_value = self._count_value(count)
+        if count_value > 0:
+            return "SUCCESS"
+        if blocked:
+            return "BLOCKED"
+        return "SKIPPED"
+
+    def _stage_from_winner(self, arena: dict[str, Any]) -> str:
+        winner = arena.get("arena_winner")
+        selection_state = str(arena.get("selection_state") or "")
+        if winner and selection_state != "NO_SAFE_WINNER":
+            return "SUCCESS"
+        if selection_state in {"NO_SAFE_WINNER", "NO_CANDIDATES"}:
+            return "BLOCKED"
+        return "SKIPPED"
+
+    def _development_stage(
+        self,
+        coverage: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if self._count_value(executable.get("validated_programs")) > 0:
+            if self._count_value(
+                coverage.get("materialized_operational_capabilities"),
+                executable.get("materialized_operational_capabilities"),
+            ) > 0:
+                return "CAPABILITY_MATERIALIZATION"
+            return "POST_VALIDATION_MATERIALIZATION"
+        if executable.get("validation_probe_evidence_acceptance_state"):
+            return "EVIDENCE_ACCEPTANCE"
+        if arena.get("selection_state") == "NO_SAFE_WINNER":
+            return "PREDICTION_QUALITY_CALIBRATION"
+        return "CANDIDATE_OPERATIONALIZATION"
+
+    def _compiler_resolution_state(self, canonical: dict[str, Any]) -> str:
+        trace = self._semantic_summary(canonical).get("compiler_resolution_trace")
+        trace = trace if isinstance(trace, list) else []
+        if not trace:
+            return "Not Available"
+        states = [
+            row.get("resolution_state")
+            for row in trace
+            if isinstance(row, dict) and row.get("resolution_state")
+        ]
+        return self._value(states[0] if states else None)
+
+    def _critical_resolution_row(
+        self,
+        trace: list[Any],
+        semantic: dict[str, Any],
+    ) -> dict[str, Any]:
+        selected_operation = self._semantic_selected_operation(semantic)
+        selected_intent = semantic.get("selected_intent")
+        if selected_operation:
+            for row in trace:
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("operation") or "") != str(selected_operation):
+                    continue
+                if (
+                    selected_intent
+                    and row.get("semantic_intent")
+                    and str(row.get("semantic_intent")) != str(selected_intent)
+                ):
+                    continue
+                return row
+            for row in trace:
+                if isinstance(row, dict) and str(row.get("operation") or "") == str(selected_operation):
+                    return row
+        if semantic.get("semantic_to_transformation_compilation_success") is True:
+            for row in trace:
+                if not isinstance(row, dict):
+                    continue
+                if (
+                    row.get("candidate_emitted") is True
+                    or row.get("resolution_state")
+                    == "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+                ):
+                    return row
+        for row in trace:
+            if not isinstance(row, dict):
+                continue
+            if row.get("resolution_state") != "RESOLVED_COMPILER_EMITTED_CANDIDATE":
+                return row
+        for row in trace:
+            if isinstance(row, dict):
+                return row
+        return {
+            "semantic_intent": semantic.get("selected_intent"),
+            "operation": semantic.get("selected_operation")
+            or semantic.get("compiled_operation"),
+            "resolved_compiler": "Not Available",
+            "compiler_found": "Not Available",
+            "compilation_attempted": semantic.get("compiler_triggered"),
+            "candidate_emitted": (
+                (self._count_value(semantic.get("compiled_candidate_count")) > 0)
+                if semantic.get("compiled_candidate_count") is not None
+                else "Not Available"
+            ),
+            "resolution_state": semantic.get("compilation_status"),
+        }
+
+    def _semantic_selected_operation(self, semantic: dict[str, Any]) -> Any:
+        operation = semantic.get("selected_operation") or semantic.get("compiled_operation")
+        if operation:
+            return operation
+        program = semantic.get("compiled_program")
+        program = program if isinstance(program, dict) else {}
+        steps = program.get("steps")
+        if isinstance(steps, list) and steps and isinstance(steps[0], dict):
+            return steps[0].get("operation")
+        return None
+
+    def _critical_compiler_failure(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        row = self._current_critical_resolution_row(canonical)
+        if not row:
+            return {}
+        if (
+            row.get("compiler_found") is True
+            and row.get("compilation_attempted") is True
+            and row.get("candidate_emitted") is False
+        ):
+            return row
+        return {}
+
+    def _current_critical_resolution_row(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        semantic = self._semantic_summary(canonical)
+        trace = semantic.get("compiler_resolution_trace")
+        trace = trace if isinstance(trace, list) else []
+        return self._critical_resolution_row(trace, semantic) if trace else {}
+
+    def _historical_compiler_issue_count(
+        self,
+        canonical: dict[str, Any],
+        current_row: dict[str, Any],
+    ) -> int:
+        trace = self._semantic_summary(canonical).get("compiler_resolution_trace")
+        trace = trace if isinstance(trace, list) else []
+        count = 0
+        for row in trace:
+            if not isinstance(row, dict):
+                continue
+            if row is current_row:
+                continue
+            if (
+                row.get("compiler_found") is True
+                and row.get("compilation_attempted") is True
+                and row.get("candidate_emitted") is False
+            ):
+                count += 1
+        return count
+
+    def _engineering_conclusion(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        coverage = self._coverage_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        metadata = canonical.get("runtime_metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        current_row = self._current_critical_resolution_row(canonical)
+        current_failure = self._critical_compiler_failure(canonical)
+        largest_success = self._largest_current_success(arena, executable)
+        raw_regression = (
+            arena.get("prediction_quality_calibration_state")
+            or coverage.get("capability_evidence_contamination_state")
+            or "none"
+        )
+        decision_state = arena.get("arena_decision_resolution_state")
+        decision_action = arena.get("arena_decision_resolution_action")
+        decision_pending = (
+            decision_state == "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+        )
+        regression = "none" if decision_pending else raw_regression
+        current_open_decision = (
+            decision_state
+            or (
+                "prediction_quality_calibration_review"
+                if raw_regression
+                == "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED"
+                else "none"
+            )
+        )
+        next_decision_gate = (
+            arena.get("evidence_acquisition_validation_task")
+            or decision_action
+            or arena.get("prediction_quality_calibration_action")
+            or "none"
+        )
+        current_path_succeeded = self._compiler_path_succeeded(
+            current_row,
+            arena,
+            executable,
+        )
+        conclusion_run_id = self._conclusion_run_id(canonical, metadata)
+        conclusion_task_id = self._conclusion_task_id(
+            canonical,
+            metadata,
+            current_row,
+            arena,
+        )
+        if current_failure:
+            current_bottleneck = "semantic_compiler_candidate_emission"
+            root_cause = current_failure.get("candidate_rejection_reason") or "unknown"
+            responsible_component = current_failure.get("resolved_compiler")
+            next_task = (
+                f"repair_{str(responsible_component).lower()}_candidate_composition"
+            )
+            source_stage = "critical_compiler_resolution_trace"
+        elif current_path_succeeded:
+            if decision_pending:
+                current_bottleneck = "arena_decision_finalization"
+                root_cause = (
+                    arena.get("arena_decision_resolution_reason")
+                    or "post_calibration_decision_pending"
+                )
+                responsible_component = "CANDIDATE_ARENA_DECISION_RESOLUTION"
+                next_task = (
+                    arena.get("evidence_acquisition_validation_task")
+                    or decision_action
+                    or "resolve_post_calibration_arena_decision"
+                )
+            else:
+                current_bottleneck = "none"
+                root_cause = "none"
+                responsible_component = "none"
+                next_task = self._next_task_from_current_regression(
+                    regression,
+                    coverage,
+                    arena,
+                    executable,
+                )
+            source_stage = "current_successful_critical_execution_trace"
+        else:
+            current_bottleneck = (
+                coverage.get("knowledge_operationalization_choke_point") or "none"
+            )
+            root_cause = (
+                coverage.get("knowledge_operationalization_choke_cause")
+                or executable.get("validation_probe_evidence_insufficiency_cause")
+                or "none"
+            )
+            responsible_component = (
+                coverage.get("knowledge_operationalization_evidence_responsibility")
+                or executable.get("object_grounding_blocked_stage")
+                or arena.get("arena_source_diversity_action")
+                or "none"
+            )
+            next_task = (
+                coverage.get("knowledge_operationalization_choke_action")
+                or executable.get("validation_probe_recommended_validation_action")
+                or arena.get("prediction_quality_calibration_action")
+                or self._next_task_from_current_regression(
+                    regression,
+                    coverage,
+                    arena,
+                    executable,
+                )
+            )
+            source_stage = "current_canonical_operationalization_summary"
+        conclusion = {
+            "largest_success": largest_success,
+            "largest_regression": regression,
+            "current_open_decision": current_open_decision,
+            "next_decision_gate": next_decision_gate,
+            "current_bottleneck": current_bottleneck,
+            "root_cause": root_cause,
+            "responsible_component": responsible_component,
+            "next_task": next_task,
+            "engineering_priority": self._priority_label(coverage, arena, executable),
+            "conclusion_scope": "current_run",
+            "conclusion_run_id": conclusion_run_id,
+            "conclusion_task_id": conclusion_task_id,
+            "conclusion_source_stage": source_stage,
+            "conclusion_source_timestamp": (
+                metadata.get("timestamp") or self._field(canonical, "timestamp")
+            ),
+            "conclusion_is_current": True,
+            "conclusion_historical_issue_count": (
+                self._historical_compiler_issue_count(canonical, current_row)
+            ),
+        }
+        conflicts = self._engineering_conclusion_conflicts(
+            conclusion,
+            current_row,
+            arena,
+            executable,
+        )
+        conclusion["integrity_conflicts"] = conflicts
+        conclusion["integrity"] = "INVALID" if conflicts else "VALID"
+        if conflicts:
+            conclusion["current_bottleneck"] = "not_authoritative"
+            conclusion["root_cause"] = "not_authoritative"
+            conclusion["responsible_component"] = "not_authoritative"
+            conclusion["next_task"] = "repair_engineering_conclusion_integrity"
+        return conclusion
+
+    def _conclusion_run_id(
+        self,
+        canonical: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> str:
+        state = canonical.get("report_state", {})
+        performance = canonical.get("performance", {})
+        return self._first_meaningful(
+            metadata.get("run_id"),
+            metadata.get("execution_id"),
+            metadata.get("current_execution_id"),
+            state.get("run_id") if isinstance(state, dict) else None,
+            state.get("execution_id") if isinstance(state, dict) else None,
+            state.get("current_execution_id") if isinstance(state, dict) else None,
+            performance.get("run_id") if isinstance(performance, dict) else None,
+            performance.get("execution_id") if isinstance(performance, dict) else None,
+            self._field(canonical, "execution_identifier"),
+            default="current_run_unidentified",
+        )
+
+    def _conclusion_task_id(
+        self,
+        canonical: dict[str, Any],
+        metadata: dict[str, Any],
+        current_row: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> str:
+        state = canonical.get("report_state", {})
+        performance = canonical.get("performance", {})
+        operation = current_row.get("operation") if isinstance(current_row, dict) else None
+        return self._first_meaningful(
+            metadata.get("task_id"),
+            metadata.get("current_task_id"),
+            metadata.get("task_name"),
+            state.get("task_id") if isinstance(state, dict) else None,
+            state.get("current_task_id") if isinstance(state, dict) else None,
+            state.get("task_name") if isinstance(state, dict) else None,
+            performance.get("task_id") if isinstance(performance, dict) else None,
+            performance.get("current_task_id") if isinstance(performance, dict) else None,
+            arena.get("validation_probe_candidate_id"),
+            arena.get("arena_winner"),
+            f"operation:{operation}" if operation else None,
+            default="current_task_unidentified",
+        )
+
+    def _largest_current_success(
+        self,
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if self._count_value(executable.get("validated_programs")) > 0:
+            return "validated_program_produced"
+        if (
+            executable.get("validation_probe_evidence_acceptance_state") == "ACCEPTED"
+        ):
+            return "validation_probe_evidence_accepted"
+        if executable.get("object_grounding_produced") is True:
+            return "object_grounding_produced"
+        if arena.get("arena_winner"):
+            return "arena_winner_selected"
+        return "Not Available"
+
+    def _compiler_path_succeeded(
+        self,
+        current_row: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> bool:
+        if not current_row:
+            return False
+        if (
+            current_row.get("candidate_emitted") is not True
+            and current_row.get("resolution_state")
+            != "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+        ):
+            return False
+        failure = str(
+            current_row.get("candidate_rejection_reason")
+            or current_row.get("failure_reason")
+            or "none"
+        ).lower()
+        if failure not in {"none", "candidate_emitted", "not available"}:
+            return False
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        source_row = self._source_trace_row_for_operation(
+            source_trace,
+            "semantic_to_transformation_compiler",
+            current_row.get("operation"),
+        )
+        identity = self._operation_identity_chain(current_row, source_row, arena)
+        if identity.get("identity_state") == "OPERATION_IDENTITY_DRIFT":
+            return False
+        evidence_state = executable.get("validation_probe_evidence_acceptance_state")
+        if evidence_state and evidence_state != "ACCEPTED":
+            return False
+        return True
+
+    def _next_task_from_current_regression(
+        self,
+        regression: Any,
+        coverage: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if regression == "CALIBRATION_NOT_TRIGGERED":
+            return "diagnose_prediction_quality_calibration_trigger"
+        if regression == "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED":
+            return (
+                arena.get("prediction_quality_calibration_action")
+                or "perform_sandbox_evidence_ranking_recalibration"
+            )
+        return (
+            arena.get("prediction_quality_calibration_action")
+            or coverage.get("knowledge_operationalization_choke_action")
+            or executable.get("validation_probe_recommended_validation_action")
+            or "monitor_current_run"
+        )
+
+    def _engineering_conclusion_conflicts(
+        self,
+        conclusion: dict[str, Any],
+        current_row: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> list[str]:
+        conflicts: list[str] = []
+        emitted = (
+            current_row.get("candidate_emitted") is True
+            or current_row.get("resolution_state")
+            == "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+        )
+        root = str(conclusion.get("root_cause") or "").lower()
+        bottleneck = str(conclusion.get("current_bottleneck") or "").lower()
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        source_row = self._source_trace_row_for_operation(
+            source_trace,
+            "semantic_to_transformation_compiler",
+            current_row.get("operation"),
+        )
+        identity = self._operation_identity_chain(current_row, source_row, arena)
+        if emitted and bottleneck == "semantic_compiler_candidate_emission":
+            conflicts.append(
+                "candidate_emitted=true conflicts with semantic_compiler_candidate_emission"
+            )
+        failure = str(
+            current_row.get("candidate_rejection_reason")
+            or current_row.get("failure_reason")
+            or "none"
+        ).lower()
+        decision_bottleneck = bottleneck == "arena_decision_finalization"
+        if (
+            current_row
+            and failure in {"none", "candidate_emitted"}
+            and root not in {"", "none"}
+            and not decision_bottleneck
+        ):
+            conflicts.append("failure_reason=none conflicts with non_none_root_cause")
+        if (
+            current_row
+            and
+            identity.get("identity_state") == "CONSISTENT"
+            and root == "operation_semantics_mismatch"
+        ):
+            conflicts.append(
+                "operation_identity_consistent conflicts with operation_semantics_mismatch"
+            )
+        if (
+            self._count_value(executable.get("validated_programs")) > 0
+            and bottleneck == "semantic_compiler_candidate_emission"
+        ):
+            conflicts.append(
+                "validated_programs>0 conflicts with current candidate emission bottleneck"
+            )
+        return conflicts
+
+    def _fallback_compiler_entry_payload(
+        self,
+        resolution_row: dict[str, Any],
+        semantic: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> dict[str, Any]:
+        operation = (
+            resolution_row.get("operation")
+            or semantic.get("selected_operation")
+            or semantic.get("compiled_operation")
+        )
+        execution_intents = semantic.get("execution_intents") or []
+        execution_intents = (
+            execution_intents if isinstance(execution_intents, list) else []
+        )
+        semantic_matches = set()
+        if resolution_row.get("semantic_intent"):
+            semantic_matches.add(str(resolution_row.get("semantic_intent")))
+        if resolution_row.get("operation"):
+            semantic_matches.add(str(resolution_row.get("operation")))
+        for intent in execution_intents:
+            if not isinstance(intent, dict):
+                continue
+            if intent.get("intent"):
+                semantic_matches.add(str(intent.get("intent")))
+            if intent.get("operation"):
+                semantic_matches.add(str(intent.get("operation")))
+            semantic_matches.update(
+                str(item) for item in intent.get("matched_concepts", []) or []
+            )
+        shared_input = arena.get("validation_probe_shared_input_trace")
+        shared_input = shared_input if isinstance(shared_input, dict) else {}
+        non_empty_keys = shared_input.get("non_empty_keys") or []
+        non_empty_keys = non_empty_keys if isinstance(non_empty_keys, list) else []
+        return {
+            "operation": operation,
+            "semantic_match_count": len(semantic_matches)
+            if semantic_matches
+            else None,
+            "execution_intent_count": len(execution_intents),
+            "input_grid_available": "input_grid" in non_empty_keys
+            if non_empty_keys
+            else None,
+            "target_grid_available": "target_grid" in non_empty_keys
+            if non_empty_keys
+            else None,
+            "source_color": None,
+            "target_color": None,
+            "mapping_count": None,
+            "affected_cell_count": None,
+        }
+
+    def _operation_diagnostic_for_resolution(
+        self,
+        semantic: dict[str, Any],
+        resolution_row: dict[str, Any],
+    ) -> dict[str, Any]:
+        operation = resolution_row.get("operation")
+        diagnostics = semantic.get("compiler_operation_diagnostics") or []
+        diagnostics = diagnostics if isinstance(diagnostics, list) else []
+        for row in diagnostics:
+            if isinstance(row, dict) and row.get("operation") == operation:
+                return row
+        return {}
+
+    def _operation_diagnostic_entry_payload(
+        self,
+        diagnostic: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not diagnostic:
+            return {}
+        return {
+            "operation": diagnostic.get("operation"),
+            "semantic_match_count": (
+                len(diagnostic.get("relevant_semantic_matches") or [])
+            ),
+            "execution_intent_count": diagnostic.get(
+                "relevant_execution_intent_count"
+            ),
+            "source_color": diagnostic.get("source_color"),
+            "target_color": diagnostic.get("target_color"),
+            "application_scope": diagnostic.get("application_scope"),
+            "mapping_count": diagnostic.get("mapping_count"),
+            "affected_cell_count": diagnostic.get("affected_cell_count"),
+            "affected_position_count": diagnostic.get("affected_position_count"),
+            "preserved_color_count": diagnostic.get("preserved_color_count"),
+            "composition_step_count": diagnostic.get("composition_step_count"),
+            "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+            "parameter_source": diagnostic.get("parameter_source"),
+            "preservation_contract_state": diagnostic.get(
+                "preservation_contract_state"
+            ),
+            "changed_cell_count": diagnostic.get("changed_cell_count"),
+            "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+            "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+            "predicted_accuracy_breakdown": diagnostic.get(
+                "predicted_accuracy_breakdown"
+            ),
+            "validation_threshold": diagnostic.get("validation_threshold"),
+            "dominant_accuracy_loss_cause": diagnostic.get(
+                "dominant_accuracy_loss_cause"
+            ),
+            "composition_validation_state": diagnostic.get(
+                "composition_validation_state"
+            ),
+            "candidate_object_created": diagnostic.get("candidate_object_created"),
+            "candidate_registered": diagnostic.get("candidate_registered"),
+            "candidate_count_incremented": diagnostic.get(
+                "candidate_count_incremented"
+            ),
+            "proposal_emission_ready": diagnostic.get("proposal_emission_ready"),
+            "materialization_outcome": diagnostic.get("materialization_outcome"),
+            "materialization_completion_stage": diagnostic.get(
+                "materialization_completion_stage"
+            ),
+            "materialization_blocked_stage": diagnostic.get(
+                "materialization_blocked_stage"
+            ),
+            "materialization_rejection_reason": diagnostic.get(
+                "materialization_rejection_reason"
+            ),
+        }
+
+    def _operation_diagnostic_exit_payload(
+        self,
+        diagnostic: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not diagnostic:
+            return {}
+        candidate_count = diagnostic.get("candidate_count")
+        candidate_count = self._count_value(candidate_count)
+        return {
+            "candidate_count": candidate_count,
+            "valid_candidate_count": candidate_count,
+            "rejected_candidate_count": 0 if candidate_count else 1,
+            "total_candidate_count": candidate_count,
+            "composition_step_count": diagnostic.get("composition_step_count"),
+            "application_scope": diagnostic.get("application_scope"),
+            "mapping_count": diagnostic.get("mapping_count"),
+            "affected_position_count": diagnostic.get("affected_position_count"),
+            "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+            "rejection_reason": diagnostic.get("rejection_reason"),
+            "preservation_contract_state": diagnostic.get(
+                "preservation_contract_state"
+            ),
+            "changed_cell_count": diagnostic.get("changed_cell_count"),
+            "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+            "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+            "predicted_accuracy_breakdown": diagnostic.get(
+                "predicted_accuracy_breakdown"
+            ),
+            "validation_threshold": diagnostic.get("validation_threshold"),
+            "dominant_accuracy_loss_cause": diagnostic.get(
+                "dominant_accuracy_loss_cause"
+            ),
+            "composition_validation_state": diagnostic.get(
+                "composition_validation_state"
+            ),
+            "candidate_object_created": diagnostic.get("candidate_object_created"),
+            "candidate_registered": diagnostic.get("candidate_registered"),
+            "candidate_count_incremented": diagnostic.get(
+                "candidate_count_incremented"
+            ),
+            "proposal_emission_ready": diagnostic.get("proposal_emission_ready"),
+            "materialization_outcome": diagnostic.get("materialization_outcome"),
+            "materialization_completion_stage": diagnostic.get(
+                "materialization_completion_stage"
+            ),
+            "materialization_blocked_stage": diagnostic.get(
+                "materialization_blocked_stage"
+            ),
+            "materialization_rejection_reason": diagnostic.get(
+                "materialization_rejection_reason"
+            ),
+        }
+
+    def _fallback_compiler_exit_payload(
+        self,
+        resolution_row: dict[str, Any],
+        semantic: dict[str, Any],
+    ) -> dict[str, Any]:
+        candidate_emitted = resolution_row.get("candidate_emitted")
+        candidate_count = (
+            self._count_value(semantic.get("compiled_candidate_count"))
+            if candidate_emitted
+            else 0
+            if candidate_emitted is False
+            else None
+        )
+        return {
+            "candidate_count": candidate_count,
+            "valid_candidate_count": candidate_count,
+            "rejected_candidate_count": 1 if candidate_emitted is False else None,
+            "total_candidate_count": candidate_count,
+            "composition_step_count": 0 if candidate_emitted is False else None,
+            "application_scope": None,
+            "mapping_count": None,
+            "affected_position_count": None,
+            "candidate_schema_valid": False
+            if candidate_emitted is False
+            else None,
+            "best_candidate_confidence": None,
+            "best_accuracy": None,
+            "predicted_accuracy": None,
+            "predicted_accuracy_breakdown": {},
+            "validation_threshold": None,
+            "dominant_accuracy_loss_cause": None,
+            "preservation_contract_state": None,
+            "changed_cell_count": None,
+            "preserved_cell_count": None,
+            "composition_validation_state": None,
+            "candidate_object_created": False
+            if candidate_emitted is False
+            else None,
+            "candidate_registered": False if candidate_emitted is False else None,
+            "candidate_count_incremented": False
+            if candidate_emitted is False
+            else None,
+            "proposal_emission_ready": False if candidate_emitted is False else None,
+            "materialization_outcome": "CANDIDATE_REJECTED"
+            if candidate_emitted is False
+            else "CANDIDATE_EMITTED"
+            if candidate_emitted is True
+            else None,
+            "materialization_completion_stage": "candidate_registered"
+            if candidate_emitted is True
+            else None,
+            "materialization_blocked_stage": None,
+            "materialization_rejection_reason": None,
+        }
+
+    def _normalize_materialization_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized = dict(payload) if isinstance(payload, dict) else {}
+        succeeded = (
+            normalized.get("candidate_object_created") is True
+            and normalized.get("candidate_registered") is True
+            and normalized.get("proposal_emission_ready") is True
+        )
+        if succeeded:
+            normalized["materialization_outcome"] = "CANDIDATE_EMITTED"
+            normalized["materialization_completion_stage"] = "candidate_registered"
+            normalized["materialization_blocked_stage"] = "none"
+            normalized["materialization_rejection_reason"] = "none"
+        elif normalized.get("candidate_object_created") is False:
+            normalized.setdefault("materialization_outcome", "CANDIDATE_REJECTED")
+        return normalized
+
+    def _color_remap_accuracy_breakdown_line(
+        self,
+        exit_payload: dict[str, Any],
+        operation_diagnostic: dict[str, Any],
+    ) -> str:
+        breakdown = (
+            exit_payload.get("predicted_accuracy_breakdown")
+            or operation_diagnostic.get("predicted_accuracy_breakdown")
+            or {}
+        )
+        breakdown = breakdown if isinstance(breakdown, dict) else {}
+        correct = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "correct_cell_count",
+        )
+        total = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "total_cell_count",
+        )
+        incorrect = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "incorrect_cell_count",
+        )
+        changed = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "changed_target_cell_count",
+        )
+        mapped = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "mapped_source_cell_count",
+        )
+        collateral = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "collateral_remap_cell_count",
+        )
+        localized_accuracy = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "localized_accuracy",
+        )
+        localized_positions = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "localized_affected_position_count",
+        )
+        selected_scope = self._value(
+            breakdown.get("selected_execution_scope")
+            or exit_payload.get("selected_execution_scope")
+            or operation_diagnostic.get("selected_execution_scope")
+            or exit_payload.get("application_scope")
+            or operation_diagnostic.get("application_scope")
+        )
+        dominant = self._value(
+            breakdown.get("dominant_accuracy_loss_cause")
+            or exit_payload.get("dominant_accuracy_loss_cause")
+            or operation_diagnostic.get("dominant_accuracy_loss_cause")
+        )
+        estimator = self._value(
+            breakdown.get("estimator")
+            or exit_payload.get("accuracy_estimator")
+            or operation_diagnostic.get("accuracy_estimator")
+        )
+        if (
+            correct == "Not Available"
+            and total == "Not Available"
+            and incorrect == "Not Available"
+            and changed == "Not Available"
+            and mapped == "Not Available"
+            and collateral == "Not Available"
+            and dominant == "Not Available"
+            and estimator == "Not Available"
+        ):
+            return "Not Available"
+        return (
+            f"estimator={estimator} correct={correct}/{total} "
+            f"incorrect={incorrect} changed_cells={changed} "
+            f"mapped_source_cells={mapped} collateral_remap_cells={collateral} "
+            f"localized_accuracy={localized_accuracy} "
+            f"localized_positions={localized_positions} "
+            f"selected_scope={selected_scope} "
+            f"dominant_loss={dominant}"
+        )
+
+    def _first_available_breakdown_value(
+        self,
+        breakdown: dict[str, Any],
+        exit_payload: dict[str, Any],
+        operation_diagnostic: dict[str, Any],
+        key: str,
+    ) -> str:
+        for source in (breakdown, exit_payload, operation_diagnostic):
+            value = source.get(key)
+            if self._payload_value_available(value):
+                return self._value(value)
+        return "Not Available"
+
+    def _hydrate_payload(
+        self,
+        payload: dict[str, Any],
+        fallback: dict[str, Any],
+    ) -> dict[str, Any]:
+        hydrated = dict(payload) if isinstance(payload, dict) else {}
+        for key, value in fallback.items():
+            if not self._payload_value_available(hydrated.get(key)):
+                hydrated[key] = value
+        return hydrated
+
+    def _payload_value_available(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str) and value.strip().lower() in {
+            "",
+            "not available",
+            "unknown",
+            "none",
+        }:
+            return False
+        return True
+
+    def _source_trace_row(
+        self,
+        source_trace: list[Any],
+        source_name: str,
+    ) -> dict[str, Any]:
+        for row in source_trace:
+            if isinstance(row, dict) and row.get("source") == source_name:
+                return row
+        return {}
+
+    def _source_trace_row_for_operation(
+        self,
+        source_trace: list[Any],
+        source_name: str,
+        operation: Any,
+    ) -> dict[str, Any]:
+        normalized_source = self._normalize_source_name(source_name)
+        operation = str(operation or "")
+        same_source_rows = [
+            row for row in source_trace
+            if isinstance(row, dict)
+            and (
+                row.get("source") == source_name
+                or row.get("normalized_source") == normalized_source
+            )
+        ]
+        for row in same_source_rows:
+            if str(row.get("operation") or "") == operation:
+                return row
+        for row in same_source_rows:
+            if row.get("entered_arena") is not True:
+                return row
+        return same_source_rows[0] if same_source_rows else {}
+
+    def _compiler_source_flow_alignment(
+        self,
+        source_row: dict[str, Any],
+        resolution_row: dict[str, Any],
+    ) -> str:
+        if not source_row:
+            return "NO_SOURCE_FLOW_ROW"
+        compiler_operation = str(resolution_row.get("operation") or "")
+        source_operation = str(source_row.get("operation") or "")
+        if source_operation and compiler_operation and source_operation != compiler_operation:
+            return (
+                "SOURCE_ENTERED_ARENA_WITH_DIFFERENT_OPERATION "
+                f"source_operation={source_operation}"
+            )
+        if (
+            resolution_row.get("candidate_emitted") is False
+            and source_row.get("entered_arena") is True
+        ):
+            return "SOURCE_FLOW_NOT_COMPILER_ROW_SPECIFIC"
+        return "ALIGNED"
+
+    def _operation_identity_chain(
+        self,
+        resolution_row: dict[str, Any],
+        source_row: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> dict[str, Any]:
+        compiler_operation = resolution_row.get("operation")
+        proposal_operation = source_row.get("operation")
+        arena_operation = (
+            arena.get("validation_probe_operation")
+            or arena.get("winner_operation")
+        )
+        validation_probe_operation = arena.get("validation_probe_operation")
+        links = [
+            ("compiler_to_proposal", compiler_operation, proposal_operation),
+            ("proposal_to_arena", proposal_operation, arena_operation),
+            ("arena_to_validation_probe", arena_operation, validation_probe_operation),
+        ]
+        first_drift = None
+        for stage, left, right in links:
+            if not self._payload_value_available(left) or not self._payload_value_available(right):
+                continue
+            if str(left) != str(right):
+                first_drift = (stage, left, right)
+                break
+        if first_drift:
+            stage, left, right = first_drift
+            state = "OPERATION_IDENTITY_DRIFT"
+            detail = f"{stage}: {left} != {right}"
+        else:
+            state = "CONSISTENT"
+            detail = "operation_identity_preserved"
+        return {
+            "identity_state": state,
+            "semantic_intent": resolution_row.get("semantic_intent"),
+            "compiler_operation": compiler_operation,
+            "proposal_operation": proposal_operation,
+            "arena_operation": arena_operation,
+            "validation_probe_operation": validation_probe_operation,
+            "first_drift_stage": first_drift[0] if first_drift else "none",
+            "drift_detail": detail,
+        }
+
+    def _normalize_source_name(self, value: Any) -> str:
+        token = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "semantic_to_transformation_compiler": "semantic_compiler",
+            "compiler": "semantic_compiler",
+            "program_generation": "normalized_program_candidates",
+            "adaptive_reuse_layer": "adaptive_reuse",
+        }
+        return aliases.get(token, token)
+
+    def _candidate_builder_state(self, arena: dict[str, Any]) -> str:
+        trace = arena.get("candidate_source_flow_trace") or []
+        trace = trace if isinstance(trace, list) else []
+        if any(
+            isinstance(row, dict) and row.get("arena_proposal_built") is True
+            for row in trace
+        ):
+            return "BUILT"
+        blocked = [
+            row.get("blocked_stage")
+            for row in trace
+            if isinstance(row, dict) and row.get("blocked_stage")
+        ]
+        return self._value(blocked[0] if blocked else None)
+
+    def _priority_label(
+        self,
+        coverage: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if executable.get("program_validation_contract_state") == (
+            "EVIDENCE_ACCEPTANCE_CONTRACT_UNSATISFIED"
+        ):
+            return "CRITICAL"
+        if arena.get("selection_state") == "NO_SAFE_WINNER":
+            return "HIGH"
+        if coverage.get("knowledge_operationalization_choke_point"):
+            return "HIGH"
+        return "MEDIUM"
+
     def _read_any(self, *sources_and_keys: Any) -> Any:
         sources = [item for item in sources_and_keys if isinstance(item, dict)]
         keys = [item for item in sources_and_keys if isinstance(item, str)]
@@ -4363,6 +6107,18 @@ class DeterministicFinalReportRenderer:
                 for key, item in list(value.items())[:8]
             )
         return str(value)
+
+    def _first_meaningful(self, *values: Any, default: str = "Not Available") -> str:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, str):
+                text = value.strip()
+                if not text or text.upper() in {"UNKNOWN", "NOT AVAILABLE"}:
+                    continue
+                return text
+            return str(value)
+        return default
 
     def _source_names(self, row: dict[str, Any], singular_key: str, plural_key: str) -> str:
         plural = row.get(plural_key)

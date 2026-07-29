@@ -80,6 +80,20 @@ class CandidateSimulator:
             mapping = parameters.get("color_mapping") or {}
             if not mapping and "source_color" in parameters and "target_color" in parameters:
                 mapping = {parameters["source_color"]: parameters["target_color"]}
+            affected_positions = parameters.get("affected_positions") or []
+            if affected_positions:
+                normalized_mapping = {
+                    int(source_color): int(target_color)
+                    for source_color, target_color in mapping.items()
+                }
+                for row, col in affected_positions:
+                    row = int(row)
+                    col = int(col)
+                    if 0 <= row < output.shape[0] and 0 <= col < output.shape[1]:
+                        source_color = int(grid[row, col])
+                        if source_color in normalized_mapping:
+                            output[row, col] = normalized_mapping[source_color]
+                return output, True
             for source_color, target_color in mapping.items():
                 output[grid == int(source_color)] = int(target_color)
             return output, True

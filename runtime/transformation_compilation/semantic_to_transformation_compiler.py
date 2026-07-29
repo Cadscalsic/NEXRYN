@@ -23,6 +23,8 @@ class SemanticToTransformationCompiler:
     """Bridge semantic attribution and concrete transformation execution."""
 
     system_name = "semantic_to_transformation_compiler"
+    COLOR_REMAP_CANDIDATE_THRESHOLD = 0.75
+    PRESERVATION_CANDIDATE_THRESHOLD = 1.0
 
     PATH_CONCEPTS = {
         "path_finding",
@@ -223,7 +225,14 @@ class SemanticToTransformationCompiler:
             if candidate:
                 candidates.append(candidate)
         if concepts.intersection(self.COLOR_REMAP_CONCEPTS) or self._has_intent(execution_intents, {"replace_color_mapping", "remap_symbols", "replace_color"}):
-            candidate = self._compile_color_remap(source, target)
+            candidate = self._compile_color_remap(
+                source,
+                target,
+                self._intent_parameters_for_operation(
+                    execution_intents,
+                    "replace_color",
+                ),
+            )
             if candidate:
                 candidates.append(candidate)
         if concepts.intersection(self.DUPLICATION_CONCEPTS) or self._has_intent(execution_intents, {"duplicate_object"}):
@@ -233,9 +242,12 @@ class SemanticToTransformationCompiler:
 
         if not candidates:
             reason = (
-                "no_supported_compiler_for_execution_intents"
-                if execution_intents
-                else "no_supported_semantic_delta"
+                self._no_candidate_failure_reason(
+                    concepts,
+                    execution_intents,
+                    source,
+                    target,
+                )
             )
             return self._empty_report(
                 concepts,
@@ -291,6 +303,15 @@ class SemanticToTransformationCompiler:
                 concepts,
                 execution_intents,
                 candidates,
+                source=source,
+                target=target,
+            ),
+            "compiler_operation_diagnostics": self._compiler_operation_diagnostics(
+                concepts,
+                execution_intents,
+                candidates,
+                source=source,
+                target=target,
             ),
             "timestamp": str(datetime.utcnow()),
         }
@@ -484,29 +505,37 @@ class SemanticToTransformationCompiler:
             rationale=f"semantic_{intent}_to_preservation_program",
         )
 
-    def _compile_color_remap(self, source: np.ndarray, target: np.ndarray) -> dict[str, Any] | None:
-        if source.shape != target.shape:
+    def _compile_color_remap(
+        self,
+        source: np.ndarray,
+        target: np.ndarray,
+        intent_parameters: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        diagnostic = self._color_remap_composition_diagnostic(
+            source,
+            target,
+            intent_parameters,
+        )
+        if diagnostic["rejection_reason"] != "CANDIDATE_VALID":
             return None
-        changed = np.argwhere(source != target)
-        if len(changed) == 0:
-            return None
-        mapping = {}
-        for row, col in changed:
-            src = int(source[row, col])
-            dst = int(target[row, col])
-            if src in mapping and mapping[src] != dst:
-                return None
-            mapping[src] = dst
-        predicted = source.copy()
-        for src, dst in mapping.items():
-            predicted[source == src] = dst
-        validation = self._validation(predicted, target)
-        if validation["accuracy"] < 0.75:
-            return None
+        mapping = {
+            int(src): int(dst)
+            for src, dst in (diagnostic.get("color_mapping") or {}).items()
+        }
         parameters = {
             "color_mapping": {int(src): int(dst) for src, dst in mapping.items()},
+            "source_color": diagnostic.get("source_color"),
+            "target_color": diagnostic.get("target_color"),
             "remap_policy": "observed_symbol_delta",
+            "parameter_source": diagnostic.get("parameter_source"),
+            "affected_cell_count": diagnostic.get("affected_cell_count"),
+            "application_scope": diagnostic.get("application_scope"),
+            "affected_positions": diagnostic.get("affected_positions") or [],
         }
+        predicted = self._execute_color_remap(source, parameters)
+        validation = self._validation(predicted, target)
+        if validation["accuracy"] < self.COLOR_REMAP_CANDIDATE_THRESHOLD:
+            return None
         return self._candidate(
             "symbolic_remapping",
             "replace_color",
@@ -712,6 +741,16 @@ class SemanticToTransformationCompiler:
     def _execute_color_remap(self, grid: np.ndarray, parameters: Mapping[str, Any]) -> np.ndarray:
         output = grid.copy()
         mapping = parameters.get("color_mapping", {}) or {}
+        affected_positions = parameters.get("affected_positions") or []
+        if affected_positions:
+            for row, col in affected_positions:
+                row = int(row)
+                col = int(col)
+                if 0 <= row < output.shape[0] and 0 <= col < output.shape[1]:
+                    source_color = int(grid[row, col])
+                    if source_color in {int(src) for src in mapping}:
+                        output[row, col] = int(mapping[source_color])
+            return output
         for source_color, target_color in mapping.items():
             output[grid == int(source_color)] = int(target_color)
         return output
@@ -805,6 +844,15 @@ class SemanticToTransformationCompiler:
                 concepts,
                 execution_intents or [],
                 [],
+                source=source,
+                target=target,
+            ),
+            "compiler_operation_diagnostics": self._compiler_operation_diagnostics(
+                concepts,
+                execution_intents or [],
+                [],
+                source=source,
+                target=target,
             ),
             "timestamp": str(datetime.utcnow()),
         }
@@ -845,8 +893,6 @@ class SemanticToTransformationCompiler:
         reason_counts = Counter()
         rows = []
         grounding_requirement_rows = []
-        if failure_reason:
-            reason_counts[failure_reason] += 1
         if not trace_events:
             reason_counts["operation_ambiguity"] += 1
             rows.append({
@@ -1035,6 +1081,9 @@ class SemanticToTransformationCompiler:
         concepts: set[str],
         execution_intents: list[Mapping[str, Any]],
         candidates: list[dict[str, Any]],
+        *,
+        source: np.ndarray | None = None,
+        target: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
         trace_events = self._expected_operation_traces(concepts, execution_intents)
         candidate_operations = {
@@ -1058,6 +1107,31 @@ class SemanticToTransformationCompiler:
                 "compilation_attempted": compiler_found,
                 "candidate_emitted": candidate_emitted,
                 "compiler_rule": event.get("compiler_rule"),
+                "compiler_entry_payload": self._compiler_entry_payload(
+                    operation,
+                    concepts,
+                    execution_intents,
+                    source,
+                    target,
+                ),
+                "compiler_exit_payload": self._compiler_exit_payload(
+                    operation,
+                    candidates,
+                    source,
+                    target,
+                    execution_intents,
+                ),
+                "candidate_rejection_reason": (
+                    self._candidate_rejection_reason(
+                        operation,
+                        compiler_found,
+                        candidate_emitted,
+                        candidates,
+                        source,
+                        target,
+                        execution_intents,
+                    )
+                ),
                 "resolution_state": self._compiler_resolution_state(
                     compiler_found,
                     candidate_emitted,
@@ -1079,12 +1153,1012 @@ class SemanticToTransformationCompiler:
                     "compilation_attempted": compiler_found,
                     "candidate_emitted": False,
                     "compiler_rule": self._compiler_rule_for(operation),
+                    "compiler_entry_payload": self._compiler_entry_payload(
+                        operation,
+                        concepts,
+                        execution_intents,
+                        source,
+                        target,
+                    ),
+                    "compiler_exit_payload": self._compiler_exit_payload(
+                        operation,
+                        candidates,
+                        source,
+                        target,
+                        execution_intents,
+                    ),
+                    "candidate_rejection_reason": (
+                        self._candidate_rejection_reason(
+                            operation,
+                            compiler_found,
+                            False,
+                            candidates,
+                            source,
+                            target,
+                            execution_intents,
+                        )
+                    ),
                     "resolution_state": self._compiler_resolution_state(
                         compiler_found,
                         False,
                     ),
                 })
         return rows[:25]
+
+    def _compiler_operation_diagnostics(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+        candidates: list[dict[str, Any]],
+        *,
+        source: np.ndarray | None = None,
+        target: np.ndarray | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = []
+        for operation in self._expected_operations(concepts, execution_intents):
+            relevant_intents = self._relevant_intents_for_operation(
+                execution_intents,
+                operation,
+            )
+            row = {
+                "operation": operation,
+                "resolved_compiler": self._compiler_gate_for_operation(operation)
+                or "NONE",
+                "relevant_execution_intent_count": len(relevant_intents),
+                "relevant_semantic_matches": self._relevant_semantic_matches(
+                    relevant_intents,
+                    concepts,
+                    operation,
+                )[:12],
+                "candidate_count": len(
+                    [
+                        candidate for candidate in candidates
+                        if self._candidate_operation(candidate) == operation
+                    ]
+                ),
+            }
+            if operation == "replace_color":
+                diagnostic = self._color_remap_composition_diagnostic(
+                    source,
+                    target,
+                    self._intent_parameters_for_operation(
+                        execution_intents,
+                        operation,
+                    ),
+                )
+                row.update({
+                    "composition_diagnostic_type": "color_remap",
+                    "mapping_extraction_state": (
+                        "MAPPING_EXTRACTED"
+                        if diagnostic.get("mapping_count")
+                        else "MAPPING_NOT_EXTRACTED"
+                    ),
+                    **self._flatten_color_remap_accuracy_breakdown(diagnostic),
+                    "source_color": diagnostic.get("source_color"),
+                    "target_color": diagnostic.get("target_color"),
+                    "application_scope": diagnostic.get("application_scope"),
+                    "mapping_count": diagnostic.get("mapping_count"),
+                    "affected_cell_count": diagnostic.get("affected_cell_count"),
+                    "affected_position_count": len(
+                        diagnostic.get("affected_positions") or []
+                    ),
+                    "preserved_color_count": diagnostic.get("preserved_color_count"),
+                    "composition_step_count": diagnostic.get("composition_step_count"),
+                    "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+                    "parameter_source": diagnostic.get("parameter_source"),
+                    "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+                    "predicted_accuracy_breakdown": diagnostic.get(
+                        "predicted_accuracy_breakdown"
+                    ),
+                    "validation_threshold": diagnostic.get("validation_threshold"),
+                    "dominant_accuracy_loss_cause": diagnostic.get(
+                        "dominant_accuracy_loss_cause"
+                    ),
+                    "composition_validation_state": diagnostic.get(
+                        "composition_validation_state"
+                    ),
+                    "candidate_object_created": diagnostic.get(
+                        "candidate_object_created"
+                    ),
+                    "candidate_registered": diagnostic.get("candidate_registered"),
+                    "candidate_count_incremented": diagnostic.get(
+                        "candidate_count_incremented"
+                    ),
+                    "proposal_emission_ready": diagnostic.get(
+                        "proposal_emission_ready"
+                    ),
+                    "materialization_outcome": diagnostic.get(
+                        "materialization_outcome"
+                    ),
+                    "materialization_completion_stage": diagnostic.get(
+                        "materialization_completion_stage"
+                    ),
+                    "materialization_blocked_stage": diagnostic.get(
+                        "materialization_blocked_stage"
+                    ),
+                    "materialization_rejection_reason": diagnostic.get(
+                        "materialization_rejection_reason"
+                    ),
+                    "rejection_reason": diagnostic.get("rejection_reason"),
+                })
+            elif operation.startswith("preserve_"):
+                diagnostic = self._preservation_composition_diagnostic(
+                    source,
+                    target,
+                    operation,
+                )
+                row.update({
+                    "composition_diagnostic_type": "preservation",
+                    "preservation_contract_state": diagnostic.get(
+                        "preservation_contract_state"
+                    ),
+                    "changed_cell_count": diagnostic.get("changed_cell_count"),
+                    "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+                    "composition_step_count": diagnostic.get("composition_step_count"),
+                    "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+                    "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+                    "validation_threshold": diagnostic.get("validation_threshold"),
+                    "composition_validation_state": diagnostic.get(
+                        "composition_validation_state"
+                    ),
+                    "candidate_object_created": diagnostic.get(
+                        "candidate_object_created"
+                    ),
+                    "candidate_registered": diagnostic.get("candidate_registered"),
+                    "candidate_count_incremented": diagnostic.get(
+                        "candidate_count_incremented"
+                    ),
+                    "proposal_emission_ready": diagnostic.get(
+                        "proposal_emission_ready"
+                    ),
+                    "materialization_outcome": diagnostic.get(
+                        "materialization_outcome"
+                    ),
+                    "materialization_completion_stage": diagnostic.get(
+                        "materialization_completion_stage"
+                    ),
+                    "materialization_blocked_stage": diagnostic.get(
+                        "materialization_blocked_stage"
+                    ),
+                    "materialization_rejection_reason": diagnostic.get(
+                        "materialization_rejection_reason"
+                    ),
+                    "rejection_reason": diagnostic.get("rejection_reason"),
+                })
+            rows.append(row)
+        return rows[:25]
+
+    def _relevant_intents_for_operation(
+        self,
+        execution_intents: list[Mapping[str, Any]],
+        operation: str,
+    ) -> list[Mapping[str, Any]]:
+        relevant = []
+        operation_concepts = set()
+        for concept_set, mapped_operation in self._concept_operation_pairs():
+            if mapped_operation == operation:
+                operation_concepts.update(concept_set)
+        for intent in execution_intents:
+            if not isinstance(intent, Mapping):
+                continue
+            matched = {
+                str(intent.get("intent") or ""),
+                str(intent.get("operation") or ""),
+                *[str(item) for item in intent.get("matched_concepts", []) or []],
+            }
+            if str(intent.get("operation") or "") == operation:
+                relevant.append(intent)
+            elif matched.intersection(operation_concepts):
+                relevant.append(intent)
+        return relevant
+
+    def _relevant_semantic_matches(
+        self,
+        relevant_intents: list[Mapping[str, Any]],
+        concepts: set[str],
+        operation: str,
+    ) -> list[str]:
+        matches = set()
+        for intent in relevant_intents:
+            if intent.get("intent"):
+                matches.add(str(intent.get("intent")))
+            if intent.get("operation"):
+                matches.add(str(intent.get("operation")))
+            matches.update(
+                str(item) for item in intent.get("matched_concepts", []) or []
+            )
+        for concept_set, mapped_operation in self._concept_operation_pairs():
+            if mapped_operation == operation:
+                matches.update(str(item) for item in concepts.intersection(concept_set))
+        return sorted(item for item in matches if item)
+
+    def _no_candidate_failure_reason(
+        self,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+        source: np.ndarray,
+        target: np.ndarray,
+    ) -> str:
+        trace_events = self._expected_operation_traces(concepts, execution_intents)
+        for event in trace_events:
+            operation = str(event.get("expected_operation") or "unknown")
+            gate = self._compiler_gate_for_operation(operation)
+            if gate and self._operation_has_primitive(operation):
+                return self._candidate_rejection_reason(
+                    operation,
+                    True,
+                    False,
+                    [],
+                    source,
+                    target,
+                    execution_intents,
+                )
+        if execution_intents:
+            return "no_supported_compiler_for_execution_intents"
+        return "no_supported_semantic_delta"
+
+    def _compiler_entry_payload(
+        self,
+        operation: str,
+        concepts: set[str],
+        execution_intents: list[Mapping[str, Any]],
+        source: np.ndarray | None = None,
+        target: np.ndarray | None = None,
+    ) -> dict[str, Any]:
+        matched = []
+        for intent in execution_intents:
+            if not isinstance(intent, Mapping):
+                continue
+            matched.extend(str(item) for item in intent.get("matched_concepts", []) or [])
+            if intent.get("intent"):
+                matched.append(str(intent.get("intent")))
+            if intent.get("operation"):
+                matched.append(str(intent.get("operation")))
+        semantic_matches = sorted(
+            item for item in set(matched).union(concepts) if item
+        )
+        payload = {
+            "operation": operation,
+            "semantic_match_count": len(semantic_matches),
+            "semantic_matches": semantic_matches[:8],
+            "execution_intent_count": len(
+                [intent for intent in execution_intents if isinstance(intent, Mapping)]
+            ),
+            "input_grid_available": bool(source is not None and source.size > 0),
+            "target_grid_available": bool(target is not None and target.size > 0),
+            "input_shape": list(source.shape) if source is not None and source.size > 0 else [],
+            "target_shape": list(target.shape) if target is not None and target.size > 0 else [],
+        }
+        if operation == "replace_color":
+            diagnostic = self._color_remap_composition_diagnostic(
+                source,
+                target,
+                self._intent_parameters_for_operation(
+                    execution_intents,
+                    operation,
+                ),
+            )
+            payload.update({
+                **self._flatten_color_remap_accuracy_breakdown(diagnostic),
+                "source_color": diagnostic.get("source_color"),
+                "target_color": diagnostic.get("target_color"),
+                "application_scope": diagnostic.get("application_scope"),
+                "mapping_count": diagnostic.get("mapping_count"),
+                "affected_cell_count": diagnostic.get("affected_cell_count"),
+                "affected_position_count": len(
+                    diagnostic.get("affected_positions") or []
+                ),
+                "preserved_color_count": diagnostic.get("preserved_color_count"),
+                "grounded_object_count": diagnostic.get("grounded_object_count"),
+                "composition_step_count": diagnostic.get("composition_step_count"),
+                "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+                "parameter_source": diagnostic.get("parameter_source"),
+                "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+                "predicted_accuracy_breakdown": diagnostic.get(
+                    "predicted_accuracy_breakdown"
+                ),
+                "validation_threshold": diagnostic.get("validation_threshold"),
+                "dominant_accuracy_loss_cause": diagnostic.get(
+                    "dominant_accuracy_loss_cause"
+                ),
+                "composition_validation_state": diagnostic.get(
+                    "composition_validation_state"
+                ),
+                "candidate_object_created": diagnostic.get("candidate_object_created"),
+                "candidate_registered": diagnostic.get("candidate_registered"),
+                "candidate_count_incremented": diagnostic.get(
+                    "candidate_count_incremented"
+                ),
+                "proposal_emission_ready": diagnostic.get("proposal_emission_ready"),
+                "materialization_outcome": diagnostic.get("materialization_outcome"),
+                "materialization_completion_stage": diagnostic.get(
+                    "materialization_completion_stage"
+                ),
+                "materialization_blocked_stage": diagnostic.get(
+                    "materialization_blocked_stage"
+                ),
+                "materialization_rejection_reason": diagnostic.get(
+                    "materialization_rejection_reason"
+                ),
+            })
+        elif operation.startswith("preserve_"):
+            diagnostic = self._preservation_composition_diagnostic(
+                source,
+                target,
+                operation,
+            )
+            payload.update({
+                "preservation_contract_state": diagnostic.get(
+                    "preservation_contract_state"
+                ),
+                "changed_cell_count": diagnostic.get("changed_cell_count"),
+                "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+                "composition_step_count": diagnostic.get("composition_step_count"),
+                "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+                "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+                "validation_threshold": diagnostic.get("validation_threshold"),
+                "composition_validation_state": diagnostic.get(
+                    "composition_validation_state"
+                ),
+                "candidate_object_created": diagnostic.get("candidate_object_created"),
+                "candidate_registered": diagnostic.get("candidate_registered"),
+                "candidate_count_incremented": diagnostic.get(
+                    "candidate_count_incremented"
+                ),
+                "proposal_emission_ready": diagnostic.get("proposal_emission_ready"),
+                "materialization_outcome": diagnostic.get("materialization_outcome"),
+                "materialization_completion_stage": diagnostic.get(
+                    "materialization_completion_stage"
+                ),
+                "materialization_blocked_stage": diagnostic.get(
+                    "materialization_blocked_stage"
+                ),
+                "materialization_rejection_reason": diagnostic.get(
+                    "materialization_rejection_reason"
+                ),
+            })
+        return payload
+
+    def _compiler_exit_payload(
+        self,
+        operation: str,
+        candidates: list[dict[str, Any]],
+        source: np.ndarray | None = None,
+        target: np.ndarray | None = None,
+        execution_intents: list[Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        matching = [
+            candidate for candidate in candidates
+            if self._candidate_operation(candidate) == operation
+        ]
+        best_accuracy = None
+        if matching:
+            best_accuracy = max(
+                float(candidate.get("validation", {}).get("accuracy", 0.0))
+                for candidate in matching
+            )
+        payload = {
+            "candidate_count": len(matching),
+            "valid_candidate_count": len(matching),
+            "rejected_candidate_count": 0 if matching else 1,
+            "total_candidate_count": len(candidates),
+            "best_accuracy": best_accuracy,
+            "best_candidate_confidence": (
+                max(
+                    float(candidate.get("confidence", 0.0))
+                    for candidate in matching
+                )
+                if matching
+                else None
+            ),
+            "composition_step_count": (
+                len(matching[0].get("compiled_program", {}).get("steps", []) or [])
+                if matching
+                else 0
+            ),
+        }
+        if operation == "replace_color":
+            diagnostic = self._color_remap_composition_diagnostic(
+                source,
+                target,
+                self._intent_parameters_for_operation(
+                    execution_intents or [],
+                    operation,
+                ),
+            )
+            payload.update({
+                **self._flatten_color_remap_accuracy_breakdown(diagnostic),
+                "source_color": diagnostic.get("source_color"),
+                "target_color": diagnostic.get("target_color"),
+                "application_scope": diagnostic.get("application_scope"),
+                "mapping_count": diagnostic.get("mapping_count"),
+                "affected_cell_count": diagnostic.get("affected_cell_count"),
+                "affected_position_count": len(
+                    diagnostic.get("affected_positions") or []
+                ),
+                "composition_step_count": diagnostic.get("composition_step_count"),
+                "candidate_schema_valid": bool(matching)
+                or diagnostic.get("candidate_schema_valid"),
+                "rejection_reason": (
+                    "none"
+                    if matching
+                    else diagnostic.get("rejection_reason")
+                ),
+                "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+                "predicted_accuracy_breakdown": diagnostic.get(
+                    "predicted_accuracy_breakdown"
+                ),
+                "validation_threshold": diagnostic.get("validation_threshold"),
+                "dominant_accuracy_loss_cause": diagnostic.get(
+                    "dominant_accuracy_loss_cause"
+                ),
+                "composition_validation_state": diagnostic.get(
+                    "composition_validation_state"
+                ),
+                "candidate_object_created": bool(matching),
+                "candidate_registered": bool(matching),
+                "candidate_count_incremented": bool(matching),
+                "proposal_emission_ready": bool(matching),
+                "materialization_outcome": (
+                    "CANDIDATE_EMITTED"
+                    if matching
+                    else diagnostic.get("materialization_outcome")
+                ),
+                "materialization_completion_stage": (
+                    "candidate_registered"
+                    if matching
+                    else diagnostic.get("materialization_completion_stage")
+                ),
+                "materialization_blocked_stage": (
+                    "none"
+                    if matching
+                    else diagnostic.get("materialization_blocked_stage")
+                ),
+                "materialization_rejection_reason": (
+                    "none"
+                    if matching
+                    else diagnostic.get("materialization_rejection_reason")
+                ),
+            })
+        elif operation.startswith("preserve_"):
+            diagnostic = self._preservation_composition_diagnostic(
+                source,
+                target,
+                operation,
+            )
+            payload.update({
+                "preservation_contract_state": diagnostic.get(
+                    "preservation_contract_state"
+                ),
+                "changed_cell_count": diagnostic.get("changed_cell_count"),
+                "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+                "composition_step_count": (
+                    len(matching[0].get("compiled_program", {}).get("steps", []) or [])
+                    if matching
+                    else diagnostic.get("composition_step_count")
+                ),
+                "candidate_schema_valid": bool(matching)
+                or diagnostic.get("candidate_schema_valid"),
+                "rejection_reason": (
+                    "none"
+                    if matching
+                    else diagnostic.get("rejection_reason")
+                ),
+                "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+                "validation_threshold": diagnostic.get("validation_threshold"),
+                "composition_validation_state": diagnostic.get(
+                    "composition_validation_state"
+                ),
+                "candidate_object_created": bool(matching),
+                "candidate_registered": bool(matching),
+                "candidate_count_incremented": bool(matching),
+                "proposal_emission_ready": bool(matching),
+                "materialization_outcome": (
+                    "CANDIDATE_EMITTED"
+                    if matching
+                    else diagnostic.get("materialization_outcome")
+                ),
+                "materialization_completion_stage": (
+                    "candidate_registered"
+                    if matching
+                    else diagnostic.get("materialization_completion_stage")
+                ),
+                "materialization_blocked_stage": (
+                    "none"
+                    if matching
+                    else diagnostic.get("materialization_blocked_stage")
+                ),
+                "materialization_rejection_reason": (
+                    "none"
+                    if matching
+                    else diagnostic.get("materialization_rejection_reason")
+                ),
+            })
+        return payload
+
+    def _candidate_rejection_reason(
+        self,
+        operation: str,
+        compiler_found: bool,
+        candidate_emitted: bool,
+        candidates: list[dict[str, Any]],
+        source: np.ndarray | None,
+        target: np.ndarray | None,
+        execution_intents: list[Mapping[str, Any]] | None = None,
+    ) -> str:
+        if not compiler_found:
+            return "compiler_not_resolved"
+        if candidate_emitted:
+            return "none"
+        if source is None or target is None or source.size == 0 or target.size == 0:
+            return "missing_grid_pair"
+        if source.shape != target.shape and operation not in {
+            "scale_up",
+            "scale_down",
+            "rotate",
+            "mirror_horizontal",
+            "mirror_vertical",
+        }:
+            return "UNSUPPORTED_COMPOSITION_SHAPE"
+        if operation == "replace_color":
+            diagnostic = self._color_remap_composition_diagnostic(
+                source,
+                target,
+                self._intent_parameters_for_operation(
+                    execution_intents or [],
+                    operation,
+                ),
+            )
+            return str(diagnostic.get("rejection_reason") or "COMPOSITION_VALIDATION_FAILED")
+        return self._missing_candidate_reason(operation, source, target)
+
+    def _intent_parameters_for_operation(
+        self,
+        execution_intents: list[Mapping[str, Any]],
+        operation: str,
+    ) -> dict[str, Any]:
+        for intent in execution_intents:
+            if not isinstance(intent, Mapping):
+                continue
+            if str(intent.get("operation") or "") != operation:
+                continue
+            parameters = intent.get("parameters") or intent.get("params") or {}
+            if isinstance(parameters, Mapping):
+                return dict(parameters)
+            return {}
+        return {}
+
+    def _color_remap_composition_diagnostic(
+        self,
+        source: np.ndarray | None,
+        target: np.ndarray | None,
+        intent_parameters: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        intent_parameters = (
+            intent_parameters if isinstance(intent_parameters, Mapping) else {}
+        )
+        base = {
+            "source_color": None,
+            "target_color": None,
+            "color_mapping": {},
+            "affected_positions": [],
+            "application_scope": "global_color_remap",
+            "mapping_count": 0,
+            "affected_cell_count": 0,
+            "preserved_color_count": 0,
+            "grounded_object_count": 0,
+            "composition_step_count": 0,
+            "candidate_schema_valid": False,
+            "parameter_source": "none",
+            "predicted_accuracy": None,
+            "predicted_accuracy_breakdown": {},
+            "validation_threshold": self.COLOR_REMAP_CANDIDATE_THRESHOLD,
+            "dominant_accuracy_loss_cause": None,
+            "composition_validation_state": "NOT_EVALUATED",
+            "candidate_object_created": False,
+            "candidate_registered": False,
+            "candidate_count_incremented": False,
+            "proposal_emission_ready": False,
+            "materialization_blocked_stage": "mapping_extraction",
+            "materialization_rejection_reason": "MISSING_GRID_PAIR",
+            "rejection_reason": "MISSING_GRID_PAIR",
+        }
+        if source is None or target is None or source.size == 0 or target.size == 0:
+            return base
+        if source.shape != target.shape:
+            return {
+                **base,
+                "rejection_reason": "UNSUPPORTED_COMPOSITION_SHAPE",
+                "materialization_rejection_reason": "UNSUPPORTED_COMPOSITION_SHAPE",
+            }
+        changed = np.argwhere(source != target)
+        preserved_colors = set(int(value) for value in np.unique(source[source == target]))
+        mapping = self._normalize_color_mapping(
+            intent_parameters.get("color_mapping")
+            or intent_parameters.get("mapping")
+        )
+        parameter_source = "execution_intent_parameters" if mapping else "grid_delta"
+        if not mapping:
+            inferred: dict[int, int] = {}
+            for row, col in changed:
+                src = int(source[row, col])
+                dst = int(target[row, col])
+                if src in inferred and inferred[src] != dst:
+                    return {
+                        **base,
+                        "source_color": src,
+                        "target_color": dst,
+                        "mapping_count": len(inferred),
+                        "affected_cell_count": int(len(changed)),
+                        "preserved_color_count": len(preserved_colors),
+                        "parameter_source": "grid_delta",
+                        "materialization_rejection_reason": "AMBIGUOUS_COLOR_MAPPING",
+                        "rejection_reason": "AMBIGUOUS_COLOR_MAPPING",
+                    }
+                inferred[src] = dst
+            mapping = inferred
+        if not mapping:
+            return {
+                **base,
+                "affected_cell_count": int(len(changed)),
+                "preserved_color_count": len(preserved_colors),
+                "parameter_source": parameter_source,
+                "materialization_rejection_reason": "MISSING_COLOR_MAPPING",
+                "rejection_reason": "MISSING_COLOR_MAPPING",
+            }
+        predicted = source.copy()
+        for src, dst in mapping.items():
+            if not np.any(source == src):
+                return {
+                    **base,
+                    "source_color": src,
+                    "target_color": dst,
+                    "color_mapping": mapping,
+                    "mapping_count": len(mapping),
+                    "affected_cell_count": int(len(changed)),
+                    "preserved_color_count": len(preserved_colors),
+                    "parameter_source": parameter_source,
+                    "materialization_rejection_reason": "SOURCE_COLOR_NOT_IN_INPUT",
+                    "rejection_reason": "SOURCE_COLOR_NOT_IN_INPUT",
+                }
+            predicted[source == src] = dst
+        if not all(np.any(target == dst) for dst in mapping.values()):
+            dst = next(dst for dst in mapping.values() if not np.any(target == dst))
+            src = next(src for src, value in mapping.items() if value == dst)
+            return {
+                **base,
+                "source_color": src,
+                "target_color": dst,
+                "color_mapping": mapping,
+                "mapping_count": len(mapping),
+                "affected_cell_count": int(len(changed)),
+                "preserved_color_count": len(preserved_colors),
+                "parameter_source": parameter_source,
+                "materialization_rejection_reason": "TARGET_COLOR_NOT_IN_TARGET",
+                "rejection_reason": "TARGET_COLOR_NOT_IN_TARGET",
+            }
+        validation = self._validation(predicted, target)
+        accuracy_breakdown = self._color_remap_accuracy_breakdown(
+            source,
+            target,
+            predicted,
+            mapping,
+            changed,
+        )
+        localized = self._localized_color_remap_evaluation(
+            source,
+            target,
+            mapping,
+            changed,
+        )
+        if (
+            validation["accuracy"] < self.COLOR_REMAP_CANDIDATE_THRESHOLD
+            and localized["accuracy"] >= self.COLOR_REMAP_CANDIDATE_THRESHOLD
+        ):
+            src, dst = next(iter(mapping.items()))
+            return {
+                **base,
+                "source_color": src,
+                "target_color": dst,
+                "color_mapping": mapping,
+                "affected_positions": localized["affected_positions"],
+                "application_scope": "localized_changed_cells",
+                "mapping_count": len(mapping),
+                "affected_cell_count": int(len(changed)),
+                "preserved_color_count": len(preserved_colors),
+                "grounded_object_count": int(len(changed) > 0),
+                "composition_step_count": 1,
+                "candidate_schema_valid": True,
+                "parameter_source": parameter_source,
+                "predicted_accuracy": localized["accuracy"],
+                "global_predicted_accuracy": validation["accuracy"],
+                "predicted_accuracy_breakdown": {
+                    **accuracy_breakdown,
+                    "localized_correct_cell_count": localized["correct_cell_count"],
+                    "localized_total_cell_count": localized["total_cell_count"],
+                    "localized_accuracy": localized["accuracy"],
+                    "localized_affected_position_count": len(
+                        localized["affected_positions"]
+                    ),
+                    "selected_execution_scope": "localized_changed_cells",
+                },
+                "validation_threshold": self.COLOR_REMAP_CANDIDATE_THRESHOLD,
+                "dominant_accuracy_loss_cause": accuracy_breakdown.get(
+                    "dominant_accuracy_loss_cause"
+                ),
+                "composition_validation_state": "CANDIDATE_VALID",
+                "candidate_object_created": True,
+                "candidate_registered": True,
+                "candidate_count_incremented": True,
+                "proposal_emission_ready": True,
+                "materialization_outcome": "CANDIDATE_EMITTED",
+                "materialization_completion_stage": "candidate_registered",
+                "materialization_blocked_stage": "none",
+                "materialization_rejection_reason": "none",
+                "rejection_reason": "CANDIDATE_VALID",
+            }
+        if validation["accuracy"] < self.COLOR_REMAP_CANDIDATE_THRESHOLD:
+            src, dst = next(iter(mapping.items()))
+            return {
+                **base,
+                "source_color": src,
+                "target_color": dst,
+                "color_mapping": mapping,
+                "affected_positions": [point.tolist() for point in changed],
+                "application_scope": "global_color_remap",
+                "mapping_count": len(mapping),
+                "affected_cell_count": int(len(changed)),
+                "preserved_color_count": len(preserved_colors),
+                "composition_step_count": 1,
+                "candidate_schema_valid": True,
+                "parameter_source": parameter_source,
+                "predicted_accuracy": validation["accuracy"],
+                "predicted_accuracy_breakdown": accuracy_breakdown,
+                "validation_threshold": self.COLOR_REMAP_CANDIDATE_THRESHOLD,
+                "dominant_accuracy_loss_cause": accuracy_breakdown.get(
+                    "dominant_accuracy_loss_cause"
+                ),
+                "composition_validation_state": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+                "materialization_blocked_stage": "composition_validation",
+                "materialization_rejection_reason": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+                "rejection_reason": (
+                    "PREDICTED_ACCURACY_BELOW_CANDIDATE_THRESHOLD"
+                ),
+            }
+        src, dst = next(iter(mapping.items()))
+        return {
+            **base,
+            "source_color": src,
+            "target_color": dst,
+            "color_mapping": mapping,
+            "affected_positions": [point.tolist() for point in changed],
+            "application_scope": "global_color_remap",
+            "mapping_count": len(mapping),
+            "affected_cell_count": int(len(changed)),
+            "preserved_color_count": len(preserved_colors),
+            "grounded_object_count": int(len(changed) > 0),
+            "composition_step_count": 1,
+            "candidate_schema_valid": True,
+            "parameter_source": parameter_source,
+            "predicted_accuracy": validation["accuracy"],
+            "predicted_accuracy_breakdown": accuracy_breakdown,
+            "validation_threshold": self.COLOR_REMAP_CANDIDATE_THRESHOLD,
+            "dominant_accuracy_loss_cause": accuracy_breakdown.get(
+                "dominant_accuracy_loss_cause"
+            ),
+            "composition_validation_state": "CANDIDATE_VALID",
+            "candidate_object_created": True,
+            "candidate_registered": True,
+            "candidate_count_incremented": True,
+            "proposal_emission_ready": True,
+            "materialization_outcome": "CANDIDATE_EMITTED",
+            "materialization_completion_stage": "candidate_registered",
+            "materialization_blocked_stage": "none",
+            "materialization_rejection_reason": "none",
+            "rejection_reason": "CANDIDATE_VALID",
+        }
+
+    def _normalize_color_mapping(self, value: Any) -> dict[int, int]:
+        if not isinstance(value, Mapping):
+            return {}
+        mapping: dict[int, int] = {}
+        for src, dst in value.items():
+            try:
+                mapping[int(src)] = int(dst)
+            except (TypeError, ValueError):
+                return {}
+        return mapping
+
+    def _preservation_composition_diagnostic(
+        self,
+        source: np.ndarray | None,
+        target: np.ndarray | None,
+        operation: str,
+    ) -> dict[str, Any]:
+        base = {
+            "operation": operation,
+            "preservation_contract_state": "NOT_EVALUATED",
+            "changed_cell_count": 0,
+            "preserved_cell_count": 0,
+            "composition_step_count": 0,
+            "candidate_schema_valid": False,
+            "predicted_accuracy": None,
+            "validation_threshold": self.PRESERVATION_CANDIDATE_THRESHOLD,
+            "composition_validation_state": "NOT_EVALUATED",
+            "candidate_object_created": False,
+            "candidate_registered": False,
+            "candidate_count_incremented": False,
+            "proposal_emission_ready": False,
+            "materialization_blocked_stage": "preservation_contract",
+            "materialization_rejection_reason": "MISSING_GRID_PAIR",
+            "rejection_reason": "missing_grid_pair",
+        }
+        if source is None or target is None or source.size == 0 or target.size == 0:
+            return base
+        if source.shape != target.shape:
+            return {
+                **base,
+                "preservation_contract_state": "PRESERVATION_SHAPE_MISMATCH",
+                "composition_validation_state": "UNSUPPORTED_COMPOSITION_SHAPE",
+                "materialization_rejection_reason": "UNSUPPORTED_COMPOSITION_SHAPE",
+                "rejection_reason": "UNSUPPORTED_COMPOSITION_SHAPE",
+            }
+        changed_cell_count = int(np.sum(source != target))
+        preserved_cell_count = int(np.sum(source == target))
+        validation = self._validation(source, target)
+        if changed_cell_count:
+            return {
+                **base,
+                "preservation_contract_state": (
+                    "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+                ),
+                "changed_cell_count": changed_cell_count,
+                "preserved_cell_count": preserved_cell_count,
+                "predicted_accuracy": validation["accuracy"],
+                "composition_validation_state": (
+                    "PRESERVATION_CONTRACT_FAILED_TARGET_CHANGED"
+                ),
+                "materialization_rejection_reason": "operation_semantics_mismatch",
+                "rejection_reason": "operation_semantics_mismatch",
+            }
+        return {
+            **base,
+            "preservation_contract_state": "PRESERVATION_CONTRACT_SATISFIED",
+            "changed_cell_count": 0,
+            "preserved_cell_count": preserved_cell_count,
+            "composition_step_count": 1,
+            "candidate_schema_valid": True,
+            "predicted_accuracy": validation["accuracy"],
+            "composition_validation_state": "CANDIDATE_VALID",
+            "candidate_object_created": True,
+            "candidate_registered": True,
+            "candidate_count_incremented": True,
+            "proposal_emission_ready": True,
+            "materialization_outcome": "CANDIDATE_EMITTED",
+            "materialization_completion_stage": "candidate_registered",
+            "materialization_blocked_stage": "none",
+            "materialization_rejection_reason": "none",
+            "rejection_reason": "CANDIDATE_VALID",
+        }
+
+    def _color_remap_accuracy_breakdown(
+        self,
+        source: np.ndarray,
+        target: np.ndarray,
+        predicted: np.ndarray,
+        mapping: Mapping[int, int],
+        changed: np.ndarray,
+    ) -> dict[str, Any]:
+        total_cells = int(target.size)
+        correct_cells = int(np.sum(predicted == target))
+        incorrect_cells = int(total_cells - correct_cells)
+        mapped_source_mask = np.zeros(source.shape, dtype=bool)
+        for src in mapping:
+            mapped_source_mask |= source == int(src)
+        mapped_source_cell_count = int(np.sum(mapped_source_mask))
+        changed_mask = source != target
+        collateral_remap_mask = mapped_source_mask & ~changed_mask
+        collateral_remap_cell_count = int(np.sum(collateral_remap_mask))
+        remapped_correct_cell_count = int(
+            np.sum(mapped_source_mask & (predicted == target))
+        )
+        changed_correct_cell_count = int(
+            np.sum(changed_mask & (predicted == target))
+        )
+        unchanged_preserved_cell_count = int(
+            np.sum(~changed_mask & (predicted == target))
+        )
+        dominant_loss = "LOW_GRID_MATCH_AFTER_REMAP"
+        if collateral_remap_cell_count > 0:
+            dominant_loss = "GLOBAL_REMAP_COLLATERAL_MISMATCH"
+        return {
+            "estimator": "exact_grid_cell_match_after_global_color_remap",
+            "accuracy_basis": "correct_cells / total_cells",
+            "correct_cell_count": correct_cells,
+            "incorrect_cell_count": incorrect_cells,
+            "total_cell_count": total_cells,
+            "changed_target_cell_count": int(len(changed)),
+            "mapping_count": len(mapping),
+            "mapped_source_cell_count": mapped_source_cell_count,
+            "collateral_remap_cell_count": collateral_remap_cell_count,
+            "remapped_correct_cell_count": remapped_correct_cell_count,
+            "changed_correct_cell_count": changed_correct_cell_count,
+            "unchanged_preserved_cell_count": unchanged_preserved_cell_count,
+            "dominant_accuracy_loss_cause": dominant_loss,
+        }
+
+    def _localized_color_remap_evaluation(
+        self,
+        source: np.ndarray,
+        target: np.ndarray,
+        mapping: Mapping[int, int],
+        changed: np.ndarray,
+    ) -> dict[str, Any]:
+        affected_positions = []
+        predicted = source.copy()
+        for row, col in changed:
+            row = int(row)
+            col = int(col)
+            source_color = int(source[row, col])
+            target_color = int(target[row, col])
+            if source_color not in mapping:
+                continue
+            if int(mapping[source_color]) != target_color:
+                continue
+            predicted[row, col] = target_color
+            affected_positions.append([row, col])
+        validation = self._validation(predicted, target)
+        return {
+            "accuracy": validation["accuracy"],
+            "exact_match": validation["exact_match"],
+            "correct_cell_count": int(np.sum(predicted == target)),
+            "total_cell_count": int(target.size),
+            "affected_positions": affected_positions,
+        }
+
+    def _flatten_color_remap_accuracy_breakdown(
+        self,
+        diagnostic: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        breakdown = diagnostic.get("predicted_accuracy_breakdown")
+        if not isinstance(breakdown, Mapping):
+            breakdown = {}
+        return {
+            "accuracy_estimator": breakdown.get("estimator"),
+            "accuracy_basis": breakdown.get("accuracy_basis"),
+            "correct_cell_count": breakdown.get("correct_cell_count"),
+            "incorrect_cell_count": breakdown.get("incorrect_cell_count"),
+            "total_cell_count": breakdown.get("total_cell_count"),
+            "changed_target_cell_count": breakdown.get("changed_target_cell_count"),
+            "mapped_source_cell_count": breakdown.get("mapped_source_cell_count"),
+            "collateral_remap_cell_count": breakdown.get(
+                "collateral_remap_cell_count"
+            ),
+            "localized_correct_cell_count": breakdown.get(
+                "localized_correct_cell_count"
+            ),
+            "localized_total_cell_count": breakdown.get(
+                "localized_total_cell_count"
+            ),
+            "localized_accuracy": breakdown.get("localized_accuracy"),
+            "localized_affected_position_count": breakdown.get(
+                "localized_affected_position_count"
+            ),
+            "selected_execution_scope": breakdown.get("selected_execution_scope"),
+            "remapped_correct_cell_count": breakdown.get(
+                "remapped_correct_cell_count"
+            ),
+            "changed_correct_cell_count": breakdown.get(
+                "changed_correct_cell_count"
+            ),
+            "unchanged_preserved_cell_count": breakdown.get(
+                "unchanged_preserved_cell_count"
+            ),
+        }
 
     def _compiler_resolution_state(
         self,
@@ -1458,14 +2532,14 @@ class SemanticToTransformationCompiler:
         if operation.startswith("preserve_") and not np.array_equal(source, target):
             return "operation_semantics_mismatch"
         if operation == "replace_color" and source.shape == target.shape:
-            changed = np.argwhere(source != target)
-            mappings = {}
-            for row, col in changed:
-                src = int(source[row, col])
-                dst = int(target[row, col])
-                if src in mappings and mappings[src] != dst:
-                    return "operation_ambiguity"
-                mappings[src] = dst
+            diagnostic = self._color_remap_composition_diagnostic(
+                source,
+                target,
+                {},
+            )
+            reason = diagnostic.get("rejection_reason")
+            if reason and reason != "CANDIDATE_VALID":
+                return str(reason)
         if operation == "duplicate_object":
             background = self._background_color(source)
             if not np.any((source == background) & (target != background)):

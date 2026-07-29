@@ -1338,6 +1338,9 @@ class CanonicalReportBindingEngine:
             "compiler_resolution_trace": (
                 compiler.get("compiler_resolution_trace") or []
             ),
+            "compiler_operation_diagnostics": (
+                compiler.get("compiler_operation_diagnostics") or []
+            ),
             "semantic_intent_routing_success": semantic_intent_success,
             "compiler_activation_source": compiler_activation_source,
             "semantic_intent_router_integration_status": router_integration_status,
@@ -7791,6 +7794,18 @@ class CanonicalReportBindingEngine:
             self._first_dict(report_state, "COGNITIVE_CANDIDATE_ARENA_REPORT", "candidate_arena_report"),
             self._first_dict(performance, "COGNITIVE_CANDIDATE_ARENA_REPORT", "candidate_arena_report"),
         )
+        executable = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "EXECUTABLE_INTELLIGENCE_REPORT",
+                "executable_intelligence_report",
+            ),
+            self._first_dict(
+                performance,
+                "EXECUTABLE_INTELLIGENCE_REPORT",
+                "executable_intelligence_report",
+            ),
+        )
         explicit_summary = self._first_dict(explicit, "candidate_arena_summary")
         if not explicit_summary and explicit.get("arena_state"):
             explicit_summary = explicit
@@ -7921,6 +7936,35 @@ class CanonicalReportBindingEngine:
                 ),
                 "validation_probe_authority": explicit_summary.get(
                     "validation_probe_authority"
+                ),
+                "validation_probe_consumed": self._first_present(
+                    explicit_summary.get("validation_probe_consumed"),
+                    executable.get("validation_probe_consumed"),
+                    executable.get("validation_probe_candidate_consumed"),
+                ),
+                "validation_probe_evidence_acceptance_evaluated": (
+                    self._first_present(
+                        explicit_summary.get(
+                            "validation_probe_evidence_acceptance_evaluated"
+                        ),
+                        executable.get(
+                            "validation_probe_evidence_acceptance_evaluated"
+                        ),
+                    )
+                ),
+                "validation_probe_evidence_acceptance_state": (
+                    self._first_present(
+                        explicit_summary.get(
+                            "validation_probe_evidence_acceptance_state"
+                        ),
+                        executable.get(
+                            "validation_probe_evidence_acceptance_state"
+                        ),
+                    )
+                ),
+                "execution_success_rate": self._first_present(
+                    explicit_summary.get("execution_success_rate"),
+                    executable.get("execution_success_rate"),
                 ),
                 "validation_probe_shared_input_trace": explicit_summary.get(
                     "validation_probe_shared_input_trace"
@@ -8082,9 +8126,22 @@ class CanonicalReportBindingEngine:
     ) -> dict[str, Any]:
         explanation = str(summary.get("selection_explanation") or "")
         selection_state = summary.get("selection_state") or summary.get("arena_state")
+        selection_margin = self._first_number(summary.get("selection_margin"))
         simulation_success_count = self._first_number(
             summary.get("simulation_success_count"),
             0,
+        )
+        validation_probe_acceptance = summary.get(
+            "validation_probe_evidence_acceptance_state"
+        )
+        source_count = self._first_number(summary.get("source_count"), 0)
+        execution_success_rate = self._first_number(
+            summary.get("execution_success_rate")
+        )
+        authority = summary.get("validation_probe_authority")
+        calibration_invoked = bool(
+            summary.get("prediction_quality_calibration_invoked")
+            or summary.get("post_validation_calibration_invoked")
         )
         if (
             selection_state == "NO_SAFE_WINNER"
@@ -8102,10 +8159,162 @@ class CanonicalReportBindingEngine:
                     "review_prediction_quality_thresholds_and_evidence_basis"
                 ),
             }
+        tie_requires_review = selection_state == "TIE_REQUIRES_REVIEW"
+        exact_or_near_tie = (
+            selection_margin is not None
+            and selection_margin <= 0.01
+            and summary.get("winner_score") is not None
+            and summary.get("second_best_score") is not None
+        )
+        validation_probe_accepted = validation_probe_acceptance == "ACCEPTED"
+        strong_probe_result = (
+            execution_success_rate is not None and execution_success_rate >= 0.999
+        )
+        if (tie_requires_review or exact_or_near_tie) and validation_probe_accepted:
+            evidence_state = (
+                "ACCEPTED_SANDBOX_VALIDATION_EVIDENCE"
+                if authority == "SANDBOX_VALIDATION_ONLY"
+                else "ACCEPTED_VALIDATION_EVIDENCE"
+            )
+            target_operation = (
+                summary.get("validation_probe_operation")
+                or summary.get("winner_operation")
+                or "candidate_operation"
+            )
+            target_candidate = (
+                summary.get("validation_probe_candidate_id")
+                or summary.get("arena_winner")
+                or "tie_candidate"
+            )
+            tie_break_strategy = (
+                "cross_source_consensus"
+                if (source_count or 0) < 2
+                else "independent_repeat_validation"
+            )
+            required_evidence_category = (
+                "CROSS_SOURCE_CONSENSUS"
+                if tie_break_strategy == "cross_source_consensus"
+                else "INDEPENDENT_GOVERNED_VALIDATION"
+            )
+            required_evidence = (
+                "cross_source_consensus_evidence"
+                if tie_break_strategy == "cross_source_consensus"
+                else "repeatable_independent_validation_evidence"
+            )
+            validation_task = (
+                "select_cross_source_tie_break_validation_task"
+                if tie_break_strategy == "cross_source_consensus"
+                else "select_independent_tie_break_validation_task"
+            )
+            expected_impact = "HIGH" if strong_probe_result else "MEDIUM"
+            return {
+                "prediction_quality_calibration_state": (
+                    "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED"
+                ),
+                "prediction_quality_calibration_cause": (
+                    "TIE_WITH_ACCEPTED_VALIDATION_PROBE_EVIDENCE"
+                ),
+                "prediction_quality_calibration_action": (
+                    "perform_sandbox_evidence_ranking_recalibration"
+                ),
+                "prediction_quality_calibration_trigger": (
+                    "TIE_WITH_ACCEPTED_VALIDATION_PROBE_EVIDENCE"
+                ),
+                "prediction_quality_calibration_evidence_state": evidence_state,
+                "prediction_quality_calibration_authority_boundary": (
+                    "SANDBOX_EVIDENCE_MAY_SUPPORT_RANKING_REVIEW_NOT_TRUTH"
+                    if authority == "SANDBOX_VALIDATION_ONLY"
+                    else "EVIDENCE_REVIEW_MUST_NOT_GRANT_TRUTH_AUTHORITY"
+                ),
+                "prediction_quality_calibration_invoked": True,
+                "prediction_quality_calibration_review_outcome": (
+                    "RANKING_REVIEW_ELIGIBLE_NO_TRUTH_AUTHORITY"
+                ),
+                "prediction_quality_calibration_score_update_authority": (
+                    "RANKING_REVIEW_ONLY"
+                ),
+                "prediction_quality_calibration_truth_authority": "NONE",
+                "arena_decision_resolution_state": (
+                    "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+                ),
+                "arena_decision_resolution_outcome": "TIE_CONFIRMED",
+                "arena_decision_resolution_reason": (
+                    "accepted_sandbox_probe_evidence_does_not_grant_execution_authority"
+                ),
+                "arena_decision_resolution_action": (
+                    "execute_evidence_acquisition_plan_for_governed_tie_break"
+                ),
+                "arena_decision_ranking_changed": False,
+                "arena_decision_ranking_change_reason": (
+                    "no_authorized_score_delta_applied"
+                ),
+                "arena_decision_final_state": (
+                    "SANDBOX_VALIDATION_COMPLETE_EXECUTION_DECISION_PENDING"
+                ),
+                "arena_decision_execution_recommendation": (
+                    "continue_sandbox_validation_or_escalate_governed_review"
+                ),
+                "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
+                "evidence_acquisition_trigger": (
+                    "TIE_CONFIRMED_AFTER_ACCEPTED_SANDBOX_PROBE"
+                ),
+                "evidence_acquisition_target_candidate": target_candidate,
+                "evidence_acquisition_target_operation": target_operation,
+                "evidence_acquisition_required_category": (
+                    required_evidence_category
+                ),
+                "evidence_acquisition_required_evidence": required_evidence,
+                "evidence_acquisition_tie_break_strategy": tie_break_strategy,
+                "evidence_acquisition_validation_task": validation_task,
+                "evidence_acquisition_expected_tie_break_impact": expected_impact,
+                "evidence_acquisition_governed_reentry_action": (
+                    "reenter_arena_after_required_evidence_without_truth_grant"
+                ),
+                "evidence_acquisition_truth_authority": "NONE",
+                "prediction_quality_calibration_strong_probe_result": (
+                    strong_probe_result
+                ),
+            }
+        if tie_requires_review or exact_or_near_tie:
+            return {
+                "prediction_quality_calibration_state": (
+                    "CALIBRATION_NOT_TRIGGERED"
+                ),
+                "prediction_quality_calibration_cause": (
+                    "TIE_REQUIRES_REVIEW_WITHOUT_ACCEPTED_VALIDATION_EVIDENCE"
+                ),
+                "prediction_quality_calibration_action": (
+                    "collect_or_accept_validation_probe_evidence_before_calibration"
+                ),
+                "prediction_quality_calibration_trigger": (
+                    "TIE_REQUIRES_REVIEW"
+                ),
+                "prediction_quality_calibration_evidence_state": (
+                    validation_probe_acceptance or "NO_ACCEPTED_VALIDATION_EVIDENCE"
+                ),
+                "prediction_quality_calibration_authority_boundary": (
+                    "CALIBRATION_REVIEW_REQUIRES_EVIDENCE_WITHOUT_TRUTH_GRANT"
+                ),
+                "prediction_quality_calibration_invoked": calibration_invoked,
+                "prediction_quality_calibration_strong_probe_result": (
+                    strong_probe_result
+                ),
+            }
         return {
             "prediction_quality_calibration_state": "CALIBRATION_NOT_TRIGGERED",
-            "prediction_quality_calibration_cause": None,
-            "prediction_quality_calibration_action": None,
+            "prediction_quality_calibration_cause": (
+                "NO_CALIBRATION_TRIGGER_CONDITIONS_MET"
+            ),
+            "prediction_quality_calibration_action": "monitor_prediction_quality",
+            "prediction_quality_calibration_trigger": "none",
+            "prediction_quality_calibration_evidence_state": (
+                validation_probe_acceptance or "Not Available"
+            ),
+            "prediction_quality_calibration_authority_boundary": (
+                "NO_CALIBRATION_AUTHORITY_REQUESTED"
+            ),
+            "prediction_quality_calibration_invoked": calibration_invoked,
+            "prediction_quality_calibration_strong_probe_result": strong_probe_result,
         }
 
     def _build_candidate_proposal_visibility(
@@ -9158,6 +9367,15 @@ class CanonicalReportBindingEngine:
                 continue
             if number >= 0.0:
                 return round(number, 6)
+        return None
+
+    def _first_present(self, *values: Any) -> Any:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, str) and value.strip() == "":
+                continue
+            return deepcopy(value)
         return None
 
     def _first_list(

@@ -2519,6 +2519,194 @@ def test_candidate_arena_reports_prediction_quality_calibration_gap():
     }
 
 
+def test_candidate_arena_explains_untriggered_calibration_after_probe_evidence():
+    state = _state()
+    state["candidate_arena_report"] = {
+        "candidate_arena_summary": {
+            "arena_state": "TIE_REQUIRES_REVIEW",
+            "candidate_count": 2,
+            "unique_candidate_count": 2,
+            "source_count": 2,
+            "sources_entered": [
+                "normalized_program_candidates",
+                "semantic_to_transformation_compiler",
+            ],
+            "simulation_count": 2,
+            "simulation_success_count": 2,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "selection_explanation": "Top candidates are within tie margin.",
+            "validation_probe_candidate_id": "semantic_program:replace_color",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_source": "semantic_to_transformation_compiler",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "arena_to_compiled_bridge_state": "VALIDATION_PROBE_AVAILABLE",
+            "candidate_summary": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "candidate_id": "semantic_program:replace_color",
+                    "operation": "replace_color",
+                    "entered_arena": True,
+                },
+                {
+                    "source": "normalized_program_candidates",
+                    "candidate_id": "semantic_program:duplicate_object",
+                    "operation": "duplicate_object",
+                    "entered_arena": True,
+                },
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validation_probe_consumed": True,
+        "validation_probe_evidence_acceptance_evaluated": True,
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["validation_probe_evidence_acceptance_state"] == "ACCEPTED"
+    assert summary["execution_success_rate"] == 1.0
+    assert summary["prediction_quality_calibration_state"] == (
+        "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED"
+    )
+    assert summary["prediction_quality_calibration_cause"] == (
+        "TIE_WITH_ACCEPTED_VALIDATION_PROBE_EVIDENCE"
+    )
+    assert summary["prediction_quality_calibration_action"] == (
+        "perform_sandbox_evidence_ranking_recalibration"
+    )
+    assert summary["prediction_quality_calibration_trigger"] == (
+        "TIE_WITH_ACCEPTED_VALIDATION_PROBE_EVIDENCE"
+    )
+    assert summary["prediction_quality_calibration_evidence_state"] == (
+        "ACCEPTED_SANDBOX_VALIDATION_EVIDENCE"
+    )
+    assert summary["prediction_quality_calibration_authority_boundary"] == (
+        "SANDBOX_EVIDENCE_MAY_SUPPORT_RANKING_REVIEW_NOT_TRUTH"
+    )
+    assert summary["prediction_quality_calibration_invoked"] is True
+    assert summary["prediction_quality_calibration_review_outcome"] == (
+        "RANKING_REVIEW_ELIGIBLE_NO_TRUTH_AUTHORITY"
+    )
+    assert summary["prediction_quality_calibration_score_update_authority"] == (
+        "RANKING_REVIEW_ONLY"
+    )
+    assert summary["prediction_quality_calibration_truth_authority"] == "NONE"
+    assert summary["arena_decision_resolution_state"] == (
+        "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+    )
+    assert summary["arena_decision_resolution_outcome"] == "TIE_CONFIRMED"
+    assert summary["arena_decision_resolution_reason"] == (
+        "accepted_sandbox_probe_evidence_does_not_grant_execution_authority"
+    )
+    assert summary["arena_decision_resolution_action"] == (
+        "execute_evidence_acquisition_plan_for_governed_tie_break"
+    )
+    assert summary["arena_decision_ranking_changed"] is False
+    assert summary["arena_decision_ranking_change_reason"] == (
+        "no_authorized_score_delta_applied"
+    )
+    assert summary["arena_decision_final_state"] == (
+        "SANDBOX_VALIDATION_COMPLETE_EXECUTION_DECISION_PENDING"
+    )
+    assert summary["arena_decision_execution_recommendation"] == (
+        "continue_sandbox_validation_or_escalate_governed_review"
+    )
+    assert summary["evidence_acquisition_state"] == (
+        "EVIDENCE_ACQUISITION_PLAN_READY"
+    )
+    assert summary["evidence_acquisition_trigger"] == (
+        "TIE_CONFIRMED_AFTER_ACCEPTED_SANDBOX_PROBE"
+    )
+    assert summary["evidence_acquisition_target_candidate"] == (
+        "semantic_program:replace_color"
+    )
+    assert summary["evidence_acquisition_target_operation"] == "replace_color"
+    assert summary["evidence_acquisition_required_category"] == (
+        "INDEPENDENT_GOVERNED_VALIDATION"
+    )
+    assert summary["evidence_acquisition_required_evidence"] == (
+        "repeatable_independent_validation_evidence"
+    )
+    assert summary["evidence_acquisition_tie_break_strategy"] == (
+        "independent_repeat_validation"
+    )
+    assert summary["evidence_acquisition_validation_task"] == (
+        "select_independent_tie_break_validation_task"
+    )
+    assert summary["evidence_acquisition_expected_tie_break_impact"] == "HIGH"
+    assert summary["evidence_acquisition_governed_reentry_action"] == (
+        "reenter_arena_after_required_evidence_without_truth_grant"
+    )
+    assert summary["evidence_acquisition_truth_authority"] == "NONE"
+    assert summary["prediction_quality_calibration_strong_probe_result"] is True
+
+
+def test_candidate_arena_evidence_acquisition_asks_cross_source_when_source_diversity_low():
+    state = _state()
+    state["candidate_arena_report"] = {
+        "candidate_arena_summary": {
+            "arena_state": "TIE_REQUIRES_REVIEW",
+            "candidate_count": 2,
+            "unique_candidate_count": 2,
+            "source_count": 1,
+            "sources_entered": ["normalized_program_candidates"],
+            "simulation_count": 2,
+            "simulation_success_count": 2,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "validation_probe_candidate_id": "semantic_program:duplicate_object",
+            "validation_probe_operation": "duplicate_object",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_summary": [
+                {
+                    "source": "normalized_program_candidates",
+                    "candidate_id": "semantic_program:duplicate_object",
+                    "operation": "duplicate_object",
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["evidence_acquisition_required_category"] == (
+        "CROSS_SOURCE_CONSENSUS"
+    )
+    assert summary["evidence_acquisition_required_evidence"] == (
+        "cross_source_consensus_evidence"
+    )
+    assert summary["evidence_acquisition_tie_break_strategy"] == (
+        "cross_source_consensus"
+    )
+    assert summary["evidence_acquisition_validation_task"] == (
+        "select_cross_source_tie_break_validation_task"
+    )
+
+
 def test_evidence_deficit_progress_compares_previous_deficit_rows():
     state = _state()
     state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {
