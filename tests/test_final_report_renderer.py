@@ -1791,6 +1791,13 @@ def test_engineering_conclusion_uses_current_successful_compiler_path():
             "validation_probe_operation": "replace_color",
             "validation_probe_source": "semantic_to_transformation_compiler",
             "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "validation_probe_shared_input_trace": {
+                "input_population_state": "SHARED_TASK_IO_AVAILABLE",
+                "task_io_source_status": "failed_task_io_fallback",
+                "present_keys": ["input_grid", "target_grid"],
+                "empty_keys": [],
+                "non_empty_keys": ["input_grid", "target_grid"],
+            },
             "candidate_source_flow_trace": [
                 {
                     "source": "semantic_to_transformation_compiler",
@@ -1895,6 +1902,37 @@ def test_engineering_conclusion_uses_current_successful_compiler_path():
     ) in report
     assert "Expected Tie-Break Impact: HIGH" in report
     assert "Evidence Acquisition Truth Authority: NONE" in report
+    assert "Evidence Acquisition Plan Forwarded: TRUE" in report
+    assert "Training Assistant Consumed Plan: FALSE" in report
+    assert "Task Selection Consumed Plan: FALSE" in report
+    assert "Tie-Break Task Scheduled: FALSE" in report
+    assert "Decision Orchestration State: PLAN_FORWARDED_AWAITING_TASK_SELECTION" in report
+    assert (
+        "Validation Probe Shared Input Source Status: "
+        "failed_task_io_fallback"
+    ) in report
+    assert (
+        "Validation Probe Shared Input Fallback Reason: "
+        "Original Task IO unavailable"
+    ) in report
+    assert (
+        "Validation Probe Shared Input Recovered From: "
+        "Cached Runtime Context"
+    ) in report
+    evidence_generation = report[
+        report.index("EVIDENCE GENERATION REPORT"):
+        report.index("COUNTERFACTUAL REASONING REPORT")
+    ]
+    assert "Generation Required: FALSE" in evidence_generation
+    assert "Existing Tasks Found: Not Available" in evidence_generation
+    assert (
+        "Generation Status: "
+        "AWAITING_TRAINING_ASSISTANT_CURRICULUM_SEARCH"
+    ) in evidence_generation
+    assert (
+        "Constitutional Boundary: "
+        "GENERATED_TASKS_ARE_VALIDATION_OPPORTUNITIES_NOT_EVIDENCE"
+    ) in evidence_generation
     conclusion = report[
         report.index("ENGINEERING CONCLUSION"):
         report.index("FINAL STATUS")
@@ -1909,14 +1947,14 @@ def test_engineering_conclusion_uses_current_successful_compiler_path():
         "Next Decision Gate: "
         "select_independent_tie_break_validation_task"
     ) in conclusion
-    assert "Current Bottleneck: arena_decision_finalization" in conclusion
+    assert "Current Bottleneck: training_assistant_plan_consumption" in conclusion
     assert (
         "Root Cause: "
-        "accepted_sandbox_probe_evidence_does_not_grant_execution_authority"
+        "evidence_acquisition_plan_not_consumed_by_training_assistant"
     ) in conclusion
     assert (
         "Exact Responsible Component: "
-        "CANDIDATE_ARENA_DECISION_RESOLUTION"
+        "TRAINING_ASSISTANT"
     ) in conclusion
     assert (
         "Immediate Next Development Task: "
@@ -3140,3 +3178,69 @@ def test_diagnostic_report_exposes_timing_detail_fields():
     assert "source=ExecutionTimingState" in report
     assert "Reporting Final Report Rendering Time" in report
     assert "Legacy Reporting Field report_generation_time" in report
+
+
+def test_final_report_renders_evidence_generation_report():
+    state = _report_state()
+    state["evidence_generation_report"] = {
+        "generation_required": True,
+        "generation_trigger": (
+            "evidence_acquisition_plan_without_existing_task"
+        ),
+        "required_evidence": "cross_source_consensus_evidence",
+        "required_validation_task": (
+            "select_cross_source_tie_break_validation_task"
+        ),
+        "existing_tasks_found": False,
+        "generated_tasks": 1,
+        "generated_task_files": [
+            "runtime/evidence_generation/generated_curriculum/task.json"
+        ],
+        "generated_curriculum_path": (
+            "runtime/evidence_generation/generated_curriculum"
+        ),
+        "generated_curriculum_size": 1,
+        "generated_domains": ["source_diversity"],
+        "generation_strategy": "cross_source_consensus",
+        "generation_governance": "POTENTIAL_VALIDATION_OPPORTUNITY_ONLY",
+        "training_assistant_queue_updated": True,
+        "future_execution_ready": True,
+        "generation_status": "GENERATED_VALIDATION_OPPORTUNITY",
+        "evidence_produced": False,
+        "truth_authority": "NONE",
+        "trust_authority": "NONE",
+        "graduation_authority": "NONE",
+        "constitutional_boundary": (
+            "GENERATED_TASKS_ARE_VALIDATION_OPPORTUNITIES_NOT_EVIDENCE"
+        ),
+    }
+
+    report = DeterministicFinalReportRenderer().render(state)
+
+    assert "EVIDENCE GENERATION REPORT" in report
+    assert "Generation Required: TRUE" in report
+    assert "Required Evidence: cross_source_consensus_evidence" in report
+    assert "Generated Tasks: 1" in report
+    assert "Training Assistant Queue Updated: TRUE" in report
+    assert "Future Execution Ready: TRUE" in report
+    assert "Evidence Produced: FALSE" in report
+    assert "Truth Authority: NONE" in report
+    assert (
+        "Constitutional Boundary: "
+        "GENERATED_TASKS_ARE_VALIDATION_OPPORTUNITIES_NOT_EVIDENCE"
+    ) in report
+
+
+def test_warning_section_does_not_count_empty_state_as_warning():
+    state = _report_state()
+    state["performance_report"]["untracked_runtime_seconds"] = 0
+    state["execution_timing"]["execution_timing_state"]["unattributed_time"] = 0
+    report = DeterministicFinalReportRenderer().render(state)
+    section = report[
+        report.index("WARNINGS AND GAPS"):
+        report.index("RUNTIME METADATA")
+    ]
+
+    assert "Warning Count: 0" in section
+    assert "- No validated report warnings." in section
+    assert "Warning Count: 1" not in section

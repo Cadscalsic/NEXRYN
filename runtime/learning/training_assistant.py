@@ -4,6 +4,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from runtime.evidence_generation.evidence_generation_engine import (
+    EvidenceGenerationEngine,
+)
 from runtime.training.curriculum_manager import CurriculumManager
 from runtime.training.elite_curriculum_validator import (
     ELITE_CURRICULUM_NAME,
@@ -41,6 +44,8 @@ class TrainingAssistant:
         survival_store_path="runtime/artifacts/runtime_data/operational_capability_survival.json",
         operational_economy_path="runtime/artifacts/runtime_data/operational_economy_report.json",
         validation_academy_path=ELITE_VALIDATION_ACADEMY_PATH,
+        evidence_generation_path="runtime/evidence_generation/generated_curriculum",
+        evidence_generation_engine=None,
     ):
         self.state_path = Path(state_path)
         self.batch_size = max(int(batch_size), 1)
@@ -52,6 +57,10 @@ class TrainingAssistant:
         self.survival_store_path = Path(survival_store_path)
         self.operational_economy_path = Path(operational_economy_path)
         self.validation_academy_path = Path(validation_academy_path)
+        self.evidence_generation_engine = (
+            evidence_generation_engine
+            or EvidenceGenerationEngine(evidence_generation_path)
+        )
         self.state = self._load()
         self.selection_memory = self._load_selection_memory()
 
@@ -70,6 +79,7 @@ class TrainingAssistant:
             "selection_diversity_report": {},
             "elite_selection_report": {},
             "training_economy_alignment_report": {},
+            "evidence_generation_report": {},
             "history": [],
         }
 
@@ -386,6 +396,30 @@ class TrainingAssistant:
             "knowledge_operationalization_required_evidence": report.get(
                 "knowledge_operationalization_required_evidence"
             ),
+            "evidence_acquisition_state": report.get(
+                "evidence_acquisition_state"
+            ),
+            "evidence_acquisition_required_evidence": report.get(
+                "evidence_acquisition_required_evidence"
+            ),
+            "evidence_acquisition_required_category": report.get(
+                "evidence_acquisition_required_category"
+            ),
+            "evidence_acquisition_validation_task": report.get(
+                "evidence_acquisition_validation_task"
+            ),
+            "evidence_acquisition_tie_break_strategy": report.get(
+                "evidence_acquisition_tie_break_strategy"
+            ),
+            "evidence_acquisition_target_operation": report.get(
+                "evidence_acquisition_target_operation"
+            ),
+            "evidence_acquisition_target_candidate": report.get(
+                "evidence_acquisition_target_candidate"
+            ),
+            "evidence_acquisition_expected_tie_break_impact": report.get(
+                "evidence_acquisition_expected_tie_break_impact"
+            ),
             "arena_source_diversity_state": report.get(
                 "arena_source_diversity_state"
             ),
@@ -604,6 +638,51 @@ class TrainingAssistant:
             matches.append({
                 "match_type": "required_evidence",
                 "target": required_evidence or choke_action,
+            })
+
+        acquisition_task = self._term(
+            economy_context.get("evidence_acquisition_validation_task")
+        )
+        acquisition_evidence = self._term(
+            economy_context.get("evidence_acquisition_required_evidence")
+        )
+        acquisition_strategy = self._term(
+            economy_context.get("evidence_acquisition_tie_break_strategy")
+        )
+        acquisition_operation = self._term(
+            economy_context.get("evidence_acquisition_target_operation")
+        )
+        acquisition_task_match = bool(
+            acquisition_task
+            and (
+                acquisition_task in terms
+                or any(part in terms for part in acquisition_task.split("_"))
+            )
+        )
+        acquisition_evidence_match = bool(
+            acquisition_evidence and acquisition_evidence in terms
+        )
+        acquisition_strategy_match = bool(
+            acquisition_strategy
+            and any(part in terms for part in acquisition_strategy.split("_"))
+        )
+        acquisition_operation_match = bool(
+            acquisition_operation and acquisition_operation in terms
+        )
+        if (
+            acquisition_task_match
+            or acquisition_evidence_match
+            or acquisition_strategy_match
+            or acquisition_operation_match
+        ):
+            priority += 90
+            reasons.append("evidence_acquisition_plan_alignment")
+            matches.append({
+                "match_type": "evidence_acquisition_plan",
+                "target": acquisition_task or acquisition_evidence,
+                "required_evidence": acquisition_evidence,
+                "tie_break_strategy": acquisition_strategy,
+                "target_operation": acquisition_operation,
             })
 
         return round(priority, 4), reasons, matches[:12]
@@ -844,6 +923,15 @@ class TrainingAssistant:
                 "required_evidence",
             }
         ]
+        evidence_acquisition_rows = [
+            match for match in match_rows
+            if match.get("match_type") == "evidence_acquisition_plan"
+        ]
+        evidence_acquisition_task = (
+            selected_rows[0].get("task_file")
+            if evidence_acquisition_rows and selected_rows
+            else "Not Available"
+        )
         composition_match_rows = [
             match for match in match_rows
             if match.get("match_type") in {
@@ -1009,13 +1097,68 @@ class TrainingAssistant:
             "evidence_driven_task_selection_state": (
                 "ALIGNED_TASK_SELECTED"
                 if evidence_remediation_rows
+                or evidence_acquisition_rows
                 else "EVIDENCE_DEFICIT_AVAILABLE_WITHOUT_ALIGNED_TASK"
                 if economy_context.get("knowledge_operationalization_required_evidence")
                 or economy_context.get(
                     "knowledge_operationalization_evidence_responsibility"
                 )
+                or economy_context.get(
+                    "evidence_acquisition_required_evidence"
+                )
                 else "NO_EVIDENCE_DEFICIT_SIGNAL"
             ),
+            "decision_orchestration_state": (
+                "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+                if evidence_acquisition_rows
+                else "PLAN_FORWARDED_WITHOUT_MATCHING_TASK"
+                if economy_context.get("evidence_acquisition_state")
+                == "EVIDENCE_ACQUISITION_PLAN_READY"
+                else "NO_DECISION_ORCHESTRATION_PLAN"
+            ),
+            "evidence_acquisition_plan_forwarded": (
+                economy_context.get("evidence_acquisition_state")
+                == "EVIDENCE_ACQUISITION_PLAN_READY"
+            ),
+            "evidence_acquisition_plan_consumed": bool(
+                economy_context.get("evidence_acquisition_state")
+            ),
+            "evidence_acquisition_task_scheduled": bool(
+                evidence_acquisition_rows
+            ),
+            "evidence_acquisition_selected_task": evidence_acquisition_task,
+            "evidence_acquisition_required_evidence": (
+                economy_context.get("evidence_acquisition_required_evidence")
+            ),
+            "evidence_acquisition_validation_task": (
+                economy_context.get("evidence_acquisition_validation_task")
+            ),
+            "evidence_acquisition_tie_break_strategy": (
+                economy_context.get("evidence_acquisition_tie_break_strategy")
+            ),
+            "evidence_acquisition_expected_tie_break_impact": (
+                economy_context.get("evidence_acquisition_expected_tie_break_impact")
+            ),
+            "evidence_generation_report": (
+                economy_context.get("evidence_generation_report") or {}
+            ),
+            "evidence_acquisition_alignment_trace": [
+                {
+                    "selected_task": row.get("task_file"),
+                    "match_type": match.get("match_type"),
+                    "required_evidence": match.get("required_evidence"),
+                    "tie_break_strategy": match.get("tie_break_strategy"),
+                    "target_operation": match.get("target_operation"),
+                    "generated_validation_opportunity": bool(
+                        match.get("generated_validation_opportunity")
+                    ),
+                    "governance_state": match.get("governance_state"),
+                }
+                for row in selected_rows
+                for match in row.get("training_economy_matches", []) or []
+                if isinstance(match, dict)
+                and match.get("match_type") == "evidence_acquisition_plan"
+            ][:12],
             "evidence_remediation_attempted": bool(evidence_remediation_rows),
             "evidence_remediation_task": (
                 selected_rows[0].get("task_file")
@@ -1070,6 +1213,112 @@ class TrainingAssistant:
                 4,
             ),
         }
+
+    def _generated_evidence_priority_row(self, task_file, economy_context):
+        task = self._term(economy_context.get("evidence_acquisition_validation_task"))
+        evidence = self._term(
+            economy_context.get("evidence_acquisition_required_evidence")
+        )
+        strategy = self._term(
+            economy_context.get("evidence_acquisition_tie_break_strategy")
+        )
+        operation = self._term(
+            economy_context.get("evidence_acquisition_target_operation")
+        )
+        metadata = self._task_metadata(task_file)
+        return {
+            "task_file": str(task_file),
+            "original_order": -1,
+            "target_concepts": metadata.get("target_concepts", []),
+            "deficiency_targets": [],
+            "required_operational_capabilities": [],
+            "evidence_terms": sorted(set(metadata.get("required_evidence", []))),
+            "priority": 1000.0,
+            "priority_reasons": [
+                "generated_evidence_acquisition_opportunity",
+                "evidence_acquisition_plan_alignment",
+            ],
+            "survival_reappearance_matches": [],
+            "domain_citizenship_matches": [],
+            "training_economy_matches": [
+                {
+                    "match_type": "evidence_acquisition_plan",
+                    "target": task or evidence,
+                    "required_evidence": evidence,
+                    "tie_break_strategy": strategy,
+                    "target_operation": operation,
+                    "generated_validation_opportunity": True,
+                    "governance_state": (
+                        "POTENTIAL_VALIDATION_OPPORTUNITY_ONLY"
+                    ),
+                }
+            ],
+            "validation_academy_matches": [],
+        }
+
+    def _maybe_generate_evidence_task(
+        self,
+        *,
+        selected,
+        elite_selection_report,
+        selection_report,
+        training_economy_alignment_report,
+        economy_context,
+    ):
+        selected = list(selected or [])
+        elite_selection_report = dict(elite_selection_report or {})
+        selection_report = dict(selection_report or {})
+        training_economy_alignment_report = dict(
+            training_economy_alignment_report or {}
+        )
+        plan_ready = (
+            economy_context.get("evidence_acquisition_state")
+            == "EVIDENCE_ACQUISITION_PLAN_READY"
+        )
+        existing_task_found = bool(
+            training_economy_alignment_report.get(
+                "evidence_acquisition_task_scheduled"
+            )
+        )
+        report = self.evidence_generation_engine.generate_for_plan(
+            economy_context,
+            existing_tasks_found=existing_task_found,
+        )
+        if not plan_ready or existing_task_found:
+            return selected, elite_selection_report, selection_report, report
+        generated_files = report.get("generated_task_files") or []
+        if not generated_files:
+            return selected, elite_selection_report, selection_report, report
+
+        generated_task = str(generated_files[0])
+        selected = [
+            generated_task,
+            *[task_file for task_file in selected if task_file != generated_task],
+        ][: self.batch_size]
+        selection_report["selected_tasks"] = list(selected)
+        selection_report["generated_validation_task_selected"] = True
+        selection_report["evidence_generation_status"] = report.get(
+            "generation_status"
+        )
+        priorities = list(elite_selection_report.get("elite_task_priorities") or [])
+        priorities = [
+            self._generated_evidence_priority_row(
+                generated_task,
+                economy_context,
+            ),
+            *[
+                row for row in priorities
+                if isinstance(row, dict) and row.get("task_file") != generated_task
+            ],
+        ]
+        elite_selection_report["elite_task_priorities"] = priorities
+        elite_selection_report["generated_validation_task_file"] = generated_task
+        elite_selection_report["generated_validation_task_selected"] = True
+        elite_selection_report["priority_reasons"] = list(dict.fromkeys([
+            "generated_evidence_acquisition_opportunity",
+            *list(elite_selection_report.get("priority_reasons") or []),
+        ]))
+        return selected, elite_selection_report, selection_report, report
 
     def _is_elite_task(self, task_file, task_directory=None):
         if str(task_file).startswith("elite_cognitive_task_"):
@@ -2612,9 +2861,48 @@ class TrainingAssistant:
                     operational_economy_context,
                 )
             )
+            selected, elite_selection_report, selection_report, evidence_generation_report = (
+                self._maybe_generate_evidence_task(
+                    selected=selected,
+                    elite_selection_report=elite_selection_report,
+                    selection_report=selection_report,
+                    training_economy_alignment_report=(
+                        training_economy_alignment_report
+                    ),
+                    economy_context=operational_economy_context,
+                )
+            )
+            if evidence_generation_report.get("training_assistant_queue_updated"):
+                generated_metadata = self._task_metadata(selected[0])
+                selected_concepts = sorted(set(selected_concepts) | {
+                    str(concept)
+                    for concept in generated_metadata.get("target_concepts", [])
+                    if concept
+                })
+                training_economy_alignment_report = (
+                    self._training_economy_alignment_report(
+                        selected,
+                        elite_selection_report,
+                        {
+                            **operational_economy_context,
+                            "evidence_generation_report": (
+                                evidence_generation_report
+                            ),
+                        },
+                    )
+                )
+            else:
+                training_economy_alignment_report[
+                    "evidence_generation_report"
+                ] = evidence_generation_report
             self.state["training_economy_alignment_report"] = (
                 training_economy_alignment_report
             )
+            self.state["evidence_generation_report"] = evidence_generation_report
+            self.state["active_batch"] = selected
+            self.state["selected_concepts"] = selected_concepts
+            self.state["selection_diversity_report"] = selection_report
+            self.state["elite_selection_report"] = elite_selection_report
             self.state["pending_next_task_index"] = (
                 (start + len([
                     task_file
@@ -2653,6 +2941,9 @@ class TrainingAssistant:
             )
         training_economy_alignment_report = dict(
             self.state.get("training_economy_alignment_report", {})
+        )
+        evidence_generation_report = dict(
+            self.state.get("evidence_generation_report", {})
         )
         if not training_economy_alignment_report:
             training_economy_alignment_report = (
@@ -2710,6 +3001,36 @@ class TrainingAssistant:
                         "evidence_driven_task_selection_state"
                     )
                 ),
+                "decision_orchestration_state": (
+                    training_economy_alignment_report.get(
+                        "decision_orchestration_state"
+                    )
+                ),
+                "evidence_acquisition_plan_forwarded": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_plan_forwarded"
+                    )
+                ),
+                "evidence_acquisition_plan_consumed": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_plan_consumed"
+                    )
+                ),
+                "evidence_acquisition_task_scheduled": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_task_scheduled"
+                    )
+                ),
+                "evidence_acquisition_selected_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_selected_task"
+                    )
+                ),
+                "evidence_acquisition_validation_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_validation_task"
+                    )
+                ),
                 "evidence_remediation_attempted": (
                     training_economy_alignment_report.get(
                         "evidence_remediation_attempted"
@@ -2757,6 +3078,26 @@ class TrainingAssistant:
                     training_economy_alignment_report.get(
                         "required_evidence_produced"
                     )
+                ),
+                "evidence_generation_required": (
+                    evidence_generation_report.get("generation_required")
+                ),
+                "evidence_generation_status": (
+                    evidence_generation_report.get("generation_status")
+                ),
+                "generated_validation_tasks": (
+                    evidence_generation_report.get("generated_task_files")
+                ),
+                "generated_curriculum_size": (
+                    evidence_generation_report.get("generated_curriculum_size")
+                ),
+                "training_assistant_queue_updated": (
+                    evidence_generation_report.get(
+                        "training_assistant_queue_updated"
+                    )
+                ),
+                "future_execution_ready": (
+                    evidence_generation_report.get("future_execution_ready")
                 ),
             })
         elite_curriculum_report = {}
@@ -2817,6 +3158,7 @@ class TrainingAssistant:
             "curriculum_report": curriculum_report,
             "elite_curriculum_report": elite_curriculum_report,
             "training_economy_alignment_report": training_economy_alignment_report,
+            "evidence_generation_report": evidence_generation_report,
             "training_diversity_report": training_diversity_report,
             "selection_diversity_report": selection_report,
             "elite_selection_report": elite_selection_report,
@@ -2869,6 +3211,7 @@ class TrainingAssistant:
         self.state["selection_diversity_report"] = {}
         self.state["elite_selection_report"] = {}
         self.state["training_economy_alignment_report"] = {}
+        self.state["evidence_generation_report"] = {}
         self.state["history"] = [
             *list(self.state.get("history", []))[-31:],
             {

@@ -143,8 +143,11 @@ class CurriculumManager:
 
     def _task_metadata(self, task_file, task_directory=None):
         if task_directory is None:
-            return {}
-        path = Path(task_directory) / task_file
+            path = Path(task_file)
+        else:
+            path = Path(task_file)
+            if not path.is_absolute():
+                path = Path(task_directory) / task_file
         try:
             with path.open("r", encoding="utf-8") as file:
                 task = json.load(file)

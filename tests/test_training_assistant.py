@@ -1220,6 +1220,103 @@ def test_training_assistant_uses_validation_academy_opportunity_matching(tmp_pat
     ] == "elite_validation_task_27"
 
 
+def test_training_assistant_searches_advanced_validation_academy_before_generation(
+    tmp_path,
+):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    academy_path = tmp_path / "elite_validation_academy_v1.json"
+    academy_path.write_text(
+        json.dumps({
+            "academy": "nexryn_elite_validation_academy_v1",
+            "tasks": [
+                {
+                    "task_id": "elite_validation_task_31",
+                    "elite_group": "Advanced Multi-Concept Validation Tasks",
+                    "target_capability": "localized_replace_color",
+                    "target_cluster": "Color Transformation Capability",
+                    "target_domain": "Color",
+                    "required_task_property": (
+                        "localized_color_remap_cross_source_consensus"
+                    ),
+                    "required_validation_evidence": (
+                        "cross_source_consensus_evidence"
+                    ),
+                    "promotion_weight": 0.94,
+                }
+            ],
+        }),
+        encoding="utf-8",
+    )
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["general_validation"],
+            "required_evidence": ["independent_validation_evidence"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": [
+                "replace_color",
+                "localized_replace_color",
+                "cross_source_consensus",
+            ],
+            "required_evidence": ["cross_source_consensus_evidence"],
+            "task_properties": [
+                "select_cross_source_tie_break_validation_task",
+                "localized_color_remap_cross_source_consensus",
+            ],
+            "target_capability": "localized_replace_color",
+            "target_cluster": "Color Transformation Capability",
+        },
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        validation_academy_path=academy_path,
+        evidence_generation_path=tmp_path / "generated_curriculum",
+        batch_size=1,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        ["elite_cognitive_task_01.json", "elite_cognitive_task_02.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
+            "evidence_acquisition_required_evidence": (
+                "cross_source_consensus_evidence"
+            ),
+            "evidence_acquisition_required_category": "CROSS_SOURCE_CONSENSUS",
+            "evidence_acquisition_validation_task": (
+                "select_cross_source_tie_break_validation_task"
+            ),
+            "evidence_acquisition_tie_break_strategy": "cross_source_consensus",
+            "evidence_acquisition_target_operation": "replace_color",
+        },
+    )
+
+    assert selected["selected_task_files"] == ["elite_cognitive_task_02.json"]
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["decision_orchestration_state"] == (
+        "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+    )
+    assert alignment["validation_academy_alignment"] == (
+        "VALIDATION_ACADEMY_ALIGNED"
+    )
+    assert alignment["validation_academy_alignment_trace"][0][
+        "academy_task_id"
+    ] == "elite_validation_task_31"
+    generation = selected["evidence_generation_report"]
+    assert generation["generation_required"] is False
+    assert generation["existing_tasks_found"] is True
+    assert generation["generated_tasks"] == 0
+
+
 def test_training_assistant_uses_evidence_responsibility_for_task_selection(tmp_path):
     tasks_directory = tmp_path / "training"
     tasks_directory.mkdir()
@@ -1293,6 +1390,141 @@ def test_training_assistant_uses_evidence_responsibility_for_task_selection(tmp_
         for match in row.get("training_economy_matches", [])
         if row["task_file"] == "elite_cognitive_task_02.json"
     )
+
+
+def test_training_assistant_consumes_evidence_acquisition_plan(tmp_path):
+    tasks_directory = tmp_path / "training"
+    tasks_directory.mkdir()
+    for task_file, metadata in {
+        "elite_cognitive_task_01.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["general_validation"],
+            "required_evidence": ["independent_validation_evidence"],
+        },
+        "elite_cognitive_task_02.json": {
+            "elite_cognitive_task": True,
+            "target_concepts": ["replace_color", "source_consensus"],
+            "required_evidence": ["cross_source_consensus_evidence"],
+            "task_properties": ["select_cross_source_tie_break_validation_task"],
+        },
+    }.items():
+        (tasks_directory / task_file).write_text(
+            json.dumps({"train": [], "test": [], "nexryn_metadata": metadata}),
+            encoding="utf-8",
+        )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=1,
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        ["elite_cognitive_task_01.json", "elite_cognitive_task_02.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
+            "evidence_acquisition_required_evidence": (
+                "cross_source_consensus_evidence"
+            ),
+            "evidence_acquisition_required_category": "CROSS_SOURCE_CONSENSUS",
+            "evidence_acquisition_validation_task": (
+                "select_cross_source_tie_break_validation_task"
+            ),
+            "evidence_acquisition_tie_break_strategy": "cross_source_consensus",
+            "evidence_acquisition_target_operation": "replace_color",
+            "evidence_acquisition_expected_tie_break_impact": "HIGH",
+        },
+    )
+
+    assert selected["selected_task_files"] == ["elite_cognitive_task_02.json"]
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["decision_orchestration_state"] == (
+        "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+    )
+    assert alignment["evidence_acquisition_plan_forwarded"] is True
+    assert alignment["evidence_acquisition_plan_consumed"] is True
+    assert alignment["evidence_acquisition_task_scheduled"] is True
+    assert alignment["evidence_acquisition_selected_task"] == (
+        "elite_cognitive_task_02.json"
+    )
+    assert alignment["evidence_acquisition_validation_task"] == (
+        "select_cross_source_tie_break_validation_task"
+    )
+    assert alignment["evidence_acquisition_alignment_trace"][0][
+        "tie_break_strategy"
+    ] == "cross_source_consensus"
+
+
+def test_training_assistant_generates_validation_task_when_plan_has_no_match(
+    tmp_path,
+):
+    tasks_directory = tmp_path / "training"
+    generated_directory = tmp_path / "generated_curriculum"
+    tasks_directory.mkdir()
+    (tasks_directory / "task_general.json").write_text(
+        json.dumps({
+            "train": [],
+            "test": [],
+            "nexryn_metadata": {
+                "target_concepts": ["general_validation"],
+                "required_evidence": ["independent_validation_evidence"],
+            },
+        }),
+        encoding="utf-8",
+    )
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        batch_size=1,
+        selection_mode="curriculum",
+        evidence_generation_path=generated_directory,
+    )
+
+    selected = assistant.select_batch(
+        ["task_general.json"],
+        task_directory=tasks_directory,
+        operational_economy_report={
+            "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
+            "evidence_acquisition_required_evidence": (
+                "cross_source_consensus_evidence"
+            ),
+            "evidence_acquisition_required_category": "CROSS_SOURCE_CONSENSUS",
+            "evidence_acquisition_validation_task": (
+                "select_cross_source_tie_break_validation_task"
+            ),
+            "evidence_acquisition_tie_break_strategy": "cross_source_consensus",
+            "evidence_acquisition_target_operation": "replace_color",
+            "evidence_acquisition_expected_tie_break_impact": "HIGH",
+            "evidence_acquisition_target_candidate": (
+                "semantic_program:replace_color"
+            ),
+        },
+    )
+
+    generated_task = selected["selected_task_files"][0]
+    assert str(generated_task).startswith(str(generated_directory))
+    assert generated_directory.exists()
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["decision_orchestration_state"] == (
+        "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+    )
+    assert alignment["evidence_acquisition_plan_forwarded"] is True
+    assert alignment["evidence_acquisition_task_scheduled"] is True
+    assert alignment["evidence_acquisition_selected_task"] == generated_task
+    assert alignment["evidence_acquisition_alignment_trace"][0][
+        "generated_validation_opportunity"
+    ] is True
+
+    generation = selected["evidence_generation_report"]
+    assert generation["generation_required"] is True
+    assert generation["generation_status"] == "GENERATED_VALIDATION_OPPORTUNITY"
+    assert generation["training_assistant_queue_updated"] is True
+    assert generation["future_execution_ready"] is True
+    assert generation["evidence_produced"] is False
+    assert generation["truth_authority"] == "NONE"
+    assert generation["trust_authority"] == "NONE"
+    assert generation["graduation_authority"] == "NONE"
 
 
 def test_training_assistant_tracks_evidence_remediation_across_runs(tmp_path):

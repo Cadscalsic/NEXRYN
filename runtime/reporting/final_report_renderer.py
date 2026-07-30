@@ -46,6 +46,7 @@ SECTION_ORDER = [
     "MULTI HYPOTHESIS REPORT",
     "CANDIDATE PROPOSAL PHASE",
     "COGNITIVE CANDIDATE ARENA",
+    "EVIDENCE GENERATION REPORT",
     "COUNTERFACTUAL REASONING REPORT",
     "EXECUTABLE INTELLIGENCE REPORT",
     "SEARCH QUALITY",
@@ -66,6 +67,7 @@ EXECUTIVE_SECTION_ORDER = [
     "CANDIDATE PIPELINE",
     "RUNTIME CHOKE POINT",
     "SOURCE COMPETITION SUMMARY",
+    "EVIDENCE GENERATION REPORT",
     "SEMANTIC COMPILATION",
     "KNOWLEDGE OPERATIONALIZATION",
     "VALIDATION SUMMARY",
@@ -578,6 +580,7 @@ class DeterministicFinalReportRenderer:
             self._render_multi_hypothesis_report(canonical),
             self._render_candidate_proposal(canonical),
             self._render_candidate_arena(canonical),
+            self._render_evidence_generation_report(canonical),
             self._render_counterfactual_reasoning(canonical),
             self._render_executable_intelligence(canonical),
             self._render_search_quality(canonical),
@@ -615,6 +618,7 @@ class DeterministicFinalReportRenderer:
             self._render_candidate_pipeline_dashboard(canonical),
             self._render_runtime_choke_point(canonical),
             self._render_source_competition_summary(canonical),
+            self._render_evidence_generation_report(canonical),
             self._render_semantic_compilation(canonical),
             self._render_knowledge_operationalization_summary(canonical),
             self._render_validation_summary(canonical),
@@ -1238,6 +1242,19 @@ class DeterministicFinalReportRenderer:
             f"{self._value(arena.get('evidence_acquisition_expected_tie_break_impact'))}",
             "  Governed Re-entry: "
             f"{self._value(arena.get('evidence_acquisition_governed_reentry_action'))}",
+            "Decision Orchestration:",
+            "  Plan Forwarded: "
+            f"{self._value(arena.get('evidence_acquisition_plan_forwarded'))}",
+            "  Training Assistant Consumed: "
+            f"{self._value(arena.get('training_assistant_consumed_plan'))}",
+            "  Task Selection Consumed: "
+            f"{self._value(arena.get('task_selection_consumed_plan'))}",
+            "  Tie-Break Task Scheduled: "
+            f"{self._value(arena.get('tie_break_task_scheduled'))}",
+            "  Selected Tie-Break Task: "
+            f"{self._value(arena.get('selected_tie_break_task'))}",
+            "  State: "
+            f"{self._value(arena.get('decision_orchestration_state'))}",
         ]
         return self._section("CRITICAL EXECUTION TRACE", lines)
 
@@ -3929,6 +3946,21 @@ class DeterministicFinalReportRenderer:
             )
             else "none"
         )
+        shared_input_source_status = str(
+            shared_input_trace.get("task_io_source_status") or ""
+        )
+        shared_input_fallback_reason = (
+            shared_input_trace.get("fallback_reason")
+            or "Original Task IO unavailable"
+            if shared_input_source_status == "failed_task_io_fallback"
+            else shared_input_trace.get("fallback_reason")
+        )
+        shared_input_recovered_from = (
+            shared_input_trace.get("recovered_from")
+            or "Cached Runtime Context"
+            if shared_input_source_status == "failed_task_io_fallback"
+            else shared_input_trace.get("recovered_from")
+        )
         lines = [
             f"Arena State: {self._value(summary.get('arena_state'))}",
             f"Candidate Count: {self._value(summary.get('candidate_count'))}",
@@ -3988,6 +4020,10 @@ class DeterministicFinalReportRenderer:
             f"{self._value(shared_input_trace.get('input_population_state'))}",
             "Validation Probe Shared Input Source Status: "
             f"{self._value(shared_input_trace.get('task_io_source_status'))}",
+            "Validation Probe Shared Input Fallback Reason: "
+            f"{self._value(shared_input_fallback_reason)}",
+            "Validation Probe Shared Input Recovered From: "
+            f"{self._value(shared_input_recovered_from)}",
             "Validation Probe Shared Input Present Keys: "
             f"{self._value(shared_input_trace.get('present_keys'))}",
             "Validation Probe Shared Input Empty Keys: "
@@ -4052,6 +4088,18 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('evidence_acquisition_governed_reentry_action'))}",
             "Evidence Acquisition Truth Authority: "
             f"{self._value(summary.get('evidence_acquisition_truth_authority'))}",
+            "Evidence Acquisition Plan Forwarded: "
+            f"{self._value(summary.get('evidence_acquisition_plan_forwarded'))}",
+            "Training Assistant Consumed Plan: "
+            f"{self._value(summary.get('training_assistant_consumed_plan'))}",
+            "Task Selection Consumed Plan: "
+            f"{self._value(summary.get('task_selection_consumed_plan'))}",
+            "Tie-Break Task Scheduled: "
+            f"{self._value(summary.get('tie_break_task_scheduled'))}",
+            "Selected Tie-Break Task: "
+            f"{self._value(summary.get('selected_tie_break_task'))}",
+            "Decision Orchestration State: "
+            f"{self._value(summary.get('decision_orchestration_state'))}",
         ]
         if rows:
             lines.append("Top Arena Candidates:")
@@ -4131,6 +4179,144 @@ class DeterministicFinalReportRenderer:
             for source, status in sorted(source_status.items()):
                 lines.append(f"  {source}: {status}")
         return self._section("COGNITIVE CANDIDATE ARENA", lines)
+
+    def _evidence_generation_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        summary = self._arena_summary(canonical)
+        report = summary.get("evidence_generation_report")
+        if isinstance(report, dict) and report:
+            return report
+        report = self._first_dict(
+            canonical["report_state"],
+            "evidence_generation_report",
+            "EVIDENCE_GENERATION_REPORT",
+        )
+        if report:
+            return report
+        report = self._first_dict(
+            canonical["performance"],
+            "evidence_generation_report",
+            "EVIDENCE_GENERATION_REPORT",
+        )
+        if report:
+            return report
+        plan_forwarded = summary.get("evidence_acquisition_plan_forwarded") is True
+        training_consumed = summary.get("training_assistant_consumed_plan") is True
+        task_scheduled = summary.get("tie_break_task_scheduled") is True
+        awaiting_curriculum_search = plan_forwarded and not training_consumed
+        generation_required_after_search = (
+            plan_forwarded and training_consumed and not task_scheduled
+        )
+        return {
+            "generation_required": (
+                True
+                if generation_required_after_search
+                else False
+                if awaiting_curriculum_search
+                else summary.get("evidence_generation_required")
+            ),
+            "generation_trigger": (
+                "curriculum_search_failed_to_find_validation_task"
+                if generation_required_after_search
+                else "awaiting_training_assistant_curriculum_search"
+                if awaiting_curriculum_search
+                else "none"
+            ),
+            "required_evidence": summary.get(
+                "evidence_acquisition_required_evidence"
+            ),
+            "required_validation_task": summary.get(
+                "evidence_acquisition_validation_task"
+            ),
+            "existing_tasks_found": (
+                False
+                if generation_required_after_search
+                else "Not Available"
+                if awaiting_curriculum_search
+                else summary.get("tie_break_task_scheduled")
+            ),
+            "generated_tasks": 0,
+            "generated_curriculum_size": 0,
+            "generated_domains": [],
+            "generation_strategy": summary.get(
+                "evidence_acquisition_tie_break_strategy"
+            ),
+            "generation_governance": (
+                "POTENTIAL_VALIDATION_OPPORTUNITY_ONLY"
+            ),
+            "training_assistant_queue_updated": False,
+            "future_execution_ready": False,
+            "generation_status": (
+                "GENERATION_REQUIRED_AFTER_CURRICULUM_SEARCH"
+                if generation_required_after_search
+                else "AWAITING_TRAINING_ASSISTANT_CURRICULUM_SEARCH"
+                if awaiting_curriculum_search
+                else summary.get(
+                    "evidence_generation_status",
+                    "GENERATION_NOT_REQUIRED",
+                )
+            ),
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "evidence_produced": False,
+            "constitutional_boundary": (
+                "GENERATED_TASKS_ARE_VALIDATION_OPPORTUNITIES_NOT_EVIDENCE"
+            ),
+        }
+
+    def _render_evidence_generation_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        report = self._evidence_generation_report(canonical)
+        lines = [
+            "Generation Required: "
+            f"{self._value(report.get('generation_required'))}",
+            "Generation Trigger: "
+            f"{self._value(report.get('generation_trigger'))}",
+            "Required Evidence: "
+            f"{self._value(report.get('required_evidence'))}",
+            "Required Validation Task: "
+            f"{self._value(report.get('required_validation_task'))}",
+            "Existing Tasks Found: "
+            f"{self._value(report.get('existing_tasks_found'))}",
+            "Generated Tasks: "
+            f"{self._value(report.get('generated_tasks'))}",
+            "Generated Task Files: "
+            f"{self._value(report.get('generated_task_files') or [])}",
+            "Generated Curriculum Path: "
+            f"{self._value(report.get('generated_curriculum_path'))}",
+            "Generated Curriculum Size: "
+            f"{self._value(report.get('generated_curriculum_size'))}",
+            "Generated Domains: "
+            f"{self._value(report.get('generated_domains') or [])}",
+            "Generation Strategy: "
+            f"{self._value(report.get('generation_strategy'))}",
+            "Generation Governance: "
+            f"{self._value(report.get('generation_governance'))}",
+            "Training Assistant Queue Updated: "
+            f"{self._value(report.get('training_assistant_queue_updated'))}",
+            "Future Execution Ready: "
+            f"{self._value(report.get('future_execution_ready'))}",
+            "Generation Status: "
+            f"{self._value(report.get('generation_status'))}",
+            "Evidence Produced: "
+            f"{self._value(report.get('evidence_produced'))}",
+            "Truth Authority: "
+            f"{self._value(report.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(report.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(report.get('graduation_authority'))}",
+            "Constitutional Boundary: "
+            f"{self._value(report.get('constitutional_boundary'))}",
+        ]
+        return self._section("EVIDENCE GENERATION REPORT", lines)
 
     def _render_multi_hypothesis_report(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
@@ -4756,11 +4942,14 @@ class DeterministicFinalReportRenderer:
 
     def _render_warnings(self, canonical: dict[str, Any]) -> str:
         warnings = self._derive_warnings(canonical)
-        if not warnings:
-            warnings = ["No validated report warnings."]
+        warning_lines = (
+            [f"- {warning}" for warning in warnings]
+            if warnings
+            else ["- No validated report warnings."]
+        )
         return self._section("WARNINGS AND GAPS", [
             f"Warning Count: {len(warnings)}",
-            *[f"- {warning}" for warning in warnings],
+            *warning_lines,
         ])
 
     def _render_runtime_metadata(self, canonical: dict[str, Any]) -> str:
@@ -5234,12 +5423,26 @@ class DeterministicFinalReportRenderer:
             source_stage = "critical_compiler_resolution_trace"
         elif current_path_succeeded:
             if decision_pending:
-                current_bottleneck = "arena_decision_finalization"
-                root_cause = (
-                    arena.get("arena_decision_resolution_reason")
-                    or "post_calibration_decision_pending"
+                plan_forwarded = (
+                    arena.get("evidence_acquisition_plan_forwarded") is True
                 )
-                responsible_component = "CANDIDATE_ARENA_DECISION_RESOLUTION"
+                plan_consumed = arena.get("training_assistant_consumed_plan") is True
+                task_scheduled = arena.get("tie_break_task_scheduled") is True
+                if plan_forwarded and not plan_consumed:
+                    current_bottleneck = "training_assistant_plan_consumption"
+                    root_cause = "evidence_acquisition_plan_not_consumed_by_training_assistant"
+                    responsible_component = "TRAINING_ASSISTANT"
+                elif plan_consumed and not task_scheduled:
+                    current_bottleneck = "task_selection_decision_orchestration"
+                    root_cause = "evidence_acquisition_plan_consumed_without_tie_break_task_scheduled"
+                    responsible_component = "TASK_SELECTION_INTELLIGENCE"
+                else:
+                    current_bottleneck = "arena_decision_finalization"
+                    root_cause = (
+                        arena.get("arena_decision_resolution_reason")
+                        or "post_calibration_decision_pending"
+                    )
+                    responsible_component = "CANDIDATE_ARENA_DECISION_RESOLUTION"
                 next_task = (
                     arena.get("evidence_acquisition_validation_task")
                     or decision_action
@@ -5486,7 +5689,11 @@ class DeterministicFinalReportRenderer:
             or current_row.get("failure_reason")
             or "none"
         ).lower()
-        decision_bottleneck = bottleneck == "arena_decision_finalization"
+        decision_bottleneck = bottleneck in {
+            "arena_decision_finalization",
+            "training_assistant_plan_consumption",
+            "task_selection_decision_orchestration",
+        }
         if (
             current_row
             and failure in {"none", "candidate_emitted"}

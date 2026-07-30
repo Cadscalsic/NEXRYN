@@ -2770,6 +2770,128 @@ def test_candidate_arena_evidence_acquisition_asks_cross_source_when_consensus_m
     )
 
 
+def test_candidate_arena_reports_evidence_acquisition_plan_consumed_by_training():
+    state = _state()
+    state["candidate_arena_report"] = {
+        "candidate_arena_summary": {
+            "arena_state": "TIE_REQUIRES_REVIEW",
+            "candidate_count": 7,
+            "unique_candidate_count": 7,
+            "source_count": 2,
+            "cross_source_consensus_count": 0,
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "sources_entered": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+            "simulation_count": 7,
+            "simulation_success_count": 7,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "validation_probe_candidate_id": "semantic_to_transformation_compiler_0",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_summary": [
+                {
+                    "source": "semantic_compiler",
+                    "candidate_id": "semantic_to_transformation_compiler_0",
+                    "operation": "replace_color",
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["training_economy_alignment_report"] = {
+        "decision_orchestration_state": "PLAN_CONSUMED_AND_TASK_SCHEDULED",
+        "evidence_acquisition_plan_consumed": True,
+        "evidence_acquisition_task_scheduled": True,
+        "evidence_acquisition_selected_task": "elite_cognitive_task_07.json",
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["evidence_acquisition_plan_forwarded"] is True
+    assert summary["training_assistant_consumed_plan"] is True
+    assert summary["task_selection_consumed_plan"] is True
+    assert summary["tie_break_task_scheduled"] is True
+    assert summary["selected_tie_break_task"] == "elite_cognitive_task_07.json"
+    assert summary["decision_orchestration_state"] == (
+        "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+    )
+
+
+def test_candidate_arena_keeps_forwarded_plan_state_when_training_report_has_no_plan():
+    state = _state()
+    state["candidate_arena_report"] = {
+        "candidate_arena_summary": {
+            "arena_state": "TIE_REQUIRES_REVIEW",
+            "candidate_count": 2,
+            "unique_candidate_count": 2,
+            "source_count": 2,
+            "cross_source_consensus_count": 0,
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "sources_entered": [
+                "normalized_program_candidates",
+                "semantic_compiler",
+            ],
+            "simulation_count": 2,
+            "simulation_success_count": 2,
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "validation_probe_candidate_id": "semantic_to_transformation_compiler_0",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_summary": [
+                {
+                    "source": "semantic_compiler",
+                    "candidate_id": "semantic_to_transformation_compiler_0",
+                    "operation": "replace_color",
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["training_economy_alignment_report"] = {
+        "decision_orchestration_state": "NO_DECISION_ORCHESTRATION_PLAN",
+        "evidence_acquisition_plan_consumed": False,
+        "evidence_acquisition_task_scheduled": False,
+    }
+
+    result = CanonicalReportBindingEngine().bind(
+        state,
+        runtime_metadata=_metadata(),
+        report_level="normal",
+    )
+    summary = result["field_bindings"]["candidate_arena_summary"]["value"]
+
+    assert summary["evidence_acquisition_plan_forwarded"] is True
+    assert summary["training_assistant_consumed_plan"] is False
+    assert summary["task_selection_consumed_plan"] is False
+    assert summary["tie_break_task_scheduled"] is False
+    assert summary["decision_orchestration_state"] == (
+        "PLAN_FORWARDED_AWAITING_TASK_SELECTION"
+    )
+
+
 def test_evidence_deficit_progress_compares_previous_deficit_rows():
     state = _state()
     state["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = {

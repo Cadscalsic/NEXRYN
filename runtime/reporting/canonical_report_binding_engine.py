@@ -7794,6 +7794,45 @@ class CanonicalReportBindingEngine:
             self._first_dict(report_state, "COGNITIVE_CANDIDATE_ARENA_REPORT", "candidate_arena_report"),
             self._first_dict(performance, "COGNITIVE_CANDIDATE_ARENA_REPORT", "candidate_arena_report"),
         )
+        training_alignment = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "training_economy_alignment_report",
+                "TRAINING_ECONOMY_ALIGNMENT_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "training_economy_alignment_report",
+                "TRAINING_ECONOMY_ALIGNMENT_REPORT",
+            ),
+            self._first_dict(
+                report_state,
+                "training_diversity_report",
+                "TRAINING_DIVERSITY_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "training_diversity_report",
+                "TRAINING_DIVERSITY_REPORT",
+            ),
+        )
+        evidence_generation = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "evidence_generation_report",
+                "EVIDENCE_GENERATION_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "evidence_generation_report",
+                "EVIDENCE_GENERATION_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "evidence_generation_report",
+                "EVIDENCE_GENERATION_REPORT",
+            ),
+        )
         executable = self._merge_dicts(
             self._first_dict(
                 report_state,
@@ -7966,6 +8005,41 @@ class CanonicalReportBindingEngine:
                     explicit_summary.get("execution_success_rate"),
                     executable.get("execution_success_rate"),
                 ),
+                "evidence_acquisition_plan_consumed": self._first_present(
+                    training_alignment.get("evidence_acquisition_plan_consumed"),
+                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                ),
+                "training_assistant_consumed_plan": self._first_present(
+                    training_alignment.get("evidence_acquisition_plan_consumed"),
+                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                ),
+                "task_selection_consumed_plan": self._first_present(
+                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                    False,
+                ),
+                "tie_break_task_scheduled": self._first_present(
+                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                    False,
+                ),
+                "selected_tie_break_task": self._first_present(
+                    training_alignment.get("evidence_acquisition_selected_task"),
+                    "Not Available",
+                ),
+                "decision_orchestration_state": self._first_present(
+                    training_alignment.get("decision_orchestration_state"),
+                    "PLAN_FORWARDED_AWAITING_TASK_SELECTION",
+                ),
+                "evidence_generation_required": self._first_present(
+                    evidence_generation.get("generation_required"),
+                    training_alignment.get("evidence_generation_required"),
+                    False,
+                ),
+                "evidence_generation_status": self._first_present(
+                    evidence_generation.get("generation_status"),
+                    training_alignment.get("evidence_generation_status"),
+                    "GENERATION_NOT_REQUIRED",
+                ),
+                "evidence_generation_report": evidence_generation,
                 "validation_probe_shared_input_trace": explicit_summary.get(
                     "validation_probe_shared_input_trace"
                 ) or {},
@@ -8107,6 +8181,41 @@ class CanonicalReportBindingEngine:
                 if not participants
                 else None
             ),
+            "evidence_acquisition_plan_consumed": self._first_present(
+                training_alignment.get("evidence_acquisition_plan_consumed"),
+                training_alignment.get("evidence_acquisition_task_scheduled"),
+            ),
+            "training_assistant_consumed_plan": self._first_present(
+                training_alignment.get("evidence_acquisition_plan_consumed"),
+                training_alignment.get("evidence_acquisition_task_scheduled"),
+            ),
+            "task_selection_consumed_plan": self._first_present(
+                training_alignment.get("evidence_acquisition_task_scheduled"),
+                False,
+            ),
+            "tie_break_task_scheduled": self._first_present(
+                training_alignment.get("evidence_acquisition_task_scheduled"),
+                False,
+            ),
+            "selected_tie_break_task": self._first_present(
+                training_alignment.get("evidence_acquisition_selected_task"),
+                "Not Available",
+            ),
+            "decision_orchestration_state": self._first_present(
+                training_alignment.get("decision_orchestration_state"),
+                "PLAN_FORWARDED_AWAITING_TASK_SELECTION",
+            ),
+            "evidence_generation_required": self._first_present(
+                evidence_generation.get("generation_required"),
+                training_alignment.get("evidence_generation_required"),
+                False,
+            ),
+            "evidence_generation_status": self._first_present(
+                evidence_generation.get("generation_status"),
+                training_alignment.get("evidence_generation_status"),
+                "GENERATION_NOT_REQUIRED",
+            ),
+            "evidence_generation_report": evidence_generation,
         }
         summary.update(self._prediction_quality_calibration(summary))
         return {
@@ -8219,6 +8328,20 @@ class CanonicalReportBindingEngine:
                 else "select_independent_tie_break_validation_task"
             )
             expected_impact = "HIGH" if strong_probe_result else "MEDIUM"
+            task_scheduled = self._first_present(
+                summary.get("tie_break_task_scheduled"),
+                False,
+            )
+            plan_consumed = self._first_present(
+                summary.get("training_assistant_consumed_plan"),
+                task_scheduled,
+            )
+            orchestration_state = self._decision_orchestration_state(
+                plan_forwarded=True,
+                plan_consumed=plan_consumed,
+                task_scheduled=task_scheduled,
+                reported_state=summary.get("decision_orchestration_state"),
+            )
             return {
                 "prediction_quality_calibration_state": (
                     "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED"
@@ -8283,6 +8406,16 @@ class CanonicalReportBindingEngine:
                     "reenter_arena_after_required_evidence_without_truth_grant"
                 ),
                 "evidence_acquisition_truth_authority": "NONE",
+                "evidence_acquisition_plan_forwarded": True,
+                "evidence_acquisition_plan_consumed": plan_consumed,
+                "training_assistant_consumed_plan": plan_consumed,
+                "task_selection_consumed_plan": task_scheduled,
+                "tie_break_task_scheduled": task_scheduled,
+                "selected_tie_break_task": self._first_present(
+                    summary.get("selected_tie_break_task"),
+                    "Not Available",
+                ),
+                "decision_orchestration_state": orchestration_state,
                 "prediction_quality_calibration_strong_probe_result": (
                     strong_probe_result
                 ),
@@ -8328,6 +8461,23 @@ class CanonicalReportBindingEngine:
             "prediction_quality_calibration_invoked": calibration_invoked,
             "prediction_quality_calibration_strong_probe_result": strong_probe_result,
         }
+
+    def _decision_orchestration_state(
+        self,
+        *,
+        plan_forwarded: bool,
+        plan_consumed: Any,
+        task_scheduled: Any,
+        reported_state: Any,
+    ) -> str:
+        if task_scheduled is True:
+            return "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+        if plan_consumed is True:
+            return "PLAN_CONSUMED_AWAITING_TASK_SELECTION"
+        if plan_forwarded:
+            return "PLAN_FORWARDED_AWAITING_TASK_SELECTION"
+        reported = str(reported_state or "").strip()
+        return reported or "NO_DECISION_ORCHESTRATION_PLAN"
 
     def _build_candidate_proposal_visibility(
         self,

@@ -54,7 +54,9 @@ REQUIRED_VALIDATION_GROUPS = {
     "Cross Domain Validation Tasks": 5,
     "Trust Formation Tasks": 5,
     "Capability Graduation Tasks": 5,
+    "Advanced Multi-Concept Validation Tasks": 20,
 }
+ELITE_VALIDATION_ACADEMY_TASK_COUNT = sum(REQUIRED_VALIDATION_GROUPS.values())
 REQUIRED_VALIDATION_FIELDS = {
     "task_id",
     "task_name",
@@ -76,6 +78,20 @@ REQUIRED_VALIDATION_FIELDS = {
     "expected_governed_validation_effect",
     "expected_capability_trust_effect",
     "expected_graduation_effect",
+}
+ADVANCED_VALIDATION_FIELDS = {
+    "target_cognitive_domains",
+    "primary_evidence_category",
+    "secondary_evidence_categories",
+    "required_grounding",
+    "expected_validation_contract",
+    "capability_targets",
+    "cross_domain_participation",
+    "reasoning_complexity",
+    "operational_reuse_potential",
+    "prerequisite_capabilities",
+    "validation_difficulty",
+    "graduation_relevance",
 }
 
 
@@ -339,6 +355,32 @@ def validate_elite_validation_academy(
             failures.append("cross_domain_requirement_not_list")
         elif len(task.get("cross_domain_requirement") or []) < 2:
             failures.append("insufficient_cross_domain_requirement")
+        if task.get("elite_group") == "Advanced Multi-Concept Validation Tasks":
+            missing_advanced_fields = [
+                field for field in sorted(ADVANCED_VALIDATION_FIELDS)
+                if task.get(field) in (None, "", [])
+            ]
+            if missing_advanced_fields:
+                failures.append(
+                    "missing_advanced_fields:"
+                    + ",".join(missing_advanced_fields)
+                )
+            for field in (
+                "target_cognitive_domains",
+                "secondary_evidence_categories",
+                "required_grounding",
+                "capability_targets",
+                "cross_domain_participation",
+                "prerequisite_capabilities",
+            ):
+                if not isinstance(task.get(field), list):
+                    failures.append(f"{field}_not_list")
+            if task.get("truth_authority") != "NONE":
+                failures.append("truth_authority_not_none")
+            if task.get("trust_authority") != "NONE":
+                failures.append("trust_authority_not_none")
+            if task.get("graduation_authority") != "NONE":
+                failures.append("graduation_authority_not_none")
         weight = task.get("promotion_weight")
         if not isinstance(weight, int | float) or not 0.0 <= float(weight) <= 1.0:
             failures.append("promotion_weight_out_of_bounds")
@@ -355,7 +397,7 @@ def validate_elite_validation_academy(
         for group, expected in REQUIRED_VALIDATION_GROUPS.items()
     )
     fields_ok = not invalid_tasks
-    task_count_ok = len(tasks) == 30
+    task_count_ok = len(tasks) == ELITE_VALIDATION_ACADEMY_TASK_COUNT
     property_coverage = _ratio(len([
         key for key in required_properties
         if key and key != "None"
