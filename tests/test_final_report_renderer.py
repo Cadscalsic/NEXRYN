@@ -2032,6 +2032,392 @@ def test_engineering_conclusion_derives_ids_when_metadata_is_incomplete():
     assert "Conclusion Task Id: Not Available" not in conclusion
 
 
+def test_engineering_conclusion_treats_persisted_plan_as_cross_run_handoff():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "source_count": 2,
+            "cross_source_consensus_count": 1,
+            "cross_source_consensus_state": "CROSS_SOURCE_CONSENSUS",
+            "winner_operation": "replace_color",
+            "validation_probe_candidate_id": "semantic_program:replace_color",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["evidence_plan_store_report"] = {
+        "evidence_plan_store_state": "READY",
+        "evidence_plan_persistence_attempted": True,
+        "evidence_plan_persisted": True,
+        "evidence_plan_id": "evidence_plan_run_20260730_074151_a84f290c",
+        "evidence_plan_fingerprint": "fingerprint-a84f290c",
+        "evidence_plan_lifecycle_state": "PENDING_NEXT_RUN",
+        "evidence_plan_storage_state": "NEW_PLAN_PERSISTED",
+        "evidence_plan_storage_path": (
+            "runtime/state/evidence_acquisition_plans/pending/"
+            "evidence_plan_run_20260730_074151_a84f290c.json"
+        ),
+        "equivalent_pending_plan_found": False,
+        "duplicate_persistence_prevented": False,
+        "pending_evidence_plan_count": 1,
+        "evidence_plans_loaded_at_boot": 0,
+        "evidence_plans_delivered_to_training_assistant": 0,
+        "training_assistant_plan_available": False,
+        "current_run_consumption_expected": False,
+        "next_run_consumption_required": True,
+        "current_run_consumption_failure": False,
+        "plan_persistence_failure_reason": "none",
+        "plan_schema_version": "1.0",
+        "plan_constitutional_boundary": (
+            "EVIDENCE_ACQUISITION_PLAN_IS_A_GOVERNED_REQUEST_FOR_VALIDATION_NOT_EVIDENCE"
+        ),
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "Evidence Plan Persisted: TRUE" in report
+    assert (
+        "Decision Orchestration State: "
+        "PLAN_PERSISTED_FOR_NEXT_RUN_CONSUMPTION"
+    ) in report
+    assert (
+        "Training Assistant Current Run Consumption Expected: FALSE"
+    ) in report
+    assert "Training Assistant Next Run Consumption Required: TRUE" in report
+    assert "Largest Success: evidence_acquisition_plan_persisted" in conclusion
+    assert (
+        "Current Bottleneck: next_run_training_assistant_plan_consumption"
+    ) in conclusion
+    assert (
+        "Root Cause: cross_run_evidence_plan_awaiting_next_runtime"
+    ) in conclusion
+    assert (
+        "Exact Responsible Component: "
+        "TRAINING_ASSISTANT_ORCHESTRATION_HANDOFF"
+    ) in conclusion
+    assert (
+        "Immediate Next Development Task: "
+        "consume_persisted_evidence_plan_during_next_run"
+    ) in conclusion
+    assert (
+        "evidence_acquisition_plan_not_consumed_by_training_assistant"
+        not in conclusion
+    )
+
+
+def test_report_renders_boot_loaded_plan_delivered_to_training_assistant():
+    state = _report_state()
+    state["evidence_plan_store_report"] = {
+        "evidence_plan_store_state": "READY",
+        "evidence_plan_boot_load_state": "PENDING_PLAN_DELIVERED",
+        "evidence_plan_persistence_attempted": False,
+        "evidence_plan_persisted": False,
+        "evidence_plan_id": "evidence_plan_run_20260730_074151_a84f290c",
+        "evidence_plan_fingerprint": "fingerprint-a84f290c",
+        "evidence_plan_lifecycle_state": "CONSUMPTION_PENDING",
+        "evidence_plan_storage_state": "CONSUMPTION_PENDING",
+        "pending_evidence_plan_count": 1,
+        "evidence_plans_loaded_at_boot": 1,
+        "evidence_plans_delivered_to_training_assistant": 1,
+        "training_assistant_plan_available": True,
+        "current_run_consumption_expected": True,
+        "next_run_consumption_required": False,
+        "current_run_consumption_failure": False,
+        "plan_persistence_failure_reason": "none",
+        "plan_schema_version": "1.0",
+        "plan_constitutional_boundary": (
+            "EVIDENCE_ACQUISITION_PLAN_IS_A_GOVERNED_REQUEST_FOR_VALIDATION_NOT_EVIDENCE"
+        ),
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Evidence Plans Loaded At Boot: 1" in report
+    assert "Evidence Plans Delivered To Training Assistant: 1" in report
+    assert "Training Assistant Plan Available: TRUE" in report
+    assert "Training Assistant Current Run Consumption Expected: TRUE" in report
+    assert "Training Assistant Next Run Consumption Required: FALSE" in report
+    assert (
+        "Decision Orchestration State: "
+        "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
+    ) in report
+    assert "Training Assistant Consumed Plan: FALSE" in report
+
+
+def test_delivered_inbound_plan_takes_precedence_over_outbound_duplicate_reuse():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "source_count": 1,
+            "cross_source_consensus_count": 0,
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "source_dominance_detected": True,
+            "winner_operation": "replace_color",
+            "validation_probe_candidate_id": "semantic_program:replace_color",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["evidence_plan_store_report"] = {
+        "evidence_plan_persistence_attempted": True,
+        "evidence_plan_persisted": False,
+        "evidence_plan_id": "evidence_plan_run_20260730_074151_a84f290c",
+        "evidence_plan_fingerprint": "fingerprint-a84f290c",
+        "evidence_plan_lifecycle_state": "CONSUMPTION_PENDING",
+        "evidence_plan_storage_state": "EQUIVALENT_PENDING_PLAN_REUSED",
+        "equivalent_pending_plan_found": True,
+        "duplicate_persistence_prevented": True,
+        "pending_evidence_plan_count": 1,
+        "evidence_plans_loaded_at_boot": 1,
+        "evidence_plans_delivered_to_training_assistant": 1,
+        "training_assistant_plan_available": False,
+        "current_run_consumption_expected": False,
+        "next_run_consumption_required": True,
+        "current_run_consumption_failure": False,
+        "inbound_evidence_plan_state": (
+            "PLAN_AVAILABLE_FOR_CURRENT_RUN_CONSUMPTION"
+        ),
+        "outbound_evidence_plan_state": "EQUIVALENT_PENDING_PLAN_REUSED",
+        "outbound_evidence_plan_id": (
+            "evidence_plan_run_20260730_074151_a84f290c"
+        ),
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "Equivalent Pending Plan Found: TRUE" in report
+    assert "Duplicate Persistence Prevented: TRUE" in report
+    assert "Evidence Plans Loaded At Boot: 1" in report
+    assert "Evidence Plans Delivered To Training Assistant: 1" in report
+    assert "Training Assistant Plan Available: TRUE" in report
+    assert "Training Assistant Current Run Consumption Expected: TRUE" in report
+    assert "Training Assistant Next Run Consumption Required: FALSE" in report
+    assert (
+        "Decision Orchestration State: "
+        "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
+    ) in report
+    assert "Current Bottleneck: training_assistant_plan_consumption" in conclusion
+    assert (
+        "Root Cause: training_assistant_consumption_logic_not_implemented"
+        in conclusion
+    )
+    assert (
+        "Exact Responsible Component: "
+        "TRAINING_ASSISTANT_EVIDENCE_PLAN_CONSUMER"
+    ) in conclusion
+
+
+def test_engineering_conclusion_advances_after_validation_task_selection():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "source_count": 1,
+            "cross_source_consensus_count": 0,
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "source_dominance_detected": True,
+            "winner_operation": "replace_color",
+            "validation_probe_candidate_id": "semantic_program:replace_color",
+            "validation_probe_operation": "replace_color",
+            "validation_probe_authority": "SANDBOX_VALIDATION_ONLY",
+            "candidate_source_flow_trace": [
+                {
+                    "source": "semantic_to_transformation_compiler",
+                    "operation": "replace_color",
+                    "proposal_runtime_proposed": True,
+                    "arena_proposal_built": True,
+                    "gateway_accepted": True,
+                    "entered_arena": True,
+                }
+            ],
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["training_economy_alignment_report"] = {
+        "evidence_acquisition_plan_forwarded": True,
+        "evidence_acquisition_plan_consumed": True,
+        "training_assistant_consumed_plan": True,
+        "evidence_acquisition_task_scheduled": True,
+        "task_selection_consumed_plan": True,
+        "tie_break_task_scheduled": True,
+        "evidence_acquisition_selected_task": "elite_validation_task_31",
+        "selected_tie_break_task": "elite_validation_task_31",
+        "decision_orchestration_state": (
+            "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+        ),
+        "consumption_state": "MATCHING_COMPLETED",
+        "curriculum_search_state": "COMPLETED",
+        "matching_validation_tasks": 5,
+        "best_matching_task": "elite_validation_task_31",
+        "best_matching_curriculum": "Elite Validation Academy",
+        "matching_score": 118.0,
+        "matching_explanation": "primary_required_evidence_match",
+        "selection_authority": "TRAINING_ASSISTANT",
+        "selection_state": "WAITING_EXECUTION",
+        "waiting_execution": True,
+        "generation_eligible": False,
+        "generation_invoked": False,
+        "waiting_generator": False,
+        "evidence_plan_consumption_report": {
+            "plans_delivered": 1,
+            "plans_consumed": 1,
+            "current_plan_id": "plan-cross-source",
+            "lifecycle_state": "WAITING_EXECUTION",
+            "consumption_state": "MATCHING_COMPLETED",
+            "current_required_evidence": "cross_source_consensus_evidence",
+            "current_required_validation_task": (
+                "select_cross_source_tie_break_validation_task"
+            ),
+            "current_target_operation": "replace_color",
+            "current_tie_break_strategy": "cross_source_consensus",
+            "registered_curricula": 1,
+            "loaded_curricula": 1,
+            "enabled_curricula": 1,
+            "disabled_curricula": 0,
+            "curricula_searched": 1,
+            "total_validation_tasks": 50,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "execution_authority": "NONE",
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "TRAINING ASSISTANT PLAN CONSUMPTION" in report
+    assert "Training Assistant Consumed Plan: TRUE" in report
+    assert "Curriculum Search: COMPLETED" in report
+    assert "Matching Validation Tasks: 5" in report
+    assert "Selection State: WAITING_EXECUTION" in report
+    assert "Largest Success: training_assistant_consumed_evidence_plan" in conclusion
+    assert "Current Open Decision: WAITING_VALIDATION_TASK_EXECUTION" in conclusion
+    assert "Next Decision Gate: execute_selected_validation_task" in conclusion
+    assert "Current Bottleneck: validation_execution_pipeline" in conclusion
+    assert "Root Cause: validation_task_execution_not_started" in conclusion
+    assert (
+        "Exact Responsible Component: VALIDATION_EXECUTION_PIPELINE"
+        in conclusion
+    )
+
+
 def test_engineering_conclusion_generates_run_id_from_timestamp_when_ids_missing():
     state = _report_state()
     state.pop("execution_id", None)

@@ -54,6 +54,7 @@ def build_runtime_metadata(
     runtime_metrics = runtime_metrics or {}
     return {
         "tasks_directory": args.tasks_dir,
+        "run_id": runtime_metrics.get("run_id"),
         "mode": args.mode,
         "execution_profile": runtime_metrics.get("execution_profile"),
         "cognitive_pipeline": runtime_metrics.get("cognitive_pipeline"),
@@ -3697,6 +3698,7 @@ runtime_watchdog = RuntimeWatchdog()
 runtime_watchdog.start("boot_total")
 runtime_watchdog.checkpoint("boot_start")
 runtime_metrics = {
+    "run_id": f"run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
     "execution_profile": execution_profile.as_runtime_metadata(),
     "cognitive_pipeline": execution_profile.pipeline_name,
     "pipeline_contract": "unified_execution_architecture",
@@ -3727,6 +3729,10 @@ results = {}
 shutdown_controller = None
 shared_cognitive_state = None
 knowledge_bus = None
+evidence_plan_store = None
+evidence_plan_store_report = {}
+evidence_plan_persistence_report = {}
+pending_evidence_acquisition_plans = []
 
 
 # ============================================
@@ -3777,7 +3783,41 @@ try:
     )
     runtime_watchdog.checkpoint("task_list_loaded")
 
+    from runtime.evidence.evidence_plan_store import EvidenceAcquisitionPlanStore
     from runtime.learning.training_assistant import TrainingAssistant
+
+    evidence_plan_store = EvidenceAcquisitionPlanStore()
+    evidence_plan_boot_report = evidence_plan_store.load_pending_plans()
+    evidence_plan_delivery_report = (
+        evidence_plan_store.deliver_pending_plans_to_training_assistant(
+            evidence_plan_boot_report.get("pending_evidence_acquisition_plans")
+            or []
+        )
+    )
+    pending_evidence_acquisition_plans = (
+        evidence_plan_delivery_report.get("pending_evidence_acquisition_plans")
+        or []
+    )
+    evidence_plan_store_report = {
+        **evidence_plan_boot_report,
+        **evidence_plan_delivery_report,
+        "evidence_plans_loaded_at_boot": evidence_plan_boot_report.get(
+            "evidence_plans_loaded_at_boot",
+            0,
+        ),
+    }
+    runtime_metrics.update({
+        "evidence_plans_loaded_at_boot": evidence_plan_store_report.get(
+            "evidence_plans_loaded_at_boot",
+            0,
+        ),
+        "evidence_plans_delivered_to_training_assistant": (
+            evidence_plan_store_report.get(
+                "evidence_plans_delivered_to_training_assistant",
+                0,
+            )
+        ),
+    })
 
     training_assistant = TrainingAssistant(
         batch_size=training_batch_size,
@@ -3807,6 +3847,7 @@ try:
         core_knowledge=core_knowledge,
         selection_mode=args.selection_mode,
         random_seed=args.random_seed,
+        pending_evidence_acquisition_plans=pending_evidence_acquisition_plans,
     )
     runtime_metrics["task_selection_duration"] = (
         runtime_watchdog.stop_and_warn(
@@ -4148,6 +4189,9 @@ try:
             "training_assistant_batch": training_batch,
             "training_assistant_report": training_assistant_report,
             "training_report": training_report,
+            "evidence_plan_store_report": evidence_plan_store_report,
+            "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
+            "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
             "performance_report": performance_report,
             "tasks_executed": len(all_results),
             "successful_tasks": successful_tasks,
@@ -7027,6 +7071,9 @@ try:
         "training_assistant_batch": training_batch,
         "training_assistant_report": training_assistant_report,
         "training_report": training_report,
+        "evidence_plan_store_report": evidence_plan_store_report,
+        "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
+        "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
         "performance_report": performance_report,
         "PERFORMANCE_REPORT": performance_intelligence_report,
         "performance_intelligence_report": performance_intelligence_report,
@@ -7861,6 +7908,105 @@ if runtime_status == "completed":
             "watchdog": runtime_watchdog.report(),
         },
     )
+    if isinstance(results, dict) and evidence_plan_store is not None:
+        try:
+            from runtime.reporting.canonical_report_binding_engine import (
+                canonical_report_binding_engine,
+            )
+
+            binding_result = canonical_report_binding_engine.bind(
+                results,
+                runtime_metadata=runtime_metadata,
+                report_level=final_report_level,
+            )
+            arena_binding = (
+                binding_result.get("field_bindings", {})
+                .get("candidate_arena_summary", {})
+            )
+            arena_summary = (
+                arena_binding.get("value")
+                if isinstance(arena_binding, dict)
+                else {}
+            )
+            plan = evidence_plan_store.plan_from_candidate_arena_summary(
+                arena_summary if isinstance(arena_summary, dict) else {},
+                source_run_id=runtime_metadata.get("run_id"),
+            )
+            boot_loaded = evidence_plan_store_report.get(
+                "evidence_plans_loaded_at_boot",
+                0,
+            )
+            delivered = evidence_plan_store_report.get(
+                "evidence_plans_delivered_to_training_assistant",
+                0,
+            )
+            inbound_plan_available = bool(delivered)
+            if plan:
+                evidence_plan_persistence_report = (
+                    evidence_plan_store.persist_plan(
+                        plan,
+                        source_run_id=runtime_metadata.get("run_id"),
+                    )
+                )
+            else:
+                evidence_plan_persistence_report = dict(
+                    evidence_plan_store.last_report or {}
+                )
+                evidence_plan_persistence_report[
+                    "evidence_plan_persistence_attempted"
+                ] = False
+            evidence_plan_store_report = {
+                **evidence_plan_store_report,
+                **evidence_plan_persistence_report,
+                "evidence_plans_loaded_at_boot": boot_loaded,
+                "evidence_plans_delivered_to_training_assistant": delivered,
+                "outbound_evidence_plan_state": (
+                    evidence_plan_persistence_report.get(
+                        "evidence_plan_storage_state"
+                    )
+                ),
+                "outbound_evidence_plan_id": (
+                    evidence_plan_persistence_report.get("evidence_plan_id")
+                ),
+            }
+            if inbound_plan_available:
+                evidence_plan_store_report.update({
+                    "training_assistant_plan_available": True,
+                    "current_run_consumption_expected": True,
+                    "next_run_consumption_required": False,
+                    "current_run_consumption_failure": False,
+                    "inbound_evidence_plan_state": (
+                        "PLAN_AVAILABLE_FOR_CURRENT_RUN_CONSUMPTION"
+                    ),
+                    "decision_orchestration_state": (
+                        "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
+                    ),
+                })
+        except Exception as plan_store_error:
+            evidence_plan_store_report = {
+                **(evidence_plan_store_report or {}),
+                "evidence_plan_store_state": "FAILED",
+                "evidence_plan_persistence_attempted": True,
+                "evidence_plan_persisted": False,
+                "evidence_plan_storage_state": "PERSISTENCE_FAILED",
+                "plan_persistence_failure_reason": str(plan_store_error),
+                "current_run_consumption_expected": False,
+                "next_run_consumption_required": False,
+                "current_run_consumption_failure": False,
+            }
+        results["evidence_plan_store_report"] = evidence_plan_store_report
+        results["EVIDENCE_PLAN_STORE_REPORT"] = evidence_plan_store_report
+        if isinstance(results.get("performance_report"), dict):
+            results["performance_report"]["evidence_plan_store_report"] = (
+                evidence_plan_store_report
+            )
+            results["performance_report"]["EVIDENCE_PLAN_STORE_REPORT"] = (
+                evidence_plan_store_report
+            )
+        if isinstance(results.get("training_report"), dict):
+            results["training_report"]["evidence_plan_store_report"] = (
+                evidence_plan_store_report
+            )
     pre_final_report_diagnostics.collection_snapshot(
         "REPORT_SOURCE_COLLECTION",
         {

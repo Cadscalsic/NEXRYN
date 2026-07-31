@@ -10,6 +10,62 @@ def task_files(count=12):
     ]
 
 
+def test_training_assistant_consumes_persisted_evidence_plan_and_selects_validation_task(
+    tmp_path,
+):
+    assistant = TrainingAssistant(
+        state_path=tmp_path / "training_assistant_state.json",
+        selection_memory_path=tmp_path / "task_selection_memory.json",
+        selection_mode="curriculum",
+    )
+
+    selected = assistant.select_batch(
+        task_files(),
+        pending_evidence_acquisition_plans=[
+            {
+                "plan_id": "evidence_plan_run_20260730_074151_a84f290c",
+                "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
+                "required_evidence": "cross_source_consensus_evidence",
+                "required_validation_task": (
+                    "select_cross_source_tie_break_validation_task"
+                ),
+                "tie_break_strategy": "cross_source_consensus",
+                "target_candidate": "semantic_program:replace_color",
+                "target_operation": "replace_color",
+                "expected_tie_break_impact": "HIGH",
+                "governed_reentry_action": (
+                    "reenter_arena_after_required_evidence_without_truth_grant"
+                ),
+                "authority": {
+                    "truth": "NONE",
+                    "trust": "NONE",
+                    "graduation": "NONE",
+                    "execution": "NONE",
+                },
+            }
+        ],
+    )
+
+    alignment = selected["training_economy_alignment_report"]
+    assert alignment["pending_evidence_plan_count"] == 1
+    assert alignment["training_assistant_plan_available"] is True
+    assert alignment["evidence_acquisition_plan_forwarded"] is True
+    assert alignment["evidence_acquisition_plan_consumed"] is True
+    assert alignment["training_assistant_consumed_plan"] is True
+    assert alignment["consumption_state"] == "MATCHING_COMPLETED"
+    assert alignment["curriculum_search_state"] == "COMPLETED"
+    assert alignment["matching_validation_tasks"] > 0
+    assert alignment["best_matching_task"] != "Not Available"
+    assert alignment["evidence_acquisition_selected_task"] != "Not Available"
+    assert alignment["selection_authority"] == "TRAINING_ASSISTANT"
+    assert alignment["selection_state"] == "WAITING_EXECUTION"
+    assert alignment["waiting_execution"] is True
+    assert alignment["generation_invoked"] is False
+    assert alignment["decision_orchestration_state"] == (
+        "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+    )
+
+
 def test_training_assistant_selects_three_tasks_and_resumes_active_batch(
     tmp_path,
 ):

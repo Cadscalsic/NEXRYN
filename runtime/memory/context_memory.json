@@ -9,7 +9,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-03T01:47:45.617700+00:00",
       "observation_count": 22,
-      "runtime_cycles_survived": 101,
+      "runtime_cycles_survived": 133,
       "semantic_validation": true,
       "source_concept": "cardinality",
       "source_context": {
@@ -167,7 +167,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-06-19T16:50:54.380357+00:00",
       "observation_count": 43,
-      "runtime_cycles_survived": 1604,
+      "runtime_cycles_survived": 1636,
       "semantic_validation": true,
       "source_concept": "",
       "source_context": {
@@ -502,8 +502,8 @@
       "first_discovered_at": "2026-06-18T20:25:24.891752+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:12:52.431146+00:00",
-      "observation_count": 432,
+      "last_observed_at": "2026-07-31T06:47:05.514041+00:00",
+      "observation_count": 435,
       "runtime_cycles_survived": 30,
       "semantic_validation": true,
       "source_concept": "",
@@ -557,8 +557,8 @@
       "first_discovered_at": "2026-06-18T20:24:30.184026+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:15:18.373813+00:00",
-      "observation_count": 744,
+      "last_observed_at": "2026-07-31T06:51:06.635175+00:00",
+      "observation_count": 755,
       "runtime_cycles_survived": 0,
       "semantic_validation": true,
       "source_concept": "directional_motion",
@@ -647,8 +647,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -1763,8 +1763,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -2623,8 +2623,8 @@
               "context_id": "replication_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
-                "last_observed_at": "2026-07-23T18:15:04.729801+00:00",
-                "observation_count": 1033,
+                "last_observed_at": "2026-07-31T06:50:44.705732+00:00",
+                "observation_count": 1050,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -4122,8 +4122,8 @@
               "context_id": "topological_growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:28.827879+00:00",
-                "last_observed_at": "2026-07-23T18:15:10.124771+00:00",
-                "observation_count": 976,
+                "last_observed_at": "2026-07-31T06:50:52.804926+00:00",
+                "observation_count": 992,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -5182,8 +5182,8 @@
               "context_id": "directional_motion_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:30.184026+00:00",
-                "last_observed_at": "2026-07-23T18:15:15.771954+00:00",
-                "observation_count": 745,
+                "last_observed_at": "2026-07-31T06:51:02.069997+00:00",
+                "observation_count": 756,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -6115,8 +6115,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -7231,8 +7231,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -8091,8 +8091,8 @@
               "context_id": "replication_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
-                "last_observed_at": "2026-07-23T18:15:04.729801+00:00",
-                "observation_count": 1033,
+                "last_observed_at": "2026-07-31T06:50:44.705732+00:00",
+                "observation_count": 1050,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -9590,8 +9590,8 @@
               "context_id": "topological_growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:28.827879+00:00",
-                "last_observed_at": "2026-07-23T18:15:10.124771+00:00",
-                "observation_count": 976,
+                "last_observed_at": "2026-07-31T06:50:52.804926+00:00",
+                "observation_count": 992,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -10650,8 +10650,8 @@
               "context_id": "directional_motion_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:30.184026+00:00",
-                "last_observed_at": "2026-07-23T18:15:15.771954+00:00",
-                "observation_count": 745,
+                "last_observed_at": "2026-07-31T06:51:02.069997+00:00",
+                "observation_count": 756,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -12521,8 +12521,8 @@
       "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:14:56.726304+00:00",
-      "observation_count": 1744,
+      "last_observed_at": "2026-07-31T06:50:31.687662+00:00",
+      "observation_count": 1780,
       "runtime_cycles_survived": 4,
       "semantic_validation": true,
       "source_concept": "growth",
@@ -12611,8 +12611,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -13736,8 +13736,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -16019,8 +16019,8 @@
       "first_discovered_at": "2026-06-18T20:25:36.925522+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:13:14.206716+00:00",
-      "observation_count": 437,
+      "last_observed_at": "2026-07-31T06:47:42.367907+00:00",
+      "observation_count": 440,
       "runtime_cycles_survived": 24,
       "semantic_validation": true,
       "source_concept": "",
@@ -16077,7 +16077,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-03T01:47:47.401569+00:00",
       "observation_count": 22,
-      "runtime_cycles_survived": 101,
+      "runtime_cycles_survived": 133,
       "semantic_validation": true,
       "source_concept": "numerical_reasoning",
       "source_context": {
@@ -16231,7 +16231,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-03T01:47:44.949657+00:00",
       "observation_count": 22,
-      "runtime_cycles_survived": 101,
+      "runtime_cycles_survived": 133,
       "semantic_validation": true,
       "source_concept": "object_counting",
       "source_context": {
@@ -16395,7 +16395,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-06-19T16:51:11.411014+00:00",
       "observation_count": 32,
-      "runtime_cycles_survived": 1598,
+      "runtime_cycles_survived": 1630,
       "semantic_validation": true,
       "source_concept": "",
       "source_context": {
@@ -16698,8 +16698,8 @@
       "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:15:01.925764+00:00",
-      "observation_count": 1464,
+      "last_observed_at": "2026-07-31T06:50:40.044776+00:00",
+      "observation_count": 1490,
       "runtime_cycles_survived": 3,
       "semantic_validation": true,
       "source_concept": "propagation",
@@ -16788,8 +16788,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -17904,8 +17904,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -18774,8 +18774,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -19890,8 +19890,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -21637,7 +21637,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-03T01:47:46.136264+00:00",
       "observation_count": 22,
-      "runtime_cycles_survived": 101,
+      "runtime_cycles_survived": 133,
       "semantic_validation": true,
       "source_concept": "quantity_preservation",
       "source_context": {
@@ -21791,7 +21791,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-03T01:47:46.746601+00:00",
       "observation_count": 22,
-      "runtime_cycles_survived": 101,
+      "runtime_cycles_survived": 133,
       "semantic_validation": true,
       "source_concept": "quantity_transformation",
       "source_context": {
@@ -21943,8 +21943,8 @@
       "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:15:07.041842+00:00",
-      "observation_count": 1032,
+      "last_observed_at": "2026-07-31T06:50:48.323189+00:00",
+      "observation_count": 1049,
       "runtime_cycles_survived": 2,
       "semantic_validation": true,
       "source_concept": "replication",
@@ -22034,8 +22034,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -23150,8 +23150,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -24010,8 +24010,8 @@
               "context_id": "replication_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
-                "last_observed_at": "2026-07-23T18:15:04.729801+00:00",
-                "observation_count": 1033,
+                "last_observed_at": "2026-07-31T06:50:44.705732+00:00",
+                "observation_count": 1050,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -25520,8 +25520,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -26636,8 +26636,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -27496,8 +27496,8 @@
               "context_id": "replication_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
-                "last_observed_at": "2026-07-23T18:15:04.729801+00:00",
-                "observation_count": 1033,
+                "last_observed_at": "2026-07-31T06:50:44.705732+00:00",
+                "observation_count": 1050,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -30578,7 +30578,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-15T13:32:03.053247+00:00",
       "observation_count": 272,
-      "runtime_cycles_survived": 48,
+      "runtime_cycles_survived": 80,
       "semantic_validation": true,
       "source_concept": "",
       "source_context": {
@@ -30633,7 +30633,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-07-03T01:47:48.151724+00:00",
       "observation_count": 22,
-      "runtime_cycles_survived": 101,
+      "runtime_cycles_survived": 133,
       "semantic_validation": true,
       "source_concept": "set_reasoning",
       "source_context": {
@@ -30787,7 +30787,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-06-19T16:51:21.576794+00:00",
       "observation_count": 31,
-      "runtime_cycles_survived": 1595,
+      "runtime_cycles_survived": 1627,
       "semantic_validation": true,
       "source_concept": "",
       "source_context": {
@@ -31092,7 +31092,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-06-26T01:14:59.492604+00:00",
       "observation_count": 16,
-      "runtime_cycles_survived": 1485,
+      "runtime_cycles_survived": 1517,
       "semantic_validation": true,
       "source_concept": "",
       "source_context": {
@@ -31379,8 +31379,8 @@
       "first_discovered_at": "2026-06-18T20:24:28.827879+00:00",
       "governance_visible": true,
       "identity_compatible": true,
-      "last_observed_at": "2026-07-23T18:15:12.555618+00:00",
-      "observation_count": 975,
+      "last_observed_at": "2026-07-31T06:50:56.523739+00:00",
+      "observation_count": 991,
       "runtime_cycles_survived": 1,
       "semantic_validation": true,
       "source_concept": "topological_growth",
@@ -31469,8 +31469,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -32585,8 +32585,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -33445,8 +33445,8 @@
               "context_id": "replication_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
-                "last_observed_at": "2026-07-23T18:15:04.729801+00:00",
-                "observation_count": 1033,
+                "last_observed_at": "2026-07-31T06:50:44.705732+00:00",
+                "observation_count": 1050,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -34944,8 +34944,8 @@
               "context_id": "topological_growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:28.827879+00:00",
-                "last_observed_at": "2026-07-23T18:15:10.124771+00:00",
-                "observation_count": 976,
+                "last_observed_at": "2026-07-31T06:50:52.804926+00:00",
+                "observation_count": 992,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -36016,8 +36016,8 @@
               "context_id": "growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:26.764610+00:00",
-                "last_observed_at": "2026-07-23T18:14:54.543355+00:00",
-                "observation_count": 1745,
+                "last_observed_at": "2026-07-31T06:50:28.618117+00:00",
+                "observation_count": 1781,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -37132,8 +37132,8 @@
               "context_id": "propagation_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.083306+00:00",
-                "last_observed_at": "2026-07-23T18:14:59.479721+00:00",
-                "observation_count": 1465,
+                "last_observed_at": "2026-07-31T06:50:36.592906+00:00",
+                "observation_count": 1491,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -37992,8 +37992,8 @@
               "context_id": "replication_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:27.882327+00:00",
-                "last_observed_at": "2026-07-23T18:15:04.729801+00:00",
-                "observation_count": 1033,
+                "last_observed_at": "2026-07-31T06:50:44.705732+00:00",
+                "observation_count": 1050,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -39491,8 +39491,8 @@
               "context_id": "topological_growth_context",
               "context_lifecycle": {
                 "first_discovered_at": "2026-06-18T20:24:28.827879+00:00",
-                "last_observed_at": "2026-07-23T18:15:10.124771+00:00",
-                "observation_count": 976,
+                "last_observed_at": "2026-07-31T06:50:52.804926+00:00",
+                "observation_count": 992,
                 "runtime_cycles_survived": 0,
                 "status": "GOVERNANCE_VISIBLE"
               },
@@ -41657,7 +41657,7 @@
       "identity_compatible": true,
       "last_observed_at": "2026-06-19T16:51:40.379433+00:00",
       "observation_count": 19,
-      "runtime_cycles_survived": 1587,
+      "runtime_cycles_survived": 1619,
       "semantic_validation": true,
       "source_concept": "",
       "source_context": {
@@ -239782,6 +239782,3466 @@
       "context_id": "topology_context",
       "event": "survived_runtime_cycle",
       "timestamp": "2026-07-23T18:15:18.841219+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:46:58.117448+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:46:58.808700+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:46:59.572515+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:00.251080+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:00.884821+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:01.550629+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:03.729656+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:04.679589+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:05.514041+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:06.266775+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:12.765801+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:13.701088+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:14.528261+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:15.304594+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:16.086295+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:16.828158+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:19.000867+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:21.278517+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:24.100369+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:34.139145+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:35.136748+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:36.055509+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:36.852745+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:37.845444+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:38.626452+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:40.295719+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:41.346031+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:42.367907+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:43.162009+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:44.689834+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.025301+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.026470+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.026470+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.026470+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.026470+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.026470+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:47.026470+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:55.025998+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:55.819816+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:56.560734+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:57.357217+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:47:58.157168+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:47:58.897778+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:06.439429+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:07.315951+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:08.175576+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:09.057881+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:09.792174+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:10.593234+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:18.191384+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:19.047923+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:19.889905+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:20.701709+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:21.541078+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:22.409028+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:30.000412+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:30.726136+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:31.502931+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:32.296120+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:33.203994+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274091+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274691+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274691+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274691+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274691+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:34.274753+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:42.819104+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:43.631242+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:44.387047+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:45.330243+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:46.113944+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:47.112235+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:55.254328+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:56.219583+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:56.992093+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:57.851454+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:48:58.691590+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:48:59.606660+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:07.232644+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:08.276798+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:09.176669+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:10.085644+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:11.058914+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.961560+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.962567+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.962567+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:11.962567+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:20.064599+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:21.129945+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:22.124990+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:23.152856+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:24.138992+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:25.216924+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:33.539622+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:34.750666+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:35.530232+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:36.450178+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:37.231542+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:38.136240+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:41.080649+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:49.546747+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:50.331092+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:51.043630+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:51.837974+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:52.745386+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:49:53.608192+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:49:59.618780+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:00.474995+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:01.249597+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:02.186129+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:02.935629+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:03.879701+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:05.277369+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:11.009986+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:12.133422+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:12.791936+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:13.373581+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:14.073473+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:14.656953+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:15.263744+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:15.923007+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.630936+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:16.632294+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:21.345127+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:21.934669+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:22.546866+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:23.017623+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:23.460928+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:24.016887+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:29.539612+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:30.122858+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:30.690981+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:31.173162+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:31.687662+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280153+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:32.280660+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:37.612968+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:38.328956+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:38.937071+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:39.472806+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:40.044776+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:40.658681+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:45.764506+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:46.387278+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:47.011142+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:47.722385+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:48.323189+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:48.888841+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:53.788008+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:54.594672+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:55.234745+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:55.893759+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:50:56.523739+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:50:57.319724+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:51:03.243355+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:51:04.238983+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:51:05.120717+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:51:05.920323+00:00"
+    },
+    {
+      "context_id": "directional_motion_context",
+      "event": "observed",
+      "timestamp": "2026-07-31T06:51:06.635175+00:00"
+    },
+    {
+      "context_id": "cardinality_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "color_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "density_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "mapping_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "numerical_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "object_counting_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "position_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "propagation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "quantity_preservation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "quantity_transformation_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "replication_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "scale_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "set_reasoning_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "shape_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "symmetry_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "topological_growth_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
+    },
+    {
+      "context_id": "topology_context",
+      "event": "survived_runtime_cycle",
+      "timestamp": "2026-07-31T06:51:07.761745+00:00"
     }
   ],
   "system": "persistent_context_memory"

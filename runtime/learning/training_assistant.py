@@ -13,6 +13,9 @@ from runtime.training.elite_curriculum_validator import (
     ELITE_VALIDATION_ACADEMY_PATH,
     validate_elite_curriculum,
 )
+from runtime.training.validation_curriculum_registry import (
+    ValidationCurriculumRegistry,
+)
 
 
 class TrainingAssistant:
@@ -46,6 +49,7 @@ class TrainingAssistant:
         validation_academy_path=ELITE_VALIDATION_ACADEMY_PATH,
         evidence_generation_path="runtime/evidence_generation/generated_curriculum",
         evidence_generation_engine=None,
+        validation_curriculum_registry=None,
     ):
         self.state_path = Path(state_path)
         self.batch_size = max(int(batch_size), 1)
@@ -61,6 +65,13 @@ class TrainingAssistant:
             evidence_generation_engine
             or EvidenceGenerationEngine(evidence_generation_path)
         )
+        self.validation_curriculum_registry = (
+            validation_curriculum_registry or ValidationCurriculumRegistry()
+        )
+        if validation_curriculum_registry is None:
+            self.validation_curriculum_registry.register_default_academy(
+                self.validation_academy_path
+            )
         self.state = self._load()
         self.selection_memory = self._load_selection_memory()
 
@@ -419,6 +430,19 @@ class TrainingAssistant:
             ),
             "evidence_acquisition_expected_tie_break_impact": report.get(
                 "evidence_acquisition_expected_tie_break_impact"
+            ),
+            "pending_evidence_acquisition_plans": (
+                report.get("pending_evidence_acquisition_plans") or []
+            ),
+            "pending_evidence_plan_count": (
+                report.get("pending_evidence_plan_count") or 0
+            ),
+            "highest_priority_pending_evidence_plan": (
+                report.get("highest_priority_pending_evidence_plan") or {}
+            ),
+            "evidence_plan_store_state": report.get("evidence_plan_store_state"),
+            "evidence_plan_boot_load_state": report.get(
+                "evidence_plan_boot_load_state"
             ),
             "arena_source_diversity_state": report.get(
                 "arena_source_diversity_state"
@@ -1109,6 +1133,9 @@ class TrainingAssistant:
                 else "NO_EVIDENCE_DEFICIT_SIGNAL"
             ),
             "decision_orchestration_state": (
+                "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
+                if economy_context.get("pending_evidence_plan_count")
+                else
                 "PLAN_CONSUMED_AND_TASK_SCHEDULED"
                 if evidence_acquisition_rows
                 else "PLAN_FORWARDED_WITHOUT_MATCHING_TASK"
@@ -1119,9 +1146,11 @@ class TrainingAssistant:
             "evidence_acquisition_plan_forwarded": (
                 economy_context.get("evidence_acquisition_state")
                 == "EVIDENCE_ACQUISITION_PLAN_READY"
+                or bool(economy_context.get("pending_evidence_plan_count"))
             ),
             "evidence_acquisition_plan_consumed": bool(
                 economy_context.get("evidence_acquisition_state")
+                and not economy_context.get("pending_evidence_plan_count")
             ),
             "evidence_acquisition_task_scheduled": bool(
                 evidence_acquisition_rows
@@ -1142,6 +1171,24 @@ class TrainingAssistant:
             "evidence_generation_report": (
                 economy_context.get("evidence_generation_report") or {}
             ),
+            "pending_evidence_plan_count": (
+                economy_context.get("pending_evidence_plan_count") or 0
+            ),
+            "training_assistant_plan_available": bool(
+                economy_context.get("pending_evidence_plan_count")
+            ),
+            "pending_evidence_plan_id": (
+                (
+                    economy_context.get("highest_priority_pending_evidence_plan")
+                    or {}
+                ).get("plan_id")
+            ),
+            "current_run_consumption_expected": True
+            if economy_context.get("pending_evidence_plan_count")
+            else None,
+            "next_run_consumption_required": False
+            if economy_context.get("pending_evidence_plan_count")
+            else None,
             "evidence_acquisition_alignment_trace": [
                 {
                     "selected_task": row.get("task_file"),
@@ -1213,6 +1260,230 @@ class TrainingAssistant:
                 4,
             ),
         }
+
+    def _validate_evidence_plan_payload(self, plan):
+        failures = []
+        if not isinstance(plan, dict):
+            return ["plan_payload_not_mapping"]
+        for field in (
+            "plan_id",
+            "required_evidence",
+            "required_validation_task",
+            "tie_break_strategy",
+            "target_operation",
+        ):
+            if not plan.get(field):
+                failures.append(f"missing_{field}")
+        authority = plan.get("authority") or {}
+        if not isinstance(authority, dict):
+            failures.append("authority_not_mapping")
+        else:
+            for field in ("truth", "trust", "graduation", "execution"):
+                if authority.get(field) != "NONE":
+                    failures.append(f"invalid_authority_{field}")
+        return failures
+
+    def _consume_delivered_evidence_plans(self, plans):
+        plans = [plan for plan in plans or [] if isinstance(plan, dict)]
+        report = {
+            "system": "training_assistant_evidence_plan_consumer",
+            "responsible_component": "TRAINING_ASSISTANT_EVIDENCE_PLAN_CONSUMER",
+            "plans_delivered": len(plans),
+            "plans_consumed": 0,
+            "current_plan_id": "Not Available",
+            "lifecycle_state": "NO_DELIVERED_PLAN",
+            "consumption_state": "NOT_STARTED",
+            "current_required_evidence": "Not Available",
+            "current_required_validation_task": "Not Available",
+            "current_target_operation": "Not Available",
+            "current_tie_break_strategy": "Not Available",
+            "curriculum_search_state": "NOT_STARTED",
+            "matching_validation_tasks": 0,
+            "best_matching_task": "Not Available",
+            "best_matching_curriculum": "Not Available",
+            "matching_score": 0.0,
+            "matching_explanation": "no_delivered_plan",
+            "selection_authority": "TRAINING_ASSISTANT",
+            "selection_state": "NOT_STARTED",
+            "waiting_execution": False,
+            "generation_eligible": False,
+            "generation_invoked": False,
+            "waiting_generator": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "execution_authority": "NONE",
+            "consumed_plan_reports": [],
+        }
+        if not plans:
+            return report
+
+        consumed_reports = []
+        for plan in plans:
+            failures = self._validate_evidence_plan_payload(plan)
+            plan_report = {
+                "plan_id": plan.get("plan_id", "Not Available"),
+                "lifecycle": ["CONSUMPTION_PENDING"],
+                "validation_failures": failures,
+                "consumption_state": (
+                    "PLAN_REJECTED_INVALID" if failures else "PLAN_PARSED"
+                ),
+            }
+            if failures:
+                consumed_reports.append(plan_report)
+                continue
+            search_report = self.validation_curriculum_registry.search(plan)
+            plan_report.update(search_report)
+            plan_report["lifecycle"] = [
+                "CONSUMPTION_PENDING",
+                *search_report.get("consumption_lifecycle", []),
+            ]
+            plan_report["consumption_state"] = (
+                "MATCHING_COMPLETED"
+                if search_report.get("selection_state") in {
+                    "WAITING_EXECUTION",
+                    "NO_MATCH",
+                }
+                else search_report.get("selection_state", "MATCHING_COMPLETED")
+            )
+            consumed_reports.append(plan_report)
+
+        valid_reports = [
+            item for item in consumed_reports
+            if not item.get("validation_failures")
+        ]
+        current = valid_reports[0] if valid_reports else consumed_reports[0]
+        selected = current.get("selection_state") == "WAITING_EXECUTION"
+        no_match = current.get("selection_state") == "NO_MATCH"
+        report.update({
+            "plans_consumed": len(valid_reports),
+            "current_plan_id": current.get("plan_id", "Not Available"),
+            "lifecycle_state": (
+                "WAITING_EXECUTION"
+                if selected else "MATCHING_COMPLETED"
+                if no_match else current.get("consumption_state", "INVALID")
+            ),
+            "consumption_state": current.get("consumption_state"),
+            "current_required_evidence": current.get(
+                "plan_required_evidence",
+                plans[0].get("required_evidence"),
+            ),
+            "current_required_validation_task": plans[0].get(
+                "required_validation_task",
+                "Not Available",
+            ),
+            "current_target_operation": plans[0].get(
+                "target_operation",
+                "Not Available",
+            ),
+            "current_tie_break_strategy": plans[0].get(
+                "tie_break_strategy",
+                "Not Available",
+            ),
+            "registered_curricula": current.get("registered_curricula", 0),
+            "loaded_curricula": current.get("loaded_curricula", 0),
+            "enabled_curricula": current.get("enabled_curricula", 0),
+            "disabled_curricula": current.get("disabled_curricula", 0),
+            "curricula_searched": current.get("curricula_searched", 0),
+            "total_validation_tasks": current.get("total_validation_tasks", 0),
+            "curriculum_search_state": (
+                "COMPLETED" if valid_reports else "NOT_STARTED"
+            ),
+            "matching_validation_tasks": current.get("matching_tasks", 0),
+            "best_matching_task": current.get(
+                "best_matching_task",
+                "Not Available",
+            ),
+            "best_matching_curriculum": current.get(
+                "best_matching_curriculum",
+                "Not Available",
+            ),
+            "matching_score": current.get("matching_score", 0.0),
+            "matching_explanation": current.get(
+                "matching_explanation",
+                "Not Available",
+            ),
+            "selected_validation_task": current.get(
+                "selected_validation_task",
+                "Not Available",
+            ),
+            "selected_validation_task_metadata": current.get(
+                "selected_validation_task_metadata",
+                {},
+            ),
+            "selection_state": (
+                "WAITING_EXECUTION" if selected else "NO_MATCH"
+                if no_match else "INVALID"
+            ),
+            "waiting_execution": selected,
+            "generation_eligible": no_match,
+            "generation_invoked": False,
+            "waiting_generator": no_match,
+            "consumed_plan_reports": consumed_reports,
+        })
+        return report
+
+    def _apply_plan_consumption_report(self, alignment_report, consumption_report):
+        alignment_report = dict(alignment_report or {})
+        consumption_report = dict(consumption_report or {})
+        if not consumption_report.get("plans_delivered"):
+            return alignment_report
+        selected = consumption_report.get("selection_state") == "WAITING_EXECUTION"
+        no_match = consumption_report.get("selection_state") == "NO_MATCH"
+        alignment_report.update({
+            "evidence_plan_consumption_report": consumption_report,
+            "training_assistant_plan_available": True,
+            "evidence_acquisition_plan_forwarded": True,
+            "evidence_acquisition_plan_consumed": (
+                consumption_report.get("plans_consumed", 0) > 0
+            ),
+            "training_assistant_consumed_plan": (
+                consumption_report.get("plans_consumed", 0) > 0
+            ),
+            "evidence_acquisition_task_scheduled": selected,
+            "task_selection_consumed_plan": selected,
+            "tie_break_task_scheduled": selected,
+            "evidence_acquisition_selected_task": (
+                consumption_report.get("selected_validation_task")
+            ),
+            "selected_tie_break_task": (
+                consumption_report.get("selected_validation_task")
+            ),
+            "decision_orchestration_state": (
+                "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+                if selected else "PLAN_CONSUMED_WAITING_EVIDENCE_GENERATOR"
+                if no_match else "PLAN_CONSUMPTION_FAILED"
+            ),
+            "evidence_driven_task_selection_state": (
+                "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+                if selected else "NO_MATCH_GENERATION_ELIGIBLE"
+                if no_match else "PLAN_CONSUMPTION_FAILED"
+            ),
+            "current_run_consumption_expected": True,
+            "next_run_consumption_required": False,
+            "consumption_state": consumption_report.get("consumption_state"),
+            "curriculum_search_state": consumption_report.get(
+                "curriculum_search_state"
+            ),
+            "matching_validation_tasks": consumption_report.get(
+                "matching_validation_tasks"
+            ),
+            "best_matching_task": consumption_report.get("best_matching_task"),
+            "best_matching_curriculum": consumption_report.get(
+                "best_matching_curriculum"
+            ),
+            "matching_score": consumption_report.get("matching_score"),
+            "matching_explanation": consumption_report.get(
+                "matching_explanation"
+            ),
+            "selection_authority": "TRAINING_ASSISTANT",
+            "selection_state": consumption_report.get("selection_state"),
+            "waiting_execution": consumption_report.get("waiting_execution"),
+            "generation_eligible": consumption_report.get("generation_eligible"),
+            "generation_invoked": False,
+            "waiting_generator": consumption_report.get("waiting_generator"),
+        })
+        return alignment_report
 
     def _generated_evidence_priority_row(self, task_file, economy_context):
         task = self._term(economy_context.get("evidence_acquisition_validation_task"))
@@ -2563,6 +2834,7 @@ class TrainingAssistant:
         selection_mode=None,
         random_seed=None,
         operational_economy_report=None,
+        pending_evidence_acquisition_plans=None,
     ):
         task_files = self._normalized_tasks(task_files)
         if not task_files:
@@ -2577,9 +2849,31 @@ class TrainingAssistant:
         )
         if operational_economy_report is None:
             operational_economy_report = self._load_operational_economy_report()
+        if pending_evidence_acquisition_plans:
+            pending_plans = list(pending_evidence_acquisition_plans)
+            operational_economy_report = {
+                **(operational_economy_report or {}),
+                "pending_evidence_acquisition_plans": pending_plans,
+                "pending_evidence_plan_count": len(pending_plans),
+                "highest_priority_pending_evidence_plan": pending_plans[0],
+                "evidence_plan_store_state": "READY",
+                "evidence_plan_boot_load_state": "PENDING_PLANS_LOADED",
+            }
         operational_economy_context = self._operational_economy_context(
             operational_economy_report,
         )
+        evidence_plan_consumption_report = (
+            self._consume_delivered_evidence_plans(
+                pending_evidence_acquisition_plans or []
+            )
+        )
+        if evidence_plan_consumption_report.get("plans_delivered"):
+            operational_economy_context = {
+                **operational_economy_context,
+                "evidence_plan_consumption_report": (
+                    evidence_plan_consumption_report
+                ),
+            }
         normal_selection_files = (
             []
             if elite_only_policy_active
@@ -2861,6 +3155,12 @@ class TrainingAssistant:
                     operational_economy_context,
                 )
             )
+            training_economy_alignment_report = (
+                self._apply_plan_consumption_report(
+                    training_economy_alignment_report,
+                    evidence_plan_consumption_report,
+                )
+            )
             selected, elite_selection_report, selection_report, evidence_generation_report = (
                 self._maybe_generate_evidence_task(
                     selected=selected,
@@ -2953,6 +3253,15 @@ class TrainingAssistant:
                     operational_economy_context,
                 )
             )
+        training_economy_alignment_report = self._apply_plan_consumption_report(
+            training_economy_alignment_report,
+            evidence_plan_consumption_report,
+        )
+        if evidence_plan_consumption_report.get("plans_delivered"):
+            self.state["training_economy_alignment_report"] = (
+                training_economy_alignment_report
+            )
+            self._persist()
         if training_economy_alignment_report:
             training_diversity_report.update({
                 "training_economy_alignment_state": (
@@ -3030,6 +3339,52 @@ class TrainingAssistant:
                     training_economy_alignment_report.get(
                         "evidence_acquisition_validation_task"
                     )
+                ),
+                "training_assistant_consumed_plan": (
+                    training_economy_alignment_report.get(
+                        "training_assistant_consumed_plan"
+                    )
+                ),
+                "consumption_state": (
+                    training_economy_alignment_report.get("consumption_state")
+                ),
+                "curriculum_search_state": (
+                    training_economy_alignment_report.get(
+                        "curriculum_search_state"
+                    )
+                ),
+                "matching_validation_tasks": (
+                    training_economy_alignment_report.get(
+                        "matching_validation_tasks"
+                    )
+                ),
+                "best_matching_task": (
+                    training_economy_alignment_report.get("best_matching_task")
+                ),
+                "best_matching_curriculum": (
+                    training_economy_alignment_report.get(
+                        "best_matching_curriculum"
+                    )
+                ),
+                "selected_validation_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_selected_task"
+                    )
+                ),
+                "selection_state": (
+                    training_economy_alignment_report.get("selection_state")
+                ),
+                "waiting_execution": (
+                    training_economy_alignment_report.get("waiting_execution")
+                ),
+                "generation_eligible": (
+                    training_economy_alignment_report.get("generation_eligible")
+                ),
+                "generation_invoked": (
+                    training_economy_alignment_report.get("generation_invoked")
+                ),
+                "waiting_generator": (
+                    training_economy_alignment_report.get("waiting_generator")
                 ),
                 "evidence_remediation_attempted": (
                     training_economy_alignment_report.get(
@@ -3158,6 +3513,7 @@ class TrainingAssistant:
             "curriculum_report": curriculum_report,
             "elite_curriculum_report": elite_curriculum_report,
             "training_economy_alignment_report": training_economy_alignment_report,
+            "evidence_plan_consumption_report": evidence_plan_consumption_report,
             "evidence_generation_report": evidence_generation_report,
             "training_diversity_report": training_diversity_report,
             "selection_diversity_report": selection_report,

@@ -7833,6 +7833,23 @@ class CanonicalReportBindingEngine:
                 "EVIDENCE_GENERATION_REPORT",
             ),
         )
+        evidence_plan_store = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "evidence_plan_store_report",
+                "EVIDENCE_PLAN_STORE_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "evidence_plan_store_report",
+                "EVIDENCE_PLAN_STORE_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "evidence_plan_store_report",
+                "EVIDENCE_PLAN_STORE_REPORT",
+            ),
+        )
         executable = self._merge_dicts(
             self._first_dict(
                 report_state,
@@ -8025,6 +8042,62 @@ class CanonicalReportBindingEngine:
                     training_alignment.get("evidence_acquisition_selected_task"),
                     "Not Available",
                 ),
+                "consumption_state": self._first_present(
+                    training_alignment.get("consumption_state"),
+                    "Not Available",
+                ),
+                "curriculum_search_state": self._first_present(
+                    training_alignment.get("curriculum_search_state"),
+                    "Not Available",
+                ),
+                "matching_validation_tasks": self._first_present(
+                    training_alignment.get("matching_validation_tasks"),
+                    0,
+                ),
+                "best_matching_task": self._first_present(
+                    training_alignment.get("best_matching_task"),
+                    "Not Available",
+                ),
+                "best_matching_curriculum": self._first_present(
+                    training_alignment.get("best_matching_curriculum"),
+                    "Not Available",
+                ),
+                "matching_score": self._first_present(
+                    training_alignment.get("matching_score"),
+                    0.0,
+                ),
+                "matching_explanation": self._first_present(
+                    training_alignment.get("matching_explanation"),
+                    "Not Available",
+                ),
+                "selection_authority": self._first_present(
+                    training_alignment.get("selection_authority"),
+                    "Not Available",
+                ),
+                "validation_task_selection_state": self._first_present(
+                    training_alignment.get("selection_state"),
+                    "Not Available",
+                ),
+                "waiting_execution": self._first_present(
+                    training_alignment.get("waiting_execution"),
+                    False,
+                ),
+                "generation_eligible": self._first_present(
+                    training_alignment.get("generation_eligible"),
+                    False,
+                ),
+                "generation_invoked": self._first_present(
+                    training_alignment.get("generation_invoked"),
+                    False,
+                ),
+                "waiting_generator": self._first_present(
+                    training_alignment.get("waiting_generator"),
+                    False,
+                ),
+                "evidence_plan_consumption_report": self._first_dict(
+                    training_alignment,
+                    "evidence_plan_consumption_report",
+                ),
                 "decision_orchestration_state": self._first_present(
                     training_alignment.get("decision_orchestration_state"),
                     "PLAN_FORWARDED_AWAITING_TASK_SELECTION",
@@ -8051,6 +8124,12 @@ class CanonicalReportBindingEngine:
                 ),
             }
             summary.update(self._prediction_quality_calibration(summary))
+            summary.update(
+                self._evidence_plan_store_projection(
+                    summary,
+                    evidence_plan_store,
+                )
+            )
             return {
                 "candidate_arena_summary": summary,
                 "candidate_arena_diagnostics": {
@@ -8201,6 +8280,62 @@ class CanonicalReportBindingEngine:
                 training_alignment.get("evidence_acquisition_selected_task"),
                 "Not Available",
             ),
+            "consumption_state": self._first_present(
+                training_alignment.get("consumption_state"),
+                "Not Available",
+            ),
+            "curriculum_search_state": self._first_present(
+                training_alignment.get("curriculum_search_state"),
+                "Not Available",
+            ),
+            "matching_validation_tasks": self._first_present(
+                training_alignment.get("matching_validation_tasks"),
+                0,
+            ),
+            "best_matching_task": self._first_present(
+                training_alignment.get("best_matching_task"),
+                "Not Available",
+            ),
+            "best_matching_curriculum": self._first_present(
+                training_alignment.get("best_matching_curriculum"),
+                "Not Available",
+            ),
+            "matching_score": self._first_present(
+                training_alignment.get("matching_score"),
+                0.0,
+            ),
+            "matching_explanation": self._first_present(
+                training_alignment.get("matching_explanation"),
+                "Not Available",
+            ),
+            "selection_authority": self._first_present(
+                training_alignment.get("selection_authority"),
+                "Not Available",
+            ),
+            "validation_task_selection_state": self._first_present(
+                training_alignment.get("selection_state"),
+                "Not Available",
+            ),
+            "waiting_execution": self._first_present(
+                training_alignment.get("waiting_execution"),
+                False,
+            ),
+            "generation_eligible": self._first_present(
+                training_alignment.get("generation_eligible"),
+                False,
+            ),
+            "generation_invoked": self._first_present(
+                training_alignment.get("generation_invoked"),
+                False,
+            ),
+            "waiting_generator": self._first_present(
+                training_alignment.get("waiting_generator"),
+                False,
+            ),
+            "evidence_plan_consumption_report": self._first_dict(
+                training_alignment,
+                "evidence_plan_consumption_report",
+            ),
             "decision_orchestration_state": self._first_present(
                 training_alignment.get("decision_orchestration_state"),
                 "PLAN_FORWARDED_AWAITING_TASK_SELECTION",
@@ -8218,6 +8353,9 @@ class CanonicalReportBindingEngine:
             "evidence_generation_report": evidence_generation,
         }
         summary.update(self._prediction_quality_calibration(summary))
+        summary.update(
+            self._evidence_plan_store_projection(summary, evidence_plan_store)
+        )
         return {
             "candidate_arena_summary": summary,
             "candidate_arena_diagnostics": {
@@ -8461,6 +8599,152 @@ class CanonicalReportBindingEngine:
             "prediction_quality_calibration_invoked": calibration_invoked,
             "prediction_quality_calibration_strong_probe_result": strong_probe_result,
         }
+
+    def _evidence_plan_store_projection(
+        self,
+        summary: Mapping[str, Any],
+        store: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if not isinstance(store, Mapping) or not store:
+            return {}
+        projection = {
+            "evidence_plan_persistence_attempted": self._first_present(
+                store.get("evidence_plan_persistence_attempted"),
+                False,
+            ),
+            "evidence_plan_persisted": self._first_present(
+                store.get("evidence_plan_persisted"),
+                False,
+            ),
+            "evidence_plan_id": self._first_present(
+                store.get("evidence_plan_id"),
+                "Not Available",
+            ),
+            "evidence_plan_fingerprint": self._first_present(
+                store.get("evidence_plan_fingerprint"),
+                "Not Available",
+            ),
+            "evidence_plan_lifecycle_state": self._first_present(
+                store.get("evidence_plan_lifecycle_state"),
+                "Not Available",
+            ),
+            "evidence_plan_storage_state": self._first_present(
+                store.get("evidence_plan_storage_state"),
+                "Not Available",
+            ),
+            "evidence_plan_storage_path": self._first_present(
+                store.get("evidence_plan_storage_path"),
+                "Not Available",
+            ),
+            "equivalent_pending_plan_found": self._first_present(
+                store.get("equivalent_pending_plan_found"),
+                False,
+            ),
+            "duplicate_persistence_prevented": self._first_present(
+                store.get("duplicate_persistence_prevented"),
+                False,
+            ),
+            "pending_evidence_plan_count": self._first_present(
+                store.get("pending_evidence_plan_count"),
+                0,
+            ),
+            "evidence_plans_loaded_at_boot": self._first_present(
+                store.get("evidence_plans_loaded_at_boot"),
+                0,
+            ),
+            "evidence_plans_delivered_to_training_assistant": self._first_present(
+                store.get("evidence_plans_delivered_to_training_assistant"),
+                0,
+            ),
+            "training_assistant_plan_available": self._first_present(
+                store.get("training_assistant_plan_available"),
+                False,
+            ),
+            "training_assistant_current_run_consumption_expected": (
+                self._first_present(
+                    store.get("current_run_consumption_expected"),
+                    None,
+                )
+            ),
+            "training_assistant_next_run_consumption_required": (
+                self._first_present(
+                    store.get("next_run_consumption_required"),
+                    None,
+                )
+            ),
+            "current_run_consumption_failure": self._first_present(
+                store.get("current_run_consumption_failure"),
+                False,
+            ),
+            "plan_persistence_failure_reason": self._first_present(
+                store.get("plan_persistence_failure_reason"),
+                "none",
+            ),
+            "plan_schema_version": self._first_present(
+                store.get("plan_schema_version"),
+                "Not Available",
+            ),
+            "plan_constitutional_boundary": self._first_present(
+                store.get("plan_constitutional_boundary"),
+                "Not Available",
+            ),
+            "inbound_evidence_plan_state": self._first_present(
+                store.get("inbound_evidence_plan_state"),
+                "Not Available",
+            ),
+            "outbound_evidence_plan_state": self._first_present(
+                store.get("outbound_evidence_plan_state"),
+                "Not Available",
+            ),
+            "outbound_evidence_plan_id": self._first_present(
+                store.get("outbound_evidence_plan_id"),
+                "Not Available",
+            ),
+        }
+        persisted = projection["evidence_plan_persisted"] is True
+        reused = (
+            projection["evidence_plan_storage_state"]
+            == "EQUIVALENT_PENDING_PLAN_REUSED"
+        )
+        delivered = (
+            projection["training_assistant_plan_available"] is True
+            or self._first_number(
+                projection.get("evidence_plans_delivered_to_training_assistant"),
+                0,
+            ) > 0
+        )
+        if delivered:
+            projection["decision_orchestration_state"] = (
+                "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
+            )
+            projection["training_assistant_plan_available"] = True
+            projection["training_assistant_current_run_consumption_expected"] = True
+            projection["training_assistant_next_run_consumption_required"] = False
+            projection["current_run_consumption_failure"] = False
+            if summary.get("training_assistant_consumed_plan") is not True:
+                projection["training_assistant_consumed_plan"] = False
+            if summary.get("task_selection_consumed_plan") is not True:
+                projection["task_selection_consumed_plan"] = False
+            if summary.get("tie_break_task_scheduled") is not True:
+                projection["tie_break_task_scheduled"] = False
+            if (
+                summary.get("training_assistant_consumed_plan") is True
+                and summary.get("waiting_execution") is True
+            ):
+                projection["decision_orchestration_state"] = (
+                    "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+                )
+        elif persisted or reused:
+            projection["decision_orchestration_state"] = (
+                "PLAN_PERSISTED_FOR_NEXT_RUN_CONSUMPTION"
+            )
+            projection["training_assistant_consumed_plan"] = False
+            projection["task_selection_consumed_plan"] = False
+            projection["tie_break_task_scheduled"] = False
+            projection["training_assistant_current_run_consumption_expected"] = False
+            projection["training_assistant_next_run_consumption_required"] = True
+            projection["current_run_consumption_failure"] = False
+        return projection
 
     def _decision_orchestration_state(
         self,

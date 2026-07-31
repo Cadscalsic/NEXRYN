@@ -580,6 +580,7 @@ class DeterministicFinalReportRenderer:
             self._render_multi_hypothesis_report(canonical),
             self._render_candidate_proposal(canonical),
             self._render_candidate_arena(canonical),
+            self._render_training_assistant_plan_consumption(canonical),
             self._render_evidence_generation_report(canonical),
             self._render_counterfactual_reasoning(canonical),
             self._render_executable_intelligence(canonical),
@@ -618,6 +619,7 @@ class DeterministicFinalReportRenderer:
             self._render_candidate_pipeline_dashboard(canonical),
             self._render_runtime_choke_point(canonical),
             self._render_source_competition_summary(canonical),
+            self._render_training_assistant_plan_consumption(canonical),
             self._render_evidence_generation_report(canonical),
             self._render_semantic_compilation(canonical),
             self._render_knowledge_operationalization_summary(canonical),
@@ -1245,8 +1247,42 @@ class DeterministicFinalReportRenderer:
             "Decision Orchestration:",
             "  Plan Forwarded: "
             f"{self._value(arena.get('evidence_acquisition_plan_forwarded'))}",
+            "  Plan Persisted: "
+            f"{self._value(arena.get('evidence_plan_persisted'))}",
+            "  Plan Id: "
+            f"{self._value(arena.get('evidence_plan_id'))}",
+            "  Plan Lifecycle: "
+            f"{self._value(arena.get('evidence_plan_lifecycle_state'))}",
+            "  Training Assistant Plan Available: "
+            f"{self._value(arena.get('training_assistant_plan_available'))}",
+            "  Current Run Consumption Expected: "
+            f"{self._value(arena.get('training_assistant_current_run_consumption_expected'))}",
+            "  Next Run Consumption Required: "
+            f"{self._value(arena.get('training_assistant_next_run_consumption_required'))}",
+            "  Inbound Plan State: "
+            f"{self._value(arena.get('inbound_evidence_plan_state'))}",
+            "  Outbound Plan State: "
+            f"{self._value(arena.get('outbound_evidence_plan_state'))}",
             "  Training Assistant Consumed: "
             f"{self._value(arena.get('training_assistant_consumed_plan'))}",
+            "  Consumption State: "
+            f"{self._value(arena.get('consumption_state'))}",
+            "  Curriculum Search: "
+            f"{self._value(arena.get('curriculum_search_state'))}",
+            "  Matching Validation Tasks: "
+            f"{self._value(arena.get('matching_validation_tasks'))}",
+            "  Best Matching Task: "
+            f"{self._value(arena.get('best_matching_task'))}",
+            "  Best Matching Curriculum: "
+            f"{self._value(arena.get('best_matching_curriculum'))}",
+            "  Matching Score: "
+            f"{self._value(arena.get('matching_score'))}",
+            "  Selection Authority: "
+            f"{self._value(arena.get('selection_authority'))}",
+            "  Validation Task Selection State: "
+            f"{self._value(arena.get('validation_task_selection_state'))}",
+            "  Waiting Execution: "
+            f"{self._value(arena.get('waiting_execution'))}",
             "  Task Selection Consumed: "
             f"{self._value(arena.get('task_selection_consumed_plan'))}",
             "  Tie-Break Task Scheduled: "
@@ -4090,8 +4126,78 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('evidence_acquisition_truth_authority'))}",
             "Evidence Acquisition Plan Forwarded: "
             f"{self._value(summary.get('evidence_acquisition_plan_forwarded'))}",
+            "Evidence Plan Persistence Attempted: "
+            f"{self._value(summary.get('evidence_plan_persistence_attempted'))}",
+            "Evidence Plan Persisted: "
+            f"{self._value(summary.get('evidence_plan_persisted'))}",
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('evidence_plan_id'))}",
+            "Evidence Plan Fingerprint: "
+            f"{self._value(summary.get('evidence_plan_fingerprint'))}",
+            "Evidence Plan Lifecycle State: "
+            f"{self._value(summary.get('evidence_plan_lifecycle_state'))}",
+            "Evidence Plan Storage State: "
+            f"{self._value(summary.get('evidence_plan_storage_state'))}",
+            "Evidence Plan Storage Path: "
+            f"{self._value(summary.get('evidence_plan_storage_path'))}",
+            "Equivalent Pending Plan Found: "
+            f"{self._value(summary.get('equivalent_pending_plan_found'))}",
+            "Duplicate Persistence Prevented: "
+            f"{self._value(summary.get('duplicate_persistence_prevented'))}",
+            "Pending Evidence Plan Count: "
+            f"{self._value(summary.get('pending_evidence_plan_count'))}",
+            "Evidence Plans Loaded At Boot: "
+            f"{self._value(summary.get('evidence_plans_loaded_at_boot'))}",
+            "Evidence Plans Delivered To Training Assistant: "
+            f"{self._value(summary.get('evidence_plans_delivered_to_training_assistant'))}",
+            "Training Assistant Plan Available: "
+            f"{self._value(summary.get('training_assistant_plan_available'))}",
+            "Training Assistant Current Run Consumption Expected: "
+            f"{self._value(summary.get('training_assistant_current_run_consumption_expected'))}",
+            "Training Assistant Next Run Consumption Required: "
+            f"{self._value(summary.get('training_assistant_next_run_consumption_required'))}",
+            "Current Run Consumption Failure: "
+            f"{self._value(summary.get('current_run_consumption_failure'))}",
+            "Plan Persistence Failure Reason: "
+            f"{self._value(summary.get('plan_persistence_failure_reason'))}",
+            "Plan Schema Version: "
+            f"{self._value(summary.get('plan_schema_version'))}",
+            "Plan Constitutional Boundary: "
+            f"{self._value(summary.get('plan_constitutional_boundary'))}",
+            "Inbound Evidence Plan State: "
+            f"{self._value(summary.get('inbound_evidence_plan_state'))}",
+            "Outbound Evidence Plan State: "
+            f"{self._value(summary.get('outbound_evidence_plan_state'))}",
+            "Outbound Evidence Plan Id: "
+            f"{self._value(summary.get('outbound_evidence_plan_id'))}",
             "Training Assistant Consumed Plan: "
             f"{self._value(summary.get('training_assistant_consumed_plan'))}",
+            "Consumption State: "
+            f"{self._value(summary.get('consumption_state'))}",
+            "Curriculum Search: "
+            f"{self._value(summary.get('curriculum_search_state'))}",
+            "Matching Validation Tasks: "
+            f"{self._value(summary.get('matching_validation_tasks'))}",
+            "Best Matching Task: "
+            f"{self._value(summary.get('best_matching_task'))}",
+            "Best Matching Curriculum: "
+            f"{self._value(summary.get('best_matching_curriculum'))}",
+            "Matching Score: "
+            f"{self._value(summary.get('matching_score'))}",
+            "Matching Explanation: "
+            f"{self._value(summary.get('matching_explanation'))}",
+            "Selection Authority: "
+            f"{self._value(summary.get('selection_authority'))}",
+            "Validation Task Selection State: "
+            f"{self._value(summary.get('validation_task_selection_state'))}",
+            "Waiting Execution: "
+            f"{self._value(summary.get('waiting_execution'))}",
+            "Generation Eligible: "
+            f"{self._value(summary.get('generation_eligible'))}",
+            "Generation Invoked: "
+            f"{self._value(summary.get('generation_invoked'))}",
+            "Waiting Generator: "
+            f"{self._value(summary.get('waiting_generator'))}",
             "Task Selection Consumed Plan: "
             f"{self._value(summary.get('task_selection_consumed_plan'))}",
             "Tie-Break Task Scheduled: "
@@ -4266,6 +4372,93 @@ class DeterministicFinalReportRenderer:
                 "GENERATED_TASKS_ARE_VALIDATION_OPPORTUNITIES_NOT_EVIDENCE"
             ),
         }
+
+    def _render_training_assistant_plan_consumption(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        summary = self._arena_summary(canonical)
+        report = summary.get("evidence_plan_consumption_report") or {}
+        report = report if isinstance(report, dict) else {}
+        lines = [
+            "Plans Delivered: "
+            f"{self._value(report.get('plans_delivered', summary.get('evidence_plans_delivered_to_training_assistant')))}",
+            "Plans Consumed: "
+            f"{self._value(report.get('plans_consumed'))}",
+            "Current Plan Id: "
+            f"{self._value(report.get('current_plan_id', summary.get('evidence_plan_id')))}",
+            "Lifecycle State: "
+            f"{self._value(report.get('lifecycle_state'))}",
+            "Consumption State: "
+            f"{self._value(summary.get('consumption_state'))}",
+            "Current Required Evidence: "
+            f"{self._value(report.get('current_required_evidence', summary.get('evidence_acquisition_required_evidence')))}",
+            "Current Required Validation Task: "
+            f"{self._value(report.get('current_required_validation_task', summary.get('evidence_acquisition_validation_task')))}",
+            "Current Target Operation: "
+            f"{self._value(report.get('current_target_operation', summary.get('evidence_acquisition_target_operation')))}",
+            "Current Tie Break Strategy: "
+            f"{self._value(report.get('current_tie_break_strategy', summary.get('evidence_acquisition_tie_break_strategy')))}",
+            "Curriculum Search: "
+            f"{self._value(summary.get('curriculum_search_state'))}",
+            "Registered Curricula: "
+            f"{self._value(report.get('registered_curricula'))}",
+            "Loaded Curricula: "
+            f"{self._value(report.get('loaded_curricula'))}",
+            "Enabled Curricula: "
+            f"{self._value(report.get('enabled_curricula'))}",
+            "Disabled Curricula: "
+            f"{self._value(report.get('disabled_curricula'))}",
+            "Curricula Searched: "
+            f"{self._value(report.get('curricula_searched'))}",
+            "Total Validation Tasks: "
+            f"{self._value(report.get('total_validation_tasks'))}",
+            "Matching Validation Tasks: "
+            f"{self._value(summary.get('matching_validation_tasks'))}",
+            "Best Matching Task: "
+            f"{self._value(summary.get('best_matching_task'))}",
+            "Best Matching Curriculum: "
+            f"{self._value(summary.get('best_matching_curriculum'))}",
+            "Matching Score: "
+            f"{self._value(summary.get('matching_score'))}",
+            "Matching Explanation: "
+            f"{self._value(summary.get('matching_explanation'))}",
+            "Selected Validation Task: "
+            f"{self._value(summary.get('selected_tie_break_task'))}",
+            "Selection Authority: "
+            f"{self._value(summary.get('selection_authority'))}",
+            "Selection State: "
+            f"{self._value(summary.get('validation_task_selection_state'))}",
+            "Waiting Execution: "
+            f"{self._value(summary.get('waiting_execution'))}",
+            "Generation Eligible: "
+            f"{self._value(summary.get('generation_eligible'))}",
+            "Generation Invoked: "
+            f"{self._value(summary.get('generation_invoked'))}",
+            "Waiting Generator: "
+            f"{self._value(summary.get('waiting_generator'))}",
+            "Truth Authority: "
+            f"{self._value(report.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(report.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(report.get('graduation_authority'))}",
+            "Execution Authority: "
+            f"{self._value(report.get('execution_authority'))}",
+        ]
+        rows = report.get("consumed_plan_reports") or []
+        rows = rows if isinstance(rows, list) else []
+        if rows and canonical["report_level"] in {"diagnostic", "full", "debug", "audit"}:
+            lines.append("Consumption Trace:")
+            for row in rows[:3]:
+                if isinstance(row, dict):
+                    lines.append(
+                        "  "
+                        f"{self._value(row.get('plan_id'))}: "
+                        f"{self._value(row.get('consumption_state'))} "
+                        f"selection={self._value(row.get('selection_state'))}"
+                    )
+        return self._section("TRAINING ASSISTANT PLAN CONSUMPTION", lines)
 
     def _render_evidence_generation_report(
         self,
@@ -5426,16 +5619,63 @@ class DeterministicFinalReportRenderer:
                 plan_forwarded = (
                     arena.get("evidence_acquisition_plan_forwarded") is True
                 )
+                plan_persisted = arena.get("evidence_plan_persisted") is True
+                plan_reused = (
+                    arena.get("evidence_plan_storage_state")
+                    == "EQUIVALENT_PENDING_PLAN_REUSED"
+                )
+                plan_available = (
+                    arena.get("training_assistant_plan_available") is True
+                )
+                persistence_attempted = (
+                    arena.get("evidence_plan_persistence_attempted") is True
+                )
+                persistence_failure = arena.get("plan_persistence_failure_reason")
                 plan_consumed = arena.get("training_assistant_consumed_plan") is True
                 task_scheduled = arena.get("tie_break_task_scheduled") is True
-                if plan_forwarded and not plan_consumed:
+                waiting_execution = arena.get("waiting_execution") is True
+                if persistence_attempted and not (plan_persisted or plan_reused):
+                    current_bottleneck = "evidence_plan_persistence"
+                    root_cause = persistence_failure or "evidence_plan_not_persisted"
+                    responsible_component = "EVIDENCE_ACQUISITION_PLAN_STORE"
+                    next_task = "repair_evidence_acquisition_plan_persistence"
+                elif plan_consumed and waiting_execution:
+                    largest_success = "training_assistant_consumed_evidence_plan"
+                    current_open_decision = "WAITING_VALIDATION_TASK_EXECUTION"
+                    next_decision_gate = "execute_selected_validation_task"
+                    current_bottleneck = "validation_execution_pipeline"
+                    root_cause = "validation_task_execution_not_started"
+                    responsible_component = "VALIDATION_EXECUTION_PIPELINE"
+                    next_task = "execute_selected_validation_task"
+                elif plan_available and not plan_consumed:
+                    current_bottleneck = "training_assistant_plan_consumption"
+                    root_cause = "training_assistant_consumption_logic_not_implemented"
+                    responsible_component = "TRAINING_ASSISTANT_EVIDENCE_PLAN_CONSUMER"
+                    next_task = "implement_persisted_evidence_plan_consumption"
+                elif (plan_persisted or plan_reused) and not plan_consumed:
+                    largest_success = "evidence_acquisition_plan_persisted"
+                    current_bottleneck = "next_run_training_assistant_plan_consumption"
+                    root_cause = "cross_run_evidence_plan_awaiting_next_runtime"
+                    responsible_component = "TRAINING_ASSISTANT_ORCHESTRATION_HANDOFF"
+                    next_task = "consume_persisted_evidence_plan_during_next_run"
+                elif plan_forwarded and not plan_consumed:
                     current_bottleneck = "training_assistant_plan_consumption"
                     root_cause = "evidence_acquisition_plan_not_consumed_by_training_assistant"
                     responsible_component = "TRAINING_ASSISTANT"
+                    next_task = (
+                        arena.get("evidence_acquisition_validation_task")
+                        or decision_action
+                        or "resolve_post_calibration_arena_decision"
+                    )
                 elif plan_consumed and not task_scheduled:
                     current_bottleneck = "task_selection_decision_orchestration"
                     root_cause = "evidence_acquisition_plan_consumed_without_tie_break_task_scheduled"
                     responsible_component = "TASK_SELECTION_INTELLIGENCE"
+                    next_task = (
+                        arena.get("evidence_acquisition_validation_task")
+                        or decision_action
+                        or "resolve_post_calibration_arena_decision"
+                    )
                 else:
                     current_bottleneck = "arena_decision_finalization"
                     root_cause = (
@@ -5443,11 +5683,11 @@ class DeterministicFinalReportRenderer:
                         or "post_calibration_decision_pending"
                     )
                     responsible_component = "CANDIDATE_ARENA_DECISION_RESOLUTION"
-                next_task = (
-                    arena.get("evidence_acquisition_validation_task")
-                    or decision_action
-                    or "resolve_post_calibration_arena_decision"
-                )
+                    next_task = (
+                        arena.get("evidence_acquisition_validation_task")
+                        or decision_action
+                        or "resolve_post_calibration_arena_decision"
+                    )
             else:
                 current_bottleneck = "none"
                 root_cause = "none"
@@ -5692,7 +5932,10 @@ class DeterministicFinalReportRenderer:
         decision_bottleneck = bottleneck in {
             "arena_decision_finalization",
             "training_assistant_plan_consumption",
+            "next_run_training_assistant_plan_consumption",
             "task_selection_decision_orchestration",
+            "evidence_plan_persistence",
+            "validation_execution_pipeline",
         }
         if (
             current_row
