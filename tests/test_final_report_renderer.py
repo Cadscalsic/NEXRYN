@@ -2118,6 +2118,7 @@ def test_engineering_conclusion_treats_persisted_plan_as_cross_run_handoff():
     ]
 
     assert "Evidence Plan Persisted: TRUE" in report
+    assert "Evidence Plan Persistence Result: NEW_PLAN_PERSISTED" in report
     assert (
         "Decision Orchestration State: "
         "PLAN_PERSISTED_FOR_NEXT_RUN_CONSUMPTION"
@@ -2274,6 +2275,8 @@ def test_delivered_inbound_plan_takes_precedence_over_outbound_duplicate_reuse()
 
     assert "Equivalent Pending Plan Found: TRUE" in report
     assert "Duplicate Persistence Prevented: TRUE" in report
+    assert "Evidence Plan Persisted: FALSE" in report
+    assert "Evidence Plan Persistence Result: REUSED_EXISTING_PLAN" in report
     assert "Evidence Plans Loaded At Boot: 1" in report
     assert "Evidence Plans Delivered To Training Assistant: 1" in report
     assert "Training Assistant Plan Available: TRUE" in report
@@ -2347,9 +2350,10 @@ def test_engineering_conclusion_advances_after_validation_task_selection():
         "evidence_acquisition_plan_forwarded": True,
         "evidence_acquisition_plan_consumed": True,
         "training_assistant_consumed_plan": True,
-        "evidence_acquisition_task_scheduled": True,
+        "evidence_acquisition_task_selected": True,
+        "evidence_acquisition_task_scheduled": False,
         "task_selection_consumed_plan": True,
-        "tie_break_task_scheduled": True,
+        "tie_break_task_scheduled": False,
         "evidence_acquisition_selected_task": "elite_validation_task_31",
         "selected_tie_break_task": "elite_validation_task_31",
         "decision_orchestration_state": (
@@ -2392,6 +2396,24 @@ def test_engineering_conclusion_advances_after_validation_task_selection():
             "execution_authority": "NONE",
         },
     }
+    state["evidence_plan_store_report"] = {
+        "evidence_plan_persistence_attempted": True,
+        "evidence_plan_persisted": False,
+        "evidence_plan_storage_state": "LIFECYCLE_UPDATE_PERSISTED",
+        "plan_creation_result": "REUSED_EXISTING_PLAN",
+        "lifecycle_update_attempted": True,
+        "lifecycle_update_persisted": True,
+        "evidence_plan_id": "plan-cross-source",
+        "evidence_plan_fingerprint": "fingerprint-cross-source",
+        "evidence_plan_lifecycle_state": "WAITING_EXECUTION",
+        "evidence_plans_delivered_to_training_assistant": 1,
+        "training_assistant_plan_available": True,
+        "persisted_lifecycle_state": "WAITING_EXECUTION",
+        "persisted_selected_validation_task": "elite_validation_task_31",
+        "boot_recovery_route": "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER",
+        "execution_state": "NOT_SCHEDULED",
+        "execution_authority": "NONE",
+    }
 
     report = DeterministicFinalReportRenderer().render(
         state,
@@ -2404,9 +2426,30 @@ def test_engineering_conclusion_advances_after_validation_task_selection():
 
     assert "TRAINING ASSISTANT PLAN CONSUMPTION" in report
     assert "Training Assistant Consumed Plan: TRUE" in report
+    assert "Lifecycle State: WAITING_EXECUTION" in report
     assert "Curriculum Search: COMPLETED" in report
+    assert "Registered Curricula: 1" in report
+    assert "Loaded Curricula: 1" in report
+    assert "Enabled Curricula: 1" in report
+    assert "Curricula Searched: 1" in report
+    assert "Total Validation Tasks: 50" in report
     assert "Matching Validation Tasks: 5" in report
+    assert "Matching Score: 118" in report
+    assert "Matching Explanation: primary_required_evidence_match" in report
+    assert "Selection Authority: TRAINING_ASSISTANT" in report
+    assert "Plan Creation Result: REUSED_EXISTING_PLAN" in report
+    assert "Lifecycle Update Attempted: TRUE" in report
+    assert "Lifecycle Update Persisted: TRUE" in report
+    assert "Persisted Lifecycle State: WAITING_EXECUTION" in report
+    assert "Persisted Selected Validation Task: elite_validation_task_31" in report
+    assert "Boot Recovery Route: WAITING_EXECUTION_TO_VALIDATION_SCHEDULER" in report
+    assert "Execution State: NOT_SCHEDULED" in report
+    assert "Truth Authority: NONE" in report
+    assert "Trust Authority: NONE" in report
+    assert "Graduation Authority: NONE" in report
+    assert "Execution Authority: NONE" in report
     assert "Selection State: WAITING_EXECUTION" in report
+    assert "Tie-Break Task Scheduled: FALSE" in report
     assert "Largest Success: training_assistant_consumed_evidence_plan" in conclusion
     assert "Current Open Decision: WAITING_VALIDATION_TASK_EXECUTION" in conclusion
     assert "Next Decision Gate: execute_selected_validation_task" in conclusion
@@ -2416,6 +2459,219 @@ def test_engineering_conclusion_advances_after_validation_task_selection():
         "Exact Responsible Component: VALIDATION_EXECUTION_PIPELINE"
         in conclusion
     )
+
+
+def test_engineering_conclusion_advances_after_governed_validation_scheduling():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_mode": "EVIDENCE_BASED_ARENA",
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "winner_score": 0.778,
+            "second_best_score": 0.778,
+            "selection_margin": 0.0,
+            "source_count": 1,
+            "cross_source_consensus_count": 0,
+            "cross_source_consensus_state": "NO_CROSS_SOURCE_CONSENSUS",
+            "source_dominance_detected": True,
+            "winner_operation": "replace_color",
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+        "execution_success_rate": 1.0,
+    }
+    state["training_economy_alignment_report"] = {
+        "evidence_acquisition_plan_forwarded": True,
+        "evidence_acquisition_plan_consumed": True,
+        "training_assistant_consumed_plan": True,
+        "evidence_acquisition_task_selected": True,
+        "evidence_acquisition_selected_task": "elite_validation_task_31",
+        "selected_tie_break_task": "elite_validation_task_31",
+        "decision_orchestration_state": (
+            "VALIDATION_TASK_SCHEDULED_AWAITING_EXECUTION"
+        ),
+        "consumption_state": "MATCHING_COMPLETED",
+        "curriculum_search_state": "COMPLETED",
+        "matching_validation_tasks": 5,
+        "best_matching_task": "elite_validation_task_31",
+        "best_matching_curriculum": "Elite Validation Academy",
+        "matching_score": 118.0,
+        "matching_explanation": "primary_required_evidence_match",
+        "selection_authority": "TRAINING_ASSISTANT",
+        "selection_state": "WAITING_EXECUTION",
+        "waiting_execution": True,
+        "validation_scheduling_report": {
+            "task_selected": True,
+            "task_scheduled": True,
+            "task_execution_started": False,
+            "task_execution_completed": False,
+            "selection_state": "TASK_SELECTED",
+            "scheduling_admission_state": "ADMITTED",
+            "scheduling_admission_reason": "admission_contract_satisfied",
+            "scheduling_state": "SCHEDULED",
+            "schedule_id": "validation_schedule_abc123",
+            "schedule_creation_result": "CREATED_NEW_SCHEDULE",
+            "scheduling_authority": "VALIDATION_SCHEDULER",
+            "execution_state": "NOT_STARTED",
+            "execution_invoked": False,
+            "execution_authority": "NONE",
+            "constitutional_boundary": (
+                "VALIDATION_SCHEDULE_IS_A_GOVERNED_FUTURE_EXECUTION_REQUEST_NOT_EXECUTION_OR_EVIDENCE"
+            ),
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "Validation Task Selection State: TASK_SELECTED" in report
+    assert "Task Selected: TRUE" in report
+    assert "Task Scheduled: TRUE" in report
+    assert "Schedule Id: validation_schedule_abc123" in report
+    assert "Schedule Creation Result: CREATED_NEW_SCHEDULE" in report
+    assert "Scheduling Authority: VALIDATION_SCHEDULER" in report
+    assert "Scheduling Admission State: ADMITTED" in report
+    assert "Scheduling State: SCHEDULED" in report
+    assert "Execution Started: FALSE" in report
+    assert "Execution Completed: FALSE" in report
+    assert "Execution State: NOT_STARTED" in report
+    assert "Execution Invoked: FALSE" in report
+    assert "Execution Authority: NONE" in report
+    assert (
+        "Largest Success: selected_validation_task_governedly_scheduled"
+        in conclusion
+    )
+    assert "Next Decision Gate: start_scheduled_validation_task_execution" in conclusion
+    assert "Current Bottleneck: validation_task_execution" in conclusion
+    assert (
+        "Root Cause: scheduled_validation_task_execution_not_started"
+        in conclusion
+    )
+    assert "Immediate Next Development Task: execute_scheduled_validation_task" in conclusion
+
+
+def test_engineering_conclusion_reports_raw_result_evaluation_gate():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "arena_decision_resolution_state": (
+                "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+            ),
+            "arena_decision_resolution_action": (
+                "request_governed_tie_breaking_or_additional_evidence"
+            ),
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+    }
+    state["training_economy_alignment_report"] = {
+        "validation_task_execution_report": {
+            "plan_id": "evidence_plan_1",
+            "schedule_id": "validation_schedule_1",
+            "execution_id": "validation_execution_1",
+            "raw_result_id": "raw_validation_result_1",
+            "selected_validation_task_id": "elite_validation_task_31",
+            "selected_curriculum_id": "elite_validation_academy",
+            "execution_admission_evaluated": True,
+            "execution_admission_state": "ADMITTED",
+            "execution_admission_reason": "execution_contract_satisfied",
+            "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
+            "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
+            "candidate_execution_authority": "NONE",
+            "execution_invoked": True,
+            "execution_started": True,
+            "execution_completed": True,
+            "execution_state": "RAW_RESULT_CAPTURED",
+            "execution_attempt_count": 1,
+            "runner_id": "governed_validation_manifest_runner",
+            "runner_status": "COMPLETED",
+            "executed_task_count": 1,
+            "executed_case_count": 1,
+            "raw_result_captured": True,
+            "raw_result_creation_result": "CREATED_NEW_RAW_RESULT",
+            "raw_result_persistence_state": "RAW_RESULT_PERSISTED",
+            "target_reference_forwarded_to_solver": False,
+            "prediction_target_comparison_performed": False,
+            "accuracy_calculated": False,
+            "evidence_evaluation_invoked": False,
+            "evidence_produced": False,
+            "evidence_acceptance_evaluated": False,
+            "evidence_accepted": False,
+            "arena_reentry_invoked": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "evidence_state": "NOT_EVALUATED",
+            "next_consumer": "VALIDATION_EVIDENCE_EVALUATOR",
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "VALIDATION TASK EXECUTION REPORT" in report
+    assert "Raw Result Captured: TRUE" in report
+    assert "Prediction Target Comparison Performed: FALSE" in report
+    assert "Evidence Evaluation Invoked: FALSE" in report
+    assert "Evidence Accepted: FALSE" in report
+    assert "Arena Re-entry Invoked: FALSE" in report
+    assert "Next Consumer: VALIDATION_EVIDENCE_EVALUATOR" in report
+    assert (
+        "Largest Success: scheduled_validation_task_executed_and_raw_result_captured"
+        in conclusion
+    )
+    assert "Current Open Decision: WAITING_RAW_RESULT_EVIDENCE_EVALUATION" in conclusion
+    assert "Next Decision Gate: evaluate_raw_validation_result" in conclusion
+    assert "Current Bottleneck: validation_evidence_evaluation" in conclusion
+    assert "Root Cause: raw_validation_result_not_yet_evaluated" in conclusion
+    assert "Exact Responsible Component: VALIDATION_EVIDENCE_EVALUATOR" in conclusion
 
 
 def test_engineering_conclusion_generates_run_id_from_timestamp_when_ids_missing():

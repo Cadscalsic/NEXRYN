@@ -64,6 +64,47 @@ class ValidationCurriculumRegistry:
             key=lambda item: (-item.priority, item.identifier),
         )
 
+    def find_task(
+        self,
+        task_id: str,
+        curriculum_id: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_task_id = self._term(task_id)
+        normalized_curriculum_id = self._term(curriculum_id)
+        for curriculum in self.curricula():
+            if (
+                normalized_curriculum_id != "Not Available"
+                and curriculum.identifier != normalized_curriculum_id
+            ):
+                continue
+            tasks, load_report = self._load_curriculum(curriculum)
+            for task in tasks:
+                if task.get("task_id") == normalized_task_id:
+                    return {
+                        "found": True,
+                        "enabled": (
+                            curriculum.enabled
+                            and task.get("enabled", True) is not False
+                        ),
+                        "task": task,
+                        "curriculum": {
+                            "identifier": curriculum.identifier,
+                            "display_name": curriculum.display_name,
+                            "version": curriculum.version,
+                            "priority": curriculum.priority,
+                            "enabled": curriculum.enabled,
+                            "path": str(curriculum.path),
+                        },
+                        "load_report": load_report,
+                    }
+        return {
+            "found": False,
+            "enabled": False,
+            "task": {},
+            "curriculum": {},
+            "load_report": {},
+        }
+
     def search(self, plan: dict[str, Any]) -> dict[str, Any]:
         lifecycle = ["PLAN_PARSED", "CURRICULUM_SEARCH_STARTED"]
         reports = []
@@ -250,6 +291,7 @@ class ValidationCurriculumRegistry:
                 task.get("operational_reuse_potential")
             ),
             "raw_task": task,
+            "enabled": task.get("enabled", True) is not False,
         }
 
     def _match(
@@ -299,10 +341,11 @@ class ValidationCurriculumRegistry:
         ):
             score += 15
             reasons.append("cross_source_compatibility")
-        if task.get("cross_domain"):
+        core_match = bool(reasons)
+        if task.get("cross_domain") and core_match:
             score += 5
             reasons.append("cross_domain_usefulness")
-        if task.get("operational_reuse_potential") in {"high", "medium"}:
+        if task.get("operational_reuse_potential") in {"high", "medium"} and core_match:
             score += 3
             reasons.append("operational_reuse_signal")
         return {

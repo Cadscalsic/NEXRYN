@@ -73,6 +73,14 @@ class EvidenceAcquisitionPlanStore:
             "plan_persistence_failure_reason": "none",
             "plan_schema_version": self.SCHEMA_VERSION,
             "plan_constitutional_boundary": self.BOUNDARY,
+            "plan_creation_result": "Not Available",
+            "lifecycle_update_attempted": False,
+            "lifecycle_update_persisted": False,
+            "persisted_lifecycle_state": "Not Available",
+            "persisted_selected_validation_task": "Not Available",
+            "boot_recovery_route": "Not Available",
+            "execution_state": "Not Available",
+            "execution_authority": "NONE",
         }
 
     def initialize(self) -> dict[str, Any]:
@@ -402,6 +410,7 @@ class EvidenceAcquisitionPlanStore:
                 "evidence_plan_storage_state": (
                     "EQUIVALENT_PENDING_PLAN_REUSED"
                 ),
+                "plan_creation_result": "REUSED_EXISTING_PLAN",
                 "evidence_plan_storage_path": str(path),
                 "equivalent_pending_plan_found": True,
                 "duplicate_persistence_prevented": True,
@@ -424,6 +433,7 @@ class EvidenceAcquisitionPlanStore:
             "evidence_plan_persisted": True,
             "evidence_plan_lifecycle_state": "PENDING_NEXT_RUN",
             "evidence_plan_storage_state": "NEW_PLAN_PERSISTED",
+            "plan_creation_result": "NEW_PLAN_PERSISTED",
             "pending_evidence_plan_count": len(self._plan_files(self.pending_path)),
         }
         return dict(self.last_report)
@@ -460,6 +470,63 @@ class EvidenceAcquisitionPlanStore:
             seen[fingerprint] = path
             if plan["plan_id"] in self._loaded_this_run:
                 continue
+            if plan.get("lifecycle_state") in {
+                "WAITING_EXECUTION",
+                "SCHEDULING_PREPARED",
+            }:
+                plan["boot_recovery_route"] = (
+                    "SCHEDULING_PREPARED_TO_SCHEDULING_RECOVERY"
+                    if plan.get("lifecycle_state") == "SCHEDULING_PREPARED"
+                    else "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER"
+                )
+                plan["execution_state"] = (
+                    plan.get("execution_state") or "NOT_SCHEDULED"
+                )
+                plan["execution_authority"] = "NONE"
+                plan["updated_at"] = self._now()
+                plan.setdefault("history", []).append({
+                    "timestamp": plan["updated_at"],
+                    "state": "WAITING_EXECUTION",
+                    "event": "waiting_execution_plan_restored_at_boot",
+                })
+                self._atomic_write(path, plan)
+                valid.append(plan)
+                self._loaded_this_run.add(plan["plan_id"])
+                continue
+            if plan.get("lifecycle_state") == "SCHEDULED":
+                plan["boot_recovery_route"] = (
+                    "SCHEDULED_TO_VALIDATION_EXECUTION_PIPELINE"
+                )
+                plan["execution_state"] = plan.get("execution_state") or "NOT_STARTED"
+                plan["execution_invoked"] = bool(plan.get("execution_invoked", False))
+                plan["execution_authority"] = "NONE"
+                plan["updated_at"] = self._now()
+                plan.setdefault("history", []).append({
+                    "timestamp": plan["updated_at"],
+                    "state": "SCHEDULED",
+                    "event": "scheduled_plan_restored_at_boot",
+                })
+                self._atomic_write(path, plan)
+                valid.append(plan)
+                self._loaded_this_run.add(plan["plan_id"])
+                continue
+            if plan.get("lifecycle_state") == "RAW_RESULT_CAPTURED":
+                plan["boot_recovery_route"] = (
+                    "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR"
+                )
+                plan["execution_state"] = "RAW_RESULT_CAPTURED"
+                plan["evidence_state"] = "NOT_EVALUATED"
+                plan["execution_authority"] = "NONE"
+                plan["updated_at"] = self._now()
+                plan.setdefault("history", []).append({
+                    "timestamp": plan["updated_at"],
+                    "state": "RAW_RESULT_CAPTURED",
+                    "event": "raw_result_captured_plan_restored_at_boot",
+                })
+                self._atomic_write(path, plan)
+                valid.append(plan)
+                self._loaded_this_run.add(plan["plan_id"])
+                continue
             plan["lifecycle_state"] = "LOADED_AT_BOOT"
             plan["updated_at"] = self._now()
             plan.setdefault("history", []).append({
@@ -471,23 +538,124 @@ class EvidenceAcquisitionPlanStore:
             valid.append(plan)
             self._loaded_this_run.add(plan["plan_id"])
         valid.sort(key=lambda item: (-int(item.get("priority", 0)), item["plan_id"]))
+        consumption_ready = [
+            plan for plan in valid
+            if plan.get("lifecycle_state") not in {
+                "WAITING_EXECUTION",
+                "SCHEDULING_PREPARED",
+                "SCHEDULED",
+                "RAW_RESULT_CAPTURED",
+            }
+        ]
+        waiting_execution = [
+            plan for plan in valid
+            if plan.get("lifecycle_state") in {
+                "WAITING_EXECUTION",
+                "SCHEDULING_PREPARED",
+            }
+        ]
+        scheduled = [
+            plan for plan in valid
+            if plan.get("lifecycle_state") == "SCHEDULED"
+        ]
+        raw_result_captured = [
+            plan for plan in valid
+            if plan.get("lifecycle_state") == "RAW_RESULT_CAPTURED"
+        ]
+        highest = (
+            consumption_ready[0]
+            if consumption_ready else waiting_execution[0]
+            if waiting_execution else scheduled[0]
+            if scheduled else raw_result_captured[0]
+            if raw_result_captured else {}
+        )
         self.last_report = {
             **self._empty_report(),
             "evidence_plan_store_state": "READY",
             "evidence_plan_boot_load_state": (
                 "PENDING_PLANS_LOADED" if valid else "NO_PENDING_PLANS"
             ),
-            "pending_evidence_plan_count": len(valid),
+            "pending_evidence_plan_count": len(consumption_ready),
             "evidence_plans_loaded_at_boot": len(valid),
             "evidence_plan_storage_state": "BOOT_LOAD_COMPLETE",
             "evidence_plan_storage_path": str(self.root_path),
             "quarantined_plan_count": len(quarantined),
             "quarantined_plans": quarantined,
+            "waiting_execution_plan_count": len(waiting_execution),
+            "scheduled_evidence_plan_count": len(scheduled),
+            "raw_result_captured_plan_count": len(raw_result_captured),
+            "boot_recovery_route": (
+                "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER"
+                if waiting_execution and not consumption_ready
+                else "SCHEDULED_TO_VALIDATION_EXECUTION_PIPELINE"
+                if scheduled and not waiting_execution and not consumption_ready
+                else "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR"
+                if raw_result_captured
+                and not scheduled
+                and not waiting_execution
+                and not consumption_ready
+                else "CONSUMPTION_PENDING_TO_TRAINING_ASSISTANT"
+                if consumption_ready
+                else "NO_PENDING_PLAN"
+            ),
+            "evidence_plan_lifecycle_state": (
+                "WAITING_EXECUTION"
+                if waiting_execution and not consumption_ready
+                else "SCHEDULED"
+                if scheduled and not waiting_execution and not consumption_ready
+                else "RAW_RESULT_CAPTURED"
+                if raw_result_captured
+                and not scheduled
+                and not waiting_execution
+                and not consumption_ready
+                else "LOADED_AT_BOOT"
+                if consumption_ready
+                else "Not Available"
+            ),
+            "persisted_selected_validation_task": (
+                waiting_execution[0].get("selected_validation_task_id")
+                if waiting_execution else scheduled[0].get(
+                    "selected_validation_task_id"
+                )
+                if scheduled else raw_result_captured[0].get(
+                    "selected_validation_task_id"
+                )
+                if raw_result_captured else "Not Available"
+            ),
+            "execution_state": (
+                waiting_execution[0].get("execution_state", "NOT_SCHEDULED")
+                if waiting_execution else scheduled[0].get(
+                    "execution_state",
+                    "NOT_STARTED",
+                )
+                if scheduled else raw_result_captured[0].get(
+                    "execution_state",
+                    "RAW_RESULT_CAPTURED",
+                )
+                if raw_result_captured else "Not Available"
+            ),
+            "execution_authority": "NONE",
+            "schedule_id": (
+                scheduled[0].get("schedule_id")
+                if scheduled else raw_result_captured[0].get("schedule_id")
+                if raw_result_captured else "Not Available"
+            ),
+            "raw_result_id": (
+                raw_result_captured[0].get("raw_result_id")
+                if raw_result_captured else "Not Available"
+            ),
+            "evidence_state": (
+                raw_result_captured[0].get("evidence_state", "NOT_EVALUATED")
+                if raw_result_captured else "Not Available"
+            ),
         }
         return {
             **dict(self.last_report),
-            "pending_evidence_acquisition_plans": valid,
-            "highest_priority_pending_evidence_plan": valid[0] if valid else {},
+            "pending_evidence_acquisition_plans": consumption_ready,
+            "waiting_execution_evidence_plans": waiting_execution,
+            "scheduled_evidence_plans": scheduled,
+            "raw_result_captured_evidence_plans": raw_result_captured,
+            "highest_priority_pending_evidence_plan": highest,
         }
 
     def get_pending_plans(self) -> list[dict[str, Any]]:
@@ -558,6 +726,156 @@ class EvidenceAcquisitionPlanStore:
             **delivery,
             "evidence_plan_lifecycle_state": "CONSUMPTION_PENDING",
             "evidence_plan_storage_state": "CONSUMPTION_PENDING",
+        }
+        return dict(self.last_report)
+
+    def persist_selection_from_consumption_report(
+        self,
+        consumption_report: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        report = {
+            **self._empty_report(),
+            "evidence_plan_store_state": "READY",
+            "lifecycle_update_attempted": False,
+            "lifecycle_update_persisted": False,
+            "persisted_lifecycle_state": "Not Available",
+            "persisted_selected_validation_task": "Not Available",
+            "boot_recovery_route": "Not Available",
+            "execution_state": "NOT_SCHEDULED",
+            "execution_authority": "NONE",
+        }
+        consumption_report = (
+            consumption_report if isinstance(consumption_report, dict) else {}
+        )
+        if consumption_report.get("selection_state") != "WAITING_EXECUTION":
+            return {
+                **report,
+                "evidence_plan_storage_state": "LIFECYCLE_UPDATE_NOT_APPLICABLE",
+                "plan_persistence_failure_reason": "selection_state_not_waiting_execution",
+            }
+        plan_id = self._term(consumption_report.get("current_plan_id"))
+        if plan_id == "Not Available":
+            return {
+                **report,
+                "lifecycle_update_attempted": True,
+                "evidence_plan_storage_state": "PLAN_SELECTION_UPDATE_FAILED",
+                "plan_persistence_failure_reason": "missing_plan_id",
+            }
+        selected_task = self._term(
+            consumption_report.get("selected_validation_task")
+        )
+        if selected_task == "Not Available":
+            return {
+                **report,
+                "lifecycle_update_attempted": True,
+                "evidence_plan_id": plan_id,
+                "evidence_plan_storage_state": "PLAN_SELECTION_UPDATE_FAILED",
+                "plan_persistence_failure_reason": "missing_selected_validation_task",
+            }
+
+        path = None
+        plan = None
+        for directory in (self.pending_path, self.active_path):
+            candidate = directory / f"{plan_id}.json"
+            loaded, error = self._read_plan(candidate)
+            if error or not loaded:
+                continue
+            plan = loaded
+            path = candidate
+            break
+        if not plan or not path:
+            return {
+                **report,
+                "lifecycle_update_attempted": True,
+                "evidence_plan_id": plan_id,
+                "evidence_plan_storage_state": "PLAN_SELECTION_UPDATE_FAILED",
+                "plan_persistence_failure_reason": "plan_not_found",
+            }
+
+        metadata = consumption_report.get("selected_validation_task_metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        now = self._now()
+        previous_state = plan.get("lifecycle_state")
+        update_payload = {
+            "updated_at": now,
+            "lifecycle_state": "WAITING_EXECUTION",
+            "consumption_state": "MATCHING_COMPLETED",
+            "selected_validation_task_id": selected_task,
+            "selected_curriculum_id": self._term(
+                metadata.get("curriculum_id")
+                or consumption_report.get("best_matching_curriculum")
+            ),
+            "selected_curriculum": self._term(
+                consumption_report.get("best_matching_curriculum")
+            ),
+            "matching_score": consumption_report.get("matching_score", 0.0),
+            "matching_explanation": self._term(
+                consumption_report.get("matching_explanation")
+            ),
+            "selection_authority": "TRAINING_ASSISTANT",
+            "selection_timestamp": now,
+            "required_evidence": self._term(
+                consumption_report.get("current_required_evidence")
+                or plan.get("required_evidence")
+            ),
+            "required_evidence_category": self._term(
+                plan.get("required_evidence_category")
+            ),
+            "target_candidate": self._term(plan.get("target_candidate")),
+            "target_operation": self._term(
+                consumption_report.get("current_target_operation")
+                or plan.get("target_operation")
+            ),
+            "tie_break_strategy": self._term(
+                consumption_report.get("current_tie_break_strategy")
+                or plan.get("tie_break_strategy")
+            ),
+            "execution_state": "NOT_SCHEDULED",
+            "execution_authority": "NONE",
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "boot_recovery_route": "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER",
+        }
+        updated = {**plan, **update_payload}
+        updated.setdefault("history", []).append({
+            "timestamp": now,
+            "state": "WAITING_EXECUTION",
+            "event": "training_assistant_selected_validation_task",
+            "previous_state": previous_state,
+            "selected_validation_task_id": selected_task,
+        })
+        try:
+            self._atomic_write(path, updated)
+        except (OSError, TypeError, ValueError) as error:
+            return {
+                **report,
+                "lifecycle_update_attempted": True,
+                "evidence_plan_id": plan_id,
+                "evidence_plan_fingerprint": plan.get(
+                    "plan_fingerprint",
+                    "Not Available",
+                ),
+                "evidence_plan_storage_state": "PLAN_SELECTION_UPDATE_FAILED",
+                "plan_persistence_failure_reason": str(error),
+                "evidence_plan_storage_path": str(path),
+            }
+
+        self.last_report = {
+            **report,
+            "lifecycle_update_attempted": True,
+            "lifecycle_update_persisted": True,
+            "evidence_plan_id": plan_id,
+            "evidence_plan_fingerprint": updated.get("plan_fingerprint"),
+            "evidence_plan_lifecycle_state": "WAITING_EXECUTION",
+            "evidence_plan_storage_state": "LIFECYCLE_UPDATE_PERSISTED",
+            "evidence_plan_storage_path": str(path),
+            "persisted_lifecycle_state": "WAITING_EXECUTION",
+            "persisted_selected_validation_task": selected_task,
+            "boot_recovery_route": "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER",
+            "execution_state": "NOT_SCHEDULED",
+            "execution_authority": "NONE",
+            "plan_persistence_failure_reason": "none",
         }
         return dict(self.last_report)
 

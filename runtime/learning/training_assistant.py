@@ -1440,9 +1440,10 @@ class TrainingAssistant:
             "training_assistant_consumed_plan": (
                 consumption_report.get("plans_consumed", 0) > 0
             ),
-            "evidence_acquisition_task_scheduled": selected,
+            "evidence_acquisition_task_selected": selected,
+            "evidence_acquisition_task_scheduled": False,
             "task_selection_consumed_plan": selected,
-            "tie_break_task_scheduled": selected,
+            "tie_break_task_scheduled": False,
             "evidence_acquisition_selected_task": (
                 consumption_report.get("selected_validation_task")
             ),

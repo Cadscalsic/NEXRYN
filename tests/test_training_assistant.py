@@ -55,7 +55,10 @@ def test_training_assistant_consumes_persisted_evidence_plan_and_selects_validat
     assert alignment["consumption_state"] == "MATCHING_COMPLETED"
     assert alignment["curriculum_search_state"] == "COMPLETED"
     assert alignment["matching_validation_tasks"] > 0
+    assert alignment["matching_validation_tasks"] < 50
     assert alignment["best_matching_task"] != "Not Available"
+    assert alignment["matching_score"] > 0
+    assert alignment["matching_explanation"] != "Not Available"
     assert alignment["evidence_acquisition_selected_task"] != "Not Available"
     assert alignment["selection_authority"] == "TRAINING_ASSISTANT"
     assert alignment["selection_state"] == "WAITING_EXECUTION"

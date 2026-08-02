@@ -7833,6 +7833,57 @@ class CanonicalReportBindingEngine:
                 "EVIDENCE_GENERATION_REPORT",
             ),
         )
+        validation_execution = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "validation_execution_report",
+                "VALIDATION_EXECUTION_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "validation_execution_report",
+                "VALIDATION_EXECUTION_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "validation_execution_report",
+                "VALIDATION_EXECUTION_REPORT",
+            ),
+        )
+        validation_scheduling = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "validation_scheduling_report",
+                "VALIDATION_SCHEDULING_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "validation_scheduling_report",
+                "VALIDATION_SCHEDULING_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "validation_scheduling_report",
+                "VALIDATION_SCHEDULING_REPORT",
+            ),
+        )
+        validation_task_execution = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "validation_task_execution_report",
+                "VALIDATION_TASK_EXECUTION_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "validation_task_execution_report",
+                "VALIDATION_TASK_EXECUTION_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "validation_task_execution_report",
+                "VALIDATION_TASK_EXECUTION_REPORT",
+            ),
+        )
         evidence_plan_store = self._merge_dicts(
             self._first_dict(
                 report_state,
@@ -8024,14 +8075,14 @@ class CanonicalReportBindingEngine:
                 ),
                 "evidence_acquisition_plan_consumed": self._first_present(
                     training_alignment.get("evidence_acquisition_plan_consumed"),
-                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                    training_alignment.get("evidence_acquisition_task_selected"),
                 ),
                 "training_assistant_consumed_plan": self._first_present(
                     training_alignment.get("evidence_acquisition_plan_consumed"),
-                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                    training_alignment.get("evidence_acquisition_task_selected"),
                 ),
                 "task_selection_consumed_plan": self._first_present(
-                    training_alignment.get("evidence_acquisition_task_scheduled"),
+                    training_alignment.get("evidence_acquisition_task_selected"),
                     False,
                 ),
                 "tie_break_task_scheduled": self._first_present(
@@ -8113,6 +8164,9 @@ class CanonicalReportBindingEngine:
                     "GENERATION_NOT_REQUIRED",
                 ),
                 "evidence_generation_report": evidence_generation,
+                "validation_execution_report": validation_execution,
+                "validation_scheduling_report": validation_scheduling,
+                "validation_task_execution_report": validation_task_execution,
                 "validation_probe_shared_input_trace": explicit_summary.get(
                     "validation_probe_shared_input_trace"
                 ) or {},
@@ -8124,12 +8178,16 @@ class CanonicalReportBindingEngine:
                 ),
             }
             summary.update(self._prediction_quality_calibration(summary))
+            summary.update(self._evidence_plan_consumption_projection(summary))
             summary.update(
                 self._evidence_plan_store_projection(
                     summary,
                     evidence_plan_store,
                 )
             )
+            summary.update(self._validation_scheduling_projection(summary))
+            summary.update(self._validation_task_execution_projection(summary))
+            summary.update(self._validation_execution_projection(summary))
             return {
                 "candidate_arena_summary": summary,
                 "candidate_arena_diagnostics": {
@@ -8262,14 +8320,14 @@ class CanonicalReportBindingEngine:
             ),
             "evidence_acquisition_plan_consumed": self._first_present(
                 training_alignment.get("evidence_acquisition_plan_consumed"),
-                training_alignment.get("evidence_acquisition_task_scheduled"),
+                training_alignment.get("evidence_acquisition_task_selected"),
             ),
             "training_assistant_consumed_plan": self._first_present(
                 training_alignment.get("evidence_acquisition_plan_consumed"),
-                training_alignment.get("evidence_acquisition_task_scheduled"),
+                training_alignment.get("evidence_acquisition_task_selected"),
             ),
             "task_selection_consumed_plan": self._first_present(
-                training_alignment.get("evidence_acquisition_task_scheduled"),
+                training_alignment.get("evidence_acquisition_task_selected"),
                 False,
             ),
             "tie_break_task_scheduled": self._first_present(
@@ -8351,11 +8409,18 @@ class CanonicalReportBindingEngine:
                 "GENERATION_NOT_REQUIRED",
             ),
             "evidence_generation_report": evidence_generation,
+            "validation_execution_report": validation_execution,
+            "validation_scheduling_report": validation_scheduling,
+            "validation_task_execution_report": validation_task_execution,
         }
         summary.update(self._prediction_quality_calibration(summary))
+        summary.update(self._evidence_plan_consumption_projection(summary))
         summary.update(
             self._evidence_plan_store_projection(summary, evidence_plan_store)
         )
+        summary.update(self._validation_scheduling_projection(summary))
+        summary.update(self._validation_task_execution_projection(summary))
+        summary.update(self._validation_execution_projection(summary))
         return {
             "candidate_arena_summary": summary,
             "candidate_arena_diagnostics": {
@@ -8547,7 +8612,7 @@ class CanonicalReportBindingEngine:
                 "evidence_acquisition_plan_forwarded": True,
                 "evidence_acquisition_plan_consumed": plan_consumed,
                 "training_assistant_consumed_plan": plan_consumed,
-                "task_selection_consumed_plan": task_scheduled,
+                "task_selection_consumed_plan": plan_consumed,
                 "tie_break_task_scheduled": task_scheduled,
                 "selected_tie_break_task": self._first_present(
                     summary.get("selected_tie_break_task"),
@@ -8598,6 +8663,565 @@ class CanonicalReportBindingEngine:
             ),
             "prediction_quality_calibration_invoked": calibration_invoked,
             "prediction_quality_calibration_strong_probe_result": strong_probe_result,
+        }
+
+    def _evidence_plan_consumption_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("evidence_plan_consumption_report")
+        if not isinstance(report, Mapping) or not report:
+            return {}
+        selected_metadata = report.get("selected_validation_task_metadata")
+        selected_metadata = (
+            selected_metadata if isinstance(selected_metadata, Mapping) else {}
+        )
+        return {
+            "training_assistant_consumed_plan": self._first_present(
+                summary.get("training_assistant_consumed_plan"),
+                report.get("plans_consumed", 0) > 0,
+            ),
+            "evidence_acquisition_plan_consumed": self._first_present(
+                summary.get("evidence_acquisition_plan_consumed"),
+                report.get("plans_consumed", 0) > 0,
+            ),
+            "consumption_lifecycle_state": self._first_present(
+                report.get("lifecycle_state"),
+                "Not Available",
+            ),
+            "consumption_state": self._first_present(
+                summary.get("consumption_state"),
+                report.get("consumption_state"),
+                "Not Available",
+            ),
+            "curriculum_search_state": self._first_present(
+                summary.get("curriculum_search_state"),
+                report.get("curriculum_search_state"),
+                "Not Available",
+            ),
+            "registered_curricula": self._first_present(
+                report.get("registered_curricula"),
+                0,
+            ),
+            "loaded_curricula": self._first_present(
+                report.get("loaded_curricula"),
+                0,
+            ),
+            "enabled_curricula": self._first_present(
+                report.get("enabled_curricula"),
+                0,
+            ),
+            "disabled_curricula": self._first_present(
+                report.get("disabled_curricula"),
+                0,
+            ),
+            "curricula_searched": self._first_present(
+                report.get("curricula_searched"),
+                0,
+            ),
+            "total_validation_tasks": self._first_present(
+                report.get("total_validation_tasks"),
+                0,
+            ),
+            "matching_validation_tasks": self._first_present(
+                report.get("matching_validation_tasks"),
+                report.get("matching_tasks"),
+                summary.get("matching_validation_tasks"),
+                0,
+            ),
+            "best_matching_task": self._first_present(
+                report.get("best_matching_task"),
+                summary.get("best_matching_task"),
+                "Not Available",
+            ),
+            "best_matching_curriculum": self._first_present(
+                report.get("best_matching_curriculum"),
+                summary.get("best_matching_curriculum"),
+                "Not Available",
+            ),
+            "matching_score": self._first_present(
+                report.get("matching_score"),
+                selected_metadata.get("matching_score"),
+                summary.get("matching_score"),
+                0.0,
+            ),
+            "matching_explanation": self._first_present(
+                report.get("matching_explanation"),
+                selected_metadata.get("matching_explanation"),
+                summary.get("matching_explanation"),
+                "Not Available",
+            ),
+            "selected_tie_break_task": self._first_present(
+                summary.get("selected_tie_break_task"),
+                report.get("selected_validation_task"),
+                "Not Available",
+            ),
+            "selection_authority": self._first_present(
+                summary.get("selection_authority"),
+                report.get("selection_authority"),
+                "TRAINING_ASSISTANT",
+            ),
+            "validation_task_selection_state": self._first_present(
+                summary.get("validation_task_selection_state"),
+                report.get("selection_state"),
+                "Not Available",
+            ),
+            "waiting_execution": self._first_present(
+                summary.get("waiting_execution"),
+                report.get("waiting_execution"),
+                False,
+            ),
+            "generation_eligible": self._first_present(
+                summary.get("generation_eligible"),
+                report.get("generation_eligible"),
+                False,
+            ),
+            "generation_invoked": self._first_present(
+                summary.get("generation_invoked"),
+                report.get("generation_invoked"),
+                False,
+            ),
+            "waiting_generator": self._first_present(
+                summary.get("waiting_generator"),
+                report.get("waiting_generator"),
+                False,
+            ),
+            "plan_consumption_truth_authority": self._first_present(
+                report.get("truth_authority"),
+                "NONE",
+            ),
+            "plan_consumption_trust_authority": self._first_present(
+                report.get("trust_authority"),
+                "NONE",
+            ),
+            "plan_consumption_graduation_authority": self._first_present(
+                report.get("graduation_authority"),
+                "NONE",
+            ),
+            "plan_consumption_execution_authority": self._first_present(
+                report.get("execution_authority"),
+                "NONE",
+            ),
+        }
+
+    def _validation_scheduling_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("validation_scheduling_report")
+        report = report if isinstance(report, Mapping) else {}
+        if not report:
+            return {
+                "task_selected": self._first_present(
+                    summary.get("task_selected"),
+                    summary.get("waiting_execution") is True,
+                    False,
+                ),
+                "task_scheduled": self._first_present(
+                    summary.get("task_scheduled"),
+                    summary.get("tie_break_task_scheduled"),
+                    False,
+                ),
+                "task_execution_started": self._first_present(
+                    summary.get("task_execution_started"),
+                    False,
+                ),
+                "task_execution_completed": self._first_present(
+                    summary.get("task_execution_completed"),
+                    False,
+                ),
+                "scheduling_admission_state": self._first_present(
+                    summary.get("scheduling_admission_state"),
+                    "NOT_EVALUATED",
+                ),
+                "scheduling_state": self._first_present(
+                    summary.get("scheduling_state"),
+                    "NOT_SCHEDULED",
+                ),
+                "execution_state": self._first_present(
+                    summary.get("execution_state"),
+                    "NOT_STARTED",
+                ),
+                "execution_invoked": self._first_present(
+                    summary.get("execution_invoked"),
+                    False,
+                ),
+            }
+        scheduled = report.get("scheduling_state") == "SCHEDULED"
+        return {
+            "task_selected": self._first_present(
+                report.get("task_selected"),
+                summary.get("task_selected"),
+                scheduled,
+            ),
+            "task_scheduled": self._first_present(
+                report.get("task_scheduled"),
+                summary.get("task_scheduled"),
+                scheduled,
+            ),
+            "task_execution_started": self._first_present(
+                report.get("task_execution_started"),
+                False,
+            ),
+            "task_execution_completed": self._first_present(
+                report.get("task_execution_completed"),
+                False,
+            ),
+            "validation_task_selection_state": self._first_present(
+                report.get("selection_state"),
+                summary.get("validation_task_selection_state"),
+                "TASK_SELECTED" if scheduled else "Not Available",
+            ),
+            "scheduling_admission_state": self._first_present(
+                report.get("scheduling_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "scheduling_admission_reason": self._first_present(
+                report.get("scheduling_admission_reason"),
+                "not_evaluated",
+            ),
+            "scheduling_state": self._first_present(
+                report.get("scheduling_state"),
+                "NOT_SCHEDULED",
+            ),
+            "schedule_id": self._first_present(
+                report.get("schedule_id"),
+                "Not Available",
+            ),
+            "schedule_creation_result": self._first_present(
+                report.get("schedule_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "scheduling_authority": self._first_present(
+                report.get("scheduling_authority"),
+                "VALIDATION_SCHEDULER",
+            ),
+            "execution_state": self._first_present(
+                report.get("execution_state"),
+                "NOT_STARTED",
+            ),
+            "execution_invoked": self._first_present(
+                report.get("execution_invoked"),
+                False,
+            ),
+            "execution_authority": self._first_present(
+                report.get("execution_authority"),
+                "NONE",
+            ),
+            "tie_break_task_scheduled": self._first_present(
+                report.get("task_scheduled"),
+                summary.get("tie_break_task_scheduled"),
+                False,
+            ),
+            "decision_orchestration_state": (
+                "VALIDATION_TASK_SCHEDULED_AWAITING_EXECUTION"
+                if scheduled
+                else summary.get("decision_orchestration_state")
+            ),
+            "validation_scheduling_constitutional_boundary": self._first_present(
+                report.get("constitutional_boundary"),
+                "VALIDATION_SCHEDULE_IS_A_GOVERNED_FUTURE_EXECUTION_REQUEST_NOT_EXECUTION_OR_EVIDENCE",
+            ),
+        }
+
+    def _validation_task_execution_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("validation_task_execution_report")
+        if not isinstance(report, Mapping) or not report:
+            return {}
+        return {
+            "validation_task_execution_plan_id": self._first_present(
+                report.get("plan_id"),
+                summary.get("evidence_plan_id"),
+                "Not Available",
+            ),
+            "validation_task_execution_schedule_id": self._first_present(
+                report.get("schedule_id"),
+                summary.get("schedule_id"),
+                "Not Available",
+            ),
+            "execution_id": self._first_present(
+                report.get("execution_id"),
+                "Not Available",
+            ),
+            "raw_result_id": self._first_present(
+                report.get("raw_result_id"),
+                "Not Available",
+            ),
+            "raw_result_fingerprint": self._first_present(
+                report.get("raw_result_fingerprint"),
+                "Not Available",
+            ),
+            "validation_task_execution_selected_task": self._first_present(
+                report.get("selected_validation_task_id"),
+                summary.get("selected_tie_break_task"),
+                "Not Available",
+            ),
+            "validation_task_execution_selected_curriculum": self._first_present(
+                report.get("selected_curriculum_id"),
+                "Not Available",
+            ),
+            "execution_admission_evaluated": self._first_present(
+                report.get("execution_admission_evaluated"),
+                False,
+            ),
+            "execution_admission_state": self._first_present(
+                report.get("execution_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "execution_admission_reason": self._first_present(
+                report.get("execution_admission_reason"),
+                "not_evaluated",
+            ),
+            "validation_execution_authority": self._first_present(
+                report.get("validation_execution_authority"),
+                "NONE",
+            ),
+            "validation_execution_scope": self._first_present(
+                report.get("validation_execution_scope"),
+                "Not Available",
+            ),
+            "candidate_execution_authority": self._first_present(
+                report.get("candidate_execution_authority"),
+                "NONE",
+            ),
+            "execution_invoked": self._first_present(
+                report.get("execution_invoked"),
+                False,
+            ),
+            "task_execution_started": self._first_present(
+                report.get("execution_started"),
+                report.get("task_execution_started"),
+                False,
+            ),
+            "task_execution_completed": self._first_present(
+                report.get("execution_completed"),
+                report.get("task_execution_completed"),
+                False,
+            ),
+            "execution_state": self._first_present(
+                report.get("execution_state"),
+                summary.get("execution_state"),
+                "NOT_STARTED",
+            ),
+            "execution_attempt_count": self._first_present(
+                report.get("execution_attempt_count"),
+                0,
+            ),
+            "runner_id": self._first_present(
+                report.get("runner_id"),
+                "Not Available",
+            ),
+            "runner_status": self._first_present(
+                report.get("runner_status"),
+                "Not Available",
+            ),
+            "executed_task_count": self._first_present(
+                report.get("executed_task_count"),
+                0,
+            ),
+            "executed_case_count": self._first_present(
+                report.get("executed_case_count"),
+                0,
+            ),
+            "execution_duration": self._first_present(
+                report.get("execution_duration"),
+                0,
+            ),
+            "raw_result_captured": self._first_present(
+                report.get("raw_result_captured"),
+                False,
+            ),
+            "raw_result_creation_result": self._first_present(
+                report.get("raw_result_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "raw_result_persistence_state": self._first_present(
+                report.get("raw_result_persistence_state"),
+                "NOT_PERSISTED",
+            ),
+            "predicted_output_available": self._first_present(
+                report.get("predicted_output_available"),
+                False,
+            ),
+            "runtime_error_available": self._first_present(
+                report.get("runtime_error_available"),
+                False,
+            ),
+            "target_reference_forwarded_to_solver": self._first_present(
+                report.get("target_reference_forwarded_to_solver"),
+                False,
+            ),
+            "prediction_target_comparison_performed": self._first_present(
+                report.get("prediction_target_comparison_performed"),
+                False,
+            ),
+            "accuracy_calculated": self._first_present(
+                report.get("accuracy_calculated"),
+                False,
+            ),
+            "comparable_result_available": self._first_present(
+                report.get("comparable_result_available"),
+                False,
+            ),
+            "evidence_evaluation_invoked": self._first_present(
+                report.get("evidence_evaluation_invoked"),
+                False,
+            ),
+            "evidence_produced": self._first_present(
+                report.get("evidence_produced"),
+                False,
+            ),
+            "evidence_acceptance_evaluated": self._first_present(
+                report.get("evidence_acceptance_evaluated"),
+                False,
+            ),
+            "evidence_accepted": self._first_present(
+                report.get("evidence_accepted"),
+                False,
+            ),
+            "arena_reentry_invoked": self._first_present(
+                report.get("arena_reentry_invoked"),
+                False,
+            ),
+            "truth_authority": self._first_present(
+                report.get("truth_authority"),
+                "NONE",
+            ),
+            "trust_authority": self._first_present(
+                report.get("trust_authority"),
+                "NONE",
+            ),
+            "graduation_authority": self._first_present(
+                report.get("graduation_authority"),
+                "NONE",
+            ),
+            "evidence_state": self._first_present(
+                report.get("evidence_state"),
+                "NOT_EVALUATED",
+            ),
+            "next_consumer": self._first_present(
+                report.get("next_consumer"),
+                "Not Available",
+            ),
+            "validation_task_execution_constitutional_boundary": (
+                self._first_present(
+                    report.get("constitutional_boundary"),
+                    "VALIDATION_EXECUTION_AUTHORITY_IS_SCOPED_TO_THE_SCHEDULED_SANDBOX_TASK_AND_DOES_NOT_AUTHORIZE_CANDIDATE_EXECUTION_OR_EVIDENCE_ACCEPTANCE",
+                )
+            ),
+        }
+
+    def _validation_execution_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("validation_execution_report")
+        if not isinstance(report, Mapping) or not report:
+            return {}
+        return {
+            "validation_execution_lifecycle_state": self._first_present(
+                report.get("lifecycle_state"),
+                summary.get("validation_execution_lifecycle_state"),
+                "Not Available",
+            ),
+            "validation_execution_state": self._first_present(
+                report.get("evidence_evaluation_state"),
+                report.get("execution_state"),
+                summary.get("validation_execution_state"),
+                "Not Available",
+            ),
+            "validation_execution_schedule_state": self._first_present(
+                report.get("schedule_state"),
+                summary.get("validation_execution_schedule_state"),
+                "Not Available",
+            ),
+            "validation_execution_result_capture_state": self._first_present(
+                report.get("result_capture_state"),
+                summary.get("validation_execution_result_capture_state"),
+                "Not Available",
+            ),
+            "validation_execution_selected_task": self._first_present(
+                report.get("selected_validation_task"),
+                summary.get("selected_tie_break_task"),
+                "Not Available",
+            ),
+            "validation_execution_selected_curriculum": self._first_present(
+                report.get("selected_curriculum"),
+                summary.get("best_matching_curriculum"),
+                "Not Available",
+            ),
+            "selected_validation_task_executed": self._first_present(
+                report.get("selected_task_execution_completed"),
+                summary.get("selected_validation_task_executed"),
+                False,
+            ),
+            "selected_validation_task_scheduled": self._first_present(
+                report.get("selected_task_scheduled"),
+                False,
+            ),
+            "raw_validation_result_captured": self._first_present(
+                report.get("raw_result_captured"),
+                summary.get("raw_validation_result_captured"),
+                False,
+            ),
+            "comparable_output_captured": self._first_present(
+                report.get("comparable_output_captured"),
+                summary.get("comparable_output_captured"),
+                False,
+            ),
+            "evaluation_handoff_ready": self._first_present(
+                report.get("evaluation_handoff_ready"),
+                False,
+            ),
+            "evidence_evaluation_state": self._first_present(
+                report.get("evidence_evaluation_state"),
+                summary.get("evidence_evaluation_state"),
+                "Not Available",
+            ),
+            "evidence_acceptance_state": self._first_present(
+                report.get("evidence_acceptance_state"),
+                summary.get("evidence_acceptance_state"),
+                "NOT_EVALUATED",
+            ),
+            "evidence_accepted": self._first_present(
+                report.get("evidence_accepted"),
+                False,
+            ),
+            "arena_reentry_performed": self._first_present(
+                report.get("arena_reentry_performed"),
+                False,
+            ),
+            "trust_update_performed": self._first_present(
+                report.get("trust_update_performed"),
+                False,
+            ),
+            "graduation_decision_performed": self._first_present(
+                report.get("graduation_decision_performed"),
+                False,
+            ),
+            "validation_execution_truth_authority": self._first_present(
+                report.get("truth_authority"),
+                "NONE",
+            ),
+            "validation_execution_trust_authority": self._first_present(
+                report.get("trust_authority"),
+                "NONE",
+            ),
+            "validation_execution_graduation_authority": self._first_present(
+                report.get("graduation_authority"),
+                "NONE",
+            ),
+            "validation_execution_authority": self._first_present(
+                report.get("execution_authority"),
+                "NONE",
+            ),
+            "validation_execution_constitutional_boundary": self._first_present(
+                report.get("constitutional_boundary"),
+                "VALIDATION_EXECUTION_CAPTURES_RAW_RESULTS_ONLY_NO_EVIDENCE_ACCEPTANCE",
+            ),
         }
 
     def _evidence_plan_store_projection(
@@ -8700,7 +9324,114 @@ class CanonicalReportBindingEngine:
                 store.get("outbound_evidence_plan_id"),
                 "Not Available",
             ),
+            "lifecycle_update_attempted": self._first_present(
+                store.get("lifecycle_update_attempted"),
+                False,
+            ),
+            "lifecycle_update_persisted": self._first_present(
+                store.get("lifecycle_update_persisted"),
+                False,
+            ),
+            "persisted_lifecycle_state": self._first_present(
+                store.get("persisted_lifecycle_state"),
+                store.get("evidence_plan_lifecycle_state"),
+                "Not Available",
+            ),
+            "persisted_selected_validation_task": self._first_present(
+                store.get("persisted_selected_validation_task"),
+                "Not Available",
+            ),
+            "boot_recovery_route": self._first_present(
+                store.get("boot_recovery_route"),
+                "Not Available",
+            ),
+            "execution_state": self._first_present(
+                store.get("execution_state"),
+                "Not Available",
+            ),
+            "execution_authority": self._first_present(
+                store.get("execution_authority"),
+                "NONE",
+            ),
+            "schedule_id": self._first_present(
+                store.get("schedule_id"),
+                "Not Available",
+            ),
+            "schedule_creation_result": self._first_present(
+                store.get("schedule_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "raw_result_id": self._first_present(
+                store.get("raw_result_id"),
+                "Not Available",
+            ),
+            "raw_result_captured_plan_count": self._first_present(
+                store.get("raw_result_captured_plan_count"),
+                0,
+            ),
+            "evidence_state": self._first_present(
+                store.get("evidence_state"),
+                "Not Available",
+            ),
+            "task_selected": self._first_present(
+                store.get("task_selected"),
+                False,
+            ),
+            "task_scheduled": self._first_present(
+                store.get("task_scheduled"),
+                False,
+            ),
+            "task_execution_started": self._first_present(
+                store.get("task_execution_started"),
+                False,
+            ),
+            "task_execution_completed": self._first_present(
+                store.get("task_execution_completed"),
+                False,
+            ),
+            "scheduling_authority": self._first_present(
+                store.get("scheduling_authority"),
+                "VALIDATION_SCHEDULER",
+            ),
+            "scheduling_admission_state": self._first_present(
+                store.get("scheduling_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "scheduling_admission_reason": self._first_present(
+                store.get("scheduling_admission_reason"),
+                "not_evaluated",
+            ),
+            "scheduling_state": self._first_present(
+                store.get("scheduling_state"),
+                "NOT_SCHEDULED",
+            ),
+            "execution_invoked": self._first_present(
+                store.get("execution_invoked"),
+                False,
+            ),
+            "plan_creation_result": self._first_present(
+                store.get("plan_creation_result"),
+                "Not Available",
+            ),
         }
+        storage_state = projection["evidence_plan_storage_state"]
+        if storage_state == "EQUIVALENT_PENDING_PLAN_REUSED":
+            persistence_result = "REUSED_EXISTING_PLAN"
+        elif storage_state == "NEW_PLAN_PERSISTED":
+            persistence_result = "NEW_PLAN_PERSISTED"
+        elif storage_state == "PLAN_REJECTED_INVALID":
+            persistence_result = "PLAN_REJECTED_INVALID"
+        elif projection["evidence_plan_persisted"] is True:
+            persistence_result = "NEW_PLAN_PERSISTED"
+        elif projection["equivalent_pending_plan_found"] is True:
+            persistence_result = "REUSED_EXISTING_PLAN"
+        elif projection["evidence_plan_persistence_attempted"] is True:
+            persistence_result = "PERSISTENCE_FAILED_OR_NOT_COMPLETED"
+        else:
+            persistence_result = "NOT_ATTEMPTED"
+        projection["evidence_plan_persistence_result"] = persistence_result
+        if projection["plan_creation_result"] == "Not Available":
+            projection["plan_creation_result"] = persistence_result
         persisted = projection["evidence_plan_persisted"] is True
         reused = (
             projection["evidence_plan_storage_state"]
@@ -8713,7 +9444,39 @@ class CanonicalReportBindingEngine:
                 0,
             ) > 0
         )
-        if delivered:
+        if projection["execution_state"] == "RAW_RESULT_CAPTURED":
+            projection["decision_orchestration_state"] = (
+                "RAW_RESULT_CAPTURED_AWAITING_EVIDENCE_EVALUATION"
+            )
+            projection["task_selected"] = True
+            projection["task_scheduled"] = True
+            projection["tie_break_task_scheduled"] = True
+            projection["training_assistant_consumed_plan"] = True
+            projection["task_selection_consumed_plan"] = True
+            projection["task_execution_started"] = True
+            projection["task_execution_completed"] = True
+            projection["execution_invoked"] = True
+            projection["raw_result_captured"] = True
+            projection["evidence_state"] = self._first_present(
+                projection.get("evidence_state"),
+                "NOT_EVALUATED",
+            )
+            projection["training_assistant_current_run_consumption_expected"] = False
+            projection["training_assistant_next_run_consumption_required"] = False
+            projection["current_run_consumption_failure"] = False
+        elif projection["scheduling_state"] == "SCHEDULED":
+            projection["decision_orchestration_state"] = (
+                "VALIDATION_TASK_SCHEDULED_AWAITING_EXECUTION"
+            )
+            projection["task_selected"] = True
+            projection["task_scheduled"] = True
+            projection["tie_break_task_scheduled"] = True
+            projection["training_assistant_consumed_plan"] = True
+            projection["task_selection_consumed_plan"] = True
+            projection["training_assistant_current_run_consumption_expected"] = False
+            projection["training_assistant_next_run_consumption_required"] = False
+            projection["current_run_consumption_failure"] = False
+        elif delivered:
             projection["decision_orchestration_state"] = (
                 "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
             )
@@ -8754,13 +9517,15 @@ class CanonicalReportBindingEngine:
         task_scheduled: Any,
         reported_state: Any,
     ) -> str:
+        reported = str(reported_state or "").strip()
+        if reported == "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION":
+            return reported
         if task_scheduled is True:
             return "PLAN_CONSUMED_AND_TASK_SCHEDULED"
         if plan_consumed is True:
             return "PLAN_CONSUMED_AWAITING_TASK_SELECTION"
         if plan_forwarded:
             return "PLAN_FORWARDED_AWAITING_TASK_SELECTION"
-        reported = str(reported_state or "").strip()
         return reported or "NO_DECISION_ORCHESTRATION_PLAN"
 
     def _build_candidate_proposal_visibility(

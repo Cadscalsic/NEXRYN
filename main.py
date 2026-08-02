@@ -3785,6 +3785,10 @@ try:
 
     from runtime.evidence.evidence_plan_store import EvidenceAcquisitionPlanStore
     from runtime.learning.training_assistant import TrainingAssistant
+    from runtime.validation.validation_task_execution_pipeline import (
+        ValidationTaskExecutionPipeline,
+    )
+    from runtime.validation.validation_task_scheduler import ValidationTaskScheduler
 
     evidence_plan_store = EvidenceAcquisitionPlanStore()
     evidence_plan_boot_report = evidence_plan_store.load_pending_plans()
@@ -3849,6 +3853,139 @@ try:
         random_seed=args.random_seed,
         pending_evidence_acquisition_plans=pending_evidence_acquisition_plans,
     )
+    lifecycle_sync_report = (
+        evidence_plan_store.persist_selection_from_consumption_report(
+            training_batch.get("evidence_plan_consumption_report")
+        )
+    )
+    plan_creation_result = evidence_plan_store_report.get("plan_creation_result")
+    evidence_plan_store_report = {
+        **evidence_plan_store_report,
+        **lifecycle_sync_report,
+    }
+    if (
+        lifecycle_sync_report.get("plan_creation_result") in (None, "Not Available")
+        and plan_creation_result
+    ):
+        evidence_plan_store_report["plan_creation_result"] = plan_creation_result
+    validation_scheduler = ValidationTaskScheduler(
+        root_path=evidence_plan_store.root_path,
+        curriculum_registry=training_assistant.validation_curriculum_registry,
+    )
+    validation_scheduling_report = (
+        validation_scheduler.schedule_waiting_execution_plans()
+    )
+    validation_execution_pipeline = ValidationTaskExecutionPipeline(
+        root_path=evidence_plan_store.root_path,
+        curriculum_registry=training_assistant.validation_curriculum_registry,
+    )
+    validation_task_execution_report = (
+        validation_execution_pipeline.execute_scheduled_plans()
+    )
+    evidence_plan_store_report = {
+        **evidence_plan_store_report,
+        "validation_scheduling_report": validation_scheduling_report,
+        "validation_task_execution_report": validation_task_execution_report,
+        **{
+            key: value
+            for key, value in validation_scheduling_report.items()
+            if key
+            in {
+                "schedule_id",
+                "schedule_creation_result",
+                "task_selected",
+                "task_scheduled",
+                "task_execution_started",
+                "task_execution_completed",
+                "selection_state",
+                "scheduling_authority",
+                "scheduling_admission_state",
+                "scheduling_admission_reason",
+                "scheduling_state",
+                "execution_state",
+                "execution_invoked",
+                "execution_authority",
+                "constitutional_boundary",
+            }
+        },
+    }
+    training_alignment = dict(
+        training_batch.get("training_economy_alignment_report", {})
+    )
+    training_alignment["evidence_plan_lifecycle_sync_report"] = (
+        lifecycle_sync_report
+    )
+    if lifecycle_sync_report.get("lifecycle_update_persisted") is True:
+        training_alignment.update({
+            "evidence_plan_lifecycle_state": (
+                lifecycle_sync_report.get("persisted_lifecycle_state")
+            ),
+            "evidence_plan_lifecycle_update_persisted": True,
+            "persisted_selected_validation_task": (
+                lifecycle_sync_report.get("persisted_selected_validation_task")
+            ),
+            "execution_state": "NOT_SCHEDULED",
+            "execution_authority": "NONE",
+        })
+    training_alignment["validation_scheduling_report"] = (
+        validation_scheduling_report
+    )
+    training_alignment["validation_task_execution_report"] = (
+        validation_task_execution_report
+    )
+    if validation_scheduling_report.get("scheduling_state") == "SCHEDULED":
+        training_alignment.update({
+            "evidence_acquisition_task_scheduled": True,
+            "tie_break_task_scheduled": True,
+            "task_scheduled": True,
+            "task_selected": True,
+            "task_execution_started": False,
+            "task_execution_completed": False,
+            "validation_task_selection_state": "TASK_SELECTED",
+            "scheduling_admission_state": (
+                validation_scheduling_report.get("scheduling_admission_state")
+            ),
+            "scheduling_admission_reason": (
+                validation_scheduling_report.get("scheduling_admission_reason")
+            ),
+            "scheduling_state": "SCHEDULED",
+            "schedule_id": validation_scheduling_report.get("schedule_id"),
+            "schedule_creation_result": (
+                validation_scheduling_report.get("schedule_creation_result")
+            ),
+            "scheduling_authority": (
+                validation_scheduling_report.get("scheduling_authority")
+            ),
+            "execution_state": "NOT_STARTED",
+            "execution_invoked": False,
+            "execution_authority": "NONE",
+            "decision_orchestration_state": (
+                "VALIDATION_TASK_SCHEDULED_AWAITING_EXECUTION"
+            ),
+        })
+    if (
+        validation_task_execution_report.get("execution_state")
+        == "RAW_RESULT_CAPTURED"
+    ):
+        training_alignment.update({
+            "task_execution_started": True,
+            "task_execution_completed": True,
+            "raw_result_captured": True,
+            "execution_state": "RAW_RESULT_CAPTURED",
+            "execution_invoked": True,
+            "raw_result_id": validation_task_execution_report.get(
+                "raw_result_id"
+            ),
+            "evidence_state": "NOT_EVALUATED",
+            "evidence_evaluation_invoked": False,
+            "evidence_produced": False,
+            "evidence_accepted": False,
+            "arena_reentry_invoked": False,
+            "decision_orchestration_state": (
+                "RAW_RESULT_CAPTURED_AWAITING_EVIDENCE_EVALUATION"
+            ),
+        })
+    training_batch["training_economy_alignment_report"] = training_alignment
     runtime_metrics["task_selection_duration"] = (
         runtime_watchdog.stop_and_warn(
             "task_selection",
@@ -4188,6 +4325,11 @@ try:
             ],
             "training_assistant_batch": training_batch,
             "training_assistant_report": training_assistant_report,
+            "training_economy_alignment_report": training_batch.get(
+                "training_economy_alignment_report",
+                {},
+            ),
+            "validation_task_execution_report": validation_task_execution_report,
             "training_report": training_report,
             "evidence_plan_store_report": evidence_plan_store_report,
             "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
@@ -7070,6 +7212,11 @@ try:
         "discovered_task_files": discovered_task_files,
         "training_assistant_batch": training_batch,
         "training_assistant_report": training_assistant_report,
+        "training_economy_alignment_report": training_batch.get(
+            "training_economy_alignment_report",
+            {},
+        ),
+        "validation_task_execution_report": validation_task_execution_report,
         "training_report": training_report,
         "evidence_plan_store_report": evidence_plan_store_report,
         "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,

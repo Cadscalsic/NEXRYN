@@ -2809,9 +2809,12 @@ def test_candidate_arena_reports_evidence_acquisition_plan_consumed_by_training(
         "execution_success_rate": 1.0,
     }
     state["training_economy_alignment_report"] = {
-        "decision_orchestration_state": "PLAN_CONSUMED_AND_TASK_SCHEDULED",
+        "decision_orchestration_state": (
+            "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+        ),
         "evidence_acquisition_plan_consumed": True,
-        "evidence_acquisition_task_scheduled": True,
+        "evidence_acquisition_task_selected": True,
+        "evidence_acquisition_task_scheduled": False,
         "evidence_acquisition_selected_task": "elite_cognitive_task_07.json",
     }
 
@@ -2825,10 +2828,10 @@ def test_candidate_arena_reports_evidence_acquisition_plan_consumed_by_training(
     assert summary["evidence_acquisition_plan_forwarded"] is True
     assert summary["training_assistant_consumed_plan"] is True
     assert summary["task_selection_consumed_plan"] is True
-    assert summary["tie_break_task_scheduled"] is True
+    assert summary["tie_break_task_scheduled"] is False
     assert summary["selected_tie_break_task"] == "elite_cognitive_task_07.json"
     assert summary["decision_orchestration_state"] == (
-        "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+        "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
     )
 
 

@@ -4,7 +4,7 @@
   "consumption_attempt_count": 0,
   "consumption_state": "CONSUMPTION_PENDING",
   "created_at": "2026-07-31T06:55:51.901360+00:00",
-  "delivery_attempt_count": 2,
+  "delivery_attempt_count": 8,
   "eligible_from_run": "NEXT_RUNTIME",
   "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
   "evidence_acquisition_trigger": "TIE_CONFIRMED_AFTER_ACCEPTED_SANDBOX_PROBE",
@@ -65,10 +65,124 @@
       "source_run_id": "run_20260731_071240",
       "state": "CONSUMPTION_PENDING",
       "timestamp": "2026-07-31T07:13:34.896384+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-07-31T18:59:29.858699+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-07-31T18:59:29.894847+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-07-31T18:59:29.919141+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260731_185929",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-07-31T19:00:21.641440+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-07-31T19:05:54.326227+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-07-31T19:05:54.366248+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-07-31T19:05:54.389069+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260731_190554",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-07-31T19:06:52.584066+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-08-01T18:27:50.871666+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-08-01T18:27:50.913748+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-01T18:27:50.945399+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-08-01T18:29:31.354847+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-08-01T18:29:31.394674+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-01T18:29:31.424047+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-08-01T18:36:09.794713+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-08-01T18:36:09.846504+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-01T18:36:09.870631+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260801_183609",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-01T18:37:01.520782+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-08-01T18:49:06.875485+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-08-01T18:49:06.923855+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-01T18:49:06.953356+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260801_184906",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-01T18:49:56.878506+00:00"
     }
   ],
   "lifecycle_state": "CONSUMPTION_PENDING",
-  "observation_count": 2,
+  "observation_count": 6,
   "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "priority": 65,
@@ -87,5 +201,5 @@
   "tie_break_strategy": "cross_source_consensus",
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-07-31T07:13:34.896384+00:00"
+  "updated_at": "2026-08-01T18:49:56.878506+00:00"
 }
