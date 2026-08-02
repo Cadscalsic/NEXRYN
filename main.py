@@ -3788,6 +3788,15 @@ try:
     from runtime.validation.validation_task_execution_pipeline import (
         ValidationTaskExecutionPipeline,
     )
+    from runtime.validation.validation_evidence_evaluator import (
+        ValidationEvidenceEvaluator,
+    )
+    from runtime.validation.arena_evidence_admission_gate import (
+        ArenaEvidenceAdmissionGate,
+    )
+    from runtime.validation.arena_formal_selection_gate import (
+        ArenaFormalSelectionGate,
+    )
     from runtime.validation.validation_task_scheduler import ValidationTaskScheduler
 
     evidence_plan_store = EvidenceAcquisitionPlanStore()
@@ -3882,10 +3891,34 @@ try:
     validation_task_execution_report = (
         validation_execution_pipeline.execute_scheduled_plans()
     )
+    validation_evidence_evaluator = ValidationEvidenceEvaluator(
+        root_path=evidence_plan_store.root_path,
+        curriculum_registry=training_assistant.validation_curriculum_registry,
+    )
+    validation_evidence_evaluation_report = (
+        validation_evidence_evaluator.evaluate_captured_results()
+    )
+    arena_evidence_admission_gate = ArenaEvidenceAdmissionGate(
+        root_path=evidence_plan_store.root_path,
+    )
+    arena_evidence_admission_report = (
+        arena_evidence_admission_gate.admit_accepted_evidence()
+    )
+    arena_formal_selection_gate = ArenaFormalSelectionGate(
+        root_path=evidence_plan_store.root_path,
+    )
+    arena_formal_selection_report = (
+        arena_formal_selection_gate.review_pending_decision_proposals()
+    )
     evidence_plan_store_report = {
         **evidence_plan_store_report,
         "validation_scheduling_report": validation_scheduling_report,
         "validation_task_execution_report": validation_task_execution_report,
+        "validation_evidence_evaluation_report": (
+            validation_evidence_evaluation_report
+        ),
+        "arena_evidence_admission_report": arena_evidence_admission_report,
+        "arena_formal_selection_report": arena_formal_selection_report,
         **{
             key: value
             for key, value in validation_scheduling_report.items()
@@ -3932,6 +3965,15 @@ try:
     )
     training_alignment["validation_task_execution_report"] = (
         validation_task_execution_report
+    )
+    training_alignment["validation_evidence_evaluation_report"] = (
+        validation_evidence_evaluation_report
+    )
+    training_alignment["arena_evidence_admission_report"] = (
+        arena_evidence_admission_report
+    )
+    training_alignment["arena_formal_selection_report"] = (
+        arena_formal_selection_report
     )
     if validation_scheduling_report.get("scheduling_state") == "SCHEDULED":
         training_alignment.update({
@@ -3983,6 +4025,107 @@ try:
             "arena_reentry_invoked": False,
             "decision_orchestration_state": (
                 "RAW_RESULT_CAPTURED_AWAITING_EVIDENCE_EVALUATION"
+            ),
+        })
+    if validation_evidence_evaluation_report.get(
+        "evidence_acceptance_state"
+    ) in {"ACCEPTED", "INSUFFICIENT", "REJECTED"}:
+        training_alignment.update({
+            "evidence_evaluation_invoked": True,
+            "evidence_decision_recorded": True,
+            "evidence_acceptance_state": (
+                validation_evidence_evaluation_report.get(
+                    "evidence_acceptance_state"
+                )
+            ),
+            "evidence_state": (
+                "EVIDENCE_"
+                + str(
+                    validation_evidence_evaluation_report.get(
+                        "evidence_acceptance_state"
+                    )
+                )
+            ),
+            "evidence_accepted": (
+                validation_evidence_evaluation_report.get(
+                    "evidence_acceptance_state"
+                )
+                == "ACCEPTED"
+            ),
+            "arena_evidence_admission_invoked": False,
+            "arena_reentry_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "tie_resolved": False,
+            "winner_selected": False,
+            "decision_orchestration_state": (
+                validation_evidence_evaluation_report.get(
+                    "decision_orchestration_state"
+                )
+                or "EVIDENCE_EVALUATED_AWAITING_FUTURE_CONSUMER"
+            ),
+        })
+    if arena_evidence_admission_report.get("redeliberation_completed") is True:
+        training_alignment.update({
+            "arena_evidence_admission_invoked": True,
+            "arena_admission_state": arena_evidence_admission_report.get(
+                "arena_admission_state"
+            ),
+            "arena_evidence_admitted": arena_evidence_admission_report.get(
+                "arena_evidence_admitted"
+            ),
+            "arena_evidence_consumed": arena_evidence_admission_report.get(
+                "arena_evidence_consumed"
+            ),
+            "redeliberation_invoked": True,
+            "redeliberation_completed": True,
+            "decision_proposal_available": arena_evidence_admission_report.get(
+                "decision_proposal_available"
+            ),
+            "redeliberation_outcome": arena_evidence_admission_report.get(
+                "redeliberation_outcome"
+            ),
+            "formal_selection_invoked": False,
+            "tie_resolved": False,
+            "winner_selected": False,
+            "selected_candidate": "NONE",
+            "candidate_execution_authority": "NONE",
+            "decision_orchestration_state": (
+                "ARENA_REDELIBERATION_COMPLETED_AWAITING_FUTURE_CONSUMER"
+            ),
+        })
+    if arena_formal_selection_report.get("formal_selection_review_completed") is True:
+        training_alignment.update({
+            "formal_selection_invoked": True,
+            "formal_selection_review_started": True,
+            "formal_selection_review_completed": True,
+            "formal_selection_outcome": arena_formal_selection_report.get(
+                "formal_selection_outcome"
+            ),
+            "proposal_ratified": arena_formal_selection_report.get(
+                "proposal_ratified"
+            ),
+            "proposal_rejected": arena_formal_selection_report.get(
+                "proposal_rejected"
+            ),
+            "proposal_deferred": arena_formal_selection_report.get(
+                "proposal_deferred"
+            ),
+            "tie_resolved": arena_formal_selection_report.get("tie_resolved"),
+            "winner_selected": arena_formal_selection_report.get(
+                "winner_selected"
+            ),
+            "selected_candidate": arena_formal_selection_report.get(
+                "selected_candidate"
+            ),
+            "candidate_execution_authority": "NONE",
+            "candidate_execution_started": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "next_consumer": arena_formal_selection_report.get("next_consumer"),
+            "decision_orchestration_state": (
+                "FORMAL_SELECTION_COMPLETED_AWAITING_FUTURE_CONSUMER"
             ),
         })
     training_batch["training_economy_alignment_report"] = training_alignment
@@ -4330,6 +4473,11 @@ try:
                 {},
             ),
             "validation_task_execution_report": validation_task_execution_report,
+            "validation_evidence_evaluation_report": (
+                validation_evidence_evaluation_report
+            ),
+            "arena_evidence_admission_report": arena_evidence_admission_report,
+            "arena_formal_selection_report": arena_formal_selection_report,
             "training_report": training_report,
             "evidence_plan_store_report": evidence_plan_store_report,
             "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
@@ -7217,6 +7365,11 @@ try:
             {},
         ),
         "validation_task_execution_report": validation_task_execution_report,
+        "validation_evidence_evaluation_report": (
+            validation_evidence_evaluation_report
+        ),
+        "arena_evidence_admission_report": arena_evidence_admission_report,
+        "arena_formal_selection_report": arena_formal_selection_report,
         "training_report": training_report,
         "evidence_plan_store_report": evidence_plan_store_report,
         "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,

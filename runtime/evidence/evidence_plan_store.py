@@ -527,6 +527,59 @@ class EvidenceAcquisitionPlanStore:
                 valid.append(plan)
                 self._loaded_this_run.add(plan["plan_id"])
                 continue
+            if plan.get("lifecycle_state") in {
+                "EVIDENCE_ACCEPTED",
+                "EVIDENCE_INSUFFICIENT",
+                "EVIDENCE_REJECTED",
+                "ARENA_REDELIBERATION_COMPLETED",
+                "RATIFIED",
+                "REJECTED",
+                "DEFERRED",
+            }:
+                route = {
+                    "EVIDENCE_ACCEPTED": (
+                        "EVIDENCE_ACCEPTED_TO_ARENA_EVIDENCE_ADMISSION_GATE"
+                    ),
+                    "EVIDENCE_INSUFFICIENT": (
+                        "EVIDENCE_INSUFFICIENT_TO_EVIDENCE_REMEDIATION_PLANNER"
+                    ),
+                    "EVIDENCE_REJECTED": (
+                        "EVIDENCE_REJECTED_TO_EVIDENCE_REVIEW_OR_REPLAN"
+                    ),
+                    "ARENA_REDELIBERATION_COMPLETED": (
+                        plan.get("boot_recovery_route")
+                        or (
+                            "DECISION_PROPOSAL_TO_ARENA_FORMAL_SELECTION_GATE"
+                            if plan.get("redeliberation_outcome")
+                            == "DECISION_PROPOSAL_AVAILABLE"
+                            else "ARENA_REDELIBERATION_COMPLETED_TO_FUTURE_CONSUMER"
+                        )
+                    ),
+                    "RATIFIED": (
+                        "RATIFIED_TO_FUTURE_SELECTED_CANDIDATE_EXECUTION_ADMISSION_GATE"
+                    ),
+                    "REJECTED": "REJECTED_TO_ARENA_REVIEW_OR_REMEDIATION",
+                    "DEFERRED": (
+                        "DEFERRED_TO_FORMAL_SELECTION_RECOVERY_OR_CLARIFICATION"
+                    ),
+                }[plan.get("lifecycle_state")]
+                plan["boot_recovery_route"] = route
+                plan["evidence_state"] = plan.get("lifecycle_state")
+                plan["execution_authority"] = "NONE"
+                plan["candidate_execution_authority"] = "NONE"
+                plan["truth_authority"] = "NONE"
+                plan["trust_authority"] = "NONE"
+                plan["graduation_authority"] = "NONE"
+                plan["updated_at"] = self._now()
+                plan.setdefault("history", []).append({
+                    "timestamp": plan["updated_at"],
+                    "state": plan.get("lifecycle_state"),
+                    "event": "terminal_evidence_plan_restored_at_boot",
+                })
+                self._atomic_write(path, plan)
+                valid.append(plan)
+                self._loaded_this_run.add(plan["plan_id"])
+                continue
             plan["lifecycle_state"] = "LOADED_AT_BOOT"
             plan["updated_at"] = self._now()
             plan.setdefault("history", []).append({
@@ -545,6 +598,13 @@ class EvidenceAcquisitionPlanStore:
                 "SCHEDULING_PREPARED",
                 "SCHEDULED",
                 "RAW_RESULT_CAPTURED",
+                "EVIDENCE_ACCEPTED",
+                "EVIDENCE_INSUFFICIENT",
+                "EVIDENCE_REJECTED",
+                "ARENA_REDELIBERATION_COMPLETED",
+                "RATIFIED",
+                "REJECTED",
+                "DEFERRED",
             }
         ]
         waiting_execution = [
@@ -562,12 +622,25 @@ class EvidenceAcquisitionPlanStore:
             plan for plan in valid
             if plan.get("lifecycle_state") == "RAW_RESULT_CAPTURED"
         ]
+        terminal_evidence = [
+            plan for plan in valid
+            if plan.get("lifecycle_state") in {
+                "EVIDENCE_ACCEPTED",
+                "EVIDENCE_INSUFFICIENT",
+                "EVIDENCE_REJECTED",
+                "ARENA_REDELIBERATION_COMPLETED",
+                "RATIFIED",
+                "REJECTED",
+                "DEFERRED",
+            }
+        ]
         highest = (
             consumption_ready[0]
             if consumption_ready else waiting_execution[0]
             if waiting_execution else scheduled[0]
             if scheduled else raw_result_captured[0]
-            if raw_result_captured else {}
+            if raw_result_captured else terminal_evidence[0]
+            if terminal_evidence else {}
         )
         self.last_report = {
             **self._empty_report(),
@@ -584,6 +657,7 @@ class EvidenceAcquisitionPlanStore:
             "waiting_execution_plan_count": len(waiting_execution),
             "scheduled_evidence_plan_count": len(scheduled),
             "raw_result_captured_plan_count": len(raw_result_captured),
+            "terminal_evidence_plan_count": len(terminal_evidence),
             "boot_recovery_route": (
                 "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER"
                 if waiting_execution and not consumption_ready
@@ -591,6 +665,12 @@ class EvidenceAcquisitionPlanStore:
                 if scheduled and not waiting_execution and not consumption_ready
                 else "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR"
                 if raw_result_captured
+                and not scheduled
+                and not waiting_execution
+                and not consumption_ready
+                else terminal_evidence[0].get("boot_recovery_route")
+                if terminal_evidence
+                and not raw_result_captured
                 and not scheduled
                 and not waiting_execution
                 and not consumption_ready
@@ -608,6 +688,12 @@ class EvidenceAcquisitionPlanStore:
                 and not scheduled
                 and not waiting_execution
                 and not consumption_ready
+                else terminal_evidence[0].get("lifecycle_state")
+                if terminal_evidence
+                and not raw_result_captured
+                and not scheduled
+                and not waiting_execution
+                and not consumption_ready
                 else "LOADED_AT_BOOT"
                 if consumption_ready
                 else "Not Available"
@@ -620,7 +706,10 @@ class EvidenceAcquisitionPlanStore:
                 if scheduled else raw_result_captured[0].get(
                     "selected_validation_task_id"
                 )
-                if raw_result_captured else "Not Available"
+                if raw_result_captured else terminal_evidence[0].get(
+                    "selected_validation_task_id"
+                )
+                if terminal_evidence else "Not Available"
             ),
             "execution_state": (
                 waiting_execution[0].get("execution_state", "NOT_SCHEDULED")
@@ -632,7 +721,11 @@ class EvidenceAcquisitionPlanStore:
                     "execution_state",
                     "RAW_RESULT_CAPTURED",
                 )
-                if raw_result_captured else "Not Available"
+                if raw_result_captured else terminal_evidence[0].get(
+                    "execution_state",
+                    "RAW_RESULT_CAPTURED",
+                )
+                if terminal_evidence else "Not Available"
             ),
             "execution_authority": "NONE",
             "schedule_id": (
@@ -646,7 +739,11 @@ class EvidenceAcquisitionPlanStore:
             ),
             "evidence_state": (
                 raw_result_captured[0].get("evidence_state", "NOT_EVALUATED")
-                if raw_result_captured else "Not Available"
+                if raw_result_captured else terminal_evidence[0].get(
+                    "evidence_state",
+                    terminal_evidence[0].get("lifecycle_state"),
+                )
+                if terminal_evidence else "Not Available"
             ),
         }
         return {
@@ -655,6 +752,7 @@ class EvidenceAcquisitionPlanStore:
             "waiting_execution_evidence_plans": waiting_execution,
             "scheduled_evidence_plans": scheduled,
             "raw_result_captured_evidence_plans": raw_result_captured,
+            "terminal_evidence_plans": terminal_evidence,
             "highest_priority_pending_evidence_plan": highest,
         }
 

@@ -1,14 +1,24 @@
 {
+  "active_execution_lease": false,
   "authority_boundary": "EVIDENCE_PLAN_DOES_NOT_GRANT_TRUTH_TRUST_GRADUATION_OR_EXECUTION_AUTHORITY",
+  "boot_recovery_route": "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR",
+  "candidate_execution_authority": "NONE",
   "constitutional_boundary": "EVIDENCE_ACQUISITION_PLAN_IS_A_GOVERNED_REQUEST_FOR_VALIDATION_NOT_EVIDENCE",
   "consumption_attempt_count": 0,
-  "consumption_state": "CONSUMPTION_PENDING",
+  "consumption_state": "MATCHING_COMPLETED",
   "created_at": "2026-07-31T06:55:51.901360+00:00",
-  "delivery_attempt_count": 8,
+  "delivery_attempt_count": 9,
   "eligible_from_run": "NEXT_RUNTIME",
   "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
   "evidence_acquisition_trigger": "TIE_CONFIRMED_AFTER_ACCEPTED_SANDBOX_PROBE",
+  "evidence_state": "NOT_EVALUATED",
+  "execution_attempt_count": 1,
   "execution_authority": "NONE",
+  "execution_completed_at": "2026-08-02T20:46:16.828740+00:00",
+  "execution_id": "validation_execution_72adf97745e0",
+  "execution_invoked": true,
+  "execution_started_at": "2026-08-02T20:46:16.821777+00:00",
+  "execution_state": "RAW_RESULT_CAPTURED",
   "expected_tie_break_impact": "HIGH",
   "expires_after_runs": null,
   "governed_reentry_action": "reenter_arena_after_required_evidence_without_truth_grant",
@@ -179,17 +189,70 @@
       "source_run_id": "run_20260801_184906",
       "state": "CONSUMPTION_PENDING",
       "timestamp": "2026-08-01T18:49:56.878506+00:00"
+    },
+    {
+      "event": "plan_loaded_at_boot",
+      "state": "LOADED_AT_BOOT",
+      "timestamp": "2026-08-02T20:46:04.725834+00:00"
+    },
+    {
+      "event": "plan_delivered_to_training_assistant",
+      "state": "DELIVERED_TO_TRAINING_ASSISTANT",
+      "timestamp": "2026-08-02T20:46:04.760699+00:00"
+    },
+    {
+      "event": "training_assistant_consumption_pending",
+      "state": "CONSUMPTION_PENDING",
+      "timestamp": "2026-08-02T20:46:04.793967+00:00"
+    },
+    {
+      "event": "training_assistant_selected_validation_task",
+      "previous_state": "CONSUMPTION_PENDING",
+      "selected_validation_task_id": "elite_validation_task_31",
+      "state": "WAITING_EXECUTION",
+      "timestamp": "2026-08-02T20:46:16.711677+00:00"
+    },
+    {
+      "event": "validation_scheduling_prepared",
+      "schedule_id": "validation_schedule_527cdac7b811",
+      "state": "SCHEDULING_PREPARED",
+      "timestamp": "2026-08-02T20:46:16.760912+00:00"
+    },
+    {
+      "event": "validation_schedule_linked_to_plan",
+      "schedule_id": "validation_schedule_527cdac7b811",
+      "state": "SCHEDULED",
+      "timestamp": "2026-08-02T20:46:16.769161+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260802_204604",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-02T20:47:15.426454+00:00"
     }
   ],
-  "lifecycle_state": "CONSUMPTION_PENDING",
-  "observation_count": 6,
+  "lifecycle_state": "RAW_RESULT_CAPTURED",
+  "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
+  "matching_score": 88.0,
+  "observation_count": 7,
   "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "priority": 65,
+  "raw_result_fingerprint": "466436141e74d5648fdc3d91a3e4c8ffd5d417280a6ddf0d2da55f3bda5ec120",
+  "raw_result_id": "raw_validation_result_e8d6e6cad0fb",
   "required_evidence": "cross_source_consensus_evidence",
   "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
   "required_validation_task": "select_cross_source_tie_break_validation_task",
+  "schedule_id": "validation_schedule_527cdac7b811",
+  "scheduling_admission_reason": "admission_contract_satisfied",
+  "scheduling_admission_state": "ADMITTED",
+  "scheduling_state": "SCHEDULED",
   "schema_version": "1.0",
+  "selected_curriculum": "Elite Validation Academy",
+  "selected_curriculum_id": "elite_validation_academy",
+  "selected_validation_task_id": "elite_validation_task_31",
+  "selection_authority": "TRAINING_ASSISTANT",
+  "selection_timestamp": "2026-08-02T20:46:16.711677+00:00",
   "source_candidate_id": "semantic_to_transformation_compiler_0",
   "source_operation": "replace_color",
   "source_run_id": "run_20260731_065432",
@@ -201,5 +264,7 @@
   "tie_break_strategy": "cross_source_consensus",
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-08-01T18:49:56.878506+00:00"
+  "updated_at": "2026-08-02T20:47:15.426454+00:00",
+  "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
+  "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY"
 }

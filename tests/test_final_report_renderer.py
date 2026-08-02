@@ -2674,6 +2674,376 @@ def test_engineering_conclusion_reports_raw_result_evaluation_gate():
     assert "Exact Responsible Component: VALIDATION_EVIDENCE_EVALUATOR" in conclusion
 
 
+def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "arena_decision_resolution_state": (
+                "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+            ),
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+    }
+    state["training_economy_alignment_report"] = {
+        "validation_evidence_evaluation_report": {
+            "plan_id": "evidence_plan_1",
+            "schedule_id": "validation_schedule_1",
+            "execution_id": "validation_execution_1",
+            "raw_result_id": "raw_validation_result_1",
+            "comparable_result_id": "comparable_result_1",
+            "evidence_decision_id": "evidence_decision_1",
+            "accepted_evidence_id": "accepted_evidence_1",
+            "selected_validation_task_id": "elite_validation_task_31",
+            "selected_curriculum_id": "elite_validation_academy",
+            "target_candidate": "semantic_program:replace_color",
+            "target_operation": "replace_color",
+            "required_evidence": "cross_source_consensus_evidence",
+            "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
+            "tie_break_strategy": "cross_source_consensus",
+            "evaluation_admission_evaluated": True,
+            "evaluation_admission_state": "ADMITTED",
+            "evaluation_admission_reason": (
+                "evidence_evaluation_contract_satisfied"
+            ),
+            "evidence_evaluation_authority": "VALIDATION_EVIDENCE_EVALUATOR",
+            "evidence_evaluation_scope": (
+                "CAPTURED_RAW_RESULT_AND_SEALED_REFERENCE_ONLY"
+            ),
+            "sealed_reference_available": True,
+            "sealed_reference_opened_by_evaluator": True,
+            "sealed_reference_forwarded_to_solver": False,
+            "reference_integrity_state": "VERIFIED",
+            "comparison_invoked": True,
+            "comparison_started": True,
+            "comparison_completed": True,
+            "comparison_state": "COMPARISON_COMPLETED",
+            "comparator_id": "manifest_observation_comparison",
+            "comparator_version": "1.0",
+            "comparable_result_available": True,
+            "comparable_result_creation_result": "CREATED_NEW_COMPARABLE_RESULT",
+            "expected_case_count": 1,
+            "compared_case_count": 1,
+            "case_coverage": 1.0,
+            "exact_match_count": 1,
+            "exact_match_rate": 1.0,
+            "evidence_evaluation_invoked": True,
+            "evidence_admissibility_evaluated": True,
+            "evidence_admissibility_state": "ADMISSIBLE",
+            "evidence_sufficiency_evaluated": True,
+            "evidence_sufficiency_state": "SUFFICIENT",
+            "evidence_direction": "SUPPORTING",
+            "evidence_acceptance_state": "ACCEPTED",
+            "evidence_acceptance_reason": "evidence_contract_satisfied",
+            "evidence_decision_recorded": True,
+            "evidence_decision_creation_result": "CREATED_NEW_EVIDENCE_DECISION",
+            "evidence_contamination_state": "CLEAR",
+            "candidate_attribution_state": "ATTRIBUTED",
+            "operation_attribution_state": "ATTRIBUTED",
+            "accepted_evidence_artifact_created": True,
+            "accepted_evidence_creation_result": "CREATED_NEW_ACCEPTED_EVIDENCE",
+            "evidence_accepted": True,
+            "arena_evidence_admission_invoked": False,
+            "arena_reentry_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "tie_resolved": False,
+            "winner_selected": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "next_consumer": "ARENA_EVIDENCE_ADMISSION_GATE",
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "VALIDATION EVIDENCE EVALUATION REPORT" in report
+    assert "Evidence Acceptance State: ACCEPTED" in report
+    assert "Accepted Evidence Artifact Created: TRUE" in report
+    assert "Arena Evidence Admission Invoked: FALSE" in report
+    assert "Tie Resolved: FALSE" in report
+    assert "Winner Selected: FALSE" in report
+    assert (
+        "Largest Success: validation_result_governedly_evaluated_and_evidence_accepted"
+        in conclusion
+    )
+    assert "Current Open Decision: WAITING_ARENA_EVIDENCE_ADMISSION" in conclusion
+    assert "Current Bottleneck: arena_evidence_admission" in conclusion
+    assert "Estimated Engineering Priority: HIGH" in conclusion
+
+
+def test_engineering_conclusion_reports_arena_redeliberation_proposal_gate():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["COGNITIVE_CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "arena_decision_resolution_state": (
+                "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+            ),
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+    }
+    state["training_economy_alignment_report"] = {
+        "arena_evidence_admission_report": {
+            "plan_id": "evidence_plan_1",
+            "evidence_decision_id": "evidence_decision_1",
+            "accepted_evidence_id": "accepted_evidence_1",
+            "originating_arena_id": "arena_tie_1",
+            "originating_arena_snapshot_id": "arena_snapshot_1",
+            "target_candidate": "semantic_program:replace_color",
+            "target_operation": "replace_color",
+            "evidence_direction": "SUPPORTING",
+            "accepted_evidence_artifact_available": True,
+            "arena_admission_invoked": True,
+            "arena_admission_review_completed": True,
+            "arena_admission_state": "ADMITTED",
+            "arena_admission_reason": (
+                "accepted_evidence_satisfies_arena_admission_contract"
+            ),
+            "arena_admission_record_created": True,
+            "arena_evidence_admission_id": "arena_evidence_admission_1",
+            "arena_evidence_ledger_entry_created": True,
+            "arena_evidence_ledger_entry_id": "arena_evidence_ledger_1",
+            "arena_evidence_admitted": True,
+            "arena_evidence_consumed": True,
+            "redeliberation_invoked": True,
+            "redeliberation_started": True,
+            "redeliberation_completed": True,
+            "redeliberation_admission_evaluated": True,
+            "redeliberation_admission_state": "ADMITTED_TO_REDELIBERATION",
+            "arena_redeliberation_scope": "ONE_BOUNDED_REDELIBERATION_CYCLE",
+            "baseline_snapshot_loaded": True,
+            "redeliberation_snapshot_created": True,
+            "redeliberation_snapshot_id": "arena_redeliberation_1",
+            "candidate_evidence_profiles_rebuilt": True,
+            "evidence_direction_preserved": True,
+            "evidence_effect_policy_resolved": True,
+            "evidence_effect_applied": True,
+            "candidate_scores_recomputed": True,
+            "candidate_score_changed": True,
+            "candidate_ranking_recomputed": True,
+            "candidate_ranking_changed": True,
+            "cross_source_consensus_recomputed": True,
+            "cross_source_consensus_changed": False,
+            "validation_evidence_counted_as_candidate_source": False,
+            "tie_break_strategy_applied": True,
+            "tie_break_strategy_satisfied": True,
+            "provisional_leader_available": True,
+            "decision_proposal_available": True,
+            "decision_proposal_id": "decision_proposal_1",
+            "deliberative_outcome_id": "arena_deliberative_outcome_1",
+            "redeliberation_outcome": "DECISION_PROPOSAL_AVAILABLE",
+            "next_consumer": "ARENA_FORMAL_SELECTION_GATE",
+            "formal_selection_invoked": False,
+            "tie_resolved": False,
+            "winner_selected": False,
+            "selected_candidate": "NONE",
+            "candidate_execution_authority": "NONE",
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "ARENA EVIDENCE ADMISSION REPORT" in report
+    assert "Arena Evidence Admitted: TRUE" in report
+    assert "Decision Proposal Available: TRUE" in report
+    assert "Formal Selection Invoked: FALSE" in report
+    assert "Tie Resolved: FALSE" in report
+    assert "Winner Selected: FALSE" in report
+    assert "Selected Candidate: NONE" in report
+    assert (
+        "Largest Success: accepted_validation_evidence_admitted_and_governed_redeliberation_produced_decision_proposal"
+        in conclusion
+    )
+    assert "Current Open Decision: WAITING_FORMAL_ARENA_SELECTION_REVIEW" in conclusion
+    assert "Current Bottleneck: formal_arena_selection" in conclusion
+    assert "Exact Responsible Component: ARENA_FORMAL_SELECTION_GATE" in conclusion
+
+
+def test_engineering_conclusion_reports_ratified_formal_selection_gate():
+    state = _report_state()
+    state["semantic_to_transformation_compilation_report"] = {
+        "semantic_to_transformation_compilation_success": True,
+        "compiler_resolution_trace": [
+            {
+                "semantic_intent": "symbolic_remapping",
+                "operation": "replace_color",
+                "resolved_compiler": "ColorRemapCompiler",
+                "compiler_found": True,
+                "compilation_attempted": True,
+                "candidate_emitted": True,
+                "resolution_state": "RESOLVED_COMPILER_EMITTED_CANDIDATE",
+                "candidate_rejection_reason": "none",
+            }
+        ],
+    }
+    state["CANDIDATE_ARENA_REPORT"] = {
+        "candidate_arena_summary": {
+            "selection_state": "TIE_REQUIRES_REVIEW",
+            "arena_decision_resolution_state": (
+                "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+            ),
+        }
+    }
+    state["EXECUTABLE_INTELLIGENCE_REPORT"] = {
+        "validated_programs": [{"operation": "replace_color"}],
+        "validation_probe_evidence_acceptance_state": "ACCEPTED",
+    }
+    state["training_economy_alignment_report"] = {
+        "arena_formal_selection_report": {
+            "plan_id": "evidence_plan_1",
+            "decision_proposal_id": "decision_proposal_1",
+            "formal_selection_review_case_id": "formal_selection_review_1",
+            "formal_selection_decision_id": "formal_selection_decision_1",
+            "arena_selection_snapshot_id": "arena_selection_snapshot_1",
+            "proposal_disposition_id": "proposal_disposition_1",
+            "decision_proposal_route_detected": True,
+            "decision_proposal_loaded": True,
+            "originating_arena_loaded": True,
+            "baseline_snapshot_loaded": True,
+            "redeliberation_snapshot_loaded": True,
+            "deliberative_outcome_loaded": True,
+            "candidate_set_loaded": True,
+            "proposed_candidate_resolved": True,
+            "proposal_lineage_alignment": "ALIGNED",
+            "fingerprint_integrity": "VERIFIED",
+            "proposal_uniqueness": "VERIFIED",
+            "formal_selection_admission_invoked": True,
+            "formal_selection_admission_evaluated": True,
+            "formal_selection_admission_state": (
+                "ADMITTED_TO_FORMAL_SELECTION_REVIEW"
+            ),
+            "formal_selection_admission_reason": (
+                "decision_proposal_satisfies_formal_selection_admission_contract"
+            ),
+            "formal_selection_review_authority": "ARENA_FORMAL_SELECTION_GATE",
+            "formal_selection_review_scope": (
+                "ONE_DECISION_PROPOSAL_ONE_ARENA_VERSION_ONE_BOUNDED_FORMAL_REVIEW"
+            ),
+            "formal_selection_review_started": True,
+            "formal_selection_review_completed": True,
+            "proposal_lineage_integrity_state": "VERIFIED",
+            "candidate_identity_integrity_state": "VERIFIED",
+            "redeliberation_completeness_state": "VERIFIED",
+            "proposal_readiness_state": "SATISFIED",
+            "minimum_margin_state": "SATISFIED",
+            "candidate_eligibility_state": "SATISFIED",
+            "cross_source_requirement_state": "SATISFIED",
+            "consensus_integrity_state": "VERIFIED",
+            "evidence_attribution_state": "VERIFIED",
+            "evidence_quality_state": "SATISFIED",
+            "remaining_uncertainty_state": "SATISFIED",
+            "remaining_evidence_deficit_state": "SATISFIED",
+            "constitutional_review_state": "VERIFIED",
+            "constitutional_veto_state": "VERIFIED",
+            "temporal_validity_state": "VERIFIED",
+            "selection_authority_boundary_state": "VERIFIED",
+            "downstream_execution_separation_state": "VERIFIED",
+            "formal_selection_outcome": "RATIFIED",
+            "formal_selection_outcome_reason": (
+                "all_formal_selection_requirements_satisfied"
+            ),
+            "proposal_ratified": True,
+            "proposal_rejected": False,
+            "proposal_deferred": False,
+            "tie_resolved": True,
+            "winner_selected": True,
+            "selected_candidate": "semantic_program:replace_color",
+            "selection_basis": "RATIFIED_DECISION_PROPOSAL",
+            "candidate_execution_authority": "NONE",
+            "candidate_execution_started": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "next_consumer": (
+                "FUTURE_SELECTED_CANDIDATE_EXECUTION_ADMISSION_GATE"
+            ),
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+    conclusion = report[
+        report.index("ENGINEERING CONCLUSION"):
+        report.index("FINAL STATUS")
+    ]
+
+    assert "ARENA FORMAL SELECTION REPORT" in report
+    assert "Formal Selection Outcome: RATIFIED" in report
+    assert "Winner Selected: TRUE" in report
+    assert "Candidate Execution Authority: NONE" in report
+    assert (
+        "Largest Success: decision_proposal_formally_ratified_and_arena_winner_selected_without_execution_authority"
+        in conclusion
+    )
+    assert (
+        "Current Open Decision: WAITING_SELECTED_CANDIDATE_EXECUTION_ADMISSION_REVIEW"
+        in conclusion
+    )
+    assert "Current Bottleneck: selected_candidate_execution_admission" in conclusion
+    assert (
+        "Exact Responsible Component: FUTURE_SELECTED_CANDIDATE_EXECUTION_ADMISSION_GATE"
+        in conclusion
+    )
+
+
 def test_engineering_conclusion_generates_run_id_from_timestamp_when_ids_missing():
     state = _report_state()
     state.pop("execution_id", None)

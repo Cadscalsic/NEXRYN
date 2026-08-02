@@ -582,6 +582,9 @@ class DeterministicFinalReportRenderer:
             self._render_candidate_arena(canonical),
             self._render_training_assistant_plan_consumption(canonical),
             self._render_validation_task_execution_report(canonical),
+            self._render_validation_evidence_evaluation_report(canonical),
+            self._render_arena_evidence_admission_report(canonical),
+            self._render_arena_formal_selection_report(canonical),
             self._render_evidence_generation_report(canonical),
             self._render_counterfactual_reasoning(canonical),
             self._render_executable_intelligence(canonical),
@@ -622,6 +625,9 @@ class DeterministicFinalReportRenderer:
             self._render_source_competition_summary(canonical),
             self._render_training_assistant_plan_consumption(canonical),
             self._render_validation_task_execution_report(canonical),
+            self._render_validation_evidence_evaluation_report(canonical),
+            self._render_arena_evidence_admission_report(canonical),
+            self._render_arena_formal_selection_report(canonical),
             self._render_evidence_generation_report(canonical),
             self._render_semantic_compilation(canonical),
             self._render_knowledge_operationalization_summary(canonical),
@@ -1386,8 +1392,230 @@ class DeterministicFinalReportRenderer:
             f"{self._value(arena.get('evidence_state'))}",
             "  Next Consumer: "
             f"{self._value(arena.get('next_consumer'))}",
+            "Validation Evidence Evaluation:",
+            "  Plan Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_plan_id') not in {None, 'Not Available'})}",
+            "  Schedule Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_schedule_id') not in {None, 'Not Available'})}",
+            "  Execution Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_execution_id') not in {None, 'Not Available'})}",
+            "  Raw Result Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_raw_result_id') not in {None, 'Not Available'})}",
+            "  Record Alignment: "
+            f"{self._value('ALIGNED' if arena.get('evaluation_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Evaluation Admission Evaluated: "
+            f"{self._value(arena.get('evaluation_admission_evaluated'))}",
+            "  Evaluation Admission State: "
+            f"{self._value(arena.get('evaluation_admission_state'))}",
+            "  Evaluation Admission Reason: "
+            f"{self._value(arena.get('evaluation_admission_reason'))}",
+            "  Evaluation Authority Scope: "
+            f"{self._value(arena.get('evidence_evaluation_scope'))}",
+            "  Sealed Reference Resolved: "
+            f"{self._value(arena.get('sealed_reference_available'))}",
+            "  Reference Integrity Verified: "
+            f"{self._value(arena.get('reference_integrity_state') == 'VERIFIED')}",
+            "  Comparator Resolved: "
+            f"{self._value(arena.get('comparator_id') not in {None, 'Not Available'})}",
+            "  Comparison Started: "
+            f"{self._value(arena.get('comparison_started'))}",
+            "  Comparison Completed: "
+            f"{self._value(arena.get('comparison_completed'))}",
+            "  Comparable Result Id: "
+            f"{self._value(arena.get('comparable_result_id'))}",
+            "  Candidate Attribution State: "
+            f"{self._value(arena.get('candidate_attribution_state'))}",
+            "  Operation Attribution State: "
+            f"{self._value(arena.get('operation_attribution_state'))}",
+            "  Contamination State: "
+            f"{self._value(arena.get('evidence_contamination_state'))}",
+            "  Evidence Admissibility State: "
+            f"{self._value(arena.get('evidence_admissibility_state'))}",
+            "  Evidence Sufficiency State: "
+            f"{self._value(arena.get('evidence_sufficiency_state'))}",
+            "  Evidence Direction: "
+            f"{self._value(arena.get('evidence_direction'))}",
+            "  Evidence Acceptance State: "
+            f"{self._value(arena.get('evidence_acceptance_state'))}",
+            "  Evidence Decision Id: "
+            f"{self._value(arena.get('evidence_decision_id'))}",
+            "  Accepted Evidence Id: "
+            f"{self._value(arena.get('accepted_evidence_id'))}",
+            "  Arena Evidence Admission Invoked: "
+            f"{self._value(arena.get('arena_evidence_admission_invoked'))}",
+            "  Arena Re-entry Invoked: "
+            f"{self._value(arena.get('arena_reentry_invoked'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
+            "Arena Evidence Admission:",
+            "  Evidence Plan Loaded: "
+            f"{self._value(arena.get('arena_evidence_admission_plan_id') not in {None, 'Not Available'})}",
+            "  Evidence Decision Loaded: "
+            f"{self._value(arena.get('arena_evidence_admission_evidence_decision_id') not in {None, 'Not Available'})}",
+            "  Accepted Evidence Loaded: "
+            f"{self._value(arena.get('arena_evidence_admission_accepted_evidence_id') not in {None, 'Not Available'})}",
+            "  Originating Arena Loaded: "
+            f"{self._value(arena.get('originating_arena_id') not in {None, 'Not Available'})}",
+            "  Baseline Snapshot Loaded: "
+            f"{self._value(arena.get('baseline_snapshot_loaded'))}",
+            "  Record Alignment: "
+            f"{self._value('ALIGNED' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Fingerprint Integrity: "
+            f"{self._value('VERIFIED' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Target Candidate Resolved: "
+            f"{self._value(arena.get('arena_evidence_target_candidate') not in {None, 'Not Available'})}",
+            "  Target Operation Resolved: "
+            f"{self._value(arena.get('arena_evidence_target_operation') not in {None, 'Not Available'})}",
+            "  Duplicate Admission Check: "
+            f"{self._value('NO_DUPLICATE' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Duplicate Counting Check: "
+            f"{self._value('NO_DUPLICATE' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Arena Admission Evaluated: "
+            f"{self._value(arena.get('arena_admission_evaluated'))}",
+            "  Arena Admission State: "
+            f"{self._value(arena.get('arena_admission_state'))}",
+            "  Arena Admission Reason: "
+            f"{self._value(arena.get('arena_admission_reason'))}",
+            "  Admission Record Id: "
+            f"{self._value(arena.get('arena_evidence_admission_id'))}",
+            "  Ledger Entry Id: "
+            f"{self._value(arena.get('arena_evidence_ledger_entry_id'))}",
+            "  Evidence Admitted: "
+            f"{self._value(arena.get('arena_evidence_admitted'))}",
+            "Governed Redeliberation:",
+            "  Redeliberation Admission Evaluated: "
+            f"{self._value(arena.get('redeliberation_admission_evaluated'))}",
+            "  Redeliberation Admission State: "
+            f"{self._value(arena.get('redeliberation_admission_state'))}",
+            "  Redeliberation Authority Scope: "
+            f"{self._value(arena.get('arena_redeliberation_scope'))}",
+            "  Redeliberation Started: "
+            f"{self._value(arena.get('redeliberation_started'))}",
+            "  Candidate Evidence Profiles Rebuilt: "
+            f"{self._value(arena.get('candidate_evidence_profiles_rebuilt'))}",
+            "  Evidence Direction Preserved: "
+            f"{self._value(arena.get('evidence_direction_preserved'))}",
+            "  Evidence Effect Policy Resolved: "
+            f"{self._value(arena.get('evidence_effect_policy_resolved'))}",
+            "  Evidence Effect Applied: "
+            f"{self._value(arena.get('evidence_effect_applied'))}",
+            "  Candidate Scores Recomputed: "
+            f"{self._value(arena.get('candidate_scores_recomputed'))}",
+            "  Candidate Ranking Recomputed: "
+            f"{self._value(arena.get('candidate_ranking_recomputed'))}",
+            "  Cross-Source Consensus Recomputed: "
+            f"{self._value(arena.get('cross_source_consensus_recomputed'))}",
+            "  Tie-Break Strategy Applied: "
+            f"{self._value(arena.get('tie_break_strategy_applied'))}",
+            "  Tie-Break Strategy Satisfied: "
+            f"{self._value(arena.get('tie_break_strategy_satisfied'))}",
+            "  Provisional Leader Available: "
+            f"{self._value(arena.get('provisional_leader_available'))}",
+            "  Decision Proposal Available: "
+            f"{self._value(arena.get('decision_proposal_available'))}",
+            "  Decision Proposal Id: "
+            f"{self._value(arena.get('decision_proposal_id'))}",
+            "  Redeliberation Outcome: "
+            f"{self._value(arena.get('redeliberation_outcome'))}",
+            "  Redeliberation Completed: "
+            f"{self._value(arena.get('redeliberation_completed'))}",
+            "  Evidence Consumed: "
+            f"{self._value(arena.get('arena_evidence_consumed'))}",
+            "  Formal Selection Invoked: "
+            f"{self._value(arena.get('formal_selection_invoked'))}",
+            "  Tie Resolved: "
+            f"{self._value(arena.get('tie_resolved'))}",
+            "  Winner Selected: "
+            f"{self._value(arena.get('winner_selected'))}",
+            "  Selected Candidate: "
+            f"{self._value(arena.get('selected_candidate'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
             "  State: "
             f"{self._value(arena.get('decision_orchestration_state'))}",
+            "Arena Formal Selection:",
+            "  Decision Proposal Route Detected: "
+            f"{self._value(arena.get('decision_proposal_route_detected'))}",
+            "  Decision Proposal Loaded: "
+            f"{self._value(arena.get('decision_proposal_loaded'))}",
+            "  Originating Arena Loaded: "
+            f"{self._value(arena.get('originating_arena_loaded'))}",
+            "  Baseline Snapshot Loaded: "
+            f"{self._value(arena.get('formal_baseline_snapshot_loaded'))}",
+            "  Redeliberation Snapshot Loaded: "
+            f"{self._value(arena.get('formal_redeliberation_snapshot_loaded'))}",
+            "  Deliberative Outcome Loaded: "
+            f"{self._value(arena.get('deliberative_outcome_loaded'))}",
+            "  Candidate Set Loaded: "
+            f"{self._value(arena.get('candidate_set_loaded'))}",
+            "  Proposed Candidate Resolved: "
+            f"{self._value(arena.get('proposed_candidate_resolved'))}",
+            "  Proposal Lineage Alignment: "
+            f"{self._value(arena.get('proposal_lineage_alignment'))}",
+            "  Fingerprint Integrity: "
+            f"{self._value(arena.get('fingerprint_integrity'))}",
+            "  Proposal Uniqueness: "
+            f"{self._value(arena.get('proposal_uniqueness'))}",
+            "  Formal Selection Admission Evaluated: "
+            f"{self._value(arena.get('formal_selection_admission_evaluated'))}",
+            "  Formal Selection Admission State: "
+            f"{self._value(arena.get('formal_selection_admission_state'))}",
+            "  Formal Selection Admission Reason: "
+            f"{self._value(arena.get('formal_selection_admission_reason'))}",
+            "  Formal Selection Review Started: "
+            f"{self._value(arena.get('formal_selection_review_started'))}",
+            "  Proposal Readiness Reverified: "
+            f"{self._value(arena.get('proposal_readiness_reverified'))}",
+            "  Minimum Margin Reverified: "
+            f"{self._value(arena.get('minimum_margin_reverified'))}",
+            "  Candidate Eligibility Reverified: "
+            f"{self._value(arena.get('candidate_eligibility_reverified'))}",
+            "  Cross-Source Requirements Reverified: "
+            f"{self._value(arena.get('cross_source_requirements_reverified'))}",
+            "  Consensus Integrity Verified: "
+            f"{self._value(arena.get('consensus_integrity_verified'))}",
+            "  Evidence Attribution Verified: "
+            f"{self._value(arena.get('evidence_attribution_verified'))}",
+            "  Evidence Quality Verified: "
+            f"{self._value(arena.get('evidence_quality_verified'))}",
+            "  Constitutional Review Completed: "
+            f"{self._value(arena.get('constitutional_review_completed'))}",
+            "  Constitutional Veto Active: "
+            f"{self._value(arena.get('constitutional_veto_active'))}",
+            "  Temporal Validity Verified: "
+            f"{self._value(arena.get('temporal_validity_verified'))}",
+            "  Formal Selection Outcome: "
+            f"{self._value(arena.get('formal_selection_outcome'))}",
+            "  Formal Selection Decision Id: "
+            f"{self._value(arena.get('formal_selection_decision_id'))}",
+            "  Arena Selection Snapshot Id: "
+            f"{self._value(arena.get('arena_selection_snapshot_id'))}",
+            "  Proposal Disposition Id: "
+            f"{self._value(arena.get('proposal_disposition_id'))}",
+            "  Proposal Ratified: "
+            f"{self._value(arena.get('proposal_ratified'))}",
+            "  Proposal Rejected: "
+            f"{self._value(arena.get('proposal_rejected'))}",
+            "  Proposal Deferred: "
+            f"{self._value(arena.get('proposal_deferred'))}",
+            "  Tie Resolved: "
+            f"{self._value(arena.get('tie_resolved'))}",
+            "  Winner Selected: "
+            f"{self._value(arena.get('winner_selected'))}",
+            "  Selected Candidate: "
+            f"{self._value(arena.get('selected_candidate'))}",
+            "  Candidate Execution Authority: "
+            f"{self._value(arena.get('candidate_execution_authority'))}",
+            "  Candidate Execution Started: "
+            f"{self._value(arena.get('candidate_execution_started'))}",
+            "  Truth Authority: "
+            f"{self._value(arena.get('truth_authority'))}",
+            "  Trust Authority: "
+            f"{self._value(arena.get('trust_authority'))}",
+            "  Graduation Authority: "
+            f"{self._value(arena.get('graduation_authority'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
         ]
         return self._section("CRITICAL EXECUTION TRACE", lines)
 
@@ -4755,6 +4983,405 @@ class DeterministicFinalReportRenderer:
         ]
         return self._section("VALIDATION TASK EXECUTION REPORT", lines)
 
+    def _render_validation_evidence_evaluation_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        lines = [
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_plan_id'))}",
+            "Schedule Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_schedule_id'))}",
+            "Execution Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_execution_id'))}",
+            "Raw Result Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_raw_result_id'))}",
+            "Comparable Result Id: "
+            f"{self._value(summary.get('comparable_result_id'))}",
+            "Evidence Decision Id: "
+            f"{self._value(summary.get('evidence_decision_id'))}",
+            "Accepted Evidence Id: "
+            f"{self._value(summary.get('accepted_evidence_id'))}",
+            "Selected Validation Task: "
+            f"{self._value(summary.get('validation_task_execution_selected_task'))}",
+            "Selected Curriculum: "
+            f"{self._value(summary.get('validation_task_execution_selected_curriculum'))}",
+            "Target Candidate: "
+            f"{self._value(summary.get('evidence_acquisition_target_candidate'))}",
+            "Target Operation: "
+            f"{self._value(summary.get('evidence_acquisition_target_operation'))}",
+            "Required Evidence: "
+            f"{self._value(summary.get('evidence_acquisition_required_evidence'))}",
+            "Required Evidence Category: "
+            f"{self._value(summary.get('evidence_acquisition_required_category'))}",
+            "Tie-Break Strategy: "
+            f"{self._value(summary.get('evidence_acquisition_tie_break_strategy'))}",
+            "Evaluation Admission Evaluated: "
+            f"{self._value(summary.get('evaluation_admission_evaluated'))}",
+            "Evaluation Admission State: "
+            f"{self._value(summary.get('evaluation_admission_state'))}",
+            "Evaluation Admission Reason: "
+            f"{self._value(summary.get('evaluation_admission_reason'))}",
+            "Evidence Evaluation Authority: "
+            f"{self._value(summary.get('evidence_evaluation_authority'))}",
+            "Evidence Evaluation Scope: "
+            f"{self._value(summary.get('evidence_evaluation_scope'))}",
+            "Sealed Reference Available: "
+            f"{self._value(summary.get('sealed_reference_available'))}",
+            "Sealed Reference Opened By Evaluator: "
+            f"{self._value(summary.get('sealed_reference_opened_by_evaluator'))}",
+            "Sealed Reference Forwarded To Solver: "
+            f"{self._value(summary.get('sealed_reference_forwarded_to_solver'))}",
+            "Reference Integrity State: "
+            f"{self._value(summary.get('reference_integrity_state'))}",
+            "Comparison Invoked: "
+            f"{self._value(summary.get('comparison_invoked'))}",
+            "Comparison Started: "
+            f"{self._value(summary.get('comparison_started'))}",
+            "Comparison Completed: "
+            f"{self._value(summary.get('comparison_completed'))}",
+            "Comparison State: "
+            f"{self._value(summary.get('comparison_state'))}",
+            "Comparator Id: "
+            f"{self._value(summary.get('comparator_id'))}",
+            "Comparator Version: "
+            f"{self._value(summary.get('comparator_version'))}",
+            "Comparable Result Available: "
+            f"{self._value(summary.get('comparable_result_available'))}",
+            "Comparable Result Creation Result: "
+            f"{self._value(summary.get('comparable_result_creation_result'))}",
+            "Expected Case Count: "
+            f"{self._value(summary.get('expected_case_count'))}",
+            "Compared Case Count: "
+            f"{self._value(summary.get('compared_case_count'))}",
+            "Case Coverage: "
+            f"{self._value(summary.get('case_coverage'))}",
+            "Exact Match Count: "
+            f"{self._value(summary.get('exact_match_count'))}",
+            "Exact Match Rate: "
+            f"{self._value(summary.get('exact_match_rate'))}",
+            "Comparator Measurement Summary: "
+            f"{self._value(summary.get('comparator_measurement_summary'))}",
+            "Grounding Measurement Summary: "
+            f"{self._value(summary.get('grounding_measurement_summary'))}",
+            "Evidence Evaluation Invoked: "
+            f"{self._value(summary.get('evidence_evaluation_invoked'))}",
+            "Evidence Admissibility Evaluated: "
+            f"{self._value(summary.get('evidence_admissibility_evaluated'))}",
+            "Evidence Admissibility State: "
+            f"{self._value(summary.get('evidence_admissibility_state'))}",
+            "Evidence Admissibility Reason: "
+            f"{self._value(summary.get('evidence_admissibility_reason'))}",
+            "Evidence Sufficiency Evaluated: "
+            f"{self._value(summary.get('evidence_sufficiency_evaluated'))}",
+            "Evidence Sufficiency State: "
+            f"{self._value(summary.get('evidence_sufficiency_state'))}",
+            "Evidence Sufficiency Reason: "
+            f"{self._value(summary.get('evidence_sufficiency_reason'))}",
+            "Evidence Direction: "
+            f"{self._value(summary.get('evidence_direction'))}",
+            "Evidence Direction Reason: "
+            f"{self._value(summary.get('evidence_direction_reason'))}",
+            "Evidence Acceptance State: "
+            f"{self._value(summary.get('evidence_acceptance_state'))}",
+            "Evidence Acceptance Reason: "
+            f"{self._value(summary.get('evidence_acceptance_reason'))}",
+            "Evidence Decision Recorded: "
+            f"{self._value(summary.get('evidence_decision_recorded'))}",
+            "Evidence Decision Creation Result: "
+            f"{self._value(summary.get('evidence_decision_creation_result'))}",
+            "Evidence Contamination State: "
+            f"{self._value(summary.get('evidence_contamination_state'))}",
+            "Independent Validation State: "
+            f"{self._value(summary.get('independent_validation_state'))}",
+            "Candidate Attribution State: "
+            f"{self._value(summary.get('candidate_attribution_state'))}",
+            "Operation Attribution State: "
+            f"{self._value(summary.get('operation_attribution_state'))}",
+            "Duplicate Evidence Detected: "
+            f"{self._value(summary.get('duplicate_evidence_detected'))}",
+            "Accepted Evidence Artifact Created: "
+            f"{self._value(summary.get('accepted_evidence_artifact_created'))}",
+            "Accepted Evidence Creation Result: "
+            f"{self._value(summary.get('accepted_evidence_creation_result'))}",
+            "Evidence Accepted: "
+            f"{self._value(summary.get('evidence_accepted'))}",
+            "Arena Evidence Admission Invoked: "
+            f"{self._value(summary.get('arena_evidence_admission_invoked'))}",
+            "Arena Re-entry Invoked: "
+            f"{self._value(summary.get('arena_reentry_invoked'))}",
+            "Candidate Score Changed: "
+            f"{self._value(summary.get('candidate_score_changed'))}",
+            "Candidate Ranking Changed: "
+            f"{self._value(summary.get('candidate_ranking_changed'))}",
+            "Tie Resolved: "
+            f"{self._value(summary.get('tie_resolved'))}",
+            "Winner Selected: "
+            f"{self._value(summary.get('winner_selected'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Next Consumer: "
+            f"{self._value(summary.get('next_consumer'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('validation_evidence_evaluation_constitutional_boundary'))}",
+        ]
+        return self._section("VALIDATION EVIDENCE EVALUATION REPORT", lines)
+
+    def _render_arena_evidence_admission_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        lines = [
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('arena_evidence_admission_plan_id'))}",
+            "Evidence Decision Id: "
+            f"{self._value(summary.get('arena_evidence_admission_evidence_decision_id'))}",
+            "Accepted Evidence Id: "
+            f"{self._value(summary.get('arena_evidence_admission_accepted_evidence_id'))}",
+            "Originating Arena Id: "
+            f"{self._value(summary.get('originating_arena_id'))}",
+            "Originating Arena Snapshot Id: "
+            f"{self._value(summary.get('originating_arena_snapshot_id'))}",
+            "Target Candidate: "
+            f"{self._value(summary.get('arena_evidence_target_candidate'))}",
+            "Target Operation: "
+            f"{self._value(summary.get('arena_evidence_target_operation'))}",
+            "Evidence Direction: "
+            f"{self._value(summary.get('arena_evidence_direction'))}",
+            "Accepted Evidence Artifact Available: "
+            f"{self._value(summary.get('accepted_evidence_artifact_available'))}",
+            "Arena Admission Invoked: "
+            f"{self._value(summary.get('arena_admission_invoked'))}",
+            "Arena Admission Review Completed: "
+            f"{self._value(summary.get('arena_admission_review_completed'))}",
+            "Arena Admission State: "
+            f"{self._value(summary.get('arena_admission_state'))}",
+            "Arena Admission Reason: "
+            f"{self._value(summary.get('arena_admission_reason'))}",
+            "Admission Record Created: "
+            f"{self._value(summary.get('arena_admission_record_created'))}",
+            "Admission Record Id: "
+            f"{self._value(summary.get('arena_evidence_admission_id'))}",
+            "Admission Record Creation Result: "
+            f"{self._value(summary.get('arena_admission_record_creation_result'))}",
+            "Ledger Entry Created: "
+            f"{self._value(summary.get('arena_evidence_ledger_entry_created'))}",
+            "Ledger Entry Id: "
+            f"{self._value(summary.get('arena_evidence_ledger_entry_id'))}",
+            "Ledger Creation Result: "
+            f"{self._value(summary.get('arena_evidence_ledger_creation_result'))}",
+            "Arena Evidence Admitted: "
+            f"{self._value(summary.get('arena_evidence_admitted'))}",
+            "Arena Evidence Consumed: "
+            f"{self._value(summary.get('arena_evidence_consumed'))}",
+            "Redeliberation Invoked: "
+            f"{self._value(summary.get('redeliberation_invoked'))}",
+            "Redeliberation Started: "
+            f"{self._value(summary.get('redeliberation_started'))}",
+            "Redeliberation Completed: "
+            f"{self._value(summary.get('redeliberation_completed'))}",
+            "Redeliberation Admission State: "
+            f"{self._value(summary.get('redeliberation_admission_state'))}",
+            "Redeliberation Authority: "
+            f"{self._value(summary.get('arena_redeliberation_authority'))}",
+            "Redeliberation Scope: "
+            f"{self._value(summary.get('arena_redeliberation_scope'))}",
+            "Baseline Snapshot Loaded: "
+            f"{self._value(summary.get('baseline_snapshot_loaded'))}",
+            "Redeliberation Snapshot Created: "
+            f"{self._value(summary.get('redeliberation_snapshot_created'))}",
+            "Redeliberation Snapshot Id: "
+            f"{self._value(summary.get('redeliberation_snapshot_id'))}",
+            "Candidate Evidence Profiles Rebuilt: "
+            f"{self._value(summary.get('candidate_evidence_profiles_rebuilt'))}",
+            "Evidence Direction Preserved: "
+            f"{self._value(summary.get('evidence_direction_preserved'))}",
+            "Evidence Effect Policy Resolved: "
+            f"{self._value(summary.get('evidence_effect_policy_resolved'))}",
+            "Evidence Effect Applied: "
+            f"{self._value(summary.get('evidence_effect_applied'))}",
+            "Candidate Scores Recomputed: "
+            f"{self._value(summary.get('candidate_scores_recomputed'))}",
+            "Candidate Score Changed: "
+            f"{self._value(summary.get('candidate_score_changed'))}",
+            "Candidate Ranking Recomputed: "
+            f"{self._value(summary.get('candidate_ranking_recomputed'))}",
+            "Candidate Ranking Changed: "
+            f"{self._value(summary.get('candidate_ranking_changed'))}",
+            "Cross-Source Consensus Recomputed: "
+            f"{self._value(summary.get('cross_source_consensus_recomputed'))}",
+            "Cross-Source Consensus Changed: "
+            f"{self._value(summary.get('cross_source_consensus_changed'))}",
+            "Validation Evidence Counted As Candidate Source: "
+            f"{self._value(summary.get('validation_evidence_counted_as_candidate_source'))}",
+            "Decision Proposal Available: "
+            f"{self._value(summary.get('decision_proposal_available'))}",
+            "Decision Proposal Id: "
+            f"{self._value(summary.get('decision_proposal_id'))}",
+            "Redeliberation Outcome: "
+            f"{self._value(summary.get('redeliberation_outcome'))}",
+            "Deliberative Outcome Id: "
+            f"{self._value(summary.get('deliberative_outcome_id'))}",
+            "Next Consumer: "
+            f"{self._value(summary.get('next_consumer'))}",
+            "Formal Selection Invoked: "
+            f"{self._value(summary.get('formal_selection_invoked'))}",
+            "Tie Resolved: "
+            f"{self._value(summary.get('tie_resolved'))}",
+            "Winner Selected: "
+            f"{self._value(summary.get('winner_selected'))}",
+            "Selected Candidate: "
+            f"{self._value(summary.get('selected_candidate'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('arena_evidence_admission_constitutional_boundary'))}",
+        ]
+        return self._section("ARENA EVIDENCE ADMISSION REPORT", lines)
+
+    def _render_arena_formal_selection_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        lines = [
+            "Decision Proposal Route Detected: "
+            f"{self._value(summary.get('decision_proposal_route_detected'))}",
+            "Decision Proposal Loaded: "
+            f"{self._value(summary.get('decision_proposal_loaded'))}",
+            "Decision Proposal Id: "
+            f"{self._value(summary.get('formal_selection_decision_proposal_id'))}",
+            "Originating Arena Loaded: "
+            f"{self._value(summary.get('originating_arena_loaded'))}",
+            "Baseline Snapshot Loaded: "
+            f"{self._value(summary.get('formal_baseline_snapshot_loaded'))}",
+            "Redeliberation Snapshot Loaded: "
+            f"{self._value(summary.get('formal_redeliberation_snapshot_loaded'))}",
+            "Deliberative Outcome Loaded: "
+            f"{self._value(summary.get('deliberative_outcome_loaded'))}",
+            "Candidate Set Loaded: "
+            f"{self._value(summary.get('candidate_set_loaded'))}",
+            "Proposed Candidate Resolved: "
+            f"{self._value(summary.get('proposed_candidate_resolved'))}",
+            "Proposal Lineage Alignment: "
+            f"{self._value(summary.get('proposal_lineage_alignment'))}",
+            "Fingerprint Integrity: "
+            f"{self._value(summary.get('fingerprint_integrity'))}",
+            "Proposal Uniqueness: "
+            f"{self._value(summary.get('proposal_uniqueness'))}",
+            "Formal Selection Admission Invoked: "
+            f"{self._value(summary.get('formal_selection_admission_invoked'))}",
+            "Formal Selection Admission Evaluated: "
+            f"{self._value(summary.get('formal_selection_admission_evaluated'))}",
+            "Formal Selection Admission State: "
+            f"{self._value(summary.get('formal_selection_admission_state'))}",
+            "Formal Selection Admission Reason: "
+            f"{self._value(summary.get('formal_selection_admission_reason'))}",
+            "Formal Selection Review Authority: "
+            f"{self._value(summary.get('formal_selection_review_authority'))}",
+            "Formal Selection Review Scope: "
+            f"{self._value(summary.get('formal_selection_review_scope'))}",
+            "Formal Selection Review Started: "
+            f"{self._value(summary.get('formal_selection_review_started'))}",
+            "Formal Selection Review Completed: "
+            f"{self._value(summary.get('formal_selection_review_completed'))}",
+            "Proposal Lineage Integrity: "
+            f"{self._value(summary.get('proposal_lineage_integrity_state'))}",
+            "Candidate Identity Integrity: "
+            f"{self._value(summary.get('candidate_identity_integrity_state'))}",
+            "Redeliberation Completeness: "
+            f"{self._value(summary.get('redeliberation_completeness_state'))}",
+            "Proposal Readiness: "
+            f"{self._value(summary.get('proposal_readiness_state'))}",
+            "Minimum Margin: "
+            f"{self._value(summary.get('minimum_margin_state'))}",
+            "Candidate Eligibility: "
+            f"{self._value(summary.get('candidate_eligibility_state'))}",
+            "Cross-Source Requirement: "
+            f"{self._value(summary.get('cross_source_requirement_state'))}",
+            "Consensus Integrity: "
+            f"{self._value(summary.get('consensus_integrity_state'))}",
+            "Evidence Attribution: "
+            f"{self._value(summary.get('evidence_attribution_state'))}",
+            "Evidence Quality: "
+            f"{self._value(summary.get('evidence_quality_state'))}",
+            "Remaining Uncertainty: "
+            f"{self._value(summary.get('remaining_uncertainty_state'))}",
+            "Remaining Evidence Deficit: "
+            f"{self._value(summary.get('remaining_evidence_deficit_state'))}",
+            "Constitutional Review State: "
+            f"{self._value(summary.get('constitutional_review_state'))}",
+            "Constitutional Veto Active: "
+            f"{self._value(summary.get('constitutional_veto_active'))}",
+            "Temporal Validity: "
+            f"{self._value(summary.get('temporal_validity_state'))}",
+            "Selection Authority Boundary: "
+            f"{self._value(summary.get('selection_authority_boundary_state'))}",
+            "Downstream Execution Separation: "
+            f"{self._value(summary.get('downstream_execution_separation_state'))}",
+            "Formal Selection Outcome: "
+            f"{self._value(summary.get('formal_selection_outcome'))}",
+            "Outcome Reason: "
+            f"{self._value(summary.get('formal_selection_outcome_reason'))}",
+            "Proposal Ratified: "
+            f"{self._value(summary.get('proposal_ratified'))}",
+            "Proposal Rejected: "
+            f"{self._value(summary.get('proposal_rejected'))}",
+            "Proposal Deferred: "
+            f"{self._value(summary.get('proposal_deferred'))}",
+            "Tie Resolved: "
+            f"{self._value(summary.get('tie_resolved'))}",
+            "Winner Selected: "
+            f"{self._value(summary.get('winner_selected'))}",
+            "Selected Candidate: "
+            f"{self._value(summary.get('selected_candidate'))}",
+            "Selection Basis: "
+            f"{self._value(summary.get('selection_basis'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Candidate Execution Started: "
+            f"{self._value(summary.get('candidate_execution_started'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Next Consumer: "
+            f"{self._value(summary.get('next_consumer'))}",
+            "Review Case Creation Result: "
+            f"{self._value(summary.get('formal_selection_review_creation_result'))}",
+            "Decision Creation Result: "
+            f"{self._value(summary.get('formal_selection_decision_creation_result'))}",
+            "Arena Selection Snapshot Creation Result: "
+            f"{self._value(summary.get('arena_selection_snapshot_creation_result'))}",
+            "Proposal Disposition Creation Result: "
+            f"{self._value(summary.get('proposal_disposition_creation_result'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('formal_selection_constitutional_boundary'))}",
+        ]
+        return self._section("ARENA FORMAL SELECTION REPORT", lines)
+
     def _render_multi_hypothesis_report(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":
             return ""
@@ -5819,8 +6446,13 @@ class DeterministicFinalReportRenderer:
         )
         decision_state = arena.get("arena_decision_resolution_state")
         decision_action = arena.get("arena_decision_resolution_action")
+        formal_selection_outcome_for_decision = arena.get(
+            "formal_selection_outcome"
+        )
         decision_pending = (
             decision_state == "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+            or formal_selection_outcome_for_decision
+            in {"RATIFIED", "REJECTED", "DEFERRED"}
         )
         regression = "none" if decision_pending else raw_regression
         current_open_decision = (
@@ -5888,6 +6520,21 @@ class DeterministicFinalReportRenderer:
                     arena.get("raw_result_captured") is True
                     and arena.get("execution_state") == "RAW_RESULT_CAPTURED"
                 )
+                evidence_acceptance_state = arena.get("evidence_acceptance_state")
+                evidence_terminal = evidence_acceptance_state in {
+                    "ACCEPTED",
+                    "INSUFFICIENT",
+                    "REJECTED",
+                }
+                redeliberation_outcome = arena.get("redeliberation_outcome")
+                redeliberation_completed = (
+                    arena.get("redeliberation_completed") is True
+                )
+                formal_selection_outcome = arena.get("formal_selection_outcome")
+                formal_selection_completed = (
+                    arena.get("formal_selection_review_completed") is True
+                    and formal_selection_outcome in {"RATIFIED", "REJECTED", "DEFERRED"}
+                )
                 if (
                     persistence_attempted
                     and not (plan_persisted or plan_reused or lifecycle_update_persisted)
@@ -5896,6 +6543,201 @@ class DeterministicFinalReportRenderer:
                     root_cause = persistence_failure or "evidence_plan_not_persisted"
                     responsible_component = "EVIDENCE_ACQUISITION_PLAN_STORE"
                     next_task = "repair_evidence_acquisition_plan_persistence"
+                elif formal_selection_completed and formal_selection_outcome == "RATIFIED":
+                    largest_success = (
+                        "decision_proposal_formally_ratified_and_arena_winner_selected_without_execution_authority"
+                    )
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_SELECTED_CANDIDATE_EXECUTION_ADMISSION_REVIEW"
+                    )
+                    next_decision_gate = (
+                        "determine_whether_the_selected_candidate_may_enter_a_separate_governed_execution_path"
+                    )
+                    current_bottleneck = "selected_candidate_execution_admission"
+                    root_cause = (
+                        "arena_selection_does_not_and_must_not_grant_candidate_execution_authority"
+                    )
+                    responsible_component = (
+                        "FUTURE_SELECTED_CANDIDATE_EXECUTION_ADMISSION_GATE"
+                    )
+                    next_task = (
+                        "design_a_separate_selected_candidate_execution_admission_gate_without_granting_automatic_truth_trust_or_graduation"
+                    )
+                elif formal_selection_completed and formal_selection_outcome == "REJECTED":
+                    largest_success = (
+                        "unsafe_invalid_or_constitutionally_ineligible_decision_proposal_formally_rejected"
+                    )
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    )
+                    next_decision_gate = (
+                        "determine_whether_candidate_revision_or_additional_evidence_is_required"
+                    )
+                    current_bottleneck = "formal_proposal_rejection"
+                    root_cause = (
+                        arena.get("formal_selection_outcome_reason")
+                        or "formal_selection_rejected_decision_proposal"
+                    )
+                    responsible_component = "ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    next_task = (
+                        "address_the_exact_rejection_reason_without_default_candidate_selection"
+                    )
+                elif formal_selection_completed and formal_selection_outcome == "DEFERRED":
+                    largest_success = (
+                        "formal_selection_safely_deferred_without_forced_ratification_or_candidate_execution"
+                    )
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_FORMAL_SELECTION_RECOVERY_OR_GOVERNED_CLARIFICATION"
+                    )
+                    next_decision_gate = (
+                        "satisfy_the_exact_pending_formal_review_condition"
+                    )
+                    current_bottleneck = "formal_selection_review_completion"
+                    root_cause = (
+                        arena.get("formal_selection_outcome_reason")
+                        or "formal_selection_deferred_pending_condition"
+                    )
+                    responsible_component = (
+                        "FORMAL_SELECTION_REVIEW_RECOVERY_OR_GOVERNED_CLARIFICATION"
+                    )
+                    next_task = (
+                        "resolve_the_exact_deferral_condition_without_recreating_or_mutating_the_decision_proposal"
+                    )
+                elif (
+                    redeliberation_completed
+                    and redeliberation_outcome == "DECISION_PROPOSAL_AVAILABLE"
+                ):
+                    largest_success = (
+                        "accepted_validation_evidence_admitted_and_governed_redeliberation_produced_decision_proposal"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_FORMAL_ARENA_SELECTION_REVIEW"
+                    next_decision_gate = (
+                        "formally_review_decision_proposal_without_automatic_execution"
+                    )
+                    current_bottleneck = "formal_arena_selection"
+                    root_cause = (
+                        "redeliberation_proposal_not_yet_ratified_by_formal_selection_gate"
+                    )
+                    responsible_component = "ARENA_FORMAL_SELECTION_GATE"
+                    next_task = (
+                        "review_and_ratify_or_reject_decision_proposal_without_granting_automatic_truth_or_execution"
+                    )
+                elif redeliberation_completed and redeliberation_outcome == "TIE_PERSISTS":
+                    largest_success = (
+                        "accepted_evidence_admitted_and_tie_recomputed_without_forced_resolution"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_TARGETED_EVIDENCE_REMEDIATION"
+                    next_decision_gate = (
+                        "determine_next_discriminating_evidence_requirement"
+                    )
+                    current_bottleneck = "remaining_candidate_indistinguishability"
+                    root_cause = (
+                        "current_admitted_evidence_did_not_create_sufficient_deliberative_separation"
+                    )
+                    responsible_component = "EVIDENCE_REMEDIATION_PLANNER"
+                    next_task = (
+                        "prepare_one_targeted_discriminating_evidence_plan_without_automatic_scheduling"
+                    )
+                elif redeliberation_completed and redeliberation_outcome == "NO_SAFE_PROPOSAL":
+                    largest_success = "unsafe_or_under_supported_proposal_prevented"
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    )
+                    next_decision_gate = (
+                        "determine_whether_more_evidence_or_candidate_revision_is_required"
+                    )
+                    current_bottleneck = "proposal_readiness"
+                    root_cause = "no_candidate_satisfies_all_formal_proposal_requirements"
+                    responsible_component = "ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    next_task = (
+                        "identify_exact_proposal_deficit_without_forcing_winner_selection"
+                    )
+                elif (
+                    redeliberation_completed
+                    and redeliberation_outcome == "CONFLICT_REQUIRES_REVIEW"
+                ):
+                    largest_success = "material_evidence_conflict_detected_and_contained"
+                    regression = "none"
+                    current_open_decision = "WAITING_GOVERNED_ARENA_CONFLICT_REVIEW"
+                    next_decision_gate = "review_conflicting_admitted_evidence"
+                    current_bottleneck = "evidence_conflict"
+                    root_cause = (
+                        arena.get("arena_admission_reason")
+                        or "material_evidence_conflict_requires_review"
+                    )
+                    responsible_component = "GOVERNED_ARENA_CONFLICT_REVIEW"
+                    next_task = (
+                        "resolve_or_remediate_evidence_conflict_without_candidate_execution"
+                    )
+                elif (
+                    redeliberation_completed
+                    and redeliberation_outcome == "ADDITIONAL_EVIDENCE_REQUIRED"
+                ):
+                    largest_success = (
+                        "exact_remaining_decision_evidence_deficit_identified"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_ADDITIONAL_EVIDENCE_PLANNING"
+                    next_decision_gate = "prepare_targeted_additional_evidence_plan"
+                    current_bottleneck = "decision_evidence_sufficiency"
+                    root_cause = (
+                        arena.get("arena_admission_reason")
+                        or "additional_discriminating_evidence_required"
+                    )
+                    responsible_component = "EVIDENCE_REMEDIATION_PLANNER"
+                    next_task = (
+                        "prepare_one_evidence_plan_for_the_exact_remaining_deficit"
+                    )
+                elif evidence_terminal and evidence_acceptance_state == "ACCEPTED":
+                    largest_success = (
+                        "validation_result_governedly_evaluated_and_evidence_accepted"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_ARENA_EVIDENCE_ADMISSION"
+                    next_decision_gate = (
+                        "admit_accepted_evidence_to_cognitive_candidate_arena"
+                    )
+                    current_bottleneck = "arena_evidence_admission"
+                    root_cause = "accepted_validation_evidence_not_yet_admitted_to_arena"
+                    responsible_component = "ARENA_EVIDENCE_ADMISSION_GATE"
+                    next_task = (
+                        "admit_accepted_evidence_without_automatic_winner_selection"
+                    )
+                elif evidence_terminal and evidence_acceptance_state == "INSUFFICIENT":
+                    largest_success = (
+                        "validation_result_compared_and_evidence_deficit_identified"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_EVIDENCE_REMEDIATION_DECISION"
+                    next_decision_gate = "determine_additional_evidence_acquisition"
+                    current_bottleneck = "evidence_sufficiency"
+                    root_cause = (
+                        "validation_result_does_not_fully_satisfy_required_evidence_contract"
+                    )
+                    responsible_component = "EVIDENCE_REMEDIATION_PLANNER"
+                    next_task = (
+                        "prepare_targeted_evidence_remediation_without_automatic_scheduling"
+                    )
+                elif evidence_terminal and evidence_acceptance_state == "REJECTED":
+                    largest_success = (
+                        "inadmissible_validation_result_detected_and_contained"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_EVIDENCE_REVIEW_OR_REPLAN"
+                    next_decision_gate = "review_rejection_and_decide_replanning"
+                    current_bottleneck = "evidence_admissibility"
+                    root_cause = (
+                        arena.get("evidence_acceptance_reason")
+                        or "evidence_admissibility_failed"
+                    )
+                    responsible_component = "VALIDATION_EVIDENCE_EVALUATOR"
+                    next_task = "review_rejected_evidence_without_candidate_penalty"
                 elif raw_result_captured:
                     largest_success = (
                         "scheduled_validation_task_executed_and_raw_result_captured"
@@ -6010,7 +6852,23 @@ class DeterministicFinalReportRenderer:
             "root_cause": root_cause,
             "responsible_component": responsible_component,
             "next_task": next_task,
-            "engineering_priority": self._priority_label(coverage, arena, executable),
+            "engineering_priority": (
+                "HIGH"
+                if current_bottleneck in {
+                    "arena_evidence_admission",
+                    "evidence_sufficiency",
+                    "evidence_admissibility",
+                    "formal_arena_selection",
+                    "selected_candidate_execution_admission",
+                    "formal_proposal_rejection",
+                    "formal_selection_review_completion",
+                    "remaining_candidate_indistinguishability",
+                    "proposal_readiness",
+                    "evidence_conflict",
+                    "decision_evidence_sufficiency",
+                }
+                else self._priority_label(coverage, arena, executable)
+            ),
             "conclusion_scope": "current_run",
             "conclusion_run_id": conclusion_run_id,
             "conclusion_task_id": conclusion_task_id,
@@ -6213,6 +7071,17 @@ class DeterministicFinalReportRenderer:
             "validation_execution_pipeline",
             "validation_task_execution",
             "validation_evidence_evaluation",
+            "arena_evidence_admission",
+            "formal_arena_selection",
+            "selected_candidate_execution_admission",
+            "formal_proposal_rejection",
+            "formal_selection_review_completion",
+            "remaining_candidate_indistinguishability",
+            "proposal_readiness",
+            "evidence_conflict",
+            "decision_evidence_sufficiency",
+            "evidence_sufficiency",
+            "evidence_admissibility",
         }
         if (
             current_row

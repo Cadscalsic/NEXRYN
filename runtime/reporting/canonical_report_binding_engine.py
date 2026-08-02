@@ -7884,6 +7884,57 @@ class CanonicalReportBindingEngine:
                 "VALIDATION_TASK_EXECUTION_REPORT",
             ),
         )
+        validation_evidence_evaluation = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "validation_evidence_evaluation_report",
+                "VALIDATION_EVIDENCE_EVALUATION_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "validation_evidence_evaluation_report",
+                "VALIDATION_EVIDENCE_EVALUATION_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "validation_evidence_evaluation_report",
+                "VALIDATION_EVIDENCE_EVALUATION_REPORT",
+            ),
+        )
+        arena_evidence_admission = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "arena_evidence_admission_report",
+                "ARENA_EVIDENCE_ADMISSION_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "arena_evidence_admission_report",
+                "ARENA_EVIDENCE_ADMISSION_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "arena_evidence_admission_report",
+                "ARENA_EVIDENCE_ADMISSION_REPORT",
+            ),
+        )
+        arena_formal_selection = self._merge_dicts(
+            self._first_dict(
+                report_state,
+                "arena_formal_selection_report",
+                "ARENA_FORMAL_SELECTION_REPORT",
+            ),
+            self._first_dict(
+                performance,
+                "arena_formal_selection_report",
+                "ARENA_FORMAL_SELECTION_REPORT",
+            ),
+            self._first_dict(
+                training_alignment,
+                "arena_formal_selection_report",
+                "ARENA_FORMAL_SELECTION_REPORT",
+            ),
+        )
         evidence_plan_store = self._merge_dicts(
             self._first_dict(
                 report_state,
@@ -8167,6 +8218,11 @@ class CanonicalReportBindingEngine:
                 "validation_execution_report": validation_execution,
                 "validation_scheduling_report": validation_scheduling,
                 "validation_task_execution_report": validation_task_execution,
+                "validation_evidence_evaluation_report": (
+                    validation_evidence_evaluation
+                ),
+                "arena_evidence_admission_report": arena_evidence_admission,
+                "arena_formal_selection_report": arena_formal_selection,
                 "validation_probe_shared_input_trace": explicit_summary.get(
                     "validation_probe_shared_input_trace"
                 ) or {},
@@ -8187,6 +8243,9 @@ class CanonicalReportBindingEngine:
             )
             summary.update(self._validation_scheduling_projection(summary))
             summary.update(self._validation_task_execution_projection(summary))
+            summary.update(self._validation_evidence_evaluation_projection(summary))
+            summary.update(self._arena_evidence_admission_projection(summary))
+            summary.update(self._arena_formal_selection_projection(summary))
             summary.update(self._validation_execution_projection(summary))
             return {
                 "candidate_arena_summary": summary,
@@ -8412,6 +8471,11 @@ class CanonicalReportBindingEngine:
             "validation_execution_report": validation_execution,
             "validation_scheduling_report": validation_scheduling,
             "validation_task_execution_report": validation_task_execution,
+            "validation_evidence_evaluation_report": (
+                validation_evidence_evaluation
+            ),
+            "arena_evidence_admission_report": arena_evidence_admission,
+            "arena_formal_selection_report": arena_formal_selection,
         }
         summary.update(self._prediction_quality_calibration(summary))
         summary.update(self._evidence_plan_consumption_projection(summary))
@@ -8420,6 +8484,9 @@ class CanonicalReportBindingEngine:
         )
         summary.update(self._validation_scheduling_projection(summary))
         summary.update(self._validation_task_execution_projection(summary))
+        summary.update(self._validation_evidence_evaluation_projection(summary))
+        summary.update(self._arena_evidence_admission_projection(summary))
+        summary.update(self._arena_formal_selection_projection(summary))
         summary.update(self._validation_execution_projection(summary))
         return {
             "candidate_arena_summary": summary,
@@ -9111,6 +9178,932 @@ class CanonicalReportBindingEngine:
                     report.get("constitutional_boundary"),
                     "VALIDATION_EXECUTION_AUTHORITY_IS_SCOPED_TO_THE_SCHEDULED_SANDBOX_TASK_AND_DOES_NOT_AUTHORIZE_CANDIDATE_EXECUTION_OR_EVIDENCE_ACCEPTANCE",
                 )
+            ),
+        }
+
+    def _validation_evidence_evaluation_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("validation_evidence_evaluation_report")
+        if not isinstance(report, Mapping) or not report:
+            return {}
+        terminal = report.get("evidence_acceptance_state")
+        return {
+            "validation_evidence_evaluation_plan_id": self._first_present(
+                report.get("plan_id"),
+                summary.get("evidence_plan_id"),
+                "Not Available",
+            ),
+            "validation_evidence_evaluation_schedule_id": self._first_present(
+                report.get("schedule_id"),
+                summary.get("schedule_id"),
+                "Not Available",
+            ),
+            "validation_evidence_evaluation_execution_id": self._first_present(
+                report.get("execution_id"),
+                summary.get("execution_id"),
+                "Not Available",
+            ),
+            "validation_evidence_evaluation_raw_result_id": self._first_present(
+                report.get("raw_result_id"),
+                summary.get("raw_result_id"),
+                "Not Available",
+            ),
+            "comparable_result_id": self._first_present(
+                report.get("comparable_result_id"),
+                "Not Available",
+            ),
+            "evidence_decision_id": self._first_present(
+                report.get("evidence_decision_id"),
+                "Not Available",
+            ),
+            "accepted_evidence_id": self._first_present(
+                report.get("accepted_evidence_id"),
+                "Not Available",
+            ),
+            "validation_task_execution_selected_task": self._first_present(
+                report.get("selected_validation_task_id"),
+                summary.get("validation_task_execution_selected_task"),
+                "Not Available",
+            ),
+            "validation_task_execution_selected_curriculum": self._first_present(
+                report.get("selected_curriculum_id"),
+                summary.get("validation_task_execution_selected_curriculum"),
+                "Not Available",
+            ),
+            "evidence_acquisition_target_candidate": self._first_present(
+                report.get("target_candidate"),
+                summary.get("evidence_acquisition_target_candidate"),
+                "Not Available",
+            ),
+            "evidence_acquisition_target_operation": self._first_present(
+                report.get("target_operation"),
+                summary.get("evidence_acquisition_target_operation"),
+                "Not Available",
+            ),
+            "evidence_acquisition_required_evidence": self._first_present(
+                report.get("required_evidence"),
+                summary.get("evidence_acquisition_required_evidence"),
+                "Not Available",
+            ),
+            "evidence_acquisition_required_category": self._first_present(
+                report.get("required_evidence_category"),
+                summary.get("evidence_acquisition_required_category"),
+                "Not Available",
+            ),
+            "evidence_acquisition_tie_break_strategy": self._first_present(
+                report.get("tie_break_strategy"),
+                summary.get("evidence_acquisition_tie_break_strategy"),
+                "Not Available",
+            ),
+            "evaluation_admission_evaluated": self._first_present(
+                report.get("evaluation_admission_evaluated"),
+                False,
+            ),
+            "evaluation_admission_state": self._first_present(
+                report.get("evaluation_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "evaluation_admission_reason": self._first_present(
+                report.get("evaluation_admission_reason"),
+                "not_evaluated",
+            ),
+            "evidence_evaluation_authority": self._first_present(
+                report.get("evidence_evaluation_authority"),
+                "NONE",
+            ),
+            "evidence_evaluation_scope": self._first_present(
+                report.get("evidence_evaluation_scope"),
+                "Not Available",
+            ),
+            "sealed_reference_available": self._first_present(
+                report.get("sealed_reference_available"),
+                False,
+            ),
+            "sealed_reference_opened_by_evaluator": self._first_present(
+                report.get("sealed_reference_opened_by_evaluator"),
+                False,
+            ),
+            "sealed_reference_forwarded_to_solver": self._first_present(
+                report.get("sealed_reference_forwarded_to_solver"),
+                False,
+            ),
+            "reference_integrity_state": self._first_present(
+                report.get("reference_integrity_state"),
+                "NOT_EVALUATED",
+            ),
+            "comparison_invoked": self._first_present(
+                report.get("comparison_invoked"),
+                False,
+            ),
+            "comparison_started": self._first_present(
+                report.get("comparison_started"),
+                False,
+            ),
+            "comparison_completed": self._first_present(
+                report.get("comparison_completed"),
+                False,
+            ),
+            "comparison_state": self._first_present(
+                report.get("comparison_state"),
+                "NOT_COMPARED",
+            ),
+            "comparator_id": self._first_present(
+                report.get("comparator_id"),
+                "Not Available",
+            ),
+            "comparator_version": self._first_present(
+                report.get("comparator_version"),
+                "Not Available",
+            ),
+            "comparable_result_available": self._first_present(
+                report.get("comparable_result_available"),
+                False,
+            ),
+            "comparable_result_creation_result": self._first_present(
+                report.get("comparable_result_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "expected_case_count": self._first_present(
+                report.get("expected_case_count"),
+                0,
+            ),
+            "compared_case_count": self._first_present(
+                report.get("compared_case_count"),
+                0,
+            ),
+            "case_coverage": self._first_present(report.get("case_coverage"), 0.0),
+            "exact_match_count": self._first_present(
+                report.get("exact_match_count"),
+                0,
+            ),
+            "exact_match_rate": self._first_present(
+                report.get("exact_match_rate"),
+                0.0,
+            ),
+            "comparator_measurement_summary": self._first_present(
+                report.get("comparator_measurement_summary"),
+                "Not Available",
+            ),
+            "grounding_measurement_summary": self._first_present(
+                report.get("grounding_measurement_summary"),
+                "Not Available",
+            ),
+            "evidence_evaluation_invoked": self._first_present(
+                report.get("evidence_evaluation_invoked"),
+                False,
+            ),
+            "evidence_admissibility_evaluated": self._first_present(
+                report.get("evidence_admissibility_evaluated"),
+                False,
+            ),
+            "evidence_admissibility_state": self._first_present(
+                report.get("evidence_admissibility_state"),
+                "NOT_EVALUATED",
+            ),
+            "evidence_admissibility_reason": self._first_present(
+                report.get("evidence_admissibility_reason"),
+                "Not Available",
+            ),
+            "evidence_sufficiency_evaluated": self._first_present(
+                report.get("evidence_sufficiency_evaluated"),
+                False,
+            ),
+            "evidence_sufficiency_state": self._first_present(
+                report.get("evidence_sufficiency_state"),
+                "NOT_EVALUATED",
+            ),
+            "evidence_sufficiency_reason": self._first_present(
+                report.get("evidence_sufficiency_reason"),
+                "Not Available",
+            ),
+            "evidence_direction_calculated": self._first_present(
+                report.get("evidence_direction_calculated"),
+                False,
+            ),
+            "evidence_direction": self._first_present(
+                report.get("evidence_direction"),
+                "NOT_DETERMINED",
+            ),
+            "evidence_direction_reason": self._first_present(
+                report.get("evidence_direction_reason"),
+                "Not Available",
+            ),
+            "evidence_acceptance_state": self._first_present(
+                terminal,
+                "NOT_EVALUATED",
+            ),
+            "evidence_acceptance_reason": self._first_present(
+                report.get("evidence_acceptance_reason"),
+                "Not Available",
+            ),
+            "evidence_decision_recorded": self._first_present(
+                report.get("evidence_decision_recorded"),
+                False,
+            ),
+            "evidence_decision_creation_result": self._first_present(
+                report.get("evidence_decision_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "evidence_contamination_state": self._first_present(
+                report.get("evidence_contamination_state"),
+                "NOT_EVALUATED",
+            ),
+            "independent_validation_state": self._first_present(
+                report.get("independent_validation_state"),
+                "Not Available",
+            ),
+            "candidate_attribution_state": self._first_present(
+                report.get("candidate_attribution_state"),
+                "Not Available",
+            ),
+            "operation_attribution_state": self._first_present(
+                report.get("operation_attribution_state"),
+                "Not Available",
+            ),
+            "duplicate_evidence_detected": self._first_present(
+                report.get("duplicate_evidence_detected"),
+                False,
+            ),
+            "accepted_evidence_artifact_created": self._first_present(
+                report.get("accepted_evidence_artifact_created"),
+                False,
+            ),
+            "accepted_evidence_creation_result": self._first_present(
+                report.get("accepted_evidence_creation_result"),
+                "NOT_APPLICABLE",
+            ),
+            "evidence_accepted": self._first_present(
+                report.get("evidence_accepted"),
+                False,
+            ),
+            "arena_evidence_admission_invoked": self._first_present(
+                report.get("arena_evidence_admission_invoked"),
+                False,
+            ),
+            "arena_reentry_invoked": self._first_present(
+                report.get("arena_reentry_invoked"),
+                False,
+            ),
+            "candidate_score_changed": self._first_present(
+                report.get("candidate_score_changed"),
+                False,
+            ),
+            "candidate_ranking_changed": self._first_present(
+                report.get("candidate_ranking_changed"),
+                False,
+            ),
+            "tie_resolved": self._first_present(report.get("tie_resolved"), False),
+            "winner_selected": self._first_present(
+                report.get("winner_selected"),
+                False,
+            ),
+            "truth_granted": self._first_present(
+                report.get("truth_granted"),
+                False,
+            ),
+            "trust_granted": self._first_present(
+                report.get("trust_granted"),
+                False,
+            ),
+            "graduation_granted": self._first_present(
+                report.get("graduation_granted"),
+                False,
+            ),
+            "truth_authority": self._first_present(
+                report.get("truth_authority"),
+                "NONE",
+            ),
+            "trust_authority": self._first_present(
+                report.get("trust_authority"),
+                "NONE",
+            ),
+            "graduation_authority": self._first_present(
+                report.get("graduation_authority"),
+                "NONE",
+            ),
+            "candidate_execution_authority": self._first_present(
+                report.get("candidate_execution_authority"),
+                "NONE",
+            ),
+            "next_consumer": self._first_present(
+                report.get("next_consumer"),
+                summary.get("next_consumer"),
+                "Not Available",
+            ),
+            "validation_evidence_evaluation_constitutional_boundary": (
+                self._first_present(
+                    report.get("constitutional_boundary"),
+                    "EVIDENCE_EVALUATION_AUTHORITY_MAY_COMPARE_AND_CLASSIFY_VALIDATION_RESULTS_BUT_CANNOT_MODIFY_THE_ARENA_OR_GRANT_TRUTH_TRUST_GRADUATION_OR_CANDIDATE_EXECUTION_AUTHORITY",
+                )
+            ),
+            "decision_orchestration_state": (
+                "EVIDENCE_EVALUATED_AWAITING_FUTURE_CONSUMER"
+                if terminal in {"ACCEPTED", "INSUFFICIENT", "REJECTED"}
+                else summary.get("decision_orchestration_state")
+            ),
+        }
+
+    def _arena_evidence_admission_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("arena_evidence_admission_report")
+        if not isinstance(report, Mapping) or not report:
+            return {}
+        outcome = report.get("redeliberation_outcome")
+        return {
+            "arena_evidence_admission_plan_id": self._first_present(
+                report.get("plan_id"),
+                summary.get("evidence_plan_id"),
+                "Not Available",
+            ),
+            "arena_evidence_admission_evidence_decision_id": self._first_present(
+                report.get("evidence_decision_id"),
+                summary.get("evidence_decision_id"),
+                "Not Available",
+            ),
+            "arena_evidence_admission_accepted_evidence_id": self._first_present(
+                report.get("accepted_evidence_id"),
+                summary.get("accepted_evidence_id"),
+                "Not Available",
+            ),
+            "originating_arena_id": self._first_present(
+                report.get("originating_arena_id"),
+                "Not Available",
+            ),
+            "originating_arena_snapshot_id": self._first_present(
+                report.get("originating_arena_snapshot_id"),
+                "Not Available",
+            ),
+            "arena_evidence_target_candidate": self._first_present(
+                report.get("target_candidate"),
+                "Not Available",
+            ),
+            "arena_evidence_target_operation": self._first_present(
+                report.get("target_operation"),
+                "Not Available",
+            ),
+            "arena_evidence_direction": self._first_present(
+                report.get("evidence_direction"),
+                "Not Available",
+            ),
+            "accepted_evidence_artifact_available": self._first_present(
+                report.get("accepted_evidence_artifact_available"),
+                False,
+            ),
+            "arena_admission_invoked": self._first_present(
+                report.get("arena_admission_invoked"),
+                False,
+            ),
+            "arena_admission_review_completed": self._first_present(
+                report.get("arena_admission_review_completed"),
+                False,
+            ),
+            "arena_admission_evaluated": self._first_present(
+                report.get("arena_admission_evaluated"),
+                report.get("arena_admission_review_completed"),
+                False,
+            ),
+            "arena_admission_state": self._first_present(
+                report.get("arena_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "arena_admission_reason": self._first_present(
+                report.get("arena_admission_reason"),
+                "not_evaluated",
+            ),
+            "arena_admission_record_created": self._first_present(
+                report.get("arena_admission_record_created"),
+                False,
+            ),
+            "arena_evidence_admission_id": self._first_present(
+                report.get("arena_evidence_admission_id"),
+                "Not Available",
+            ),
+            "arena_admission_record_creation_result": self._first_present(
+                report.get("arena_admission_record_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "arena_evidence_ledger_entry_created": self._first_present(
+                report.get("arena_evidence_ledger_entry_created"),
+                False,
+            ),
+            "arena_evidence_ledger_entry_id": self._first_present(
+                report.get("arena_evidence_ledger_entry_id"),
+                "Not Available",
+            ),
+            "arena_evidence_ledger_creation_result": self._first_present(
+                report.get("arena_evidence_ledger_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "arena_evidence_admitted": self._first_present(
+                report.get("arena_evidence_admitted"),
+                False,
+            ),
+            "arena_evidence_consumed": self._first_present(
+                report.get("arena_evidence_consumed"),
+                False,
+            ),
+            "redeliberation_invoked": self._first_present(
+                report.get("redeliberation_invoked"),
+                False,
+            ),
+            "redeliberation_started": self._first_present(
+                report.get("redeliberation_started"),
+                False,
+            ),
+            "redeliberation_completed": self._first_present(
+                report.get("redeliberation_completed"),
+                False,
+            ),
+            "redeliberation_admission_evaluated": self._first_present(
+                report.get("redeliberation_admission_evaluated"),
+                False,
+            ),
+            "redeliberation_admission_state": self._first_present(
+                report.get("redeliberation_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "arena_redeliberation_authority": self._first_present(
+                report.get("arena_redeliberation_authority"),
+                "NONE",
+            ),
+            "arena_redeliberation_scope": self._first_present(
+                report.get("arena_redeliberation_scope"),
+                "Not Available",
+            ),
+            "baseline_snapshot_loaded": self._first_present(
+                report.get("baseline_snapshot_loaded"),
+                False,
+            ),
+            "redeliberation_snapshot_created": self._first_present(
+                report.get("redeliberation_snapshot_created"),
+                False,
+            ),
+            "redeliberation_snapshot_id": self._first_present(
+                report.get("redeliberation_snapshot_id"),
+                "Not Available",
+            ),
+            "redeliberation_snapshot_creation_result": self._first_present(
+                report.get("redeliberation_snapshot_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "candidate_evidence_profiles_rebuilt": self._first_present(
+                report.get("candidate_evidence_profiles_rebuilt"),
+                False,
+            ),
+            "evidence_direction_preserved": self._first_present(
+                report.get("evidence_direction_preserved"),
+                False,
+            ),
+            "evidence_effect_policy_resolved": self._first_present(
+                report.get("evidence_effect_policy_resolved"),
+                False,
+            ),
+            "evidence_effect_applied": self._first_present(
+                report.get("evidence_effect_applied"),
+                False,
+            ),
+            "candidate_scores_recomputed": self._first_present(
+                report.get("candidate_scores_recomputed"),
+                False,
+            ),
+            "candidate_score_changed": self._first_present(
+                report.get("candidate_score_changed"),
+                False,
+            ),
+            "candidate_ranking_recomputed": self._first_present(
+                report.get("candidate_ranking_recomputed"),
+                False,
+            ),
+            "candidate_ranking_changed": self._first_present(
+                report.get("candidate_ranking_changed"),
+                False,
+            ),
+            "cross_source_consensus_recomputed": self._first_present(
+                report.get("cross_source_consensus_recomputed"),
+                False,
+            ),
+            "cross_source_consensus_changed": self._first_present(
+                report.get("cross_source_consensus_changed"),
+                False,
+            ),
+            "validation_evidence_counted_as_candidate_source": self._first_present(
+                report.get("validation_evidence_counted_as_candidate_source"),
+                False,
+            ),
+            "tie_break_strategy_applied": self._first_present(
+                report.get("tie_break_strategy_applied"),
+                False,
+            ),
+            "tie_break_strategy_satisfied": self._first_present(
+                report.get("tie_break_strategy_satisfied"),
+                False,
+            ),
+            "provisional_leader_available": self._first_present(
+                report.get("provisional_leader_available"),
+                False,
+            ),
+            "decision_proposal_available": self._first_present(
+                report.get("decision_proposal_available"),
+                False,
+            ),
+            "decision_proposal_id": self._first_present(
+                report.get("decision_proposal_id"),
+                "NONE",
+            ),
+            "deliberative_outcome_id": self._first_present(
+                report.get("deliberative_outcome_id"),
+                "Not Available",
+            ),
+            "deliberative_outcome_creation_result": self._first_present(
+                report.get("deliberative_outcome_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "redeliberation_outcome": self._first_present(
+                outcome,
+                "Not Available",
+            ),
+            "remaining_tie_count": self._first_present(
+                report.get("remaining_tie_count"),
+                0,
+            ),
+            "formal_selection_invoked": self._first_present(
+                report.get("formal_selection_invoked"),
+                False,
+            ),
+            "tie_resolved": self._first_present(
+                report.get("tie_resolved"),
+                False,
+            ),
+            "winner_selected": self._first_present(
+                report.get("winner_selected"),
+                False,
+            ),
+            "selected_candidate": self._first_present(
+                report.get("selected_candidate"),
+                "NONE",
+            ),
+            "candidate_execution_authority": self._first_present(
+                report.get("candidate_execution_authority"),
+                "NONE",
+            ),
+            "truth_authority": self._first_present(
+                report.get("truth_authority"),
+                "NONE",
+            ),
+            "trust_authority": self._first_present(
+                report.get("trust_authority"),
+                "NONE",
+            ),
+            "graduation_authority": self._first_present(
+                report.get("graduation_authority"),
+                "NONE",
+            ),
+            "next_consumer": self._first_present(
+                report.get("next_consumer"),
+                summary.get("next_consumer"),
+                "Not Available",
+            ),
+            "arena_evidence_admission_constitutional_boundary": (
+                self._first_present(
+                    report.get("constitutional_boundary"),
+                    "ARENA_EVIDENCE_ADMISSION_AUTHORITY_MAY_ADMIT_ONE_VERIFIED_ACCEPTED_EVIDENCE_ARTIFACT_AND_AUTHORIZE_BOUNDED_REDELIBERATION_BUT_CANNOT_SELECT_A_WINNER_OR_GRANT_EXECUTION_TRUTH_TRUST_OR_GRADUATION_AUTHORITY",
+                )
+            ),
+            "decision_orchestration_state": (
+                "ARENA_REDELIBERATION_COMPLETED_AWAITING_FUTURE_CONSUMER"
+                if outcome
+                in {
+                    "DECISION_PROPOSAL_AVAILABLE",
+                    "TIE_PERSISTS",
+                    "NO_SAFE_PROPOSAL",
+                    "CONFLICT_REQUIRES_REVIEW",
+                    "ADDITIONAL_EVIDENCE_REQUIRED",
+                }
+                else summary.get("decision_orchestration_state")
+            ),
+        }
+
+    def _arena_formal_selection_projection(
+        self,
+        summary: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        report = summary.get("arena_formal_selection_report")
+        if not isinstance(report, Mapping) or not report:
+            return {}
+        outcome = report.get("formal_selection_outcome")
+        terminal = outcome in {"RATIFIED", "REJECTED", "DEFERRED"}
+        return {
+            "formal_selection_gate_attempted": self._first_present(
+                report.get("formal_selection_gate_attempted"),
+                report.get("formal_selection_admission_invoked"),
+                False,
+            ),
+            "formal_selection_plan_id": self._first_present(
+                report.get("plan_id"),
+                summary.get("evidence_plan_id"),
+                "Not Available",
+            ),
+            "formal_selection_decision_proposal_id": self._first_present(
+                report.get("decision_proposal_id"),
+                summary.get("decision_proposal_id"),
+                "NONE",
+            ),
+            "formal_selection_review_case_id": self._first_present(
+                report.get("formal_selection_review_case_id"),
+                "Not Available",
+            ),
+            "formal_selection_decision_id": self._first_present(
+                report.get("formal_selection_decision_id"),
+                "Not Available",
+            ),
+            "arena_selection_snapshot_id": self._first_present(
+                report.get("arena_selection_snapshot_id"),
+                "Not Available",
+            ),
+            "proposal_disposition_id": self._first_present(
+                report.get("proposal_disposition_id"),
+                "Not Available",
+            ),
+            "decision_proposal_route_detected": self._first_present(
+                report.get("decision_proposal_route_detected"),
+                False,
+            ),
+            "decision_proposal_loaded": self._first_present(
+                report.get("decision_proposal_loaded"),
+                False,
+            ),
+            "originating_arena_loaded": self._first_present(
+                report.get("originating_arena_loaded"),
+                False,
+            ),
+            "formal_baseline_snapshot_loaded": self._first_present(
+                report.get("baseline_snapshot_loaded"),
+                False,
+            ),
+            "formal_redeliberation_snapshot_loaded": self._first_present(
+                report.get("redeliberation_snapshot_loaded"),
+                False,
+            ),
+            "deliberative_outcome_loaded": self._first_present(
+                report.get("deliberative_outcome_loaded"),
+                False,
+            ),
+            "candidate_set_loaded": self._first_present(
+                report.get("candidate_set_loaded"),
+                False,
+            ),
+            "proposed_candidate_resolved": self._first_present(
+                report.get("proposed_candidate_resolved"),
+                False,
+            ),
+            "proposal_lineage_alignment": self._first_present(
+                report.get("proposal_lineage_alignment"),
+                "Not Available",
+            ),
+            "fingerprint_integrity": self._first_present(
+                report.get("fingerprint_integrity"),
+                "Not Available",
+            ),
+            "proposal_uniqueness": self._first_present(
+                report.get("proposal_uniqueness"),
+                "Not Available",
+            ),
+            "formal_selection_admission_invoked": self._first_present(
+                report.get("formal_selection_admission_invoked"),
+                False,
+            ),
+            "formal_selection_admission_evaluated": self._first_present(
+                report.get("formal_selection_admission_evaluated"),
+                False,
+            ),
+            "formal_selection_admission_state": self._first_present(
+                report.get("formal_selection_admission_state"),
+                "NOT_EVALUATED",
+            ),
+            "formal_selection_admission_reason": self._first_present(
+                report.get("formal_selection_admission_reason"),
+                "not_evaluated",
+            ),
+            "formal_selection_review_authority": self._first_present(
+                report.get("formal_selection_review_authority"),
+                "NONE",
+            ),
+            "formal_selection_review_scope": self._first_present(
+                report.get("formal_selection_review_scope"),
+                "Not Available",
+            ),
+            "formal_selection_review_invoked": self._first_present(
+                report.get("formal_selection_review_invoked"),
+                False,
+            ),
+            "formal_selection_review_started": self._first_present(
+                report.get("formal_selection_review_started"),
+                False,
+            ),
+            "formal_selection_review_completed": self._first_present(
+                report.get("formal_selection_review_completed"),
+                False,
+            ),
+            "proposal_readiness_reverified": self._first_present(
+                report.get("proposal_readiness_reverified"),
+                False,
+            ),
+            "minimum_margin_reverified": self._first_present(
+                report.get("minimum_margin_reverified"),
+                False,
+            ),
+            "candidate_eligibility_reverified": self._first_present(
+                report.get("candidate_eligibility_reverified"),
+                False,
+            ),
+            "cross_source_requirements_reverified": self._first_present(
+                report.get("cross_source_requirements_reverified"),
+                False,
+            ),
+            "consensus_integrity_verified": self._first_present(
+                report.get("consensus_integrity_verified"),
+                False,
+            ),
+            "evidence_attribution_verified": self._first_present(
+                report.get("evidence_attribution_verified"),
+                False,
+            ),
+            "evidence_quality_verified": self._first_present(
+                report.get("evidence_quality_verified"),
+                False,
+            ),
+            "constitutional_review_completed": self._first_present(
+                report.get("constitutional_review_completed"),
+                False,
+            ),
+            "constitutional_veto_active": self._first_present(
+                report.get("constitutional_veto_active"),
+                False,
+            ),
+            "temporal_validity_verified": self._first_present(
+                report.get("temporal_validity_verified"),
+                False,
+            ),
+            "proposal_lineage_integrity_state": self._first_present(
+                report.get("proposal_lineage_integrity_state"),
+                "Not Available",
+            ),
+            "candidate_identity_integrity_state": self._first_present(
+                report.get("candidate_identity_integrity_state"),
+                "Not Available",
+            ),
+            "redeliberation_completeness_state": self._first_present(
+                report.get("redeliberation_completeness_state"),
+                "Not Available",
+            ),
+            "proposal_readiness_state": self._first_present(
+                report.get("proposal_readiness_state"),
+                "Not Available",
+            ),
+            "minimum_margin_state": self._first_present(
+                report.get("minimum_margin_state"),
+                "Not Available",
+            ),
+            "candidate_eligibility_state": self._first_present(
+                report.get("candidate_eligibility_state"),
+                "Not Available",
+            ),
+            "cross_source_requirement_state": self._first_present(
+                report.get("cross_source_requirement_state"),
+                "Not Available",
+            ),
+            "consensus_integrity_state": self._first_present(
+                report.get("consensus_integrity_state"),
+                "Not Available",
+            ),
+            "evidence_attribution_state": self._first_present(
+                report.get("evidence_attribution_state"),
+                "Not Available",
+            ),
+            "evidence_quality_state": self._first_present(
+                report.get("evidence_quality_state"),
+                "Not Available",
+            ),
+            "remaining_uncertainty_state": self._first_present(
+                report.get("remaining_uncertainty_state"),
+                "Not Available",
+            ),
+            "remaining_evidence_deficit_state": self._first_present(
+                report.get("remaining_evidence_deficit_state"),
+                "Not Available",
+            ),
+            "constitutional_review_state": self._first_present(
+                report.get("constitutional_review_state"),
+                "Not Available",
+            ),
+            "constitutional_veto_state": self._first_present(
+                report.get("constitutional_veto_state"),
+                "Not Available",
+            ),
+            "temporal_validity_state": self._first_present(
+                report.get("temporal_validity_state"),
+                "Not Available",
+            ),
+            "selection_authority_boundary_state": self._first_present(
+                report.get("selection_authority_boundary_state"),
+                "Not Available",
+            ),
+            "downstream_execution_separation_state": self._first_present(
+                report.get("downstream_execution_separation_state"),
+                "Not Available",
+            ),
+            "formal_selection_outcome": self._first_present(
+                outcome,
+                "NOT_EVALUATED",
+            ),
+            "formal_selection_outcome_reason": self._first_present(
+                report.get("formal_selection_outcome_reason"),
+                "not_evaluated",
+            ),
+            "proposal_ratified": self._first_present(
+                report.get("proposal_ratified"),
+                False,
+            ),
+            "proposal_rejected": self._first_present(
+                report.get("proposal_rejected"),
+                False,
+            ),
+            "proposal_deferred": self._first_present(
+                report.get("proposal_deferred"),
+                False,
+            ),
+            "tie_resolved": self._first_present(
+                report.get("tie_resolved"),
+                summary.get("tie_resolved"),
+                False,
+            ),
+            "winner_selected": self._first_present(
+                report.get("winner_selected"),
+                summary.get("winner_selected"),
+                False,
+            ),
+            "selected_candidate": self._first_present(
+                report.get("selected_candidate"),
+                summary.get("selected_candidate"),
+                "NONE",
+            ),
+            "selection_basis": self._first_present(
+                report.get("selection_basis"),
+                "NONE",
+            ),
+            "candidate_execution_authority": self._first_present(
+                report.get("candidate_execution_authority"),
+                "NONE",
+            ),
+            "candidate_execution_started": self._first_present(
+                report.get("candidate_execution_started"),
+                False,
+            ),
+            "truth_authority": self._first_present(
+                report.get("truth_authority"),
+                "NONE",
+            ),
+            "trust_authority": self._first_present(
+                report.get("trust_authority"),
+                "NONE",
+            ),
+            "graduation_authority": self._first_present(
+                report.get("graduation_authority"),
+                "NONE",
+            ),
+            "next_consumer": self._first_present(
+                report.get("next_consumer"),
+                summary.get("next_consumer"),
+                "Not Available",
+            ),
+            "formal_selection_review_creation_result": self._first_present(
+                report.get("formal_selection_review_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "formal_selection_decision_creation_result": self._first_present(
+                report.get("formal_selection_decision_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "arena_selection_snapshot_creation_result": self._first_present(
+                report.get("arena_selection_snapshot_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "proposal_disposition_creation_result": self._first_present(
+                report.get("proposal_disposition_creation_result"),
+                "NOT_ATTEMPTED",
+            ),
+            "formal_selection_constitutional_boundary": self._first_present(
+                report.get("constitutional_boundary"),
+                "FORMAL_SELECTION_MAY_RATIFY_ONE_VALID_DECISION_PROPOSAL_AND_IDENTIFY_ONE_ARENA_WINNER_BUT_MUST_NOT_COMPILE_EXECUTE_VALIDATE_PROMOTE_OR_GRANT_TRUTH_TRUST_OR_GRADUATION_TO_THE_SELECTED_CANDIDATE",
+            ),
+            "decision_orchestration_state": (
+                "FORMAL_SELECTION_COMPLETED_AWAITING_FUTURE_CONSUMER"
+                if terminal
+                else summary.get("decision_orchestration_state")
             ),
         }
 

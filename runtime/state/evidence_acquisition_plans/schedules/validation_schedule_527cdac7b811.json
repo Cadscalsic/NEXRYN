@@ -1,0 +1,144 @@
+{
+  "active_execution_lease": false,
+  "attempt_count": 1,
+  "candidate_execution_authority": "NONE",
+  "constitutional_boundary": "VALIDATION_SCHEDULE_IS_A_GOVERNED_FUTURE_EXECUTION_REQUEST_NOT_EXECUTION_OR_EVIDENCE",
+  "evidence_state": "NOT_EVALUATED",
+  "execution_authority": "NONE",
+  "execution_completed_at": "2026-08-02T20:46:16.828740+00:00",
+  "execution_id": "validation_execution_72adf97745e0",
+  "execution_invoked": true,
+  "execution_started_at": "2026-08-02T20:46:16.821777+00:00",
+  "execution_state": "RAW_RESULT_CAPTURED",
+  "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
+  "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
+  "raw_result_fingerprint": "466436141e74d5648fdc3d91a3e4c8ffd5d417280a6ddf0d2da55f3bda5ec120",
+  "raw_result_id": "raw_validation_result_e8d6e6cad0fb",
+  "required_evidence": "cross_source_consensus_evidence",
+  "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
+  "schedule_fingerprint": "34176a332cddd2f5e72cd52513d4ee0ac523d3e2cba0e00d094c8204bdd6fd6a",
+  "schedule_id": "validation_schedule_527cdac7b811",
+  "scheduling_admission_reason": "admission_contract_satisfied",
+  "scheduling_admission_state": "ADMITTED",
+  "scheduling_authority": "VALIDATION_SCHEDULER",
+  "scheduling_state": "SCHEDULED",
+  "scheduling_timestamp": "2026-08-02T20:46:16.760912+00:00",
+  "schema_version": "1.0",
+  "selected_curriculum_id": "elite_validation_academy",
+  "selected_task_metadata": {
+    "capability_targets": [
+      "localized_replace_color",
+      "Color Transformation Capability"
+    ],
+    "cross_domain": true,
+    "curriculum_display_name": "Elite Validation Academy",
+    "curriculum_id": "elite_validation_academy",
+    "curriculum_priority": 100,
+    "difficulty": "elite_validation_very_high",
+    "enabled": true,
+    "operational_reuse_potential": "high",
+    "primary_evidence_category": "CROSS_SOURCE_CONSENSUS",
+    "raw_task": {
+      "capability_targets": [
+        "localized_replace_color",
+        "Color Transformation Capability"
+      ],
+      "cross_domain_participation": [
+        "Color",
+        "Identity",
+        "Transformation"
+      ],
+      "cross_domain_requirement": [
+        "Color",
+        "Identity",
+        "Transformation"
+      ],
+      "difficulty_level": "elite_validation_very_high",
+      "elite_group": "Advanced Multi-Concept Validation Tasks",
+      "evidence_authority": "GOVERNED_VALIDATION_REQUIRED",
+      "expected_capability_promotion": "EVIDENCE_OPPORTUNITY_ONLY_NO_AUTOMATIC_PROMOTION",
+      "expected_capability_trust_effect": "TRUST_REQUIRES_FUTURE_ACCEPTED_EVIDENCE",
+      "expected_governed_validation_effect": "ADVANCED_MULTI_CONCEPT_VALIDATION_EVIDENCE_AVAILABLE",
+      "expected_graduation_effect": "GRADUATION_RELEVANCE_INCREASED_WITHOUT_AUTHORITY_CHANGE",
+      "expected_validation_contract": "localized_remap_consensus_contract",
+      "graduation_authority": "NONE",
+      "graduation_objective": "Increase graduation-relevant evidence diversity while preserving evidence-governed graduation.",
+      "graduation_relevance": "high",
+      "operational_reuse_potential": "high",
+      "operationalization_objective": "Provide a governed multi-concept validation opportunity that can be selected before synthetic task generation.",
+      "prerequisite_capabilities": [
+        "replace_color",
+        "preserve_shape",
+        "object_grounding"
+      ],
+      "primary_evidence_category": "CROSS_SOURCE_CONSENSUS",
+      "promotion_weight": 0.94,
+      "reasoning_complexity": "advanced_multi_concept",
+      "required_ground_truth": "CROSS SOURCE CONSENSUS governed ground truth",
+      "required_grounding": [
+        "localized_color_remap_cross_source_consensus",
+        "paired_input_output_grounding",
+        "governed_validation_context"
+      ],
+      "required_task_property": "localized_color_remap_cross_source_consensus",
+      "required_validation_evidence": "cross_source_consensus_evidence",
+      "secondary_evidence_categories": [
+        "semantic_consistency_evidence",
+        "execution_generalization_evidence"
+      ],
+      "target_capability": "localized_replace_color",
+      "target_cluster": "Color Transformation Capability",
+      "target_cognitive_domains": [
+        "Color",
+        "Identity",
+        "Transformation"
+      ],
+      "target_domain": "Color",
+      "task_id": "elite_validation_task_31",
+      "task_name": "Cross Source Localized Remap Consensus",
+      "trust_authority": "NONE",
+      "trust_objective": "Accumulate governed validation evidence without granting trust or truth authority.",
+      "truth_authority": "NONE",
+      "validation_difficulty": "elite_validation_very_high",
+      "validation_objective": "Validate that independent candidate sources converge on the same localized recolor scope, mapping, and unchanged object identity."
+    },
+    "reasoning_patterns": [
+      "advanced_multi_concept",
+      "Advanced Multi-Concept Validation Tasks",
+      "Color Transformation Capability"
+    ],
+    "required_grounding": [
+      "localized_color_remap_cross_source_consensus",
+      "paired_input_output_grounding",
+      "governed_validation_context"
+    ],
+    "secondary_evidence_categories": [
+      "semantic_consistency_evidence",
+      "execution_generalization_evidence"
+    ],
+    "supported_domains": [
+      "Color",
+      "Identity",
+      "Transformation"
+    ],
+    "supported_evidence": [
+      "CROSS_SOURCE_CONSENSUS",
+      "cross_source_consensus_evidence",
+      "execution_generalization_evidence",
+      "semantic_consistency_evidence"
+    ],
+    "supported_operations": [
+      "Color Transformation Capability",
+      "localized_replace_color"
+    ],
+    "task_id": "elite_validation_task_31",
+    "task_name": "Cross Source Localized Remap Consensus",
+    "validation_contract": "localized_remap_consensus_contract"
+  },
+  "selected_validation_task_id": "elite_validation_task_31",
+  "target_candidate": "semantic_to_transformation_compiler_0",
+  "target_operation": "replace_color",
+  "tie_break_strategy": "cross_source_consensus",
+  "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
+  "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY"
+}
