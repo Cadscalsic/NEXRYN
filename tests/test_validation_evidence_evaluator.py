@@ -157,7 +157,14 @@ def test_raw_result_captured_evaluates_to_accepted_without_arena_authority(tmp_p
         persisted["evidence_plan_id"]
     )
 
-    assert report["evaluation_admission_state"] == "ADMITTED"
+    assert report["evaluation_admission_state"] == (
+        "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+    )
+    assert report["evaluation_contract_id"].startswith(
+        "validation_evidence_evaluation_contract_"
+    )
+    assert report["sealed_reference_resolved"] is True
+    assert report["target_reference_forwarded_to_solver"] is False
     assert report["sealed_reference_opened_by_evaluator"] is True
     assert report["sealed_reference_forwarded_to_solver"] is False
     assert report["comparison_state"] == "COMPARISON_COMPLETED"
@@ -179,7 +186,7 @@ def test_raw_result_captured_evaluates_to_accepted_without_arena_authority(tmp_p
     assert report["trust_authority"] == "NONE"
     assert report["graduation_authority"] == "NONE"
     assert report["candidate_execution_authority"] == "NONE"
-    assert report["next_consumer"] == "ARENA_EVIDENCE_ADMISSION_GATE"
+    assert report["next_consumer"] == "FUTURE_ARENA_EVIDENCE_ADMISSION_GATE"
 
     plan = _read_json(
         tmp_path / "pending" / f"{persisted['evidence_plan_id']}.json"
@@ -310,7 +317,9 @@ def test_manifest_task_without_explicit_contract_derives_safe_contract(tmp_path)
         persisted["evidence_plan_id"]
     )
 
-    assert report["evaluation_admission_state"] == "ADMITTED"
+    assert report["evaluation_admission_state"] == (
+        "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+    )
     assert report["comparison_state"] == "COMPARISON_COMPLETED"
     assert report["evidence_acceptance_state"] == "ACCEPTED"
     comparable = _read_json(

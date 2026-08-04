@@ -3791,12 +3791,6 @@ try:
     from runtime.validation.validation_evidence_evaluator import (
         ValidationEvidenceEvaluator,
     )
-    from runtime.validation.arena_evidence_admission_gate import (
-        ArenaEvidenceAdmissionGate,
-    )
-    from runtime.validation.arena_formal_selection_gate import (
-        ArenaFormalSelectionGate,
-    )
     from runtime.validation.validation_task_scheduler import ValidationTaskScheduler
 
     evidence_plan_store = EvidenceAcquisitionPlanStore()
@@ -3898,18 +3892,42 @@ try:
     validation_evidence_evaluation_report = (
         validation_evidence_evaluator.evaluate_captured_results()
     )
-    arena_evidence_admission_gate = ArenaEvidenceAdmissionGate(
-        root_path=evidence_plan_store.root_path,
-    )
-    arena_evidence_admission_report = (
-        arena_evidence_admission_gate.admit_accepted_evidence()
-    )
-    arena_formal_selection_gate = ArenaFormalSelectionGate(
-        root_path=evidence_plan_store.root_path,
-    )
-    arena_formal_selection_report = (
-        arena_formal_selection_gate.review_pending_decision_proposals()
-    )
+    arena_evidence_admission_report = {
+        "system": "arena_evidence_admission_gate",
+        "arena_evidence_admission_attempted": False,
+        "arena_admission_invoked": False,
+        "arena_evidence_admitted": False,
+        "arena_evidence_consumed": False,
+        "redeliberation_invoked": False,
+        "redeliberation_completed": False,
+        "formal_selection_invoked": False,
+        "tie_resolved": False,
+        "winner_selected": False,
+        "selected_candidate": "NONE",
+        "candidate_execution_authority": "NONE",
+        "truth_authority": "NONE",
+        "trust_authority": "NONE",
+        "graduation_authority": "NONE",
+        "next_consumer": "Not Available",
+    }
+    arena_formal_selection_report = {
+        "system": "arena_formal_selection_gate",
+        "formal_selection_gate_attempted": False,
+        "formal_selection_admission_invoked": False,
+        "formal_selection_review_completed": False,
+        "formal_selection_outcome": "NOT_EVALUATED",
+        "proposal_ratified": False,
+        "proposal_rejected": False,
+        "proposal_deferred": False,
+        "tie_resolved": False,
+        "winner_selected": False,
+        "selected_candidate": "NONE",
+        "candidate_execution_authority": "NONE",
+        "truth_authority": "NONE",
+        "trust_authority": "NONE",
+        "graduation_authority": "NONE",
+        "next_consumer": "Not Available",
+    }
     evidence_plan_store_report = {
         **evidence_plan_store_report,
         "validation_scheduling_report": validation_scheduling_report,

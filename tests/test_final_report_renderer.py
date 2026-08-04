@@ -2709,6 +2709,10 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
             "schedule_id": "validation_schedule_1",
             "execution_id": "validation_execution_1",
             "raw_result_id": "raw_validation_result_1",
+            "evaluation_contract_id": (
+                "validation_evidence_evaluation_contract_1"
+            ),
+            "evaluation_contract_fingerprint": "contract_fp_1",
             "comparable_result_id": "comparable_result_1",
             "evidence_decision_id": "evidence_decision_1",
             "accepted_evidence_id": "accepted_evidence_1",
@@ -2720,7 +2724,9 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
             "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
             "tie_break_strategy": "cross_source_consensus",
             "evaluation_admission_evaluated": True,
-            "evaluation_admission_state": "ADMITTED",
+            "evaluation_admission_state": (
+                "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+            ),
             "evaluation_admission_reason": (
                 "evidence_evaluation_contract_satisfied"
             ),
@@ -2729,8 +2735,12 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
                 "CAPTURED_RAW_RESULT_AND_SEALED_REFERENCE_ONLY"
             ),
             "sealed_reference_available": True,
+            "sealed_reference_id": "sealed_reference_1",
+            "sealed_reference_fingerprint": "sealed_ref_fp_1",
+            "sealed_reference_resolved": True,
             "sealed_reference_opened_by_evaluator": True,
             "sealed_reference_forwarded_to_solver": False,
+            "target_reference_forwarded_to_solver": False,
             "reference_integrity_state": "VERIFIED",
             "comparison_invoked": True,
             "comparison_started": True,
@@ -2738,6 +2748,7 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
             "comparison_state": "COMPARISON_COMPLETED",
             "comparator_id": "manifest_observation_comparison",
             "comparator_version": "1.0",
+            "comparator_resolved": True,
             "comparable_result_available": True,
             "comparable_result_creation_result": "CREATED_NEW_COMPARABLE_RESULT",
             "expected_case_count": 1,
@@ -2745,6 +2756,10 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
             "case_coverage": 1.0,
             "exact_match_count": 1,
             "exact_match_rate": 1.0,
+            "exact_match": True,
+            "accuracy": 1.0,
+            "difference_count": 0,
+            "shape_compatibility_state": "COMPATIBLE",
             "evidence_evaluation_invoked": True,
             "evidence_admissibility_evaluated": True,
             "evidence_admissibility_state": "ADMISSIBLE",
@@ -2752,7 +2767,9 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
             "evidence_sufficiency_state": "SUFFICIENT",
             "evidence_direction": "SUPPORTING",
             "evidence_acceptance_state": "ACCEPTED",
+            "evidence_evaluation_outcome": "EVIDENCE_ACCEPTED",
             "evidence_acceptance_reason": "evidence_contract_satisfied",
+            "outcome_reason": "evidence_contract_satisfied",
             "evidence_decision_recorded": True,
             "evidence_decision_creation_result": "CREATED_NEW_EVIDENCE_DECISION",
             "evidence_contamination_state": "CLEAR",
@@ -2771,7 +2788,9 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
-            "next_consumer": "ARENA_EVIDENCE_ADMISSION_GATE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
+            "next_consumer": "FUTURE_ARENA_EVIDENCE_ADMISSION_GATE",
         },
     }
 
@@ -2785,7 +2804,9 @@ def test_engineering_conclusion_reports_accepted_evidence_admission_gate():
     ]
 
     assert "VALIDATION EVIDENCE EVALUATION REPORT" in report
+    assert "Evaluation Contract Id: validation_evidence_evaluation_contract_1" in report
     assert "Evidence Acceptance State: ACCEPTED" in report
+    assert "Evidence Evaluation Outcome: EVIDENCE_ACCEPTED" in report
     assert "Accepted Evidence Artifact Created: TRUE" in report
     assert "Arena Evidence Admission Invoked: FALSE" in report
     assert "Tie Resolved: FALSE" in report

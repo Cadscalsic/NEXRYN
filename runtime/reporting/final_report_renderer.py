@@ -1401,8 +1401,10 @@ class DeterministicFinalReportRenderer:
             f"{self._value(arena.get('validation_evidence_evaluation_execution_id') not in {None, 'Not Available'})}",
             "  Raw Result Loaded: "
             f"{self._value(arena.get('validation_evidence_evaluation_raw_result_id') not in {None, 'Not Available'})}",
+            "  Evaluation Contract Id: "
+            f"{self._value(arena.get('evaluation_contract_id'))}",
             "  Record Alignment: "
-            f"{self._value('ALIGNED' if arena.get('evaluation_admission_state') == 'ADMITTED' else 'Not Available')}",
+            f"{self._value('ALIGNED' if arena.get('evaluation_admission_state') in {'ADMITTED', 'ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION'} else 'Not Available')}",
             "  Evaluation Admission Evaluated: "
             f"{self._value(arena.get('evaluation_admission_evaluated'))}",
             "  Evaluation Admission State: "
@@ -1412,17 +1414,25 @@ class DeterministicFinalReportRenderer:
             "  Evaluation Authority Scope: "
             f"{self._value(arena.get('evidence_evaluation_scope'))}",
             "  Sealed Reference Resolved: "
-            f"{self._value(arena.get('sealed_reference_available'))}",
+            f"{self._value(arena.get('sealed_reference_resolved'))}",
+            "  Sealed Reference Id: "
+            f"{self._value(arena.get('sealed_reference_id'))}",
             "  Reference Integrity Verified: "
             f"{self._value(arena.get('reference_integrity_state') == 'VERIFIED')}",
             "  Comparator Resolved: "
-            f"{self._value(arena.get('comparator_id') not in {None, 'Not Available'})}",
+            f"{self._value(arena.get('comparator_resolved'))}",
             "  Comparison Started: "
             f"{self._value(arena.get('comparison_started'))}",
             "  Comparison Completed: "
             f"{self._value(arena.get('comparison_completed'))}",
             "  Comparable Result Id: "
             f"{self._value(arena.get('comparable_result_id'))}",
+            "  Exact Match: "
+            f"{self._value(arena.get('exact_match'))}",
+            "  Accuracy: "
+            f"{self._value(arena.get('accuracy'))}",
+            "  Difference Count: "
+            f"{self._value(arena.get('difference_count'))}",
             "  Candidate Attribution State: "
             f"{self._value(arena.get('candidate_attribution_state'))}",
             "  Operation Attribution State: "
@@ -1437,6 +1447,8 @@ class DeterministicFinalReportRenderer:
             f"{self._value(arena.get('evidence_direction'))}",
             "  Evidence Acceptance State: "
             f"{self._value(arena.get('evidence_acceptance_state'))}",
+            "  Evidence Evaluation Outcome: "
+            f"{self._value(arena.get('evidence_evaluation_outcome'))}",
             "  Evidence Decision Id: "
             f"{self._value(arena.get('evidence_decision_id'))}",
             "  Accepted Evidence Id: "
@@ -4999,6 +5011,10 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('validation_evidence_evaluation_execution_id'))}",
             "Raw Result Id: "
             f"{self._value(summary.get('validation_evidence_evaluation_raw_result_id'))}",
+            "Evaluation Contract Id: "
+            f"{self._value(summary.get('evaluation_contract_id'))}",
+            "Evaluation Contract Fingerprint: "
+            f"{self._value(summary.get('evaluation_contract_fingerprint'))}",
             "Comparable Result Id: "
             f"{self._value(summary.get('comparable_result_id'))}",
             "Evidence Decision Id: "
@@ -5031,10 +5047,18 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('evidence_evaluation_scope'))}",
             "Sealed Reference Available: "
             f"{self._value(summary.get('sealed_reference_available'))}",
+            "Sealed Reference Id: "
+            f"{self._value(summary.get('sealed_reference_id'))}",
+            "Sealed Reference Fingerprint: "
+            f"{self._value(summary.get('sealed_reference_fingerprint'))}",
+            "Sealed Reference Resolved: "
+            f"{self._value(summary.get('sealed_reference_resolved'))}",
             "Sealed Reference Opened By Evaluator: "
             f"{self._value(summary.get('sealed_reference_opened_by_evaluator'))}",
             "Sealed Reference Forwarded To Solver: "
             f"{self._value(summary.get('sealed_reference_forwarded_to_solver'))}",
+            "Target Reference Forwarded To Solver: "
+            f"{self._value(summary.get('target_reference_forwarded_to_solver'))}",
             "Reference Integrity State: "
             f"{self._value(summary.get('reference_integrity_state'))}",
             "Comparison Invoked: "
@@ -5049,6 +5073,8 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('comparator_id'))}",
             "Comparator Version: "
             f"{self._value(summary.get('comparator_version'))}",
+            "Comparator Resolved: "
+            f"{self._value(summary.get('comparator_resolved'))}",
             "Comparable Result Available: "
             f"{self._value(summary.get('comparable_result_available'))}",
             "Comparable Result Creation Result: "
@@ -5063,6 +5089,14 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('exact_match_count'))}",
             "Exact Match Rate: "
             f"{self._value(summary.get('exact_match_rate'))}",
+            "Exact Match: "
+            f"{self._value(summary.get('exact_match'))}",
+            "Accuracy: "
+            f"{self._value(summary.get('accuracy'))}",
+            "Difference Count: "
+            f"{self._value(summary.get('difference_count'))}",
+            "Shape Compatibility State: "
+            f"{self._value(summary.get('shape_compatibility_state'))}",
             "Comparator Measurement Summary: "
             f"{self._value(summary.get('comparator_measurement_summary'))}",
             "Grounding Measurement Summary: "
@@ -5087,8 +5121,12 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('evidence_direction_reason'))}",
             "Evidence Acceptance State: "
             f"{self._value(summary.get('evidence_acceptance_state'))}",
+            "Evidence Evaluation Outcome: "
+            f"{self._value(summary.get('evidence_evaluation_outcome'))}",
             "Evidence Acceptance Reason: "
             f"{self._value(summary.get('evidence_acceptance_reason'))}",
+            "Outcome Reason: "
+            f"{self._value(summary.get('outcome_reason'))}",
             "Evidence Decision Recorded: "
             f"{self._value(summary.get('evidence_decision_recorded'))}",
             "Evidence Decision Creation Result: "
@@ -5129,6 +5167,10 @@ class DeterministicFinalReportRenderer:
             f"{self._value(summary.get('graduation_authority'))}",
             "Candidate Execution Authority: "
             f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Candidate Compilation Authority: "
+            f"{self._value(summary.get('candidate_compilation_authority'))}",
+            "Deployment Authority: "
+            f"{self._value(summary.get('deployment_authority'))}",
             "Next Consumer: "
             f"{self._value(summary.get('next_consumer'))}",
             "Constitutional Boundary: "
@@ -5143,6 +5185,13 @@ class DeterministicFinalReportRenderer:
         if canonical["report_level"] == "minimal":
             return ""
         summary = self._arena_summary(canonical)
+        if (
+            summary.get("arena_admission_invoked") is not True
+            and summary.get("arena_evidence_admitted") is not True
+            and summary.get("accepted_evidence_artifact_available") is not True
+            and summary.get("decision_proposal_available") is not True
+        ):
+            return ""
         lines = [
             "Evidence Plan Id: "
             f"{self._value(summary.get('arena_evidence_admission_plan_id'))}",
@@ -5264,6 +5313,14 @@ class DeterministicFinalReportRenderer:
         if canonical["report_level"] == "minimal":
             return ""
         summary = self._arena_summary(canonical)
+        formal_outcome = summary.get("formal_selection_outcome")
+        if (
+            summary.get("formal_selection_gate_attempted") is not True
+            and summary.get("formal_selection_invoked") is not True
+            and summary.get("winner_selected") is not True
+            and formal_outcome in {None, "Not Available", "NOT_EVALUATED"}
+        ):
+            return ""
         lines = [
             "Decision Proposal Route Detected: "
             f"{self._value(summary.get('decision_proposal_route_detected'))}",

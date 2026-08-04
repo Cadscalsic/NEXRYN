@@ -17,7 +17,7 @@ class ValidationEvidenceEvaluator:
     """Compares captured validation results and records governed evidence state."""
 
     BOUNDARY = (
-        "EVIDENCE_EVALUATION_AUTHORITY_MAY_COMPARE_AND_CLASSIFY_VALIDATION_RESULTS_BUT_CANNOT_MODIFY_THE_ARENA_OR_GRANT_TRUTH_TRUST_GRADUATION_OR_CANDIDATE_EXECUTION_AUTHORITY"
+        "VALIDATION_EVIDENCE_EVALUATION_CONTRACT_MAY_AUTHORIZE_COMPARISON_AND_EVIDENCE_CLASSIFICATION_FOR_ONE_DURABLE_RAW_RESULT_BUT_CANNOT_MUTATE_THE_ARENA_OR_GRANT_TRUTH_TRUST_GRADUATION_COMPILATION_EXECUTION_OR_DEPLOYMENT_AUTHORITY"
     )
     ACCEPTANCE_DISTINCTION = (
         "EVIDENCE_ACCEPTANCE_DESCRIBES_THE_ADMISSIBILITY_AND_SUFFICIENCY_OF_THE_OBSERVATION_NOT_WHETHER_THE_OBSERVATION_FAVORS_THE_TARGET_CANDIDATE"
@@ -45,6 +45,7 @@ class ValidationEvidenceEvaluator:
         self.pending_path = self.root_path / "pending"
         self.schedules_path = self.root_path / "schedules"
         self.raw_results_path = self.root_path / "raw_results"
+        self.evaluation_contracts_path = self.root_path / "evaluation_contracts"
         self.comparable_results_path = self.root_path / "comparable_results"
         self.evidence_decisions_path = self.root_path / "evidence_decisions"
         self.accepted_evidence_path = self.root_path / "accepted_evidence"
@@ -122,7 +123,9 @@ class ValidationEvidenceEvaluator:
             )
 
         admission = self._admission(plan, plan_path)
-        if admission["evaluation_admission_state"] != "ADMITTED":
+        if admission["evaluation_admission_state"] != (
+            "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+        ):
             return {**base, **admission}
 
         schedule = admission["schedule"]
@@ -131,6 +134,7 @@ class ValidationEvidenceEvaluator:
         raw_path = admission["raw_path"]
         task = admission["task"]
         contract = admission["evaluation_contract"]
+        contract_path = admission["evaluation_contract_path"]
         sealed_reference = admission["sealed_reference"]
         comparison_id = self._comparison_id(
             plan,
@@ -149,6 +153,10 @@ class ValidationEvidenceEvaluator:
                 "comparison_state": "COMPARISON_STARTED",
                 "comparison_invoked": True,
                 "comparison_id": comparison_id,
+                "evaluation_contract_id": contract.get("evaluation_contract_id"),
+                "evaluation_contract_fingerprint": contract.get(
+                    "evaluation_contract_fingerprint"
+                ),
                 "comparison_started_at": comparison_started_at,
                 "active_evaluation_lease": True,
                 "evidence_evaluation_authority": self.AUTHORITY,
@@ -161,6 +169,11 @@ class ValidationEvidenceEvaluator:
                 "graduation_authority": "NONE",
             }
             self._atomic_write(plan_path, started)
+            self._atomic_write(contract_path, {
+                **contract,
+                "review_state": "EVALUATION_REVIEW_STARTED",
+                "review_started_at": comparison_started_at,
+            })
         except (OSError, TypeError, ValueError) as error:
             return self._blocked(
                 {**base, **self._identity(plan, schedule, raw_result)},
@@ -197,7 +210,9 @@ class ValidationEvidenceEvaluator:
                 **base,
                 **self._identity(started, schedule, raw_result),
                 "evaluation_admission_evaluated": True,
-                "evaluation_admission_state": "ADMITTED",
+                "evaluation_admission_state": (
+                    "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+                ),
                 "evaluation_admission_reason": (
                     "evidence_evaluation_contract_satisfied"
                 ),
@@ -238,7 +253,9 @@ class ValidationEvidenceEvaluator:
                 **base,
                 **self._identity(started, schedule, raw_result),
                 "evaluation_admission_evaluated": True,
-                "evaluation_admission_state": "ADMITTED",
+                "evaluation_admission_state": (
+                    "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+                ),
                 "evaluation_admission_reason": (
                     "evidence_evaluation_contract_satisfied"
                 ),
@@ -303,7 +320,9 @@ class ValidationEvidenceEvaluator:
                 **base,
                 **self._identity(compared_plan, schedule, raw_result),
                 "evaluation_admission_evaluated": True,
-                "evaluation_admission_state": "ADMITTED",
+                "evaluation_admission_state": (
+                    "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+                ),
                 "evaluation_admission_reason": (
                     "evidence_evaluation_contract_satisfied"
                 ),
@@ -498,8 +517,37 @@ class ValidationEvidenceEvaluator:
                     "evidence_plan_payload",
                     "repair_evidence_plan_payload",
                 )
+        evaluation_contract = self._evaluation_contract_record(
+            plan,
+            schedule,
+            raw_result,
+            task,
+            contract,
+            sealed_reference,
+        )
+        existing_contract = self._existing_evaluation_contract(evaluation_contract)
+        evaluation_contract = existing_contract or evaluation_contract
+        contract_path = (
+            self.evaluation_contracts_path
+            / f"{evaluation_contract['evaluation_contract_id']}.json"
+        )
+        try:
+            if not existing_contract:
+                self._atomic_write(contract_path, evaluation_contract)
+        except (OSError, TypeError, ValueError):
+            return {
+                **self._identity(plan, schedule, raw_result),
+                **self._admission_block(
+                    "DEFERRED_VALIDATION_EVIDENCE_EVALUATION",
+                    "evaluation_contract_persistence_unavailable",
+                    "evaluation_contract_persistence",
+                    "retry_evaluation_contract_persistence",
+                ),
+            }
         return {
-            "evaluation_admission_state": "ADMITTED",
+            "evaluation_admission_state": (
+                "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+            ),
             "evaluation_admission_reason": "evidence_evaluation_contract_satisfied",
             "blocked_stage": "none",
             "responsible_component": "VALIDATION_EVIDENCE_EVALUATOR",
@@ -511,7 +559,8 @@ class ValidationEvidenceEvaluator:
             "raw_result": raw_result,
             "raw_path": raw_path,
             "task": task,
-            "evaluation_contract": contract,
+            "evaluation_contract": evaluation_contract,
+            "evaluation_contract_path": contract_path,
             "sealed_reference": sealed_reference,
         }
 
@@ -597,14 +646,28 @@ class ValidationEvidenceEvaluator:
                 "comparator_version",
                 self.DEFAULT_COMPARATOR_VERSION,
             ),
-            "evaluation_contract_fingerprint": self._contract_fingerprint(contract),
+            "evaluation_contract_id": contract.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
             "evaluation_contract_source": contract.get(
                 "contract_source",
                 "explicit_evaluation_contract",
             ),
+            "sealed_reference_id": sealed_reference.get("sealed_reference_id"),
             "sealed_reference_fingerprint": sealed_reference.get(
                 "sealed_reference_fingerprint"
             ),
+            "sealed_reference_resolved": sealed_reference.get(
+                "sealed_reference_resolved",
+                True,
+            ),
+            "reference_integrity_state": sealed_reference.get(
+                "reference_integrity_state",
+                "VERIFIED",
+            ),
+            "target_reference_forwarded_to_solver": False,
             "sealed_reference_opened_by_evaluator": True,
             "sealed_reference_forwarded_to_solver": False,
             "comparison_started_at": comparison_started_at,
@@ -645,6 +708,8 @@ class ValidationEvidenceEvaluator:
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
         }
 
     def _evidence_decision(
@@ -715,6 +780,11 @@ class ValidationEvidenceEvaluator:
                 f"evidence_decision_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
             ),
             "evidence_decision_fingerprint": fingerprint,
+            "evaluation_contract_id": contract.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
             "comparable_result_id": comparable.get("comparable_result_id"),
             "comparable_result_fingerprint": comparable.get(
                 "comparable_result_fingerprint"
@@ -746,7 +816,9 @@ class ValidationEvidenceEvaluator:
             "evidence_direction": direction,
             "evidence_direction_reason": direction_reason,
             "evidence_acceptance_state": acceptance,
+            "evidence_evaluation_outcome": f"EVIDENCE_{acceptance}",
             "evidence_acceptance_reason": reason,
+            "outcome_reason": reason,
             "evidence_decision_recorded": True,
             "evidence_contamination_state": (
                 "CLEAR" if contamination_ok else "CONTAMINATED"
@@ -778,6 +850,8 @@ class ValidationEvidenceEvaluator:
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
             "constitutional_boundary": self.BOUNDARY,
             "constitutional_distinction": self.ACCEPTANCE_DISTINCTION,
             "next_consumer": self._next_consumer(acceptance),
@@ -838,6 +912,9 @@ class ValidationEvidenceEvaluator:
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
+            "next_consumer": "FUTURE_ARENA_EVIDENCE_ADMISSION_GATE",
             "constitutional_boundary": self.BOUNDARY,
             "created_at": self._now(),
         }
@@ -924,6 +1001,10 @@ class ValidationEvidenceEvaluator:
             ),
             "accepted_evidence_id": accepted.get("accepted_evidence_id"),
             "evidence_acceptance_state": terminal,
+            "evidence_evaluation_outcome": f"EVIDENCE_{terminal}",
+            "validation_evidence_evaluation_state": (
+                "VALIDATION_EVIDENCE_EVALUATION_COMPLETED"
+            ),
             "evidence_accepted": terminal == "ACCEPTED",
             "active_evaluation_lease": False,
             "boot_recovery_route": route,
@@ -934,6 +1015,8 @@ class ValidationEvidenceEvaluator:
             "tie_resolved": False,
             "winner_selected": False,
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
             "truth_authority": "NONE",
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
@@ -961,6 +1044,10 @@ class ValidationEvidenceEvaluator:
             "comparable_result_id": comparable.get("comparable_result_id"),
             "evidence_decision_id": decision.get("evidence_decision_id"),
             "accepted_evidence_id": accepted.get("accepted_evidence_id"),
+            "evaluation_contract_id": decision.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": decision.get(
+                "evaluation_contract_fingerprint"
+            ),
             "selected_validation_task_id": decision.get(
                 "selected_validation_task_id",
                 plan.get("selected_validation_task_id"),
@@ -977,13 +1064,24 @@ class ValidationEvidenceEvaluator:
             ),
             "tie_break_strategy": decision.get("tie_break_strategy"),
             "evaluation_admission_evaluated": True,
-            "evaluation_admission_state": "ADMITTED",
+            "evaluation_admission_state": (
+                "ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION"
+            ),
             "evaluation_admission_reason": "evidence_evaluation_contract_satisfied",
             "evidence_evaluation_authority": self.AUTHORITY,
             "evidence_evaluation_scope": self.SCOPE,
             "sealed_reference_available": True,
+            "sealed_reference_id": comparable.get("sealed_reference_id"),
+            "sealed_reference_fingerprint": comparable.get(
+                "sealed_reference_fingerprint"
+            ),
+            "sealed_reference_resolved": comparable.get(
+                "sealed_reference_resolved",
+                True,
+            ),
             "sealed_reference_opened_by_evaluator": True,
             "sealed_reference_forwarded_to_solver": False,
+            "target_reference_forwarded_to_solver": False,
             "sealed_reference_forwarded_to_candidate": False,
             "sealed_reference_forwarded_to_training": False,
             "sealed_reference_used_for_repair": False,
@@ -995,6 +1093,7 @@ class ValidationEvidenceEvaluator:
             "comparison_state": "COMPARISON_COMPLETED",
             "comparator_id": comparable.get("comparator_id"),
             "comparator_version": comparable.get("comparator_version"),
+            "comparator_resolved": bool(comparable.get("comparator_id")),
             "comparable_result_available": True,
             "comparable_result_creation_result": comparable_result_creation_result,
             "expected_case_count": comparable.get("expected_case_count"),
@@ -1002,6 +1101,17 @@ class ValidationEvidenceEvaluator:
             "case_coverage": comparable.get("case_coverage"),
             "exact_match_count": comparable.get("exact_match_count"),
             "exact_match_rate": comparable.get("exact_match_rate"),
+            "exact_match": comparable.get("exact_match_rate") == 1.0,
+            "accuracy": comparable.get("exact_match_rate"),
+            "difference_count": (
+                (comparable.get("compared_case_count") or 0)
+                - (comparable.get("exact_match_count") or 0)
+            ),
+            "shape_compatibility_state": (
+                "COMPATIBLE"
+                if comparable.get("invalid_case_count", 0) == 0
+                else "INCOMPATIBLE"
+            ),
             "comparator_measurement_summary": comparable.get(
                 "comparator_defined_measurements"
             ),
@@ -1025,7 +1135,12 @@ class ValidationEvidenceEvaluator:
             "evidence_direction": decision.get("evidence_direction"),
             "evidence_direction_reason": decision.get("evidence_direction_reason"),
             "evidence_acceptance_state": terminal,
+            "evidence_evaluation_outcome": decision.get(
+                "evidence_evaluation_outcome",
+                f"EVIDENCE_{terminal}",
+            ),
             "evidence_acceptance_reason": decision.get("evidence_acceptance_reason"),
+            "outcome_reason": decision.get("outcome_reason"),
             "evidence_decision_recorded": True,
             "evidence_decision_creation_result": evidence_decision_creation_result,
             "evidence_contamination_state": decision.get(
@@ -1060,8 +1175,122 @@ class ValidationEvidenceEvaluator:
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
             "next_consumer": self._next_consumer(terminal),
             "constitutional_boundary": self.BOUNDARY,
+        }
+
+    def _evaluation_contract_record(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+        task: dict[str, Any],
+        contract: dict[str, Any],
+        sealed_reference: dict[str, Any],
+    ) -> dict[str, Any]:
+        identity = self._identity(plan, schedule, raw_result)
+        fingerprint_payload = {
+            **identity,
+            "sealed_reference_fingerprint": sealed_reference.get(
+                "sealed_reference_fingerprint"
+            ),
+            "comparator_id": contract.get("comparator_id"),
+            "comparator_version": contract.get("comparator_version"),
+            "metric_id": contract.get("metric_id", "exact_match_rate"),
+            "metric_version": contract.get("metric_version", "1.0"),
+            "acceptance_threshold": contract.get("acceptance_threshold", 1.0),
+            "exact_match_required": contract.get("exact_match_required", False),
+            "evaluation_policy_version": self.POLICY_VERSION,
+        }
+        fingerprint = self._fingerprint(fingerprint_payload)
+        target_candidate = plan.get("target_candidate")
+        return {
+            "schema_version": "1.0",
+            "evaluation_contract_id": (
+                f"validation_evidence_evaluation_contract_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+            ),
+            "evaluation_contract_fingerprint": fingerprint,
+            "evaluation_contract_version": "1.0",
+            "evaluation_policy_id": "governed_raw_validation_result_evaluation",
+            "evaluation_policy_version": self.POLICY_VERSION,
+            "evidence_plan_id": plan.get("plan_id"),
+            "validation_schedule_id": schedule.get("schedule_id"),
+            "validation_execution_id": raw_result.get("execution_id"),
+            "raw_validation_result_id": raw_result.get("raw_result_id"),
+            "raw_validation_result_fingerprint": raw_result.get(
+                "raw_result_fingerprint"
+            ),
+            "originating_arena_id": plan.get(
+                "originating_arena_id",
+                "arena_current_deliberation",
+            ),
+            "originating_arena_version": plan.get("originating_arena_version", "1.0"),
+            "baseline_arena_snapshot_id": plan.get(
+                "originating_arena_snapshot_id",
+                "Not Available",
+            ),
+            "target_candidate_id": target_candidate,
+            "target_candidate_fingerprint": plan.get(
+                "target_candidate_fingerprint",
+                self._fingerprint({
+                    "candidate_id": target_candidate,
+                    "operation": plan.get("target_operation"),
+                }),
+            ),
+            "target_candidate_source": plan.get(
+                "source_candidate_id",
+                raw_result.get("target_candidate"),
+            ),
+            "target_operation": plan.get("target_operation"),
+            "required_evidence": plan.get("required_evidence"),
+            "required_validation_task": plan.get("required_validation_task"),
+            "scheduled_validation_task_id": schedule.get(
+                "selected_validation_task_id"
+            ),
+            "sealed_reference_id": sealed_reference.get("sealed_reference_id"),
+            "sealed_reference_fingerprint": sealed_reference.get(
+                "sealed_reference_fingerprint"
+            ),
+            "sealed_reference_source": sealed_reference.get(
+                "sealed_reference_source"
+            ),
+            "comparator_id": contract.get("comparator_id"),
+            "comparator_version": contract.get(
+                "comparator_version",
+                self.DEFAULT_COMPARATOR_VERSION,
+            ),
+            "metric_id": contract.get("metric_id", "exact_match_rate"),
+            "metric_version": contract.get("metric_version", "1.0"),
+            "acceptance_threshold": contract.get("acceptance_threshold", 1.0),
+            "minimum_case_coverage": contract.get("minimum_case_coverage", 1.0),
+            "exact_match_required": contract.get("exact_match_required", False),
+            "candidate_attribution_requirements": {
+                "target_candidate_required": True,
+                "target_candidate_fingerprint_required": False,
+            },
+            "operation_attribution_requirements": {
+                "target_operation_required": True,
+            },
+            "contamination_policy_id": "sealed_reference_solver_isolation",
+            "evidence_sufficiency_policy_id": "minimum_case_coverage_and_exact_match",
+            "evidence_direction_policy_id": "comparison_result_direction_policy",
+            "contract_source": contract.get(
+                "contract_source",
+                "explicit_evaluation_contract",
+            ),
+            "review_state": "EVALUATION_CONTRACT_CREATED",
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
+            "created_at": self._now(),
+            "constitutional_boundary": (
+                "VALIDATION_EVIDENCE_EVALUATION_CONTRACT_MAY_AUTHORIZE_COMPARISON_AND_EVIDENCE_CLASSIFICATION_FOR_ONE_DURABLE_RAW_RESULT_BUT_CANNOT_MUTATE_THE_ARENA_OR_GRANT_TRUTH_TRUST_GRADUATION_COMPILATION_EXECUTION_OR_DEPLOYMENT_AUTHORITY"
+            ),
         }
 
     def _link_schedule_and_raw_result(
@@ -1077,6 +1306,10 @@ class ValidationEvidenceEvaluator:
         terminal = decision.get("evidence_acceptance_state")
         common = {
             "comparison_state": "COMPARISON_COMPLETED",
+            "evaluation_contract_id": decision.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": decision.get(
+                "evaluation_contract_fingerprint"
+            ),
             "comparable_result_id": comparable.get("comparable_result_id"),
             "evidence_decision_id": decision.get("evidence_decision_id"),
             "accepted_evidence_id": accepted.get("accepted_evidence_id"),
@@ -1092,6 +1325,8 @@ class ValidationEvidenceEvaluator:
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
         }
         self._atomic_write(schedule_path, {**schedule, **common})
         self._atomic_write(raw_path, {**raw_result, **common})
@@ -1183,10 +1418,21 @@ class ValidationEvidenceEvaluator:
         ).hexdigest() if expected is not None else None
         return {
             **payload,
+            "sealed_reference_id": (
+                f"sealed_reference_{hashlib.sha1(str(fingerprint).encode()).hexdigest()[:12]}"
+                if fingerprint else "Not Available"
+            ),
             "sealed_reference_fingerprint": fingerprint,
+            "sealed_reference_source": "validation_task_expected_output",
+            "sealed_reference_resolved": expected is not None,
             "sealed_reference_available": expected is not None,
             "sealed_reference_access_authority": self.AUTHORITY,
             "sealed_reference_access_scope": "EVALUATION_ONLY",
+            "reference_access_authority": "VALIDATION_EVIDENCE_EVALUATOR_ONLY",
+            "reference_integrity_state": (
+                "VERIFIED" if fingerprint else "MISSING"
+            ),
+            "target_reference_forwarded_to_solver": False,
         }
 
     def _expected_cases(self, sealed_reference: dict[str, Any]) -> list[Any]:
@@ -1218,6 +1464,15 @@ class ValidationEvidenceEvaluator:
             "evidence_state": "NOT_EVALUATED",
             "evidence_accepted": False,
             "arena_reentry_invoked": False,
+            "arena_evidence_admission_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
         }
 
     def _persist_comparison_failure(
@@ -1304,6 +1559,31 @@ class ValidationEvidenceEvaluator:
                 return decision
         return None
 
+    def _existing_evaluation_contract(
+        self,
+        contract: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        fingerprint = contract.get("evaluation_contract_fingerprint")
+        if self._term(fingerprint) == "Not Available":
+            return None
+        contract_id = contract.get("evaluation_contract_id")
+        if self._term(contract_id) != "Not Available":
+            path = self.evaluation_contracts_path / f"{contract_id}.json"
+            existing, error = self._read_json(path)
+            if (
+                not error
+                and isinstance(existing, dict)
+                and existing.get("evaluation_contract_fingerprint") == fingerprint
+            ):
+                return existing
+        for path in self._plan_files(self.evaluation_contracts_path):
+            existing, error = self._read_json(path)
+            if error or not isinstance(existing, dict):
+                continue
+            if existing.get("evaluation_contract_fingerprint") == fingerprint:
+                return existing
+        return None
+
     def _identity(
         self,
         plan: dict[str, Any],
@@ -1353,6 +1633,8 @@ class ValidationEvidenceEvaluator:
             "schedule_id": "Not Available",
             "execution_id": "Not Available",
             "raw_result_id": "Not Available",
+            "evaluation_contract_id": "Not Available",
+            "evaluation_contract_fingerprint": "Not Available",
             "comparable_result_id": "Not Available",
             "evidence_decision_id": "Not Available",
             "accepted_evidence_id": "Not Available",
@@ -1362,8 +1644,12 @@ class ValidationEvidenceEvaluator:
             "evidence_evaluation_authority": "NONE",
             "evidence_evaluation_scope": "Not Available",
             "sealed_reference_available": False,
+            "sealed_reference_id": "Not Available",
+            "sealed_reference_fingerprint": "Not Available",
+            "sealed_reference_resolved": False,
             "sealed_reference_opened_by_evaluator": False,
             "sealed_reference_forwarded_to_solver": False,
+            "target_reference_forwarded_to_solver": False,
             "reference_integrity_state": "NOT_EVALUATED",
             "comparison_invoked": False,
             "comparison_started": False,
@@ -1371,6 +1657,7 @@ class ValidationEvidenceEvaluator:
             "comparison_state": "NOT_COMPARED",
             "comparator_id": "Not Available",
             "comparator_version": "Not Available",
+            "comparator_resolved": False,
             "comparable_result_available": False,
             "comparable_result_creation_result": "NOT_ATTEMPTED",
             "expected_case_count": 0,
@@ -1378,6 +1665,10 @@ class ValidationEvidenceEvaluator:
             "case_coverage": 0.0,
             "exact_match_count": 0,
             "exact_match_rate": 0.0,
+            "exact_match": False,
+            "accuracy": 0.0,
+            "difference_count": 0,
+            "shape_compatibility_state": "NOT_EVALUATED",
             "evidence_evaluation_invoked": False,
             "evidence_admissibility_evaluated": False,
             "evidence_admissibility_state": "NOT_EVALUATED",
@@ -1386,6 +1677,8 @@ class ValidationEvidenceEvaluator:
             "evidence_direction_calculated": False,
             "evidence_direction": "NOT_DETERMINED",
             "evidence_acceptance_state": "NOT_EVALUATED",
+            "evidence_evaluation_outcome": "NOT_EVALUATED",
+            "outcome_reason": "not_evaluated",
             "evidence_decision_recorded": False,
             "evidence_decision_creation_result": "NOT_ATTEMPTED",
             "accepted_evidence_artifact_created": False,
@@ -1404,6 +1697,8 @@ class ValidationEvidenceEvaluator:
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
             "next_consumer": "Not Available",
             "constitutional_boundary": self.BOUNDARY,
         }
@@ -1451,6 +1746,15 @@ class ValidationEvidenceEvaluator:
             "comparison_invoked": False,
             "evidence_evaluation_invoked": False,
             "arena_reentry_invoked": False,
+            "arena_evidence_admission_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
         }
 
     def _public_projection(self, report: dict[str, Any]) -> dict[str, Any]:
@@ -1459,7 +1763,7 @@ class ValidationEvidenceEvaluator:
 
     def _next_consumer(self, state: str) -> str:
         if state == "ACCEPTED":
-            return "ARENA_EVIDENCE_ADMISSION_GATE"
+            return "FUTURE_ARENA_EVIDENCE_ADMISSION_GATE"
         if state == "INSUFFICIENT":
             return "EVIDENCE_REMEDIATION_PLANNER"
         if state == "REJECTED":
@@ -1498,7 +1802,10 @@ class ValidationEvidenceEvaluator:
             ),
             "comparator_id": contract.get("comparator_id"),
             "comparator_version": contract.get("comparator_version"),
-            "evaluation_contract_fingerprint": self._contract_fingerprint(contract),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
             "evaluation_policy_version": self.POLICY_VERSION,
         })
 
@@ -1515,7 +1822,10 @@ class ValidationEvidenceEvaluator:
             "comparable_result_fingerprint": comparable.get(
                 "comparable_result_fingerprint"
             ),
-            "evaluation_contract_fingerprint": self._contract_fingerprint(contract),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
             "evaluation_policy_version": self.POLICY_VERSION,
         })
 
@@ -1567,6 +1877,7 @@ class ValidationEvidenceEvaluator:
         self.pending_path.mkdir(parents=True, exist_ok=True)
         self.schedules_path.mkdir(parents=True, exist_ok=True)
         self.raw_results_path.mkdir(parents=True, exist_ok=True)
+        self.evaluation_contracts_path.mkdir(parents=True, exist_ok=True)
         self.comparable_results_path.mkdir(parents=True, exist_ok=True)
         self.evidence_decisions_path.mkdir(parents=True, exist_ok=True)
         self.accepted_evidence_path.mkdir(parents=True, exist_ok=True)

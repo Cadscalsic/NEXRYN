@@ -9269,6 +9269,14 @@ class CanonicalReportBindingEngine:
                 report.get("evaluation_admission_reason"),
                 "not_evaluated",
             ),
+            "evaluation_contract_id": self._first_present(
+                report.get("evaluation_contract_id"),
+                "Not Available",
+            ),
+            "evaluation_contract_fingerprint": self._first_present(
+                report.get("evaluation_contract_fingerprint"),
+                "Not Available",
+            ),
             "evidence_evaluation_authority": self._first_present(
                 report.get("evidence_evaluation_authority"),
                 "NONE",
@@ -9281,11 +9289,28 @@ class CanonicalReportBindingEngine:
                 report.get("sealed_reference_available"),
                 False,
             ),
+            "sealed_reference_id": self._first_present(
+                report.get("sealed_reference_id"),
+                "Not Available",
+            ),
+            "sealed_reference_fingerprint": self._first_present(
+                report.get("sealed_reference_fingerprint"),
+                "Not Available",
+            ),
+            "sealed_reference_resolved": self._first_present(
+                report.get("sealed_reference_resolved"),
+                False,
+            ),
             "sealed_reference_opened_by_evaluator": self._first_present(
                 report.get("sealed_reference_opened_by_evaluator"),
                 False,
             ),
             "sealed_reference_forwarded_to_solver": self._first_present(
+                report.get("sealed_reference_forwarded_to_solver"),
+                False,
+            ),
+            "target_reference_forwarded_to_solver": self._first_present(
+                report.get("target_reference_forwarded_to_solver"),
                 report.get("sealed_reference_forwarded_to_solver"),
                 False,
             ),
@@ -9317,6 +9342,11 @@ class CanonicalReportBindingEngine:
                 report.get("comparator_version"),
                 "Not Available",
             ),
+            "comparator_resolved": self._first_present(
+                report.get("comparator_resolved"),
+                report.get("comparator_id") not in {None, "Not Available"},
+                False,
+            ),
             "comparable_result_available": self._first_present(
                 report.get("comparable_result_available"),
                 False,
@@ -9341,6 +9371,23 @@ class CanonicalReportBindingEngine:
             "exact_match_rate": self._first_present(
                 report.get("exact_match_rate"),
                 0.0,
+            ),
+            "exact_match": self._first_present(
+                report.get("exact_match"),
+                False,
+            ),
+            "accuracy": self._first_present(
+                report.get("accuracy"),
+                report.get("exact_match_rate"),
+                0.0,
+            ),
+            "difference_count": self._first_present(
+                report.get("difference_count"),
+                0,
+            ),
+            "shape_compatibility_state": self._first_present(
+                report.get("shape_compatibility_state"),
+                "NOT_EVALUATED",
             ),
             "comparator_measurement_summary": self._first_present(
                 report.get("comparator_measurement_summary"),
@@ -9394,7 +9441,20 @@ class CanonicalReportBindingEngine:
                 terminal,
                 "NOT_EVALUATED",
             ),
+            "evidence_evaluation_outcome": self._first_present(
+                report.get("evidence_evaluation_outcome"),
+                (
+                    f"EVIDENCE_{terminal}"
+                    if terminal in {"ACCEPTED", "INSUFFICIENT", "REJECTED"}
+                    else "NOT_EVALUATED"
+                ),
+            ),
             "evidence_acceptance_reason": self._first_present(
+                report.get("evidence_acceptance_reason"),
+                "Not Available",
+            ),
+            "outcome_reason": self._first_present(
+                report.get("outcome_reason"),
                 report.get("evidence_acceptance_reason"),
                 "Not Available",
             ),
@@ -9485,6 +9545,14 @@ class CanonicalReportBindingEngine:
             ),
             "candidate_execution_authority": self._first_present(
                 report.get("candidate_execution_authority"),
+                "NONE",
+            ),
+            "candidate_compilation_authority": self._first_present(
+                report.get("candidate_compilation_authority"),
+                "NONE",
+            ),
+            "deployment_authority": self._first_present(
+                report.get("deployment_authority"),
                 "NONE",
             ),
             "next_consumer": self._first_present(
