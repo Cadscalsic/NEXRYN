@@ -4,6 +4,8 @@ import json
 import os
 import re
 import tempfile
+import hashlib
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,17 @@ from runtime.reporting.pre_final_report_diagnostics import (
 REPORT_SCHEMA_VERSION = "1.0"
 REPORT_BEGIN_MARKER = "<<< NEXRYN_REPORT_START >>>"
 REPORT_END_MARKER = "<<< NEXRYN_REPORT_END >>>"
+
+HUMAN_ABSENCE_DISPLAY = {
+    "NOT_APPLICABLE": "Not applicable in this run",
+    "NOT_PRODUCED": "Not produced in this run",
+    "NOT_EXPECTED_AT_CURRENT_STATE": "Not expected at current lifecycle state",
+    "EXPECTED_BUT_MISSING": "Expected artifact missing",
+    "SOURCE_NOT_ATTACHED": "Canonical source not attached",
+    "SOURCE_UNBOUND": "Canonical source unbound",
+    "SOURCE_CONFLICT": "Canonical source conflict",
+    "LEGACY_FALLBACK_USED": "Legacy compatibility fallback used",
+}
 
 SECTION_ORDER = [
     "REPORT HEADER",
@@ -82,6 +95,64 @@ EXECUTIVE_SECTION_ORDER = [
     "FINAL STATUS",
 ]
 
+HUMAN_SECTION_ORDER = [
+    "NEXRYN HUMAN RUN SUMMARY",
+    "RUN OVERVIEW",
+    "TIMING AND PERFORMANCE",
+    "COGNITIVE QUALITY",
+    "COGNITIVE OUTCOME",
+    "EVIDENCE LIFECYCLE",
+    "ENGINEERING CONCLUSION",
+    "CONSTITUTIONAL BOUNDARY",
+    "CRITICAL OBSERVABILITY NOTES",
+    "REPORT INTEGRITY",
+]
+
+HUMAN_REPORT_CHARACTER_LIMIT = None
+HUMAN_REPORT_TRUNCATION_ENABLED = False
+
+HUMAN_REPORT_MEASUREMENT_CONTRACT = {
+    "schema_version": "1.0",
+    "canonical_encoding": "UTF-8",
+    "canonical_bom_policy": "UTF-8_WITHOUT_BOM",
+    "canonical_line_ending": "LF",
+    "unicode_normalization": "NFC",
+    "character_count_unit": "UNICODE_CODE_POINTS",
+    "byte_count_unit": "UTF8_OCTETS",
+    "trailing_newline_policy": "INCLUDED_EXACTLY_ONCE",
+    "leading_whitespace_policy": "PRESERVED_AFTER_CANONICAL_RENDER",
+    "trailing_whitespace_policy": "TRIMMED_PER_LINE_BY_CANONICAL_RENDER",
+    "lifecycle_marker_inclusion_policy": "START_AND_END_MARKERS_INCLUDED_IN_CANONICAL_BODY",
+    "section_separator_policy": "LF_SEPARATED_SECTIONS",
+    "attestation_field_exclusion_policy": "LINE_PREFIX_REDACTION_WITH_VERSIONED_PLACEHOLDER",
+    "fingerprint_algorithm": "SHA-256",
+    "hexadecimal_case": "lowercase",
+    "canonical_body_fingerprint_scope": "HUMAN_REPORT_ENVELOPE_WITH_MEASUREMENT_ATTESTATION_LINES_REDACTED",
+    "persistence_measurement_boundary": "DURABLE_ARTIFACT_REMEASURED_WHEN_ARTIFACT_WRITTEN",
+    "emission_measurement_boundary": "TEXT_STREAM_WRITE_STRING_AFTER_WRITE_RETURN",
+    "detached_receipt_format": "JSON_METRICS_OR_SIDECAR_OUTSIDE_HUMAN_REPORT_ENVELOPE",
+    "comparison_rules": "COMPARE_BYTE_COUNT_AND_SHA256_ONLY_WHEN_ENCODING_LINE_ENDING_AND_SCOPE_MATCH",
+    "verification_limitations": "EXTERNAL_TERMINAL_TRANSPORT_NOT_VERIFIED",
+}
+
+HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES = [
+    "Human Report Measurement Contract Version:",
+    "Canonical Body Fingerprint Scope:",
+    "Canonical Line Ending:",
+    "Canonical Encoding:",
+    "Canonical Body Character Count:",
+    "Canonical Body Byte Count:",
+    "Canonical Body Fingerprint:",
+    "Detached Emission Receipt:",
+    "Human Report Canonical Body Integrity:",
+    "Human Report Persistence Integrity:",
+    "Human Report Emission Integrity:",
+    "Human Report Persistence-Emission Equivalence:",
+    "Human Report Receipt Integrity:",
+]
+
+HUMAN_REPORT_REDACTION_TOKEN = "<EXCLUDED_BY_HUMAN_REPORT_MEASUREMENT_CONTRACT_V1>"
+
 RAW_STRUCTURE_PATTERN = re.compile(
     r"(^|\s)(\{'.*':|\['.*'\]|\{'[^'\n]+':|\[[{]\s*')",
     re.DOTALL,
@@ -94,6 +165,11 @@ class DeterministicFinalReportRenderer:
     def __init__(self, console_budget_chars: int = 160000):
         self.console_budget_chars = int(console_budget_chars or 160000)
         self.metrics = self._empty_metrics()
+        self._last_render_measurement: dict[str, Any] = {}
+        self._last_persistence_measurement: dict[str, Any] = {}
+        self._last_emission_measurement: dict[str, Any] = {}
+        self._last_detached_receipt: dict[str, Any] = {}
+        self._last_human_report_artifact_path: Path | None = None
 
     def render(
         self,
@@ -111,7 +187,7 @@ class DeterministicFinalReportRenderer:
             runtime_metadata if isinstance(runtime_metadata, dict) else {}
         )
         report_level = self._normalize_report_level(report_level)
-        budget = (
+        deprecated_budget = (
             self.console_budget_chars
             if console_budget_chars is None
             else int(console_budget_chars)
@@ -203,33 +279,38 @@ class DeterministicFinalReportRenderer:
             "CANONICAL_RENDER_STATE",
             canonical,
         )
-        full_report = self._render_full_report(canonical)
+        full_report = self._render_human_report(canonical)
+        self._last_render_measurement = self._measure_report_payload(full_report)
+        self._last_persistence_measurement = self._not_verified_persistence_measurement()
+        self._last_emission_measurement = self._not_verified_emission_measurement()
+        self._last_detached_receipt = {}
+        self._last_human_report_artifact_path = None
         pre_final_report_diagnostics.mark(
             "REPORT_FULL_STRING_CONSTRUCTED",
             full_report_chars=len(full_report),
             full_report_bytes=len(full_report.encode("utf-8")),
         )
-        validation_errors = self.validate(full_report)
         rendered_report = full_report
-
-        if budget > 0 and len(full_report) > budget:
-            rendered_report = self._render_budget_summary(canonical, full_report)
-            validation_errors = self.validate(rendered_report)
+        validation_errors = self.validate(rendered_report)
         pre_final_report_diagnostics.phase_exit(
             "REPORT_RENDER_PREP",
             rendered_chars=len(rendered_report),
             validation_errors=len(validation_errors),
-            budget=budget,
+            deprecated_console_budget_chars=deprecated_budget,
+            deprecated_console_budget_applied_to_human_report=False,
+            human_report_character_limit="NONE",
+            human_report_truncation_enabled=False,
         )
 
         artifact_written = False
         diagnostic_artifact_written = False
         if write_artifact and artifact_directory:
-            artifact_text = full_report if rendered_report != full_report else rendered_report
-            self.write_text_artifact(
-                artifact_text,
-                Path(artifact_directory) / "runtime_report.txt",
+            artifact_path = Path(artifact_directory) / "runtime_report.txt"
+            self._last_persistence_measurement = self.write_text_artifact(
+                rendered_report,
+                artifact_path,
             )
+            self._last_human_report_artifact_path = artifact_path
             self.write_operational_economy_artifact(
                 binding_result,
                 Path(artifact_directory)
@@ -255,49 +336,75 @@ class DeterministicFinalReportRenderer:
             validation_errors,
             artifact_written=artifact_written,
             diagnostic_artifact_written=diagnostic_artifact_written,
+            render_measurement=self._last_render_measurement,
+            persistence_measurement=self._last_persistence_measurement,
+            emission_measurement=self._last_emission_measurement,
+            receipt=self._last_detached_receipt,
         )
         return rendered_report
 
     def emit(self, rendered_report: str, stream: Any | None = None) -> None:
         stream = stream or os.sys.stdout
+        payload_text = rendered_report if rendered_report.endswith("\n") else rendered_report + "\n"
+        payload_bytes = self._encode_canonical_text(payload_text)
         pre_final_report_diagnostics.mark(
             "FINAL_REPORT_FIRST_BYTE_WRITTEN",
-            rendered_chars=len(rendered_report),
-            rendered_bytes=len(rendered_report.encode("utf-8")),
+            rendered_chars=len(payload_text),
+            rendered_bytes=len(payload_bytes),
         )
-        stream.write(rendered_report)
-        if not rendered_report.endswith("\n"):
-            stream.write("\n")
+        stream.write(payload_text)
         stream.flush()
+        self._last_emission_measurement = self._measure_emitted_payload(
+            payload_text,
+            write_completed=True,
+        )
+        self._last_detached_receipt = self._build_detached_emission_receipt()
+        if self._last_human_report_artifact_path is not None:
+            receipt_path = self._last_human_report_artifact_path.with_name(
+                self._last_human_report_artifact_path.name + ".receipt.json"
+            )
+            self._atomic_write_text(
+                json.dumps(
+                    self._last_detached_receipt,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ),
+                receipt_path,
+            )
+        self.metrics.update({
+            "console_emission_completed": True,
+            **self._measurement_metrics(
+                self._last_render_measurement,
+                self._last_persistence_measurement,
+                self._last_emission_measurement,
+                self._last_detached_receipt,
+            ),
+        })
         pre_final_report_diagnostics.mark(
             "FINAL_REPORT_LAST_BYTE_WRITTEN",
-            rendered_chars=len(rendered_report),
+            rendered_chars=len(payload_text),
         )
 
     def validate(self, rendered_report: str) -> list[str]:
         errors: list[str] = []
-        if REPORT_BEGIN_MARKER not in rendered_report.splitlines()[:3]:
+        if not rendered_report.startswith(REPORT_BEGIN_MARKER):
             errors.append("missing_report_begin_marker")
-        if REPORT_END_MARKER not in rendered_report.splitlines()[-3:]:
+        if not rendered_report.rstrip().endswith(REPORT_END_MARKER):
             errors.append("missing_report_end_marker")
+        if rendered_report.count(REPORT_BEGIN_MARKER) != 1:
+            errors.append("report_begin_marker_count_not_one")
+        if rendered_report.count(REPORT_END_MARKER) != 1:
+            errors.append("report_end_marker_count_not_one")
         if "Report Schema Version: " not in rendered_report:
             errors.append("missing_report_schema_version")
         if "Console Emission Started: TRUE" not in rendered_report:
             errors.append("missing_console_emission_started")
-        if "Console Emission Completed: TRUE" not in rendered_report:
-            errors.append("missing_console_emission_completed")
-        if rendered_report.count("NEXRYN :: FINAL STATUS") != 1:
-            errors.append("final_status_occurs_not_once")
-        if "\nFINAL STATUS\n" in rendered_report:
-            errors.append("duplicate_section:FINAL STATUS")
-
-        truncated = "Report Integrity: TRUNCATED" in rendered_report
-        required_sections = EXECUTIVE_SECTION_ORDER if truncated else SECTION_ORDER
         section_positions = []
-        for section in required_sections:
+        for section in HUMAN_SECTION_ORDER:
             marker = self._section_title(section)
             count = rendered_report.count(marker)
-            if count == 0:
+            if count == 0 and section != "CRITICAL OBSERVABILITY NOTES":
                 errors.append(f"missing_section:{section}")
             if count > 1:
                 errors.append(f"duplicate_section:{section}")
@@ -307,9 +414,7 @@ class DeterministicFinalReportRenderer:
         if section_positions != sorted(section_positions):
             errors.append("section_order_invalid")
 
-        first_content = rendered_report[
-            rendered_report.find(REPORT_BEGIN_MARKER) + len(REPORT_BEGIN_MARKER):
-        ].lstrip()
+        first_content = rendered_report[len(REPORT_BEGIN_MARKER):].lstrip()
         if first_content.startswith((",", "}", "]", ":", "'")):
             errors.append("partial_beginning_detected")
         if self._ends_inside_structure(rendered_report):
@@ -318,10 +423,27 @@ class DeterministicFinalReportRenderer:
             errors.append("raw_python_structure_detected")
         if "UNKNOWN" in rendered_report:
             errors.append("unknown_value_detected")
+        integrity = self._human_report_integrity(
+            rendered_report,
+            selected_sections=[
+                section
+                for section in HUMAN_SECTION_ORDER
+                if section == "CRITICAL OBSERVABILITY NOTES"
+                and self._section_title(section) in rendered_report
+                or section != "CRITICAL OBSERVABILITY NOTES"
+            ],
+            emitted_text=rendered_report,
+        )
+        if integrity["Human Report Integrity State"] != "COMPLETE":
+            errors.append(
+                "human_report_integrity_incomplete:"
+                + str(integrity["Human Report Integrity Reason"])
+            )
         return errors
 
-    def write_text_artifact(self, text: str, path: Path) -> None:
+    def write_text_artifact(self, text: str, path: Path) -> dict[str, Any]:
         self._atomic_write_text(text, path)
+        return self._measure_persisted_artifact(path)
 
     def write_operational_economy_artifact(
         self,
@@ -546,6 +668,991 @@ class DeterministicFinalReportRenderer:
             "report_binding": binding_result or {},
         }
 
+    def _render_human_report(self, canonical: dict[str, Any]) -> str:
+        binding = self._build_human_report_binding(canonical)
+        canonical = {**canonical, "human_report_binding": binding}
+        sections = self._select_human_sections(canonical)
+        critical_note_count = len(self._human_observability_notes(canonical))
+        provisional_sections = [
+            self._render_lifecycle_start("COMPLETE"),
+            *[renderer(canonical) for _, renderer in sections],
+        ]
+        provisional_text = self._normalize_text(
+            "\n".join([*provisional_sections, self._render_lifecycle_end()])
+        )
+        integrity = self._human_report_integrity(
+            provisional_text,
+            selected_sections=[name for name, _ in sections],
+            emitted_text=provisional_text,
+            critical_note_count=critical_note_count,
+            binding=binding,
+        )
+        final_sections = [
+            self._render_lifecycle_start(integrity["Human Report Integrity State"]),
+            *[renderer(canonical) for _, renderer in sections],
+            self._render_human_report_integrity(integrity),
+            self._render_lifecycle_end(),
+        ]
+        final_text = self._normalize_text("\n".join(final_sections))
+        integrity = self._human_report_integrity(
+            final_text,
+            selected_sections=[name for name, _ in sections] + ["REPORT INTEGRITY"],
+            emitted_text=final_text,
+            critical_note_count=critical_note_count,
+            binding=binding,
+        )
+        for _ in range(4):
+            final_sections[0] = self._render_lifecycle_start(
+                integrity["Human Report Integrity State"]
+            )
+            final_sections[-2] = self._render_human_report_integrity(integrity)
+            stabilized_text = self._normalize_text("\n".join(final_sections))
+            next_integrity = self._human_report_integrity(
+                stabilized_text,
+                selected_sections=[name for name, _ in sections] + ["REPORT INTEGRITY"],
+                emitted_text=stabilized_text,
+                critical_note_count=critical_note_count,
+                binding=binding,
+            )
+            if next_integrity == integrity:
+                return stabilized_text
+            integrity = next_integrity
+        return self._normalize_text("\n".join(final_sections))
+
+    def _select_human_sections(
+        self,
+        canonical: dict[str, Any],
+    ) -> list[tuple[str, Any]]:
+        sections: list[tuple[str, Any]] = [
+            ("NEXRYN HUMAN RUN SUMMARY", self._render_human_summary_title),
+            ("RUN OVERVIEW", self._render_human_run_overview),
+            ("TIMING AND PERFORMANCE", self._render_human_timing_performance),
+            ("COGNITIVE QUALITY", self._render_human_cognitive_quality),
+            ("COGNITIVE OUTCOME", self._render_human_cognitive_outcome),
+            ("EVIDENCE LIFECYCLE", self._render_human_evidence_lifecycle),
+            ("ENGINEERING CONCLUSION", self._render_human_engineering_conclusion),
+            ("CONSTITUTIONAL BOUNDARY", self._render_human_constitutional_boundary),
+        ]
+        notes = self._human_observability_notes(canonical)
+        if notes:
+            sections.append(
+                ("CRITICAL OBSERVABILITY NOTES", self._render_human_observability_notes)
+            )
+        return sections
+
+    def _build_human_report_binding(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        fields: dict[str, dict[str, Any]] = {}
+
+        def bind(
+            key: str,
+            label: str,
+            paths: list[str],
+            *,
+            required: bool = True,
+            fallback_paths: list[str] | None = None,
+            absence: str = "SOURCE_UNBOUND",
+        ) -> None:
+            fields[key] = self._bind_human_field(
+                canonical,
+                key,
+                label,
+                paths,
+                required=required,
+                fallback_paths=fallback_paths or [],
+                absence=absence,
+            )
+
+        highest = self._highest_exclusive_consumer(canonical)
+        state = canonical.get("report_state", {})
+        validation = self._first_dict(
+            state,
+            "VALIDATION_TASK_EXECUTION_REPORT",
+            "validation_task_execution_report",
+        )
+        evaluation = self._first_dict(
+            state,
+            "VALIDATION_EVIDENCE_EVALUATION_REPORT",
+            "validation_evidence_evaluation_report",
+        )
+        raw_result_id = self._first_meaningful(
+            validation.get("raw_validation_result_id"),
+            validation.get("raw_result_id"),
+            state.get("raw_validation_result_id"),
+            default=None,
+        )
+        validation_execution_state = self._first_meaningful(
+            validation.get("execution_state"),
+            validation.get("validation_execution_lifecycle_state"),
+            default=None,
+        )
+        raw_result_captured = str(validation_execution_state).upper() == "RAW_RESULT_CAPTURED"
+
+        bind(
+            "run_id",
+            "Run Id",
+            ["runtime_metadata.execution_id", "report_state.run_id", "report_binding.field_values.execution_identifier"],
+            fallback_paths=[
+                "report_state.ENGINEERING_CONCLUSION.conclusion_run_id",
+                "report_state.engineering_conclusion.conclusion_run_id",
+            ],
+        )
+        bind("timestamp", "Timestamp", ["runtime_metadata.timestamp", "report_state.timestamp", "report_binding.field_values.timestamp"])
+        bind("mode", "Mode", ["runtime_metadata.mode", "report_binding.field_values.execution_mode"])
+        bind("report_level", "Report Level", ["report_level"])
+        bind("training_batch_size", "Training Batch Size", ["runtime_metadata.training_batch_size", "report_state.training_batch_size"])
+        bind("runtime_status", "Status", ["runtime_metadata.runtime_status", "report_state.runtime_status", "report_binding.field_values.runtime_status"])
+        bind("warning_count", "Warnings", ["report_state.warning_count", "runtime_metadata.warning_count"], required=False, absence="NOT_PRODUCED")
+        bind("error_count", "Errors", ["report_state.error_count", "runtime_metadata.error_count"], required=False, absence="NOT_PRODUCED")
+
+        bind("total_wall_time", "Total Wall Time", ["report_state.execution_timing_state.total_wall_time", "performance.total_wall_time", "performance.total_runtime_seconds"], absence="NOT_PRODUCED")
+        bind("aggregate_active_compute_time", "Aggregate Active Compute Time", ["performance.active_compute_time_seconds", "report_state.execution_timing_state.aggregate_active_compute_time", "report_state.aggregate_active_compute_time"], absence="NOT_PRODUCED")
+        bind("timing_coverage", "Timing Coverage", ["report_state.execution_timing_state.timing_coverage", "performance.timing_coverage"], absence="NOT_PRODUCED")
+        bind("untracked_time", "Untracked Time", ["performance.untracked_runtime_seconds", "report_state.execution_timing_state.untracked_time"], required=False, absence="NOT_PRODUCED")
+        bind("report_lifecycle_time", "Report Lifecycle Time", ["report_state.execution_timing_state.report_lifecycle_total_time", "report_state.execution_timing_state.report_generation_time", "performance.report_lifecycle_time"], required=False, absence="NOT_PRODUCED")
+        fields["highest_exclusive_consumer"] = self._resolved_human_field("highest_exclusive_consumer", "Highest Exclusive-Time Consumer", highest.get("name"), "computed.highest_exclusive_consumer")
+        fields["highest_consumer_duration"] = self._resolved_human_field("highest_consumer_duration", "Highest-Consumer Duration", highest.get("duration"), "computed.highest_exclusive_consumer.duration")
+        fields["highest_consumer_share"] = self._resolved_human_field("highest_consumer_share", "Highest-Consumer Share", highest.get("share"), "computed.highest_exclusive_consumer.share")
+        bind("task_selection_cost_state", "Task-Selection Cost State", ["performance.task_selection_cost_state", "report_state.task_selection_cost_state"], required=False, absence="NOT_PRODUCED")
+        bind("performance_action", "Performance Action", ["performance.performance_action", "report_state.performance_action"], required=False, absence="NOT_PRODUCED")
+        bind("governance_budget_exceeded", "Governance Budget Exceeded", ["performance.governance_budget_exceeded", "runtime_metadata.governance_budget_exceeded"], required=False, absence="NOT_PRODUCED")
+        bind("report_timing_status", "Report Timing Status", ["report_state.report_timing_status", "performance.report_timing_status"], required=False, absence="NOT_PRODUCED")
+        bind("report_timing_semantics_valid", "Report Timing Semantics Valid", ["report_state.report_timing_semantics_valid", "performance.report_timing_semantics_valid"], required=False, absence="NOT_PRODUCED")
+
+        bind("overall_search_quality", "Overall Search Quality", ["search.overall_search_quality", "report_binding.field_values.overall_search_quality"], required=False, absence="NOT_PRODUCED")
+        bind("search_efficiency", "Search Efficiency", ["search.search_efficiency", "report_binding.field_values.search_efficiency"], required=False, absence="NOT_PRODUCED")
+        bind("search_coverage", "Search Coverage", ["search.search_coverage", "report_binding.field_values.search_coverage"], required=False, absence="NOT_PRODUCED")
+        bind("average_route_quality", "Average Route Quality", ["search.average_route_quality", "report_binding.field_values.average_route_quality"], required=False, absence="NOT_PRODUCED")
+        bind("generated_programs", "Generated Programs", ["report_binding.field_values.generated_programs", "program.generated_programs", "report_state.generated_programs"], required=False, absence="NOT_PRODUCED")
+
+        bind("target_operation", "Target Operation", ["report_state.target_operation", "report_state.operation", "report_state.leading_candidate.operation"], absence="EXPECTED_BUT_MISSING")
+        bind("relevant_candidate", "Relevant Candidate", ["report_state.leading_candidate.candidate_id", "report_state.leading_candidate.name", "report_state.leading_candidate.candidate"], required=False, absence="NOT_PRODUCED")
+        bind("candidate_source", "Candidate Source", ["report_state.leading_candidate.source", "report_state.leading_candidate.candidate_source"], required=False, absence="NOT_PRODUCED")
+        bind("candidate_entered_arena", "Candidate Entered Arena", ["report_state.leading_candidate.entered_arena", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.candidate_entered_arena", "report_state.cognitive_candidate_arena_report.candidate_entered_arena"], required=False, absence="NOT_PRODUCED")
+        bind("validation_probe_state", "Validation Probe State", ["report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.validation_probe_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.validation_probe_outcome", "report_state.cognitive_candidate_arena_report.validation_probe_state", "report_state.leading_candidate.validation_probe"], required=False, absence="NOT_PRODUCED")
+        bind("arena_decision", "Arena Decision", ["report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.arena_decision", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.decision_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.selection_state", "report_state.cognitive_candidate_arena_report.arena_decision"], required=False, absence="NOT_PRODUCED")
+        bind("winner_selected", "Winner Selected", ["report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.winner_selected", "report_state.cognitive_candidate_arena_report.winner_selected"], required=False, absence="NOT_PRODUCED")
+        bind("current_unresolved_cognitive_state", "Current Unresolved Cognitive State", ["report_state.current_unresolved_cognitive_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.unresolved_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.selection_state"], required=False, absence="NOT_PRODUCED")
+
+        bind("evidence_plan_state", "Evidence Plan State", ["report_state.EVIDENCE_GENERATION_REPORT.evidence_plan_state", "report_state.EVIDENCE_GENERATION_REPORT.plan_state", "report_state.EVIDENCE_GENERATION_REPORT.existing_evidence_plan_reused"], required=False, absence="NOT_PRODUCED")
+        bind("evidence_plan_id", "Evidence Plan Id", ["report_state.EVIDENCE_GENERATION_REPORT.evidence_plan_id", "report_state.EVIDENCE_GENERATION_REPORT.plan_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.evidence_plan_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_plan_id"], required=False, absence="NOT_PRODUCED")
+        bind("scheduled_validation_task", "Scheduled Validation Task", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_validation_task", "report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_task", "report_state.EVIDENCE_GENERATION_REPORT.scheduled_validation_task"], required=False, absence="NOT_PRODUCED")
+        bind("validation_schedule_id", "Validation Schedule Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_schedule_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.schedule_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_schedule_id"], required=False, absence="NOT_PRODUCED")
+        bind("execution_admission", "Execution Admission", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_admission", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_admission_state"], required=False, absence="NOT_PRODUCED")
+        bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
+        bind("validation_execution_id", "Validation Execution Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_execution_id"], required=False, absence="NOT_PRODUCED")
+        if raw_result_id is not None:
+            fields["raw_result_state"] = self._resolved_human_field("raw_result_state", "Raw Result State", "RAW_RESULT_CAPTURED" if raw_result_captured else "RAW_RESULT_ATTACHED", "compatibility.raw_result_id")
+        elif raw_result_captured:
+            fields["raw_result_state"] = self._absent_human_field("raw_result_state", "Raw Result State", "EXPECTED_BUT_MISSING", True)
+        else:
+            bind("raw_result_state", "Raw Result State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_lifecycle_state"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+        bind("raw_validation_result_id", "Raw Validation Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.raw_validation_result_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.raw_validation_result_id"], required=raw_result_captured, absence="EXPECTED_BUT_MISSING" if raw_result_captured else "NOT_EXPECTED_AT_CURRENT_STATE")
+        if evaluation:
+            bind("evidence_evaluation_state", "Evidence Evaluation State", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.decision_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_acceptance_state"], required=False, absence="NOT_PRODUCED")
+        else:
+            fields["evidence_evaluation_state"] = self._absent_human_field("evidence_evaluation_state", "Evidence Evaluation State", "NOT_PRODUCED", False)
+        bind("evidence_decision_id", "Evidence Evaluation Decision Id", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_decision_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.decision_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+        accepted_required = str(evaluation.get("evidence_acceptance_state", "")).upper() == "EVIDENCE_ACCEPTED" or self._boolish(evaluation.get("accepted_evidence_artifact_created")) is True
+        bind("accepted_evidence_id", "Accepted Evidence Artifact Id", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.accepted_evidence_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.accepted_evidence_artifact_id"], required=accepted_required, absence="EXPECTED_BUT_MISSING" if accepted_required else "NOT_EXPECTED_AT_CURRENT_STATE")
+        bind("target_reference_forwarded_to_solver", "Target Reference Forwarded To Solver", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.target_reference_forwarded_to_solver", "report_state.EVIDENCE_GENERATION_REPORT.target_reference_forwarded_to_solver", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.target_reference_forwarded_to_solver"], required=False, absence="NOT_PRODUCED")
+        bind("arena_evidence_admission", "Arena Evidence Admission", ["report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_evidence_admission", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.admission_state", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_evidence_admission_invoked"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+        bind("arena_reentry", "Arena Re-entry", ["report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_reentry", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_re_entry", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_reentry_invoked"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+
+        bind("largest_success", "Largest Success", ["report_state.ENGINEERING_CONCLUSION.largest_success", "report_state.engineering_conclusion.largest_success"], required=False, absence="NOT_PRODUCED")
+        bind("largest_regression", "Largest Regression", ["report_state.ENGINEERING_CONCLUSION.largest_regression", "report_state.engineering_conclusion.largest_regression"], required=False, absence="NOT_PRODUCED")
+        bind("current_open_decision", "Current Open Decision", ["report_state.ENGINEERING_CONCLUSION.current_open_decision", "report_state.engineering_conclusion.current_open_decision"], required=False, absence="NOT_PRODUCED")
+        bind("next_decision_gate", "Next Decision Gate", ["report_state.ENGINEERING_CONCLUSION.next_decision_gate", "report_state.engineering_conclusion.next_decision_gate"], required=False, absence="NOT_PRODUCED")
+        bind("current_bottleneck", "Current Bottleneck", ["report_state.ENGINEERING_CONCLUSION.current_bottleneck", "report_state.engineering_conclusion.current_bottleneck"], required=False, absence="NOT_PRODUCED")
+        bind("root_cause", "Root Cause", ["report_state.ENGINEERING_CONCLUSION.root_cause", "report_state.engineering_conclusion.root_cause"], required=False, absence="NOT_PRODUCED")
+        bind("responsible_component", "Responsible Component", ["report_state.ENGINEERING_CONCLUSION.responsible_component", "report_state.ENGINEERING_CONCLUSION.exact_responsible_component", "report_state.engineering_conclusion.responsible_component"], required=False, absence="NOT_PRODUCED")
+        bind("immediate_next_development_task", "Immediate Next Development Task", ["report_state.ENGINEERING_CONCLUSION.immediate_next_development_task", "report_state.engineering_conclusion.immediate_next_development_task"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_priority", "Engineering Priority", ["report_state.ENGINEERING_CONCLUSION.engineering_priority", "report_state.engineering_conclusion.engineering_priority"], required=False, absence="NOT_PRODUCED")
+
+        required_fields = [field for field in fields.values() if field.get("required")]
+        conflict_count = sum(1 for field in fields.values() if field.get("state") == "SOURCE_CONFLICT")
+        unbound_required = sum(1 for field in required_fields if field.get("state") in {"SOURCE_UNBOUND", "SOURCE_NOT_ATTACHED"})
+        expected_missing = sum(1 for field in fields.values() if field.get("state") == "EXPECTED_BUT_MISSING")
+        generic_not_available = sum(1 for field in fields.values() if field.get("display_value") == "Not Available")
+        binding_integrity = "CONFLICTED" if conflict_count else ("INCOMPLETE" if unbound_required or expected_missing else "COMPLETE")
+        semantic_complete = binding_integrity == "COMPLETE"
+        return {
+            "field_bindings": fields,
+            "manifest": [
+                {
+                    "field": key,
+                    "label": field.get("label"),
+                    "state": field.get("state"),
+                    "source_path": field.get("source_path"),
+                    "required": field.get("required"),
+                }
+                for key, field in fields.items()
+            ],
+            "Human Report Canonical Binding Integrity": binding_integrity,
+            "Human Report Semantic Completeness": "COMPLETE" if semantic_complete else "INCOMPLETE",
+            "Human Report Bound Field Count": len(fields),
+            "Human Report Resolved Required Field Count": sum(1 for field in required_fields if field.get("state") in {"VALUE_AVAILABLE", "LEGACY_FALLBACK_USED"}),
+            "Human Report Unbound Required Field Count": unbound_required,
+            "Human Report Expected Missing Count": expected_missing,
+            "Human Report Binding Conflict Count": conflict_count,
+            "Human Report Generic Unavailable Value Count": generic_not_available,
+        }
+
+    def _bind_human_field(
+        self,
+        canonical: dict[str, Any],
+        key: str,
+        label: str,
+        paths: list[str],
+        *,
+        required: bool,
+        fallback_paths: list[str],
+        absence: str,
+    ) -> dict[str, Any]:
+        resolved: list[tuple[str, Any]] = []
+        for path in paths:
+            found, value = self._path_value(canonical, path)
+            if found and self._is_human_value_present(value):
+                resolved.append((path, value))
+        if resolved:
+            primary_value = resolved[0][1]
+            conflicts = [
+                {"source_path": path, "value": self._value(value)}
+                for path, value in resolved[1:]
+                if self._semantic_value(value) != self._semantic_value(primary_value)
+            ]
+            if conflicts:
+                return {
+                    "key": key,
+                    "label": label,
+                    "required": required,
+                    "state": "SOURCE_CONFLICT",
+                    "display_value": HUMAN_ABSENCE_DISPLAY["SOURCE_CONFLICT"],
+                    "value": primary_value,
+                    "source_path": resolved[0][0],
+                    "conflicts": conflicts,
+                }
+            return self._resolved_human_field(key, label, primary_value, resolved[0][0], required=required)
+        for path in fallback_paths:
+            found, value = self._path_value(canonical, path)
+            if found and self._is_human_value_present(value):
+                field = self._resolved_human_field(key, label, value, path, required=required)
+                field["state"] = "LEGACY_FALLBACK_USED"
+                field["fallback_used"] = True
+                return field
+        return self._absent_human_field(key, label, absence, required)
+
+    def _resolved_human_field(
+        self,
+        key: str,
+        label: str,
+        value: Any,
+        source_path: str,
+        *,
+        required: bool = False,
+    ) -> dict[str, Any]:
+        return {
+            "key": key,
+            "label": label,
+            "required": required,
+            "state": "VALUE_AVAILABLE",
+            "display_value": self._value(value),
+            "value": value,
+            "source_path": source_path,
+            "fallback_used": False,
+        }
+
+    def _absent_human_field(
+        self,
+        key: str,
+        label: str,
+        state: str,
+        required: bool,
+    ) -> dict[str, Any]:
+        return {
+            "key": key,
+            "label": label,
+            "required": required,
+            "state": state,
+            "display_value": HUMAN_ABSENCE_DISPLAY.get(state, state),
+            "value": None,
+            "source_path": None,
+            "fallback_used": False,
+        }
+
+    def _human_value(self, canonical: dict[str, Any], key: str, *, seconds: bool = False, percent: bool = False, already_percent: bool = False, upper: bool = False) -> str:
+        binding = canonical.get("human_report_binding", {})
+        fields = binding.get("field_bindings", {}) if isinstance(binding, dict) else {}
+        field = fields.get(key) if isinstance(fields, dict) else None
+        if not isinstance(field, dict):
+            return HUMAN_ABSENCE_DISPLAY["SOURCE_UNBOUND"]
+        if field.get("state") == "VALUE_AVAILABLE" or field.get("state") == "LEGACY_FALLBACK_USED":
+            value = field.get("value")
+            if seconds:
+                rendered = self._seconds(value)
+            elif percent:
+                rendered = self._percent(value, already_percent=already_percent)
+            else:
+                rendered = self._value(value)
+        else:
+            rendered = self._value(field.get("display_value"))
+        return rendered.upper() if upper else rendered
+
+    def _human_raw(self, canonical: dict[str, Any], key: str) -> Any:
+        binding = canonical.get("human_report_binding", {})
+        fields = binding.get("field_bindings", {}) if isinstance(binding, dict) else {}
+        field = fields.get(key) if isinstance(fields, dict) else None
+        if isinstance(field, dict):
+            return field.get("value")
+        return None
+
+    def _path_value(self, source: Any, path: str) -> tuple[bool, Any]:
+        current = source
+        for part in path.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+                continue
+            return False, None
+        return True, current
+
+    def _is_human_value_present(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip()) and value.strip().upper() not in {"UNKNOWN", "NOT AVAILABLE"}
+        return True
+
+    def _semantic_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip().lower()
+        if isinstance(value, (bool, int, float)) or value is None:
+            return value
+        return self._value(value)
+
+    def _measurement_contract_summary(self) -> dict[str, Any]:
+        return dict(HUMAN_REPORT_MEASUREMENT_CONTRACT)
+
+    def _canonical_measurement_text(self, text: str) -> str:
+        normalized = unicodedata.normalize("NFC", text)
+        normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized.endswith("\n"):
+            normalized += "\n"
+        while normalized.endswith("\n\n"):
+            normalized = normalized[:-1]
+        return normalized
+
+    def _encode_canonical_text(self, text: str) -> bytes:
+        return self._canonical_measurement_text(text).encode("utf-8")
+
+    def _canonical_body_text(self, rendered_report: str) -> str:
+        canonical = self._canonical_measurement_text(rendered_report)
+        redacted_lines: list[str] = []
+        for line in canonical.split("\n"):
+            replaced = False
+            for prefix in HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES:
+                if line.startswith(prefix):
+                    redacted_lines.append(f"{prefix} {HUMAN_REPORT_REDACTION_TOKEN}")
+                    replaced = True
+                    break
+            if not replaced:
+                redacted_lines.append(line)
+        return self._canonical_measurement_text("\n".join(redacted_lines))
+
+    def _sha256_bytes(self, payload: bytes) -> str:
+        return hashlib.sha256(payload).hexdigest()
+
+    def _measure_text_scope(self, text: str, *, scope: str) -> dict[str, Any]:
+        canonical_text = self._canonical_measurement_text(text)
+        payload = canonical_text.encode("utf-8")
+        return {
+            "measurement_state": "VERIFIED",
+            "scope": scope,
+            "encoding": "UTF-8",
+            "bom_policy": "UTF-8_WITHOUT_BOM",
+            "line_ending_policy": "LF",
+            "unicode_normalization": "NFC",
+            "includes_start_marker": REPORT_BEGIN_MARKER in canonical_text,
+            "includes_end_marker": REPORT_END_MARKER in canonical_text,
+            "includes_final_newline": canonical_text.endswith("\n"),
+            "character_count": len(canonical_text),
+            "byte_count": len(payload),
+            "line_count": len(canonical_text.splitlines()),
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": self._sha256_bytes(payload),
+        }
+
+    def _measure_report_payload(self, rendered_report: str) -> dict[str, Any]:
+        canonical_body = self._canonical_body_text(rendered_report)
+        body = self._measure_text_scope(
+            canonical_body,
+            scope=HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_body_fingerprint_scope"],
+        )
+        envelope = self._measure_text_scope(
+            rendered_report,
+            scope="FINAL_REPORT_ENVELOPE_TEXT_CANONICAL_LF",
+        )
+        return {
+            "contract": self._measurement_contract_summary(),
+            "canonical_body": body,
+            "final_envelope": envelope,
+            "canonical_body_excluded_field_count": len(HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES),
+            "canonical_body_excluded_fields": list(HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES),
+            "redaction_method": HUMAN_REPORT_MEASUREMENT_CONTRACT["attestation_field_exclusion_policy"],
+            "redaction_token": HUMAN_REPORT_REDACTION_TOKEN,
+            "self_reference_state": "CANONICAL_BODY_NON_SELF_REFERENTIAL",
+        }
+
+    def _measure_bytes_scope(
+        self,
+        payload: bytes,
+        *,
+        scope: str,
+        boundary: str,
+        readback_performed: bool | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "measurement_state": "VERIFIED",
+            "scope": scope,
+            "encoding": "UTF-8",
+            "line_ending_policy": "LF",
+            "byte_count": len(payload),
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": self._sha256_bytes(payload),
+            "measurement_boundary": boundary,
+            "readback_performed": readback_performed,
+            "includes_start_marker": REPORT_BEGIN_MARKER.encode("utf-8") in payload,
+            "includes_end_marker": REPORT_END_MARKER.encode("utf-8") in payload,
+            "includes_final_newline": payload.endswith(b"\n"),
+        }
+
+    def _measure_persisted_artifact(self, path: Path) -> dict[str, Any]:
+        try:
+            payload = path.read_bytes()
+        except OSError as exc:
+            result = self._not_verified_persistence_measurement()
+            result["verification_limitation"] = f"DURABLE_ARTIFACT_READBACK_FAILED:{exc.__class__.__name__}"
+            return result
+        result = self._measure_bytes_scope(
+            payload,
+            scope="FINAL_PERSISTED_REPORT_ARTIFACT_BYTES",
+            boundary="DURABLE_ARTIFACT_REMEASURED",
+            readback_performed=True,
+        )
+        result["storage_path"] = str(path)
+        result["readback_match"] = True
+        result["integrity_state"] = "VERIFIED"
+        return result
+
+    def _measure_emitted_payload(
+        self,
+        text: str,
+        *,
+        write_completed: bool,
+    ) -> dict[str, Any]:
+        payload = self._encode_canonical_text(text)
+        result = self._measure_bytes_scope(
+            payload,
+            scope="FINAL_EMITTED_REPORT_PAYLOAD_BYTES",
+            boundary="TEXT_STREAM_WRITE_STRING_AFTER_WRITE_RETURN",
+            readback_performed=None,
+        )
+        result.update({
+            "write_attempted": True,
+            "write_completed": bool(write_completed),
+            "write_result": "WRITE_RETURNED" if write_completed else "WRITE_NOT_COMPLETED",
+            "payload_independently_measured": True,
+            "external_transport_verification": "NOT_VERIFIED",
+            "verification_limitation": "External terminal transport is outside the application-controlled boundary.",
+            "integrity_state": "VERIFIED" if write_completed else "FAILED",
+        })
+        return result
+
+    def _not_verified_persistence_measurement(self) -> dict[str, Any]:
+        return {
+            "measurement_state": "NOT_VERIFIED",
+            "integrity_state": "NOT_VERIFIED",
+            "scope": "FINAL_PERSISTED_REPORT_ARTIFACT_BYTES",
+            "encoding": "UTF-8",
+            "line_ending_policy": "LF",
+            "byte_count": None,
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": None,
+            "measurement_boundary": "NO_ARTIFACT_WRITTEN",
+            "readback_performed": False,
+            "readback_match": None,
+            "verification_limitation": "Human report artifact was not requested for this render.",
+        }
+
+    def _not_verified_emission_measurement(self) -> dict[str, Any]:
+        return {
+            "measurement_state": "NOT_VERIFIED",
+            "integrity_state": "NOT_VERIFIED",
+            "scope": "FINAL_EMITTED_REPORT_PAYLOAD_BYTES",
+            "encoding": "UTF-8",
+            "line_ending_policy": "LF",
+            "byte_count": None,
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": None,
+            "measurement_boundary": "EMISSION_NOT_ATTEMPTED",
+            "write_attempted": False,
+            "write_completed": False,
+            "payload_independently_measured": False,
+            "external_transport_verification": "NOT_VERIFIED",
+            "verification_limitation": "Emission receipt cannot exist before emit() completes.",
+        }
+
+    def _compare_persisted_emitted(
+        self,
+        persisted: dict[str, Any],
+        emitted: dict[str, Any],
+    ) -> dict[str, Any]:
+        if persisted.get("measurement_state") != "VERIFIED" or emitted.get("measurement_state") != "VERIFIED":
+            return {
+                "state": "NOT_VERIFIED",
+                "reason": "one_or_both_measurements_not_verified",
+            }
+        comparable_keys = ("encoding", "line_ending_policy", "fingerprint_algorithm")
+        if any(persisted.get(key) != emitted.get(key) for key in comparable_keys):
+            return {
+                "state": "NOT_COMPARABLE",
+                "reason": "measurement_contract_mismatch",
+            }
+        if persisted.get("byte_count") != emitted.get("byte_count"):
+            return {"state": "MISMATCHED", "reason": "BYTE_COUNT_MISMATCH"}
+        if persisted.get("fingerprint") != emitted.get("fingerprint"):
+            return {"state": "MISMATCHED", "reason": "FINGERPRINT_MISMATCH"}
+        return {"state": "MATCHED", "reason": "byte_count_and_sha256_match"}
+
+    def _build_detached_emission_receipt(self) -> dict[str, Any]:
+        comparison = self._compare_persisted_emitted(
+            self._last_persistence_measurement,
+            self._last_emission_measurement,
+        )
+        receipt = {
+            "receipt_schema_version": "1.0",
+            "measurement_contract_version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "receipt_scope": "DETACHED_OUTSIDE_HUMAN_REPORT_ENVELOPE",
+            "receipt_created_after_emission": self._last_emission_measurement.get("write_completed") is True,
+            "canonical_body": self._last_render_measurement.get("canonical_body"),
+            "persisted_artifact": self._last_persistence_measurement,
+            "emitted_payload": self._last_emission_measurement,
+            "persistence_emission_equivalence": comparison,
+            "receipt_integrity": "VERIFIED" if self._last_emission_measurement.get("write_completed") else "FAILED",
+            "external_transport_verification": "NOT_VERIFIED",
+            "constitutional_boundary": "REPORT_MEASUREMENT_RECEIPT_DOES_NOT_GRANT_TRUTH_TRUST_GRADUATION_COMPILATION_EXECUTION_OR_DEPLOYMENT_AUTHORITY",
+        }
+        serialized = json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        receipt["receipt_fingerprint_algorithm"] = "SHA-256"
+        receipt["receipt_fingerprint"] = self._sha256_bytes(serialized)
+        return receipt
+
+    def verify_detached_receipt(
+        self,
+        receipt: dict[str, Any],
+        *,
+        artifact_path: str | os.PathLike[str] | None = None,
+        emitted_payload: str | bytes | None = None,
+    ) -> dict[str, Any]:
+        persisted_state = "NOT_VERIFIED"
+        emitted_state = "NOT_VERIFIED"
+        if artifact_path is not None:
+            try:
+                payload = Path(artifact_path).read_bytes()
+                expected = (receipt.get("persisted_artifact") or {}).get("fingerprint")
+                persisted_state = (
+                    "VERIFIED"
+                    if expected and self._sha256_bytes(payload) == expected
+                    else "FAILED"
+                )
+            except OSError:
+                persisted_state = "NOT_VERIFIED"
+        if emitted_payload is not None:
+            if isinstance(emitted_payload, bytes):
+                payload = emitted_payload
+            else:
+                payload = self._encode_canonical_text(emitted_payload)
+            expected = (receipt.get("emitted_payload") or {}).get("fingerprint")
+            emitted_state = (
+                "VERIFIED"
+                if expected and self._sha256_bytes(payload) == expected
+                else "FAILED"
+            )
+        return {
+            "receipt_schema_version": receipt.get("receipt_schema_version"),
+            "persisted_artifact_integrity": persisted_state,
+            "emitted_payload_integrity": emitted_state,
+            "receipt_integrity": "VERIFIED"
+            if persisted_state in {"VERIFIED", "NOT_VERIFIED"}
+            and emitted_state in {"VERIFIED", "NOT_VERIFIED"}
+            and "FAILED" not in {persisted_state, emitted_state}
+            else "FAILED",
+        }
+
+    def _measurement_metrics(
+        self,
+        render_measurement: dict[str, Any],
+        persistence_measurement: dict[str, Any],
+        emission_measurement: dict[str, Any],
+        receipt: dict[str, Any],
+    ) -> dict[str, Any]:
+        canonical_body = render_measurement.get("canonical_body", {})
+        comparison = self._compare_persisted_emitted(
+            persistence_measurement,
+            emission_measurement,
+        )
+        receipt_integrity = receipt.get("receipt_integrity") if receipt else "NOT_AVAILABLE"
+        return {
+            "human_report_measurement_contract_version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "human_report_canonical_encoding": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_encoding"],
+            "human_report_canonical_line_ending": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_line_ending"],
+            "human_report_unicode_normalization": HUMAN_REPORT_MEASUREMENT_CONTRACT["unicode_normalization"],
+            "human_report_character_count_unit": HUMAN_REPORT_MEASUREMENT_CONTRACT["character_count_unit"],
+            "human_report_byte_count_unit": HUMAN_REPORT_MEASUREMENT_CONTRACT["byte_count_unit"],
+            "human_report_canonical_body_integrity": canonical_body.get("measurement_state", "NOT_VERIFIED"),
+            "human_report_canonical_body_character_count": canonical_body.get("character_count"),
+            "human_report_canonical_body_byte_count": canonical_body.get("byte_count"),
+            "human_report_canonical_body_fingerprint_algorithm": canonical_body.get("fingerprint_algorithm", "SHA-256"),
+            "human_report_canonical_body_fingerprint": canonical_body.get("fingerprint"),
+            "human_report_canonical_body_fingerprint_scope": canonical_body.get("scope"),
+            "human_report_canonical_body_excluded_fields": render_measurement.get("canonical_body_excluded_fields", []),
+            "human_report_canonical_body_excluded_field_count": render_measurement.get("canonical_body_excluded_field_count", 0),
+            "human_report_persistence_integrity": persistence_measurement.get("integrity_state", "NOT_VERIFIED"),
+            "human_report_persisted_artifact_byte_count": persistence_measurement.get("byte_count"),
+            "human_report_persisted_artifact_fingerprint_algorithm": persistence_measurement.get("fingerprint_algorithm", "SHA-256"),
+            "human_report_persisted_artifact_fingerprint": persistence_measurement.get("fingerprint"),
+            "human_report_persisted_artifact_measurement_boundary": persistence_measurement.get("measurement_boundary"),
+            "human_report_persisted_artifact_readback_performed": persistence_measurement.get("readback_performed"),
+            "human_report_emission_integrity": emission_measurement.get("integrity_state", "NOT_VERIFIED"),
+            "human_report_emitted_payload_byte_count": emission_measurement.get("byte_count"),
+            "human_report_emitted_payload_fingerprint_algorithm": emission_measurement.get("fingerprint_algorithm", "SHA-256"),
+            "human_report_emitted_payload_fingerprint": emission_measurement.get("fingerprint"),
+            "human_report_emission_measurement_boundary": emission_measurement.get("measurement_boundary"),
+            "human_report_emission_payload_independently_measured": emission_measurement.get("payload_independently_measured"),
+            "human_report_external_transport_verification": emission_measurement.get("external_transport_verification", "NOT_VERIFIED"),
+            "human_report_persistence_emission_equivalence": comparison.get("state"),
+            "human_report_persistence_emission_equivalence_reason": comparison.get("reason"),
+            "human_report_receipt_integrity": receipt_integrity,
+            "human_report_detached_receipt": receipt,
+            "legacy_attestation_interpretation": "LEGACY_UNDECLARED",
+            # Compatibility metric names retained but scoped to the new contract.
+            "human_report_persisted_character_count": None,
+            "human_report_emitted_character_count": None,
+            "human_report_persisted_fingerprint": persistence_measurement.get("fingerprint"),
+            "human_report_emitted_fingerprint": emission_measurement.get("fingerprint"),
+            "human_report_persistence_matches_emission": comparison.get("state") == "MATCHED",
+        }
+
+    def _render_human_summary_title(self, canonical: dict[str, Any]) -> str:
+        return self._section("NEXRYN HUMAN RUN SUMMARY", [
+            "Human Report Generated: TRUE",
+            "Human Report Character Limit: NONE",
+            "Human Report Truncation Enabled: FALSE",
+            "Human Report Truncated: FALSE",
+            "Human summary is selected semantically before rendering.",
+        ])
+
+    def _render_human_run_overview(self, canonical: dict[str, Any]) -> str:
+        return self._section("RUN OVERVIEW", [
+            f"Run Id: {self._human_value(canonical, 'run_id')}",
+            f"Timestamp: {self._human_value(canonical, 'timestamp')}",
+            f"Mode: {self._human_value(canonical, 'mode')}",
+            f"Report Level: {self._human_value(canonical, 'report_level')}",
+            f"Training Batch Size: {self._human_value(canonical, 'training_batch_size')}",
+            f"Status: {self._human_value(canonical, 'runtime_status', upper=True)}",
+            f"Warnings: {self._human_value(canonical, 'warning_count')}",
+            f"Errors: {self._human_value(canonical, 'error_count')}",
+        ])
+
+    def _render_human_timing_performance(self, canonical: dict[str, Any]) -> str:
+        timing_semantics = self._human_raw(canonical, "report_timing_semantics_valid")
+        lines = [
+            f"Total Wall Time: {self._human_value(canonical, 'total_wall_time', seconds=True)}",
+            f"Aggregate Active Compute Time: {self._human_value(canonical, 'aggregate_active_compute_time', seconds=True)}",
+            "Active Compute Interpretation: Active Compute Time is aggregate measured work and is not directly comparable to elapsed wall time.",
+            f"Timing Coverage: {self._human_value(canonical, 'timing_coverage', percent=True)}",
+            f"Untracked Time: {self._human_value(canonical, 'untracked_time', seconds=True)}",
+            f"Report Lifecycle Time: {self._human_value(canonical, 'report_lifecycle_time', seconds=True)}",
+            f"Highest Exclusive-Time Consumer: {self._human_value(canonical, 'highest_exclusive_consumer')}",
+            f"Highest-Consumer Duration: {self._human_value(canonical, 'highest_consumer_duration', seconds=True)}",
+            f"Highest-Consumer Share: {self._human_value(canonical, 'highest_consumer_share', percent=True, already_percent=True)}",
+            f"Task-Selection Cost State: {self._human_value(canonical, 'task_selection_cost_state')}",
+            f"Performance Action: {self._human_value(canonical, 'performance_action')}",
+            f"Governance Budget Exceeded: {self._human_value(canonical, 'governance_budget_exceeded')}",
+            f"Report Timing Status: {self._human_value(canonical, 'report_timing_status')}",
+            f"Report Timing Semantics Valid: {self._human_value(canonical, 'report_timing_semantics_valid')}",
+        ]
+        if str(timing_semantics).upper() in {"FALSE", "INVALID"}:
+            lines.append(
+                "Observability Warning: Report Timing Semantics Valid is FALSE and remains visible even when timing status is VALID."
+            )
+        return self._section("TIMING AND PERFORMANCE", lines)
+
+    def _render_human_cognitive_quality(self, canonical: dict[str, Any]) -> str:
+        return self._section("COGNITIVE QUALITY", [
+            f"Overall Search Quality: {self._human_value(canonical, 'overall_search_quality')}",
+            f"Search Efficiency: {self._human_value(canonical, 'search_efficiency')}",
+            f"Search Coverage: {self._human_value(canonical, 'search_coverage')}",
+            f"Average Route Quality: {self._human_value(canonical, 'average_route_quality')}",
+            f"Generated Programs: {self._human_value(canonical, 'generated_programs')}",
+        ])
+
+    def _render_human_cognitive_outcome(self, canonical: dict[str, Any]) -> str:
+        return self._section("COGNITIVE OUTCOME", [
+            f"Target Operation: {self._human_value(canonical, 'target_operation')}",
+            f"Relevant Candidate: {self._human_value(canonical, 'relevant_candidate')}",
+            f"Candidate Source: {self._human_value(canonical, 'candidate_source')}",
+            f"Candidate Entered Arena: {self._human_value(canonical, 'candidate_entered_arena')}",
+            f"Validation Probe State: {self._human_value(canonical, 'validation_probe_state')}",
+            f"Arena Decision: {self._human_value(canonical, 'arena_decision')}",
+            f"Winner Selected: {self._human_value(canonical, 'winner_selected')}",
+            f"Current Unresolved Cognitive State: {self._human_value(canonical, 'current_unresolved_cognitive_state')}",
+        ])
+
+    def _render_human_evidence_lifecycle(self, canonical: dict[str, Any]) -> str:
+        return self._section("EVIDENCE LIFECYCLE", [
+            f"Evidence Plan State: {self._human_value(canonical, 'evidence_plan_state')}",
+            f"Evidence Plan Id: {self._human_value(canonical, 'evidence_plan_id')}",
+            f"Scheduled Validation Task: {self._human_value(canonical, 'scheduled_validation_task')}",
+            f"Validation Schedule Id: {self._human_value(canonical, 'validation_schedule_id')}",
+            f"Execution Admission: {self._human_value(canonical, 'execution_admission')}",
+            f"Validation Execution State: {self._human_value(canonical, 'validation_execution_state')}",
+            f"Validation Execution Id: {self._human_value(canonical, 'validation_execution_id')}",
+            f"Raw Result State: {self._human_value(canonical, 'raw_result_state')}",
+            f"Raw Validation Result Id: {self._human_value(canonical, 'raw_validation_result_id')}",
+            f"Evidence Evaluation State: {self._human_value(canonical, 'evidence_evaluation_state')}",
+            f"Evidence Evaluation Decision Id: {self._human_value(canonical, 'evidence_decision_id')}",
+            f"Accepted Evidence Artifact Id: {self._human_value(canonical, 'accepted_evidence_id')}",
+            f"Target Reference Forwarded To Solver: {self._human_value(canonical, 'target_reference_forwarded_to_solver')}",
+            f"Arena Evidence Admission: {self._human_value(canonical, 'arena_evidence_admission')}",
+            f"Arena Re-entry: {self._human_value(canonical, 'arena_reentry')}",
+        ])
+
+    def _render_human_engineering_conclusion(self, canonical: dict[str, Any]) -> str:
+        return self._section("ENGINEERING CONCLUSION", [
+            f"Largest Success: {self._human_value(canonical, 'largest_success')}",
+            f"Largest Regression: {self._human_value(canonical, 'largest_regression')}",
+            f"Current Open Decision: {self._human_value(canonical, 'current_open_decision')}",
+            f"Next Decision Gate: {self._human_value(canonical, 'next_decision_gate')}",
+            f"Current Bottleneck: {self._human_value(canonical, 'current_bottleneck')}",
+            f"Root Cause: {self._human_value(canonical, 'root_cause')}",
+            f"Responsible Component: {self._human_value(canonical, 'responsible_component')}",
+            f"Immediate Next Development Task: {self._human_value(canonical, 'immediate_next_development_task')}",
+            f"Engineering Priority: {self._human_value(canonical, 'engineering_priority')}",
+        ])
+
+    def _render_human_constitutional_boundary(self, canonical: dict[str, Any]) -> str:
+        return self._section("CONSTITUTIONAL BOUNDARY", [
+            "No truth, trust, graduation, candidate compilation, candidate execution, or deployment authority was granted."
+        ])
+
+    def _render_human_observability_notes(self, canonical: dict[str, Any]) -> str:
+        return self._section("CRITICAL OBSERVABILITY NOTES", self._human_observability_notes(canonical))
+
+    def _render_human_report_integrity(self, integrity: dict[str, Any]) -> str:
+        return self._section("REPORT INTEGRITY", [
+            f"{key}: {self._value(value)}"
+            for key, value in integrity.items()
+        ])
+
+    def _human_report_integrity(
+        self,
+        persisted_text: str,
+        *,
+        selected_sections: list[str],
+        emitted_text: str,
+        critical_note_count: int = 0,
+        binding: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        start_count = persisted_text.count(REPORT_BEGIN_MARKER)
+        end_count = persisted_text.count(REPORT_END_MARKER)
+        starts_at_boundary = persisted_text.startswith(REPORT_BEGIN_MARKER)
+        ends_at_boundary = persisted_text.rstrip().endswith(REPORT_END_MARKER)
+        missing_sections = [
+            section
+            for section in selected_sections
+            if section != "NEXRYN HUMAN RUN SUMMARY"
+            and persisted_text.count(self._section_title(section)) != 1
+        ]
+        if "NEXRYN HUMAN RUN SUMMARY" in selected_sections:
+            if persisted_text.count("\nNEXRYN HUMAN RUN SUMMARY\n") != 1:
+                missing_sections.append("NEXRYN HUMAN RUN SUMMARY")
+        failures: list[str] = []
+        if start_count != 1:
+            failures.append("start_marker_count_not_one")
+        if end_count != 1:
+            failures.append("end_marker_count_not_one")
+        if not starts_at_boundary:
+            failures.append("rendered_content_does_not_start_at_boundary")
+        if not ends_at_boundary:
+            failures.append("rendered_content_does_not_end_at_boundary")
+        if missing_sections:
+            failures.append("selected_sections_missing:" + ",".join(missing_sections))
+        complete = not failures
+        binding = binding or {}
+        measurement = self._measure_report_payload(persisted_text)
+        canonical_body = measurement["canonical_body"]
+        binding_integrity = self._value(
+            binding.get("Human Report Canonical Binding Integrity"),
+            "SOURCE_NOT_ATTACHED",
+        )
+        semantic_completeness = self._value(
+            binding.get("Human Report Semantic Completeness"),
+            "INCOMPLETE",
+        )
+        return {
+            "Human Report Generated": True,
+            "Human Report Complete": complete,
+            "Human Report Structural Integrity": "COMPLETE" if complete else "INCOMPLETE",
+            "Human Report Semantic Completeness": semantic_completeness,
+            "Human Report Canonical Body Integrity": canonical_body["measurement_state"],
+            "Human Report Persistence Integrity": "NOT_VERIFIED",
+            "Human Report Emission Integrity": "NOT_VERIFIED",
+            "Human Report Persistence-Emission Equivalence": "NOT_VERIFIED",
+            "Human Report Receipt Integrity": "NOT_AVAILABLE",
+            "Human Report Canonical Binding Integrity": binding_integrity,
+            "Human Report Measurement Contract Version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "Canonical Body Fingerprint Scope": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_body_fingerprint_scope"],
+            "Canonical Line Ending": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_line_ending"],
+            "Canonical Encoding": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_encoding"],
+            "Canonical Body Character Count": canonical_body["character_count"],
+            "Canonical Body Byte Count": canonical_body["byte_count"],
+            "Canonical Body Fingerprint": canonical_body["fingerprint"],
+            "Detached Emission Receipt": "PENDING",
+            "Human Report Character Limit": "NONE",
+            "Human Report Truncation Enabled": False,
+            "Human Report Truncated": False,
+            "Human Report Starts At Boundary": starts_at_boundary,
+            "Human Report Ends At Boundary": ends_at_boundary,
+            "Human Report Start Marker Present": start_count > 0,
+            "Human Report End Marker Present": end_count > 0,
+            "Human Report Start Marker Count": start_count,
+            "Human Report End Marker Count": end_count,
+            "Human Report Legacy Attestation Interpretation": "LEGACY_UNDECLARED",
+            "Human Report Persistence Matches Emission": False,
+            "Human Report Selected Section Count": len(selected_sections),
+            "Human Report Omitted Nonessential Section Count": max(
+                0,
+                len(SECTION_ORDER) - len(selected_sections),
+            ),
+            "Human Report Critical Observability Note Count": int(
+                critical_note_count or 0
+            ),
+            "Human Report Bound Field Count": binding.get("Human Report Bound Field Count", 0),
+            "Human Report Resolved Required Field Count": binding.get("Human Report Resolved Required Field Count", 0),
+            "Human Report Unbound Required Field Count": binding.get("Human Report Unbound Required Field Count", 0),
+            "Human Report Expected Missing Count": binding.get("Human Report Expected Missing Count", 0),
+            "Human Report Binding Conflict Count": binding.get("Human Report Binding Conflict Count", 0),
+            "Human Report Generic Unavailable Value Count": binding.get("Human Report Generic Unavailable Value Count", 0),
+            "Character Count/Fingerprint Attestation": "OUT_OF_SCOPE_UNCHANGED",
+            "Human Report Transport Limit Encountered": False,
+            "Human Report Transport Segmented": False,
+            "Human Report Integrity State": "COMPLETE" if complete else "INCOMPLETE",
+            "Human Report Integrity Reason": "all selected human-report content preserved"
+            if complete
+            else ";".join(failures),
+        }
+
+    def _human_observability_notes(self, canonical: dict[str, Any]) -> list[str]:
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        notes: list[str] = []
+        timing_status = self._first_meaningful(
+            state.get("report_timing_status"),
+            performance.get("report_timing_status"),
+            default="Not Available",
+        )
+        timing_semantics = self._first_meaningful(
+            state.get("report_timing_semantics_valid"),
+            performance.get("report_timing_semantics_valid"),
+            default="Not Available",
+        )
+        if str(timing_status).upper() == "VALID" and str(timing_semantics).upper() in {"FALSE", "INVALID"}:
+            notes.append(
+                "Observability contradiction: Report Timing Status is VALID while Report Timing Semantics Valid is FALSE."
+            )
+        invoked = self._boolish(self._first_meaningful(state.get("execution_invoked"), performance.get("execution_invoked"), default=None))
+        started = self._boolish(self._first_meaningful(state.get("execution_started"), performance.get("execution_started"), default=None))
+        completed = self._boolish(self._first_meaningful(state.get("execution_completed"), performance.get("execution_completed"), default=None))
+        if invoked is False and (started is True or completed is True):
+            notes.append(
+                "Observability contradiction: Execution Invoked is FALSE while Execution Started or Execution Completed is TRUE."
+            )
+        runner_invoked = self._boolish(self._first_meaningful(state.get("runner_invoked"), performance.get("runner_invoked"), default=None))
+        runner_status = self._first_meaningful(state.get("runner_status"), performance.get("runner_status"), default="Not Available")
+        if runner_invoked is False and str(runner_status).upper() == "COMPLETED":
+            notes.append(
+                "Observability contradiction: Runner Invoked is FALSE while Runner Status is COMPLETED."
+            )
+        warning_count = self._number(
+            self._first_meaningful(state.get("warning_count"), canonical["runtime_metadata"].get("warning_count"), default=0)
+        )
+        if warning_count == 0 and notes:
+            notes.append(
+                "Observability contradiction: Warning Count is zero despite active critical observability contradictions."
+            )
+        return list(dict.fromkeys(notes))
+
+    def _highest_exclusive_consumer(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        performance = canonical["performance"]
+        candidates: list[tuple[str, float]] = []
+        for row in performance.get("top_expensive_modules", []) or []:
+            if isinstance(row, dict):
+                duration = self._number(row.get("exclusive_duration_seconds") or row.get("seconds") or row.get("duration"))
+                if duration is not None:
+                    candidates.append((self._value(row.get("module") or row.get("stage_name") or row.get("name")), duration))
+        for row in performance.get("stage_metrics", []) or []:
+            if isinstance(row, dict):
+                duration = self._number(row.get("exclusive_duration_seconds") or row.get("total_duration") or row.get("seconds"))
+                if duration is not None:
+                    candidates.append((self._value(row.get("stage_name") or row.get("module") or row.get("name")), duration))
+        if not candidates:
+            return {"name": "Not Available", "duration": None, "share": None}
+        name, duration = max(candidates, key=lambda item: item[1])
+        total = self._number(performance.get("active_compute_time_seconds") or performance.get("total_runtime_seconds"))
+        share = (duration / total * 100.0) if total else None
+        return {"name": name, "duration": duration, "share": share}
+
+    def _leading_candidate(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        state = canonical["report_state"]
+        for key in (
+            "leading_candidate",
+            "relevant_candidate",
+            "selected_candidate",
+            "target_candidate",
+        ):
+            value = state.get(key)
+            if isinstance(value, dict):
+                return value
+        arena = self._first_dict(state, "COGNITIVE_CANDIDATE_ARENA_REPORT", "cognitive_candidate_arena_report")
+        arena_summary = arena.get("candidate_arena_summary")
+        if isinstance(arena_summary, dict):
+            arena = {**arena, **arena_summary}
+        for key in ("leading_candidate", "highest_ranked_candidate", "validation_probe_candidate"):
+            value = arena.get(key)
+            if isinstance(value, dict):
+                return value
+        for row in arena.get("candidate_source_flow_trace", []) or []:
+            if isinstance(row, dict):
+                return row
+        proposals = self._first_dict(state, "CANDIDATE_PROPOSAL_REPORT", "candidate_proposal_report")
+        for row in proposals.get("candidate_proposals", []) or []:
+            if isinstance(row, dict):
+                return row
+        return {}
+
+    def _boolish(self, value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            text = value.strip().upper()
+            if text == "TRUE":
+                return True
+            if text == "FALSE":
+                return False
+        return None
+
+    def _fingerprint(self, text: str) -> str:
+        return self._sha256_bytes(self._encode_canonical_text(text))
+
     def _render_full_report(self, canonical: dict[str, Any]) -> str:
         sections = [
             self._render_lifecycle_start("VALID"),
@@ -611,65 +1718,23 @@ class DeterministicFinalReportRenderer:
         canonical: dict[str, Any],
         full_report: str,
     ) -> str:
-        canonical = dict(canonical)
-        canonical["technical_appendix_note"] = (
-            "Console budget exceeded; full diagnostic payload is available "
-            "through runtime_diagnostic_report.json when enabled."
-        )
-        text = "\n".join([
-            self._render_lifecycle_start("TRUNCATED"),
-            self._render_header(canonical),
-            self._render_executive_runtime_summary(canonical),
-            self._render_candidate_pipeline_dashboard(canonical),
-            self._render_runtime_choke_point(canonical),
-            self._render_source_competition_summary(canonical),
-            self._render_training_assistant_plan_consumption(canonical),
-            self._render_validation_task_execution_report(canonical),
-            self._render_validation_evidence_evaluation_report(canonical),
-            self._render_arena_evidence_admission_report(canonical),
-            self._render_arena_formal_selection_report(canonical),
-            self._render_evidence_generation_report(canonical),
-            self._render_semantic_compilation(canonical),
-            self._render_knowledge_operationalization_summary(canonical),
-            self._render_validation_summary(canonical),
-            self._render_human_execution_summary(canonical),
-            self._render_runtime_health_dashboard(canonical),
-            self._render_constitutional_contracts(canonical),
-            self._render_timing_summary(canonical),
-            self._render_warnings(canonical),
-            self._render_critical_execution_trace(canonical),
-            self._render_human_engineering_conclusion(canonical),
-            self._section("OPTIONAL TECHNICAL APPENDIX", [
-                "Console Appendix: omitted",
-                "Extended Diagnostics: omitted unless full/debug/audit report artifacts are enabled",
-                f"Full Report Characters: {len(full_report)}",
-                canonical["technical_appendix_note"],
-            ]),
-            self._render_final_status(canonical, report_integrity="TRUNCATED"),
-            self._render_lifecycle_end(),
-        ])
-        return self._normalize_text(text)
+        # Backward-compatible method retained for callers that still reference
+        # the former budget path. Human reports are no longer character-clipped.
+        return full_report
 
     def _render_lifecycle_start(self, report_integrity: str) -> str:
         return "\n".join([
-            "=" * 50,
             REPORT_BEGIN_MARKER,
-            "=" * 50,
             "",
             f"Report Schema Version: {REPORT_SCHEMA_VERSION}",
-            f"Report Integrity: {report_integrity}",
+            f"Human Report Integrity State: {report_integrity}",
             "Console Emission Started: TRUE",
             "",
-            "=" * 50,
-            "NEXRYN MAIN RUNTIME",
-            "=" * 50,
         ])
 
     def _render_lifecycle_end(self) -> str:
         return "\n".join([
-            "=" * 50,
             REPORT_END_MARKER,
-            "=" * 50,
         ])
 
     def _render_header(self, canonical: dict[str, Any]) -> str:
@@ -7785,7 +8850,7 @@ class DeterministicFinalReportRenderer:
                 if not text or text.upper() in {"UNKNOWN", "NOT AVAILABLE"}:
                     continue
                 return text
-            return str(value)
+            return value
         return default
 
     def _source_names(self, row: dict[str, Any], singular_key: str, plural_key: str) -> str:
@@ -7856,53 +8921,85 @@ class DeterministicFinalReportRenderer:
         *,
         artifact_written: bool,
         diagnostic_artifact_written: bool,
+        render_measurement: dict[str, Any] | None = None,
+        persistence_measurement: dict[str, Any] | None = None,
+        emission_measurement: dict[str, Any] | None = None,
+        receipt: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         duplicate_count = sum(
             1
-            for section in SECTION_ORDER
+            for section in HUMAN_SECTION_ORDER
             if rendered_report.count(self._section_title(section)) > 1
         )
         raw_count = len(RAW_STRUCTURE_PATTERN.findall(rendered_report))
+        selected_sections = [
+            section
+            for section in HUMAN_SECTION_ORDER
+            if self._section_title(section) in rendered_report
+        ]
+        integrity = self._human_report_integrity(
+            rendered_report,
+            selected_sections=selected_sections,
+            emitted_text=rendered_report,
+        )
+        render_measurement = render_measurement or self._measure_report_payload(rendered_report)
+        persistence_measurement = persistence_measurement or self._not_verified_persistence_measurement()
+        emission_measurement = emission_measurement or self._not_verified_emission_measurement()
+        receipt = receipt or {}
+        measurement_metrics = self._measurement_metrics(
+            render_measurement,
+            persistence_measurement,
+            emission_measurement,
+            receipt,
+        )
+        critical_note_count = 0
+        if self._section_title("CRITICAL OBSERVABILITY NOTES") in rendered_report:
+            critical_note_count = rendered_report.count("Observability contradiction:")
         return {
             "report_render_success": not validation_errors,
-            "report_complete": (
-                REPORT_BEGIN_MARKER in rendered_report.splitlines()[:3]
-                and REPORT_END_MARKER in rendered_report.splitlines()[-3:]
-                and not validation_errors
-            ),
-            "report_truncated": "Console Appendix: omitted" in rendered_report,
+            "report_complete": integrity["Human Report Complete"] and not validation_errors,
+            "report_truncated": False,
             "report_section_count": sum(
                 1
-                for section in SECTION_ORDER
+                for section in HUMAN_SECTION_ORDER
                 if self._section_title(section) in rendered_report
             ),
             "report_duplicate_section_count": duplicate_count,
             "report_raw_structure_count": raw_count,
-            "report_begin_marker_present": (
-                REPORT_BEGIN_MARKER in rendered_report.splitlines()[:3]
-            ),
-            "report_end_marker_present": (
-                REPORT_END_MARKER in rendered_report.splitlines()[-3:]
-            ),
+            "report_begin_marker_present": rendered_report.startswith(REPORT_BEGIN_MARKER),
+            "report_end_marker_present": rendered_report.rstrip().endswith(REPORT_END_MARKER),
             "report_schema_version": REPORT_SCHEMA_VERSION,
             "console_emission_started": (
                 "Console Emission Started: TRUE" in rendered_report
             ),
-            "console_emission_completed": (
-                "Console Emission Completed: TRUE" in rendered_report
-            ),
-            "report_integrity": (
-                "TRUNCATED"
-                if "Report Integrity: TRUNCATED" in rendered_report
-                else "VALID"
-                if "Report Integrity: VALID" in rendered_report
-                else "INVALID"
-            ),
+            "console_emission_completed": False,
+            "report_integrity": integrity["Human Report Integrity State"],
             "report_character_count": len(rendered_report),
             "report_line_count": len(rendered_report.splitlines()),
             "report_artifact_written": artifact_written,
             "diagnostic_artifact_written": diagnostic_artifact_written,
             "report_validation_errors": validation_errors,
+            "human_report_generated": integrity["Human Report Generated"],
+            "human_report_complete": integrity["Human Report Complete"],
+            "human_report_character_limit": "NONE",
+            "human_report_truncation_enabled": False,
+            "human_report_truncated": False,
+            "human_report_starts_at_boundary": integrity["Human Report Starts At Boundary"],
+            "human_report_ends_at_boundary": integrity["Human Report Ends At Boundary"],
+            "human_report_start_marker_present": integrity["Human Report Start Marker Present"],
+            "human_report_end_marker_present": integrity["Human Report End Marker Present"],
+            "human_report_start_marker_count": integrity["Human Report Start Marker Count"],
+            "human_report_end_marker_count": integrity["Human Report End Marker Count"],
+            "human_report_selected_section_count": integrity["Human Report Selected Section Count"],
+            "human_report_omitted_nonessential_section_count": integrity["Human Report Omitted Nonessential Section Count"],
+            "human_report_critical_observability_note_count": critical_note_count,
+            "human_report_transport_limit_encountered": False,
+            "human_report_transport_segmented": False,
+            "human_report_integrity_state": integrity["Human Report Integrity State"],
+            "human_report_integrity_reason": integrity["Human Report Integrity Reason"],
+            "deprecated_console_budget_chars": self.console_budget_chars,
+            "deprecated_console_budget_applied_to_human_report": False,
+            **measurement_metrics,
         }
 
     def _empty_metrics(self) -> dict[str, Any]:
@@ -7924,6 +9021,11 @@ class DeterministicFinalReportRenderer:
             "report_artifact_written": False,
             "diagnostic_artifact_written": False,
             "report_validation_errors": [],
+            "human_report_generated": False,
+            "human_report_complete": False,
+            "human_report_character_limit": "NONE",
+            "human_report_truncation_enabled": False,
+            "human_report_truncated": False,
         }
 
     def _json_safe(self, value: Any) -> Any:
@@ -7942,15 +9044,15 @@ class DeterministicFinalReportRenderer:
 
     def _atomic_write_text(self, text: str, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        payload = self._encode_canonical_text(text)
         fd, tmp_name = tempfile.mkstemp(
             prefix=f".{path.name}.",
             suffix=".tmp",
             dir=str(path.parent),
-            text=True,
         )
         try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(text)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp_name, path)

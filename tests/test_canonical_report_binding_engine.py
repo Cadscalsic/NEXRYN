@@ -960,7 +960,7 @@ def test_legacy_unknown_value_elimination_in_binding_and_final_report():
 
     assert result["field_values"]["generated_programs"] == "Not Available"
     assert "UNKNOWN" not in report
-    assert "Generated Programs: Not Available" in report
+    assert "Generated Programs: Not produced in this run" in report
 
 
 def test_prediction_provenance_binding_resolves_decision_summary():
