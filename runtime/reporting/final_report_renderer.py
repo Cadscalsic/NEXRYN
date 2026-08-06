@@ -102,6 +102,7 @@ HUMAN_SECTION_ORDER = [
     "COGNITIVE QUALITY",
     "COGNITIVE OUTCOME",
     "EVIDENCE LIFECYCLE",
+    "EXECUTION PLAN REPORT",
     "ENGINEERING CONCLUSION",
     "CONSTITUTIONAL BOUNDARY",
     "CRITICAL OBSERVABILITY NOTES",
@@ -730,6 +731,7 @@ class DeterministicFinalReportRenderer:
             ("COGNITIVE QUALITY", self._render_human_cognitive_quality),
             ("COGNITIVE OUTCOME", self._render_human_cognitive_outcome),
             ("EVIDENCE LIFECYCLE", self._render_human_evidence_lifecycle),
+            ("EXECUTION PLAN REPORT", self._render_human_execution_plan_report),
             ("ENGINEERING CONCLUSION", self._render_human_engineering_conclusion),
             ("CONSTITUTIONAL BOUNDARY", self._render_human_constitutional_boundary),
         ]
@@ -1424,6 +1426,56 @@ class DeterministicFinalReportRenderer:
             f"Target Reference Forwarded To Solver: {self._human_value(canonical, 'target_reference_forwarded_to_solver')}",
             f"Arena Evidence Admission: {self._human_value(canonical, 'arena_evidence_admission')}",
             f"Arena Re-entry: {self._human_value(canonical, 'arena_reentry')}",
+        ])
+
+    def _render_human_execution_plan_report(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        report = self._first_dict(
+            state,
+            "EXECUTION_PLAN_REPORT",
+            "CANONICAL_EXECUTION_PLAN_REPORT",
+            "canonical_execution_plan",
+            "execution_plan_report",
+        )
+        canonical_plan = report.get("canonical_execution_plan")
+        if isinstance(canonical_plan, dict):
+            source = {**canonical_plan, **report}
+        else:
+            source = report
+        selected_tools = self._number(source.get("selected_tool_count"))
+        reconciled_tools = self._number(source.get("reconciled_tool_count"))
+        if reconciled_tools is None:
+            reconciled_tools = len(source.get("tool_reconciliation", []) or [])
+        selected_layers = self._number(source.get("selected_layer_count"))
+        reconciled_layers = self._number(source.get("reconciled_layer_count"))
+        if reconciled_layers is None:
+            reconciled_layers = len(source.get("layer_reconciliation", []) or [])
+        active_routes = self._number(source.get("active_route_count"))
+        reconciled_routes = self._number(source.get("reconciled_route_count"))
+        if reconciled_routes is None:
+            reconciled_routes = len(source.get("route_reconciliation", []) or [])
+        dependency_execution = self._first_dict(
+            state,
+            "DEPENDENCY_EXECUTION_RECEIPT",
+            "dependency_execution_receipt",
+        )
+        return self._section("EXECUTION PLAN REPORT", [
+            f"Execution Plan State: {self._first_meaningful(source.get('execution_plan_state'), source.get('planning_state'), default='LEGACY_PLAN_UNAVAILABLE')}",
+            f"Execution Plan Id: {self._first_meaningful(source.get('execution_plan_id'), default='Canonical source unbound')}",
+            f"Execution Plan Schema Version: {self._first_meaningful(source.get('execution_plan_schema_version'), default='Not produced in this run')}",
+            f"Execution Plan Finalized: {self._value(self._first_meaningful(source.get('execution_plan_finalized'), default=False))}",
+            f"Execution Plan Immutable: {self._value(self._first_meaningful(source.get('execution_plan_immutable'), default=False))}",
+            f"Selected Tools Reconciled: {self._count_pair(reconciled_tools, selected_tools)}",
+            f"Selected Layers Reconciled: {self._count_pair(reconciled_layers, selected_layers)}",
+            f"Active Routes Reconciled: {self._count_pair(reconciled_routes, active_routes)}",
+            f"Execution Nodes Materialized: {self._first_meaningful(source.get('execution_node_count'), default=0)}",
+            f"Dependency Activation State: {self._first_meaningful(source.get('dependency_activation_state'), default='NOT_REQUESTED')}",
+            f"Process Stage State: {self._first_meaningful(source.get('process_stage_state'), default='NOT_REQUESTED')}",
+            f"Unresolved Selected Items: {self._first_meaningful(source.get('unresolved_selected_item_count'), default=0)}",
+            f"Plan Validation State: {self._first_meaningful(source.get('execution_plan_validation_state'), default='NOT_APPLICABLE')}",
+            f"Dependency Execution State: {self._first_meaningful(dependency_execution.get('execution_state'), default='LEGACY_DEPENDENCY_EXECUTION_UNAVAILABLE')}",
+            f"Dependency Chains Executed: {self._first_meaningful(dependency_execution.get('executed_chain_count'), default=0)}",
+            f"Dependency Results Captured: {self._first_meaningful(dependency_execution.get('result_count'), default=0)}",
         ])
 
     def _render_human_engineering_conclusion(self, canonical: dict[str, Any]) -> str:
@@ -8904,6 +8956,17 @@ class DeterministicFinalReportRenderer:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    def _count_pair(self, resolved: Any, total: Any) -> str:
+        resolved_number = self._number(resolved)
+        total_number = self._number(total)
+        if resolved_number is None and total_number is None:
+            return "0/0"
+        if resolved_number is None:
+            resolved_number = 0
+        if total_number is None:
+            total_number = 0
+        return f"{int(resolved_number)}/{int(total_number)}"
 
     def _normalize_text(self, text: str) -> str:
         lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")

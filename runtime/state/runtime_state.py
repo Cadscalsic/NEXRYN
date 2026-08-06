@@ -15,6 +15,7 @@ from runtime.context import (
 
 from runtime.profiling import telemetry
 from runtime.security import memory_access_guard, security_reporter
+from runtime.execution.execution_planner import execution_planner
 from runtime.world_governance import WorldState
 
 
@@ -344,6 +345,42 @@ class RuntimeState:
             }
             for tool_name in self.enabled_tools
         }
+        plan_result = execution_planner.plan(
+            enabled_tools=self.enabled_tools,
+            runtime_context={
+                **self.context,
+                "enabled_tools": self.enabled_tools,
+                "disabled_tools": self.disabled_tools,
+                "tool_selection_report": {
+                    "enabled_tools": self.enabled_tools,
+                    "disabled_tools": self.disabled_tools,
+                    "selected_tools": self.enabled_tools,
+                },
+            },
+        )
+        canonical_plan = plan_result.get("canonical_execution_plan", {})
+        plan_requests = {
+            **plan_result.get("dependency_requests", {}),
+            **plan_result.get("process_requests", {}),
+            **plan_result.get("causal_requests", {}),
+        }
+        if plan_requests:
+            self.runtime_tool_requests = {
+                **self.runtime_tool_requests,
+                **plan_requests,
+            }
+        self.context["canonical_execution_plan"] = canonical_plan
+        self.context["EXECUTION_PLAN_REPORT"] = plan_result.get(
+            "EXECUTION_PLAN_REPORT",
+            {},
+        )
+        self.context["CANONICAL_EXECUTION_PLAN_REPORT"] = canonical_plan
+        self.context["EXECUTION_PLAN_RUNTIME_HANDOFF"] = (
+            execution_planner.consume_finalized_plan(
+                canonical_plan,
+                runtime_context=self.context,
+            )
+        )
 
         self.context[
             "runtime_tool_requests"

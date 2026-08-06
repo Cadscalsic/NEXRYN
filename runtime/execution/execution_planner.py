@@ -7,6 +7,8 @@ execution intents, nodes, requests, and block/defer diagnostics.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
@@ -111,6 +113,13 @@ class ExecutionPlanner:
         "explanation_generation": "explanation_generation_execution",
         "temporal_reasoning": "temporal_reasoning_execution",
         "strategy_evolution": "strategy_evolution_execution",
+        "semantic_to_transformation_compiler": "semantic_compiler_execution",
+        "transformation_compilation": "transformation_compilation_execution",
+        "transformation_execution": "transformation_execution",
+        "rotation_execution": "rotation_execution",
+        "reflection_execution": "reflection_execution",
+        "scaling_execution": "scaling_execution",
+        "path_execution": "path_execution",
     }
 
     PRIORITY = {
@@ -127,6 +136,13 @@ class ExecutionPlanner:
         "explanation_generation": 15,
         "temporal_reasoning": 10,
         "strategy_evolution": 5,
+        "semantic_to_transformation_compiler": 85,
+        "transformation_compilation": 84,
+        "transformation_execution": 83,
+        "rotation_execution": 48,
+        "reflection_execution": 48,
+        "scaling_execution": 48,
+        "path_execution": 48,
     }
 
     TOOL_COST = {
@@ -143,6 +159,13 @@ class ExecutionPlanner:
         "explanation_generation": 1,
         "temporal_reasoning": 1,
         "strategy_evolution": 1,
+        "semantic_to_transformation_compiler": 1,
+        "transformation_compilation": 1,
+        "transformation_execution": 1,
+        "rotation_execution": 1,
+        "reflection_execution": 1,
+        "scaling_execution": 1,
+        "path_execution": 1,
     }
 
     def plan(
@@ -194,15 +217,27 @@ class ExecutionPlanner:
             for tool in selected_tools
         ]
         plan = self._plan_from_intents(intents, route_count, budget)
+        canonical_plan = self._canonical_execution_plan(
+            selected_tools=selected_tools,
+            concepts=concepts,
+            intents=intents,
+            legacy_plan=plan,
+            active_routes=route_count,
+            context=context,
+            task_profile=task_profile,
+            budget=budget,
+        )
         report = self._report(
             selected_tools,
             concepts,
             intents,
             plan,
             route_count,
+            canonical_plan,
         )
         return {
             "execution_plan": plan.as_report(),
+            "canonical_execution_plan": canonical_plan,
             "execution_nodes": report["generated_execution_nodes"],
             "dependency_requests": self._requests_for(plan.dependency_nodes),
             "process_requests": self._requests_for(plan.process_nodes),
@@ -213,6 +248,7 @@ class ExecutionPlanner:
             "blocked_stages": report["blocked_nodes"],
             "pruning_decisions": report["pruning_log"],
             "EXECUTION_PLAN_REPORT": report,
+            "CANONICAL_EXECUTION_PLAN_REPORT": canonical_plan,
             "execution_graph": {
                 "node_count": len(plan.execution_nodes),
                 "execution_nodes": report["generated_execution_nodes"],
@@ -226,6 +262,137 @@ class ExecutionPlanner:
 
         plan_result = plan_result if isinstance(plan_result, Mapping) else {}
         return dict(plan_result.get("EXECUTION_PLAN_REPORT", {}))
+
+    def consume_finalized_plan(
+        self,
+        canonical_plan: Mapping[str, Any] | None,
+        runtime_context: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Materialize a governed runtime handoff from a finalized plan.
+
+        This does not invoke any runtime component. It only translates already
+        finalized plan nodes into stage/admission/activation handoff records.
+        """
+
+        plan = canonical_plan if isinstance(canonical_plan, Mapping) else {}
+        context = runtime_context if isinstance(runtime_context, Mapping) else {}
+        context_run_id = (
+            context.get("run_id")
+            or context.get("execution_id")
+            or context.get("runtime_id")
+        )
+        if (
+            context_run_id is not None
+            and self._identity_value(context_run_id)
+            != self._identity_value(plan.get("run_id"))
+        ):
+            return {
+                "orchestrator_consumption_state": "BLOCKED_BY_PLAN_IDENTITY",
+                "runtime_stage_count": 0,
+                "admission_record_count": 0,
+                "activation_request_count": 0,
+                "invocation_record_count": 0,
+                "failure_reason": "CROSS_RUN_PLAN_CONTAMINATION",
+            }
+        if plan.get("execution_plan_immutable") and not self._plan_fingerprint_valid(plan):
+            return {
+                "orchestrator_consumption_state": "BLOCKED_BY_STALE_PLAN",
+                "runtime_stage_count": 0,
+                "admission_record_count": 0,
+                "activation_request_count": 0,
+                "invocation_record_count": 0,
+                "failure_reason": "PLAN_STALE",
+            }
+        if context and self._plan_selection_stale(plan, context):
+            return {
+                "orchestrator_consumption_state": "BLOCKED_BY_STALE_PLAN",
+                "runtime_stage_count": 0,
+                "admission_record_count": 0,
+                "activation_request_count": 0,
+                "invocation_record_count": 0,
+                "failure_reason": "PLAN_STALE",
+            }
+        if plan.get("execution_plan_validation_state") != "VALID":
+            return {
+                "orchestrator_consumption_state": "BLOCKED_BY_PLAN_VALIDATION",
+                "runtime_stage_count": 0,
+                "admission_record_count": 0,
+                "activation_request_count": 0,
+                "invocation_record_count": 0,
+                "failure_reason": plan.get("execution_plan_failure_cause") or "PLAN_NOT_VALID",
+            }
+        stages = []
+        admissions = []
+        activations = []
+        for node in plan.get("nodes", []) or []:
+            if not isinstance(node, Mapping):
+                continue
+            if node.get("execution_plan_id") != plan.get("execution_plan_id"):
+                return {
+                    "orchestrator_consumption_state": "BLOCKED_BY_PLAN_IDENTITY",
+                    "runtime_stage_count": 0,
+                    "admission_record_count": 0,
+                    "activation_request_count": 0,
+                    "invocation_record_count": 0,
+                    "failure_reason": "PLAN_IDENTITY_CONFLICT",
+                }
+            if node.get("materialization_state") != "MATERIALIZED":
+                continue
+            if node.get("admission_state") != "ADMISSION_REQUESTED":
+                return {
+                    "orchestrator_consumption_state": "BLOCKED_BY_ADMISSION",
+                    "runtime_stage_count": 0,
+                    "admission_record_count": 0,
+                    "activation_request_count": 0,
+                    "invocation_record_count": 0,
+                    "failure_reason": "EXECUTION_WITHOUT_ADMISSION_RECORD",
+                }
+            stage_id = node.get("runtime_stage_id") or self._stable_id(
+                "runtime_stage",
+                node.get("execution_node_id"),
+            )
+            stages.append({
+                "runtime_stage_id": stage_id,
+                "execution_plan_id": node.get("execution_plan_id"),
+                "execution_node_id": node.get("execution_node_id"),
+                "target_runtime_component": node.get("target_runtime_component"),
+                "stage_state": "MATERIALIZED",
+                "invocation_state": "NOT_INVOKED",
+            })
+            admissions.append({
+                "admission_record_id": self._stable_id(
+                    "admission_record",
+                    {
+                        "plan": node.get("execution_plan_id"),
+                        "node": node.get("execution_node_id"),
+                    },
+                ),
+                "execution_plan_id": node.get("execution_plan_id"),
+                "execution_node_id": node.get("execution_node_id"),
+                "admission_state": node.get("admission_state"),
+                "admission_requirement": node.get("admission_requirement"),
+            })
+            if node.get("activation_request_id"):
+                activations.append({
+                    "activation_request_id": node.get("activation_request_id"),
+                    "execution_plan_id": node.get("execution_plan_id"),
+                    "execution_node_id": node.get("execution_node_id"),
+                    "activation_state": node.get("activation_state"),
+                    "target_runtime_component": node.get("target_runtime_component"),
+                })
+        return {
+            "orchestrator_consumption_state": "CANONICAL_PLAN_CONSUMED",
+            "execution_plan_id": plan.get("execution_plan_id"),
+            "runtime_stage_count": len(stages),
+            "admission_record_count": len(admissions),
+            "activation_request_count": len(activations),
+            "invocation_record_count": 0,
+            "runtime_stages": stages,
+            "admission_records": admissions,
+            "activation_requests": activations,
+            "invocation_records": [],
+            "execution_invoked": False,
+        }
 
     def _intent(
         self,
@@ -347,6 +514,586 @@ class ExecutionPlanner:
             parent_node=previous_node_id,
         )
 
+    def _canonical_execution_plan(
+        self,
+        *,
+        selected_tools: list[str],
+        concepts: list[str],
+        intents: list[ExecutionIntent],
+        legacy_plan: ExecutionPlan,
+        active_routes: int,
+        context: Mapping[str, Any],
+        task_profile: Any,
+        budget: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        run_id = self._identity_value(
+            context.get("run_id")
+            or context.get("execution_id")
+            or context.get("runtime_id")
+            or "current_run"
+        )
+        task_id = self._identity_value(
+            context.get("task_id")
+            or context.get("task")
+            or getattr(task_profile, "task_id", None)
+            or "current_task"
+        )
+        task_profile_id = self._stable_id(
+            "task_profile",
+            {
+                "run_id": run_id,
+                "task_id": task_id,
+                "concepts": concepts,
+            },
+        )
+        execution_plan_id = self._stable_id(
+            "execution_plan",
+            {
+                "run_id": run_id,
+                "task_id": task_id,
+                "selected_tools": selected_tools,
+                "active_routes": active_routes,
+            },
+        )
+        selection_records = self._tool_selection_records(selected_tools, context)
+        layer_records = self._layer_selection_records(context, selected_tools)
+        route_records = self._route_selection_records(active_routes, context)
+        legacy_nodes_by_tool = {
+            node.originating_tool: node
+            for node in (
+                legacy_plan.execution_nodes
+                + legacy_plan.blocked_nodes
+                + legacy_plan.deferred_nodes
+            )
+        }
+        nodes: list[dict[str, Any]] = []
+        tool_reconciliation: list[dict[str, Any]] = []
+        dependency_activation_requests: list[dict[str, Any]] = []
+        process_stage_requests: list[dict[str, Any]] = []
+        failures: list[dict[str, Any]] = []
+
+        for index, record in enumerate(selection_records):
+            tool = record["tool"]
+            intent = next((item for item in intents if item.tool == tool), None)
+            legacy_node = legacy_nodes_by_tool.get(tool)
+            node_id = self._stable_id(
+                "execution_node",
+                {
+                    "execution_plan_id": execution_plan_id,
+                    "tool": tool,
+                    "selection_id": record["tool_selection_record_id"],
+                },
+            )
+            target_component = self.TOOL_STAGE_MAP.get(tool)
+            block_reason = None
+            defer_reason = None
+            disposition = "MATERIALIZED_AS_EXECUTION_NODE"
+            materialization_state = "MATERIALIZED"
+            admission_state = "ADMISSION_REQUESTED"
+            activation_state = "REQUESTED"
+            if legacy_node and legacy_node.status == "BLOCKED":
+                disposition = "BLOCKED_BY_ADMISSION"
+                materialization_state = "BLOCKED"
+                admission_state = "BLOCKED"
+                activation_state = "NOT_REQUESTED"
+                block_reason = self._pruning_reason(legacy_plan, tool, "BLOCKED")
+            elif legacy_node and legacy_node.status == "DEFERRED":
+                disposition = "DEFERRED_BY_DEPENDENCY"
+                materialization_state = "DEFERRED"
+                admission_state = "NOT_REQUESTED"
+                activation_state = "DEFERRED"
+                defer_reason = self._pruning_reason(legacy_plan, tool, "DEFERRED")
+            elif not target_component:
+                disposition = "FAILED_TO_MATERIALIZE"
+                materialization_state = "FAILED"
+                admission_state = "NOT_REQUESTED"
+                activation_state = "NOT_REQUESTED"
+                block_reason = "TARGET_COMPONENT_UNRESOLVED"
+            runtime_stage_id = self._stable_id(
+                "runtime_stage",
+                {
+                    "execution_plan_id": execution_plan_id,
+                    "node_id": node_id,
+                    "component": target_component,
+                },
+            )
+            activation_request_id = (
+                self._stable_id(
+                    "activation_request",
+                    {
+                        "execution_plan_id": execution_plan_id,
+                        "node_id": node_id,
+                        "tool": tool,
+                    },
+                )
+                if activation_state == "REQUESTED"
+                else None
+            )
+            node = {
+                "execution_node_id": node_id,
+                "execution_plan_id": execution_plan_id,
+                "node_type": "runtime_tool_stage",
+                "target_runtime_component": target_component,
+                "originating_tool": tool,
+                "runtime_stage_id": runtime_stage_id if target_component else None,
+                "source_tool_selection_ids": [record["tool_selection_record_id"]],
+                "source_layer_selection_ids": [],
+                "source_route_ids": [],
+                "selection_state": "SELECTED" if record["selected_state"] else "NOT_SELECTED",
+                "materialization_state": materialization_state,
+                "admission_requirement": "GOVERNED_RUNTIME_STAGE_ADMISSION",
+                "admission_state": admission_state,
+                "activation_request_id": activation_request_id,
+                "activation_state": activation_state,
+                "invocation_id": None,
+                "invocation_state": "NOT_INVOKED",
+                "dependency_node_ids": list(intent.dependencies if intent else []),
+                "execution_order": index,
+                "block_reason": block_reason,
+                "prune_reason": None,
+                "defer_reason": defer_reason,
+                "failure_reason": block_reason if disposition == "FAILED_TO_MATERIALIZE" else None,
+            }
+            nodes.append(node)
+            record.update({
+                "planning_applicability": True,
+                "target_execution_node_ids": [node_id],
+                "final_disposition": disposition,
+                "disposition_reason": block_reason or defer_reason or "selection_materialized_by_canonical_execution_plan",
+                "admission_requirement": node["admission_requirement"],
+                "activation_request_state": activation_state,
+                "invocation_state": node["invocation_state"],
+            })
+            tool_reconciliation.append(record)
+            if disposition == "FAILED_TO_MATERIALIZE":
+                failures.append({
+                    "selected_item_type": "tool",
+                    "selected_item": tool,
+                    "failure_reason": block_reason or "UNKNOWN_MATERIALIZATION_FAILURE",
+                })
+            if tool == "dependency_reasoning" and activation_request_id:
+                dependency_activation_requests.append({
+                    "activation_request_id": activation_request_id,
+                    "execution_plan_id": execution_plan_id,
+                    "execution_node_id": node_id,
+                    "target_dependency_component": target_component,
+                    "source_selection_id": record["tool_selection_record_id"],
+                    "source_route_ids": [],
+                    "required_input_references": ["attributed_concepts"],
+                    "admission_requirement": node["admission_requirement"],
+                    "request_state": "REQUESTED",
+                    "activation_state": activation_state,
+                    "failure_reason": None,
+                })
+            if tool == "process_semantics":
+                process_stage_requests.append({
+                    "process_stage_request_id": activation_request_id or self._stable_id("process_stage_request", node_id),
+                    "execution_plan_id": execution_plan_id,
+                    "execution_node_id": node_id,
+                    "source_tool_selection_ids": [record["tool_selection_record_id"]],
+                    "source_layer_selection_ids": [],
+                    "source_route_ids": [],
+                    "required_upstream_outputs": ["attributed_concepts", "semantic_context"],
+                    "stage_order": index,
+                    "admission_state": admission_state,
+                    "activation_request_id": activation_request_id,
+                    "request_state": "REQUESTED" if activation_request_id else materialization_state,
+                    "non_materialization_reason": block_reason or defer_reason,
+                })
+
+        materialized_node_ids = [
+            node["execution_node_id"]
+            for node in nodes
+            if node["materialization_state"] == "MATERIALIZED"
+        ]
+        route_reconciliation = self._reconcile_routes(
+            route_records,
+            materialized_node_ids,
+            execution_plan_id,
+        )
+        node_by_id = {node["execution_node_id"]: node for node in nodes}
+        for row in route_reconciliation:
+            target = row.get("execution_node_id")
+            if target in node_by_id and row["route_id"] not in node_by_id[target]["source_route_ids"]:
+                node_by_id[target]["source_route_ids"].append(row["route_id"])
+        for request in dependency_activation_requests:
+            node = node_by_id.get(request.get("execution_node_id"))
+            if node:
+                request["source_route_ids"] = list(node.get("source_route_ids", []))
+        for request in process_stage_requests:
+            node = node_by_id.get(request.get("execution_node_id"))
+            if node:
+                request["source_route_ids"] = list(node.get("source_route_ids", []))
+        layer_reconciliation = self._reconcile_layers(
+            layer_records,
+            nodes,
+            execution_plan_id,
+        )
+        for row in layer_reconciliation:
+            for node_id in row.get("target_execution_node_ids", []):
+                if node_id in node_by_id:
+                    node_by_id[node_id]["source_layer_selection_ids"].append(
+                        row["layer_selection_record_id"]
+                    )
+
+        reconciled_tools = len(tool_reconciliation)
+        reconciled_layers = len(layer_reconciliation)
+        reconciled_routes = len(route_reconciliation)
+        unresolved = sum(
+            1
+            for row in [*tool_reconciliation, *layer_reconciliation, *route_reconciliation]
+            if row.get("final_disposition") == "FAILED_TO_MATERIALIZE"
+        )
+        route_balance = self._route_balance(route_reconciliation, len(route_records))
+        validation_state = "VALID"
+        failure_cause = None
+        if unresolved:
+            validation_state = "INCOMPLETE"
+            failure_cause = "SELECTED_ITEM_FAILED_TO_MATERIALIZE"
+        if not route_balance["balanced"]:
+            validation_state = "INVALID"
+            failure_cause = "ROUTE_RECONCILIATION_FAILED"
+        if any(node["execution_plan_id"] != execution_plan_id for node in nodes):
+            validation_state = "CONFLICTED"
+            failure_cause = "PLAN_IDENTITY_CONFLICT"
+        planning_state = (
+            "EXECUTION_PLAN_FINALIZED"
+            if validation_state == "VALID"
+            else "EXECUTION_PLAN_NOT_FINALIZED"
+        )
+        dependency_activation_state = self._capability_handoff_state(
+            "dependency_reasoning",
+            nodes,
+            dependency_activation_requests,
+        )
+        process_stage_state = self._capability_handoff_state(
+            "process_semantics",
+            nodes,
+            process_stage_requests,
+            materialized_label="MATERIALIZED",
+        )
+        plan = {
+            "execution_plan_schema_version": "1.0",
+            "execution_plan_id": execution_plan_id,
+            "run_id": run_id,
+            "task_id": task_id,
+            "task_profile_id": task_profile_id,
+            "planning_state": planning_state,
+            "source_selection_record_ids": [
+                row["tool_selection_record_id"] for row in selection_records
+            ],
+            "selected_tool_count": len(selection_records),
+            "selected_layer_count": len(layer_records),
+            "active_route_count": len(route_records),
+            "execution_node_count": len(nodes),
+            "route_disposition_count": len(route_reconciliation),
+            "unresolved_selected_item_count": unresolved,
+            "nodes": nodes,
+            "route_reconciliation": route_reconciliation,
+            "route_balance": route_balance,
+            "tool_reconciliation": tool_reconciliation,
+            "layer_reconciliation": layer_reconciliation,
+            "dependency_activation_requests": dependency_activation_requests,
+            "process_stage_requests": process_stage_requests,
+            "admission_summary": {
+                "admission_requested_count": sum(1 for node in nodes if node["admission_state"] == "ADMISSION_REQUESTED"),
+                "blocked_count": sum(1 for node in nodes if node["admission_state"] == "BLOCKED"),
+                "invocation_without_admission_count": 0,
+            },
+            "materialization_failures": failures,
+            "immutability_state": "IMMUTABLE" if validation_state == "VALID" else "NOT_FINALIZED",
+            "execution_plan_finalized": validation_state == "VALID",
+            "execution_plan_immutable": validation_state == "VALID",
+            "execution_plan_forwarded": validation_state == "VALID",
+            "execution_plan_reconciliation_state": "COMPLETE" if validation_state == "VALID" else "FAILED",
+            "execution_plan_validation_state": validation_state,
+            "execution_plan_failure_cause": failure_cause,
+            "dependency_activation_state": dependency_activation_state,
+            "process_stage_state": process_stage_state,
+            "orchestrator_consumption_state": "READY_FOR_ORCHESTRATOR" if validation_state == "VALID" else "BLOCKED_BY_PLAN_VALIDATION",
+            "constitutional_boundary": "CANONICAL_EXECUTION_PLAN_MATERIALIZES_EXISTING_SELECTIONS_WITHOUT_GRANTING_NEW_COGNITIVE_AUTHORITY",
+        }
+        plan["execution_plan_fingerprint"] = self._fingerprint_plan(plan)
+        return plan
+
+    def _tool_selection_records(
+        self,
+        selected_tools: list[str],
+        context: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        enabled = set(context.get("enabled_tools", []) or [])
+        available = set(context.get("available_tools", []) or [])
+        report = context.get("tool_selection_report", {})
+        if isinstance(report, Mapping):
+            available.update(report.get("available_tools", []) or [])
+            enabled.update(report.get("enabled_tools", []) or [])
+        records = []
+        for tool in sorted(dict.fromkeys(selected_tools)):
+            records.append({
+                "canonical_tool_id": tool,
+                "tool": tool,
+                "tool_selection_record_id": self._stable_id("tool_selection", tool),
+                "available_state": tool in available or tool in enabled or tool in selected_tools,
+                "enabled_state": tool in enabled,
+                "selected_state": True,
+                "planned_state": False,
+                "invoked_state": False,
+                "execution_count": 0,
+            })
+        return records
+
+    def _layer_selection_records(
+        self,
+        context: Mapping[str, Any],
+        selected_tools: list[str],
+    ) -> list[dict[str, Any]]:
+        layers = []
+        explicit_selected = "selected_layers" in context
+        if explicit_selected:
+            values = [context.get("selected_layers")]
+        else:
+            values = [
+                context.get("selected_layers"),
+                context.get("enabled_layers"),
+                context.get("active_layers"),
+            ]
+        for value in values:
+            if isinstance(value, (list, tuple, set)):
+                layers.extend(str(item) for item in value if item)
+        tool_layer_map = {
+            "dependency_reasoning": "dependency_reasoning_layer",
+            "process_semantics": "process_semantics_layer",
+        }
+        for tool in selected_tools:
+            if tool in tool_layer_map:
+                layers.append(tool_layer_map[tool])
+        records = []
+        enabled_layers = set(context.get("enabled_layers", []) or [])
+        for layer in sorted(dict.fromkeys(layers)):
+            records.append({
+                "canonical_layer_id": layer,
+                "layer_selection_record_id": self._stable_id("layer_selection", layer),
+                "layer": layer,
+                "enabled_state": layer in enabled_layers or not explicit_selected,
+                "selected_state": True,
+            })
+        return records
+
+    def _route_selection_records(
+        self,
+        active_routes: int,
+        context: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        route_report = context.get("route_selection_report") or context.get("cognitive_route_report") or {}
+        raw_routes = []
+        if isinstance(route_report, Mapping):
+            for key in ("active_routes", "routes", "selected_routes"):
+                value = route_report.get(key)
+                if isinstance(value, list):
+                    raw_routes = value
+                    break
+        records = []
+        if raw_routes:
+            for index, route in enumerate(raw_routes):
+                route = route if isinstance(route, Mapping) else {"route": route}
+                route_id = self._identity_value(route.get("route_id") or route.get("id") or f"route_{index + 1}")
+                records.append({
+                    "route_id": route_id,
+                    "route_source": route.get("source", "route_selection"),
+                    "route_rank": self._int_value(route.get("rank"), index + 1),
+                    "route_score": route.get("score"),
+                    "route_active_state": True,
+                })
+        else:
+            for index in range(max(0, active_routes)):
+                route_id = self._stable_id("route", {"index": index + 1, "active_routes": active_routes})
+                records.append({
+                    "route_id": route_id,
+                    "route_source": "active_route_count",
+                    "route_rank": index + 1,
+                    "route_score": None,
+                    "route_active_state": True,
+                })
+        return records
+
+    def _reconcile_routes(
+        self,
+        routes: list[dict[str, Any]],
+        materialized_node_ids: list[str],
+        execution_plan_id: str,
+    ) -> list[dict[str, Any]]:
+        reconciled = []
+        for index, route in enumerate(routes):
+            if not materialized_node_ids:
+                disposition = "FAILED_TO_MATERIALIZE"
+                target_node = None
+                reason = "no_materialized_execution_nodes_for_active_route"
+            elif index < len(materialized_node_ids):
+                disposition = "MATERIALIZED_AS_EXECUTION_NODE"
+                target_node = materialized_node_ids[index]
+                reason = "route_materialized_to_corresponding_execution_node"
+            else:
+                disposition = "MERGED_INTO_EXECUTION_NODE"
+                target_node = materialized_node_ids[0]
+                reason = "deterministic_route_merge_into_primary_execution_node"
+            reconciled.append({
+                **route,
+                "execution_plan_id": execution_plan_id,
+                "execution_applicability": True,
+                "execution_node_id": target_node,
+                "merged_node_id": target_node if disposition == "MERGED_INTO_EXECUTION_NODE" else None,
+                "final_disposition": disposition,
+                "disposition_reason": reason,
+                "merge_lineage": [route["route_id"]] if disposition == "MERGED_INTO_EXECUTION_NODE" else [],
+                "pruning_authority": None,
+                "admission_state": "ADMISSION_REQUESTED" if target_node else "NOT_REQUESTED",
+                "activation_state": "REQUESTED" if target_node else "NOT_REQUESTED",
+            })
+        return reconciled
+
+    def _reconcile_layers(
+        self,
+        layers: list[dict[str, Any]],
+        nodes: list[dict[str, Any]],
+        execution_plan_id: str,
+    ) -> list[dict[str, Any]]:
+        materialized = [
+            node["execution_node_id"]
+            for node in nodes
+            if node["materialization_state"] == "MATERIALIZED"
+        ]
+        rows = []
+        for layer in layers:
+            targets = [
+                node["execution_node_id"]
+                for node in nodes
+                if (
+                    layer["layer"].replace("_layer", "") in str(node["target_runtime_component"])
+                    or layer["layer"].replace("_layer", "") == node.get("originating_tool")
+                )
+            ]
+            blocked_targets = [
+                node["execution_node_id"]
+                for node in nodes
+                if (
+                    layer["layer"].replace("_layer", "") == node.get("originating_tool")
+                    and node.get("materialization_state") == "BLOCKED"
+                )
+            ]
+            if blocked_targets:
+                targets = blocked_targets
+                disposition = "BLOCKED_BY_ADMISSION"
+                reason = "layer_blocked_by_matching_tool_admission"
+            elif not targets and materialized:
+                targets = [materialized[0]]
+                disposition = "MERGED_INTO_EXECUTION_NODE"
+                reason = "layer_merged_into_primary_runtime_stage"
+            elif targets:
+                disposition = "MATERIALIZED_AS_EXECUTION_NODE"
+                reason = "layer_materialized_by_matching_runtime_stage"
+            else:
+                disposition = "FAILED_TO_MATERIALIZE"
+                reason = "no_runtime_stage_available_for_selected_layer"
+            rows.append({
+                **layer,
+                "execution_plan_id": execution_plan_id,
+                "target_execution_node_ids": targets,
+                "final_disposition": disposition,
+                "disposition_reason": reason,
+                "admission_state": "ADMISSION_REQUESTED" if targets else "NOT_REQUESTED",
+                "activation_state": "REQUESTED" if targets else "NOT_REQUESTED",
+            })
+        return rows
+
+    def _route_balance(
+        self,
+        rows: list[dict[str, Any]],
+        active_route_count: int,
+    ) -> dict[str, Any]:
+        states = {
+            "MATERIALIZED_AS_EXECUTION_NODE": 0,
+            "MERGED_INTO_EXECUTION_NODE": 0,
+            "PRUNED_BY_POLICY": 0,
+            "BLOCKED_BY_ADMISSION": 0,
+            "DEFERRED_BY_DEPENDENCY": 0,
+            "NOT_APPLICABLE_TO_FINAL_PLAN": 0,
+            "FAILED_TO_MATERIALIZE": 0,
+        }
+        for row in rows:
+            states[row["final_disposition"]] = states.get(row["final_disposition"], 0) + 1
+        total = sum(states.values())
+        return {
+            **states,
+            "active_route_count": active_route_count,
+            "reconciled_route_count": total,
+            "balanced": total == active_route_count,
+        }
+
+    def _pruning_reason(
+        self,
+        plan: ExecutionPlan,
+        tool: str,
+        decision: str,
+    ) -> str | None:
+        for row in plan.pruning_log:
+            if row.get("tool") == tool and row.get("decision") == decision:
+                return row.get("reason")
+        return None
+
+    def _capability_handoff_state(
+        self,
+        tool: str,
+        nodes: list[dict[str, Any]],
+        requests: list[dict[str, Any]],
+        *,
+        materialized_label: str = "REQUESTED",
+    ) -> str:
+        matching = [node for node in nodes if node.get("originating_tool") == tool]
+        if any(node.get("materialization_state") == "BLOCKED" for node in matching):
+            return "BLOCKED"
+        if any(node.get("materialization_state") == "DEFERRED" for node in matching):
+            return "DEFERRED"
+        if any(node.get("materialization_state") == "FAILED" for node in matching):
+            return "FAILED_TO_MATERIALIZE"
+        if requests:
+            return materialized_label
+        return "NOT_REQUESTED"
+
+    def _fingerprint_plan(self, plan: Mapping[str, Any]) -> str:
+        payload = dict(plan)
+        payload.pop("execution_plan_fingerprint", None)
+        return self._stable_id("execution_plan_fingerprint", payload)
+
+    def _plan_fingerprint_valid(self, plan: Mapping[str, Any]) -> bool:
+        fingerprint = plan.get("execution_plan_fingerprint")
+        if not fingerprint:
+            return False
+        return fingerprint == self._fingerprint_plan(plan)
+
+    def _plan_selection_stale(
+        self,
+        plan: Mapping[str, Any],
+        context: Mapping[str, Any],
+    ) -> bool:
+        report = context.get("tool_selection_report", {})
+        if not isinstance(report, Mapping) or "selected_tools" not in report:
+            return False
+        current = sorted(str(tool) for tool in report.get("selected_tools", []) or [])
+        planned = sorted(
+            str(row.get("tool"))
+            for row in plan.get("tool_reconciliation", []) or []
+            if isinstance(row, Mapping) and row.get("selected_state") is True
+        )
+        return current != planned
+
+    def _stable_id(self, prefix: str, payload: Any) -> str:
+        text = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        return f"{prefix}_{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}"
+
+    def _identity_value(self, value: Any) -> str:
+        text = str(value or "").strip()
+        return text or "unidentified"
+
     def _link_children(self, nodes: list[ExecutionNode]) -> None:
         by_id = {node.node_id: node for node in nodes}
         for node in nodes:
@@ -381,6 +1128,7 @@ class ExecutionPlanner:
         intents: list[ExecutionIntent],
         plan: ExecutionPlan,
         active_routes: int,
+        canonical_plan: Mapping[str, Any],
     ) -> dict[str, Any]:
         plan_report = plan.as_report()
         node_count = len(plan.execution_nodes)
@@ -419,6 +1167,28 @@ class ExecutionPlanner:
                 "blocked_nodes": blocked_count,
                 "deferred_nodes": len(plan.deferred_nodes),
             },
+            "execution_plan_schema_version": canonical_plan.get("execution_plan_schema_version"),
+            "execution_plan_id": canonical_plan.get("execution_plan_id"),
+            "execution_plan_state": canonical_plan.get("planning_state"),
+            "execution_plan_finalized": canonical_plan.get("execution_plan_finalized"),
+            "execution_plan_immutable": canonical_plan.get("execution_plan_immutable"),
+            "execution_plan_forwarded": canonical_plan.get("execution_plan_forwarded"),
+            "selected_tool_count": canonical_plan.get("selected_tool_count"),
+            "reconciled_tool_count": len(canonical_plan.get("tool_reconciliation", []) or []),
+            "selected_layer_count": canonical_plan.get("selected_layer_count"),
+            "reconciled_layer_count": len(canonical_plan.get("layer_reconciliation", []) or []),
+            "active_route_count": canonical_plan.get("active_route_count"),
+            "reconciled_route_count": len(canonical_plan.get("route_reconciliation", []) or []),
+            "execution_node_count": canonical_plan.get("execution_node_count"),
+            "dependency_activation_request_count": len(canonical_plan.get("dependency_activation_requests", []) or []),
+            "process_stage_request_count": len(canonical_plan.get("process_stage_requests", []) or []),
+            "unresolved_selected_item_count": canonical_plan.get("unresolved_selected_item_count"),
+            "execution_plan_reconciliation_state": canonical_plan.get("execution_plan_reconciliation_state"),
+            "execution_plan_validation_state": canonical_plan.get("execution_plan_validation_state"),
+            "execution_plan_failure_cause": canonical_plan.get("execution_plan_failure_cause"),
+            "dependency_activation_state": canonical_plan.get("dependency_activation_state"),
+            "process_stage_state": canonical_plan.get("process_stage_state"),
+            "canonical_execution_plan": canonical_plan,
         }
 
     def _requests_for(self, nodes: list[ExecutionNode]) -> dict[str, dict[str, Any]]:
@@ -443,11 +1213,17 @@ class ExecutionPlanner:
         enabled_tools: list[str] | None,
         context: Mapping[str, Any],
     ) -> list[str]:
-        tools = set(enabled_tools or [])
+        tools = set()
         report = context.get("tool_selection_report", {})
         if isinstance(report, Mapping):
+            if "selected_tools" in report:
+                tools.update(report.get("selected_tools", []) or [])
+                return sorted(str(tool) for tool in tools if tool)
             tools.update(report.get("enabled_tools", []) or [])
-            tools.update(report.get("selected_tools", []) or [])
+        if "selected_tools" in context:
+            tools.update(context.get("selected_tools", []) or [])
+            return sorted(str(tool) for tool in tools if tool)
+        tools.update(enabled_tools or [])
         tools.update(context.get("enabled_tools", []) or [])
         return sorted(str(tool) for tool in tools if tool)
 

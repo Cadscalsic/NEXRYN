@@ -12,7 +12,7 @@ from time import perf_counter
 from typing import Any, Mapping
 
 from runtime.causal import causal_context_runtime
-from runtime.dependency import dependency_execution_bridge
+from runtime.dependency import dependency_execution_bridge, dependency_execution_runtime
 from runtime.instrumentation import runtime_lifecycle
 from runtime.process import process_context_runtime
 
@@ -297,6 +297,74 @@ class ExecutionDispatcher:
         node: Mapping[str, Any],
         context: Mapping[str, Any],
     ) -> dict[str, Any]:
+        canonical_plan = context.get("canonical_execution_plan")
+        if isinstance(canonical_plan, Mapping) and canonical_plan:
+            receipt = dependency_execution_runtime.execute(
+                canonical_plan=canonical_plan,
+                runtime_context=context,
+            )
+            chains = int(receipt.get("executed_chain_count", 0) or 0)
+            result_count = int(receipt.get("result_count", 0) or 0)
+            attempted_count = int(receipt.get("attempted_chain_count", 0) or 0)
+            duration = 0.0001 if chains > 0 else 0.0
+            lifecycle_state = (
+                "COMPLETED"
+                if result_count > 0
+                else "FAILED"
+                if attempted_count > 0
+                else "REQUESTED"
+            )
+            dependency_reports = [
+                record.get("raw_result", {})
+                for record in receipt.get("result_records", []) or []
+                if isinstance(record, Mapping)
+            ]
+            updates = {
+                "DEPENDENCY_EXECUTION_RECEIPT": receipt,
+                "dependency_execution_receipt": receipt,
+                "dependency_execution_bridge_report": receipt,
+                "dependency_reasoning_report": {
+                    **receipt,
+                    "dependency_activation_state": lifecycle_state,
+                    "dependency_time": duration,
+                    "dependency_chains_executed": chains,
+                    "dependency_chain_coverage": receipt.get(
+                        "dependency_coverage",
+                        "NOT_DEFINED",
+                    ),
+                },
+                "dependency_lifecycle_report": {
+                    "system": "dependency_runtime",
+                    "report_state": "final",
+                    "dependency_activation_state": lifecycle_state,
+                    "dependency_requested_by": "canonical_execution_plan",
+                    "dependency_chains_executed": chains,
+                    "dependency_outputs_generated": result_count,
+                    "dependency_time": duration,
+                    "dependency_activation_reason": node.get("activation_reason"),
+                    "dispatch_node_id": node.get("node_id"),
+                    "execution_node_id": receipt.get("execution_node_id"),
+                    "activation_request_id": receipt.get("activation_request_id"),
+                },
+                "dependency_chains": dependency_reports,
+                "process_dependency_chains": {
+                    item.get("concept", f"dependency_{index}"): item
+                    for index, item in enumerate(dependency_reports)
+                    if isinstance(item, Mapping)
+                },
+                "dependency_chain_depth": receipt.get("maximum_executed_depth", 0),
+                "dependency_chain_coverage": receipt.get(
+                    "dependency_coverage",
+                    "NOT_DEFINED",
+                ),
+            }
+            return {
+                "runtime_called": attempted_count > 0,
+                "success": receipt.get("execution_state") == "RESULT_CAPTURED",
+                "failure_reason": receipt.get("non_execution_reason"),
+                "runtime_report": receipt,
+                "runtime_updates": updates,
+            }
         request = self._tool_request(context, "dependency_reasoning")
         report = dependency_execution_bridge.execute(
             activation_request=request,

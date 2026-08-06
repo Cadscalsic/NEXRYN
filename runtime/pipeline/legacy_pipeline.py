@@ -1792,8 +1792,17 @@ class AdaptiveCognitivePipeline:
         )
         planner_report = plan_result.get("EXECUTION_PLAN_REPORT", {})
         generated_plan = plan_result.get("execution_plan", {})
+        canonical_plan = plan_result.get("canonical_execution_plan", {})
         existing_plan = self._execution_plan(runtime_context)
         runtime_context["planner_execution_plan"] = generated_plan
+        runtime_context["canonical_execution_plan"] = canonical_plan
+        runtime_context["CANONICAL_EXECUTION_PLAN_REPORT"] = canonical_plan
+        runtime_context["EXECUTION_PLAN_RUNTIME_HANDOFF"] = (
+            execution_planner.consume_finalized_plan(
+                canonical_plan,
+                runtime_context=runtime_context,
+            )
+        )
         runtime_context["EXECUTION_PLAN_REPORT"] = planner_report
         runtime_context["execution_plan_report"] = planner_report
         runtime_context["execution_graph"] = plan_result.get(

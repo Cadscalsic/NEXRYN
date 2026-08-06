@@ -48,6 +48,10 @@ from runtime.dependency.dependency_execution_bridge import (
     DependencyExecutionBridge,
     dependency_execution_bridge,
 )
+from runtime.dependency.dependency_execution_runtime import (
+    DependencyExecutionRuntime,
+    dependency_execution_runtime,
+)
 from runtime.dependency.dependency_execution_gateway import (
     DependencyExecutionGateway,
     DependencyExecutionResult,
@@ -68,6 +72,7 @@ __all__ = [
     "DependencyCoherenceEngine",
     "DependencyExecutionBridge",
     "DependencyExecutionGateway",
+    "DependencyExecutionRuntime",
     "DependencyExecutionResult",
     "DependencyEdge",
     "DependencyGraph",
@@ -86,6 +91,7 @@ __all__ = [
     "dependency_activation_manager",
     "dependency_coherence_engine",
     "dependency_execution_bridge",
+    "dependency_execution_runtime",
     "dependency_execution_gateway",
     "dependency_graph_discovery",
     "dependency_graph_builder",
