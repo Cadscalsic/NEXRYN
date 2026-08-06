@@ -2,6 +2,7 @@ from runtime.learning.training_report import (
     build_training_report,
     print_training_report,
 )
+from runtime.execution.execution_planner import ExecutionPlanner
 from runtime.reflection.introspection_engine import IntrospectionEngine
 from runtime.reporting.final_report_renderer import final_report_renderer
 
@@ -133,6 +134,151 @@ def test_training_report_exposes_compact_results_and_concept_memory(capsys):
     assert "contradiction_threshold=0.1" not in output
     assert "dict_keys" not in output
     assert "large_runtime_context" not in output
+
+
+def _canonical_plan_result(run_id="run_batch_001", task_id="task_batch_001"):
+    return ExecutionPlanner().plan(
+        enabled_tools=["dependency_reasoning"],
+        attributed_concepts=["dependency_reasoning"],
+        active_routes=1,
+        runtime_context={
+            "run_id": run_id,
+            "task_id": task_id,
+            "enabled_tools": ["dependency_reasoning"],
+            "tool_selection_report": {
+                "enabled_tools": ["dependency_reasoning"],
+                "selected_tools": ["dependency_reasoning"],
+            },
+            "selected_layers": ["dependency_reasoning_layer"],
+            "route_selection_report": {
+                "active_routes": [
+                    {
+                        "route_id": f"route_{task_id}",
+                        "rank": 1,
+                        "score": 0.91,
+                    },
+                ],
+            },
+            "current_reasoning_budget": {
+                "max_dependency_depth": 2,
+                "max_active_routes": 1,
+            },
+        },
+    )
+
+
+def test_training_batch_report_preserves_canonical_execution_plan_identity():
+    first = _canonical_plan_result("run_batch_001", "task_batch_001")
+    second = _canonical_plan_result("run_batch_001", "task_batch_002")
+    first_plan = first["canonical_execution_plan"]
+
+    report = build_training_report(
+        training_batch={"selected_task_count": 2},
+        multi_task_results=[
+            {
+                "task": "elite_task_001.json",
+                "status": "completed",
+                "result": {
+                    **first,
+                    "introspection_report": {"execution_nodes": 1},
+                },
+            },
+            {
+                "task": "elite_task_002.json",
+                "status": "completed",
+                "result": {
+                    **second,
+                    "introspection_report": {"execution_nodes": 1},
+                },
+            },
+        ],
+    )
+    aggregate = report["EXECUTION_PLAN_REPORT"]
+
+    assert report["multi_task_results"] == [
+        {"task": "elite_task_001.json", "status": "completed"},
+        {"task": "elite_task_002.json", "status": "completed"},
+    ]
+    assert report["canonical_execution_plan"]["execution_plan_id"] == first_plan["execution_plan_id"]
+    assert report["CANONICAL_EXECUTION_PLAN_REPORT"]["execution_plan_id"] == first_plan["execution_plan_id"]
+    assert aggregate["canonical_execution_plan"]["execution_plan_id"] == first_plan["execution_plan_id"]
+    assert aggregate["batch_plan_propagation_state"] == "CANONICAL_PLAN_PROPAGATED"
+    assert aggregate["execution_plan_finalized"] is True
+    assert aggregate["execution_plan_immutable"] is True
+    assert aggregate["selected_tool_count"] == first_plan["selected_tool_count"]
+    assert aggregate["execution_node_count"] == len(first_plan["nodes"])
+    assert first_plan["run_id"] == "run_batch_001"
+    assert first_plan["task_id"] == "task_batch_001"
+
+
+def test_training_batch_renderer_consumes_propagated_plan_read_only():
+    plan_result = _canonical_plan_result("run_batch_render", "task_batch_render")
+    plan = plan_result["canonical_execution_plan"]
+    report = build_training_report(
+        training_batch={"selected_task_count": 1},
+        multi_task_results=[{
+            "task": "elite_task_render.json",
+            "status": "completed",
+            "result": plan_result,
+        }],
+    )
+    rendered_once = final_report_renderer.render(
+        {
+            "runtime_status": "completed",
+            "operation": "training_batch",
+            "EXECUTION_PLAN_REPORT": report["EXECUTION_PLAN_REPORT"],
+            "canonical_execution_plan": report["canonical_execution_plan"],
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": plan["run_id"],
+            "timestamp": "now",
+            "mode": "test",
+        },
+    )
+    rendered_twice = final_report_renderer.render(
+        {
+            "runtime_status": "completed",
+            "operation": "training_batch",
+            "EXECUTION_PLAN_REPORT": report["EXECUTION_PLAN_REPORT"],
+            "canonical_execution_plan": report["canonical_execution_plan"],
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": plan["run_id"],
+            "timestamp": "now",
+            "mode": "test",
+        },
+    )
+
+    assert "Execution Plan State: EXECUTION_PLAN_FINALIZED" in rendered_once
+    assert f"Execution Plan Id: {plan['execution_plan_id']}" in rendered_once
+    assert "Selected Tools Reconciled: 1/1" in rendered_once
+    assert "Dependency Activation State: REQUESTED" in rendered_once
+    assert len(report["canonical_execution_plan"]["dependency_activation_requests"]) == 1
+    assert report["canonical_execution_plan"]["execution_plan_id"] == plan["execution_plan_id"]
+    assert rendered_once == rendered_twice
+
+
+def test_training_batch_without_plan_reports_exact_propagation_failure():
+    report = build_training_report(
+        training_batch={"selected_task_count": 1},
+        multi_task_results=[{
+            "task": "legacy_task.json",
+            "status": "completed",
+            "result": {
+                "EXECUTION_PLAN_REPORT": {
+                    "selected_tools": ["dependency_reasoning"],
+                    "execution_nodes": 1,
+                },
+            },
+        }],
+    )
+    aggregate = report["EXECUTION_PLAN_REPORT"]
+
+    assert aggregate["batch_plan_propagation_state"] == "PLAN_DROPPED_BY_BATCH_AGGREGATION"
+    assert aggregate["execution_plan_state"] == "LEGACY_PLAN_UNAVAILABLE"
+    assert report["canonical_execution_plan"] == {}
 
 
 def test_training_report_minimal_prints_compact_concept_report(capsys):

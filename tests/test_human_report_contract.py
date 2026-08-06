@@ -188,7 +188,7 @@ def test_human_report_preserves_false_and_zero_values_as_bound_values():
     assert "Target Reference Forwarded To Solver: FALSE" in report
 
 
-def test_raw_result_captured_without_raw_result_id_is_expected_missing():
+def test_raw_result_captured_without_raw_result_id_fails_identity_closed():
     state = _state()
     state["VALIDATION_TASK_EXECUTION_REPORT"].pop("raw_validation_result_id")
 
@@ -197,10 +197,11 @@ def test_raw_result_captured_without_raw_result_id_is_expected_missing():
         runtime_metadata=_metadata(),
     )
 
-    assert "Raw Result State: Expected artifact missing" in report
-    assert "Raw Validation Result Id: Expected artifact missing" in report
-    assert "Human Report Canonical Binding Integrity: INCOMPLETE" in report
-    assert "Human Report Expected Missing Count: 2" in report
+    assert "Raw Result State: RAW_RESULT_ENVELOPE_INCOMPLETE" in report
+    assert "Raw Validation Result Id: RAW_VALIDATION_RESULT_ID_NOT_ISSUED" in report
+    assert "Human Report Canonical Binding Integrity: COMPLETE" in report
+    assert "Human Report Expected Missing Count: 0" in report
+    assert "Expected artifact missing" not in report
 
 
 def test_conclusion_task_id_is_not_used_as_relevant_candidate():
@@ -214,7 +215,44 @@ def test_conclusion_task_id_is_not_used_as_relevant_candidate():
     )
 
     assert "Relevant Candidate: elite_validation_task_31" not in report
-    assert "Relevant Candidate: Not produced in this run" in report
+
+
+def test_unbound_raw_validation_result_does_not_recommend_evaluation():
+    state = _state()
+    state.pop("ENGINEERING_CONCLUSION")
+    state["VALIDATION_TASK_EXECUTION_REPORT"] = {
+        "execution_admission": "ADMITTED",
+        "execution_state": "RAW_RESULT_CAPTURED",
+        "raw_validation_result_id": None,
+        "raw_result_captured": True,
+        "RAW_VALIDATION_RESULT_ENVELOPE": {
+            "raw_validation_result_schema_version": "1.0",
+            "raw_validation_result_id": None,
+            "raw_validation_result_state": "RAW_RESULT_CAPTURED",
+            "run_id": None,
+            "task_id": "task-localized-remap",
+            "execution_plan_id": "evidence_plan_1",
+            "executor_invocation_id": "validation_execution_1",
+            "validation_attempt_id": "validation_attempt_1",
+            "artifact_state": "ARTIFACT_CAPTURED",
+            "payload_state": "PAYLOAD_CAPTURED",
+            "provenance_state": "RAW_RESULT_PROVENANCE_UNBOUND",
+            "binding_integrity_state": "CONFLICTED",
+            "binding_conflict_count": 5,
+            "downstream_structural_eligibility": "STRUCTURALLY_INELIGIBLE",
+            "structural_ineligibility_reason": "RAW_VALIDATION_IDENTITY_INPUT_UNAVAILABLE",
+            "producer_component_id": "semantic_to_transformation_compiler_0",
+            "producer_source_type": "semantic_compiler_candidate_source",
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Raw Validation Result Id: RAW_VALIDATION_RESULT_ID_NOT_ISSUED" in report
+    assert "Immediate Next Development Task: evaluate_raw_validation_result_without_truth_grant" not in report
 
 
 def test_human_report_exposes_observability_contradictions_with_zero_warnings():

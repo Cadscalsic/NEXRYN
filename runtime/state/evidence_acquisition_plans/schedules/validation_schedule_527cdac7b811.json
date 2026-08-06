@@ -1,4 +1,5 @@
 {
+  "RAW_VALIDATION_RESULT_ENVELOPE": null,
   "active_execution_lease": false,
   "attempt_count": 1,
   "candidate_execution_authority": "NONE",
@@ -14,6 +15,8 @@
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "raw_result_fingerprint": "466436141e74d5648fdc3d91a3e4c8ffd5d417280a6ddf0d2da55f3bda5ec120",
   "raw_result_id": "raw_validation_result_e8d6e6cad0fb",
+  "raw_validation_result_envelope": null,
+  "raw_validation_result_id": null,
   "required_evidence": "cross_source_consensus_evidence",
   "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
   "schedule_fingerprint": "34176a332cddd2f5e72cd52513d4ee0ac523d3e2cba0e00d094c8204bdd6fd6a",

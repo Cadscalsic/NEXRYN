@@ -196,20 +196,29 @@ class ValidationTaskExecutionPipeline:
             completed_at,
             duration,
         )
-        raw_path = self.raw_results_path / f"{raw_result['raw_result_id']}.json"
+        raw_identity = raw_result.get("raw_result_id")
+        if self._term(raw_identity) == "Not Available":
+            raw_identity = raw_result.get("validation_attempt_id") or execution_id
+        raw_path = self.raw_results_path / f"{raw_identity}.json"
         try:
             prepared_schedule = {
                 **started_schedule,
                 "execution_state": "EXECUTION_COMPLETED_RESULT_CAPTURE_PENDING",
                 "execution_completed_at": completed_at,
-                "raw_result_id": raw_result["raw_result_id"],
+                "raw_result_id": raw_result.get("raw_result_id"),
+                "raw_validation_result_id": raw_result.get(
+                    "raw_validation_result_id"
+                ),
             }
             prepared_plan = {
                 **started_plan,
                 "lifecycle_state": "EXECUTION_COMPLETED_RESULT_CAPTURE_PENDING",
                 "execution_state": "EXECUTION_COMPLETED_RESULT_CAPTURE_PENDING",
                 "execution_completed_at": completed_at,
-                "raw_result_id": raw_result["raw_result_id"],
+                "raw_result_id": raw_result.get("raw_result_id"),
+                "raw_validation_result_id": raw_result.get(
+                    "raw_validation_result_id"
+                ),
             }
             self._atomic_write(schedule_path, prepared_schedule)
             self._atomic_write(plan_path, prepared_plan)
@@ -242,8 +251,20 @@ class ValidationTaskExecutionPipeline:
 
         return self._success_report(
             base,
-            {**prepared_plan, "lifecycle_state": "RAW_RESULT_CAPTURED"},
-            {**prepared_schedule, "execution_state": "RAW_RESULT_CAPTURED"},
+            {
+                **prepared_plan,
+                "lifecycle_state": raw_result.get(
+                    "result_state",
+                    "RAW_RESULT_CAPTURED",
+                ),
+            },
+            {
+                **prepared_schedule,
+                "execution_state": raw_result.get(
+                    "result_state",
+                    "RAW_RESULT_CAPTURED",
+                ),
+            },
             raw_result,
             "CREATED_NEW_RAW_RESULT",
             invoked=True,
@@ -458,16 +479,136 @@ class ValidationTaskExecutionPipeline:
         completed_at: str,
         duration: float,
     ) -> dict[str, Any]:
+        runner_output = runner_output if isinstance(runner_output, dict) else {}
         fingerprint = self._raw_result_fingerprint(
+            schedule,
+            plan,
+            execution_id,
+            attempt_number,
+        )
+        missing_inputs = self._raw_identity_missing_inputs(
+            schedule,
+            plan,
+            execution_id,
+        )
+        validation_attempt_id = self._validation_attempt_id(
             schedule,
             execution_id,
             attempt_number,
         )
-        raw_result_id = f"raw_validation_result_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+        expected_artifact_id = self._expected_artifact_id(
+            schedule,
+            plan,
+            task,
+            validation_attempt_id,
+        )
+        payload_present = (
+            runner_output.get("predicted_output") is not None
+            or bool(runner_output.get("case_outputs"))
+        )
+        empty_valid = (
+            payload_present is False
+            and runner_output.get("empty_output_valid") is True
+        )
+        if payload_present:
+            artifact_state = "ARTIFACT_CAPTURED"
+            payload_state = "PAYLOAD_CAPTURED"
+            result_state = "RAW_RESULT_CAPTURED"
+            structural_eligibility = "STRUCTURALLY_ELIGIBLE"
+            ineligibility_reason = "NONE"
+            failure_cause = None
+        elif empty_valid:
+            artifact_state = "ARTIFACT_EMPTY_VALID_OUTPUT"
+            payload_state = "EMPTY_VALID_OUTPUT"
+            result_state = "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED"
+            structural_eligibility = "STRUCTURALLY_ELIGIBLE"
+            ineligibility_reason = "NONE"
+            failure_cause = None
+        else:
+            artifact_state = "ARTIFACT_MISSING"
+            payload_state = "PAYLOAD_MISSING"
+            result_state = "RAW_RESULT_ARTIFACT_MISSING"
+            structural_eligibility = "STRUCTURALLY_INELIGIBLE"
+            ineligibility_reason = "ARTIFACT_MISSING"
+            failure_cause = "expected_artifact_missing"
+        raw_result_id = None
+        identity_state = "RAW_RESULT_IDENTIFIED"
+        if missing_inputs:
+            identity_state = "RAW_VALIDATION_IDENTITY_INPUT_UNAVAILABLE"
+            raw_result_id = None
+            structural_eligibility = "STRUCTURALLY_INELIGIBLE"
+            ineligibility_reason = "RAW_VALIDATION_IDENTITY_INPUT_UNAVAILABLE"
+            if result_state == "RAW_RESULT_CAPTURED":
+                result_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
+        else:
+            raw_result_id = (
+                f"raw_validation_result_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+            )
+        produced_artifact_id = (
+            self._produced_artifact_id(runner_output, validation_attempt_id)
+            if payload_present or empty_valid
+            else None
+        )
+        captured_artifact_id = produced_artifact_id if artifact_state in {
+            "ARTIFACT_CAPTURED",
+            "ARTIFACT_EMPTY_VALID_OUTPUT",
+        } else None
+        envelope = self._raw_result_envelope(
+            raw_result_id=raw_result_id,
+            fingerprint=fingerprint,
+            schedule=schedule,
+            plan=plan,
+            task=task,
+            execution_id=execution_id,
+            validation_attempt_id=validation_attempt_id,
+            expected_artifact_id=expected_artifact_id,
+            produced_artifact_id=produced_artifact_id,
+            captured_artifact_id=captured_artifact_id,
+            artifact_state=artifact_state,
+            payload_state=payload_state,
+            result_state=result_state,
+            identity_state=identity_state,
+            structural_eligibility=structural_eligibility,
+            ineligibility_reason=ineligibility_reason,
+            failure_cause=failure_cause,
+            missing_inputs=missing_inputs,
+        )
         return {
             "schema_version": "1.0",
+            "raw_validation_result_schema_version": "1.0",
             "raw_result_id": raw_result_id,
+            "raw_validation_result_id": raw_result_id,
             "raw_result_fingerprint": fingerprint,
+            "raw_validation_result_fingerprint": fingerprint,
+            "raw_validation_result_envelope": envelope,
+            "RAW_VALIDATION_RESULT_ENVELOPE": envelope,
+            "run_id": plan.get("source_run_id"),
+            "batch_id": plan.get("batch_id") or schedule.get("batch_id"),
+            "task_id": plan.get("source_task_id"),
+            "execution_plan_id": (
+                plan.get("execution_plan_id")
+                or schedule.get("execution_plan_id")
+                or plan.get("plan_id")
+            ),
+            "execution_node_id": (
+                plan.get("execution_node_id")
+                or schedule.get("execution_node_id")
+                or "VALIDATION_TASK_EXECUTION_PIPELINE"
+            ),
+            "executor_id": self.RUNNER_ID,
+            "executor_invocation_id": execution_id,
+            "validation_attempt_id": validation_attempt_id,
+            "expected_artifact_id": expected_artifact_id,
+            "produced_artifact_id": produced_artifact_id,
+            "captured_artifact_id": captured_artifact_id,
+            "artifact_state": artifact_state,
+            "payload_state": payload_state,
+            "provenance_state": envelope["provenance_state"],
+            "binding_integrity_state": envelope["binding_integrity_state"],
+            "raw_result_finalized": envelope["finalized_state"],
+            "raw_result_immutable": envelope["immutable_state"],
+            "downstream_structural_eligibility": structural_eligibility,
+            "structural_ineligibility_reason": ineligibility_reason,
             "execution_id": execution_id,
             "schedule_id": schedule.get("schedule_id"),
             "plan_id": plan.get("plan_id"),
@@ -495,15 +636,202 @@ class ValidationTaskExecutionPipeline:
             "runtime_error": None,
             "resource_usage": {"executed_case_count": 1},
             "raw_result_created_at": self._now(),
-            "result_state": "RAW_RESULT_CAPTURED",
+            "result_state": result_state,
             "comparison_state": "NOT_COMPARED",
             "evidence_state": "NOT_EVALUATED",
+            "evidence_evaluation_invoked": False,
+            "evidence_record_id": None,
             "truth_authority": "NONE",
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
             "candidate_execution_authority": "NONE",
             "constitutional_boundary": self.RAW_RESULT_BOUNDARY,
+            "failure_cause": failure_cause,
         }
+
+    def _raw_identity_missing_inputs(
+        self,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        execution_id: str,
+    ) -> list[str]:
+        required = {
+            "run_id": plan.get("source_run_id"),
+            "task_id": plan.get("source_task_id"),
+            "execution_plan_id": (
+                plan.get("execution_plan_id")
+                or schedule.get("execution_plan_id")
+                or plan.get("plan_id")
+            ),
+            "schedule_id": schedule.get("schedule_id"),
+            "executor_invocation_id": execution_id,
+        }
+        return [
+            key for key, value in required.items()
+            if self._term(value) == "Not Available"
+        ]
+
+    def _validation_attempt_id(
+        self,
+        schedule: dict[str, Any],
+        execution_id: str,
+        attempt_number: int,
+    ) -> str:
+        return self._scoped_id(
+            "validation_attempt",
+            {
+                "schedule_id": schedule.get("schedule_id"),
+                "execution_id": execution_id,
+                "attempt_number": attempt_number,
+            },
+        )
+
+    def _expected_artifact_id(
+        self,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        task: dict[str, Any],
+        validation_attempt_id: str,
+    ) -> str:
+        raw_task = task.get("raw_task") if isinstance(task, dict) else {}
+        return self._scoped_id(
+            "expected_artifact",
+            {
+                "validation_attempt_id": validation_attempt_id,
+                "required_evidence": schedule.get("required_evidence"),
+                "target_operation": schedule.get("target_operation"),
+                "validation_contract": (raw_task or {}).get(
+                    "expected_validation_contract"
+                ),
+                "plan_id": plan.get("plan_id"),
+            },
+        )
+
+    def _produced_artifact_id(
+        self,
+        runner_output: dict[str, Any],
+        validation_attempt_id: str,
+    ) -> str:
+        return self._scoped_id(
+            "captured_artifact",
+            {
+                "validation_attempt_id": validation_attempt_id,
+                "predicted_output": runner_output.get("predicted_output"),
+                "case_outputs": runner_output.get("case_outputs") or [],
+                "empty_output_valid": runner_output.get("empty_output_valid"),
+            },
+        )
+
+    def _raw_result_envelope(
+        self,
+        *,
+        raw_result_id: str | None,
+        fingerprint: str,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        task: dict[str, Any],
+        execution_id: str,
+        validation_attempt_id: str,
+        expected_artifact_id: str,
+        produced_artifact_id: str | None,
+        captured_artifact_id: str | None,
+        artifact_state: str,
+        payload_state: str,
+        result_state: str,
+        identity_state: str,
+        structural_eligibility: str,
+        ineligibility_reason: str,
+        failure_cause: str | None,
+        missing_inputs: list[str],
+    ) -> dict[str, Any]:
+        run_id = plan.get("source_run_id")
+        task_id = plan.get("source_task_id")
+        producer_component_id = "VALIDATION_TASK_EXECUTION_PIPELINE"
+        producer_source_type = "scheduled_validation_task"
+        type_conflicts = []
+        if task_id in {
+            producer_component_id,
+            "semantic_to_transformation_compiler_0",
+        }:
+            type_conflicts.append("task_id_contains_producer_identity")
+        provenance_state = (
+            "RAW_RESULT_PROVENANCE_BOUND"
+            if not missing_inputs and not type_conflicts
+            else "RAW_RESULT_PROVENANCE_UNBOUND"
+        )
+        binding_state = "BOUND" if provenance_state == "RAW_RESULT_PROVENANCE_BOUND" else "CONFLICTED"
+        if type_conflicts:
+            identity_state = "RAW_VALIDATION_IDENTITY_TYPE_CONFLICT"
+            structural_eligibility = "STRUCTURALLY_INELIGIBLE"
+            ineligibility_reason = "RAW_VALIDATION_IDENTITY_TYPE_CONFLICT"
+        envelope = {
+            "schema_version": "1.0",
+            "raw_validation_result_schema_version": "1.0",
+            "raw_validation_result_id": raw_result_id,
+            "raw_validation_result_state": result_state,
+            "raw_validation_result_identity_state": (
+                identity_state
+                if raw_result_id
+                else "RAW_VALIDATION_RESULT_ID_NOT_ISSUED"
+            ),
+            "run_id": run_id,
+            "batch_id": plan.get("batch_id") or schedule.get("batch_id"),
+            "task_id": task_id,
+            "execution_plan_id": (
+                plan.get("execution_plan_id")
+                or schedule.get("execution_plan_id")
+                or plan.get("plan_id")
+            ),
+            "execution_node_id": (
+                plan.get("execution_node_id")
+                or schedule.get("execution_node_id")
+                or "VALIDATION_TASK_EXECUTION_PIPELINE"
+            ),
+            "activation_request_id": plan.get("activation_request_id"),
+            "dependency_operation_id": plan.get("dependency_operation_id"),
+            "dependency_link_id": plan.get("dependency_link_id"),
+            "dependency_chain_id": plan.get("dependency_chain_id"),
+            "executor_id": self.RUNNER_ID,
+            "executor_invocation_id": execution_id,
+            "validation_attempt_id": validation_attempt_id,
+            "producer_component_id": producer_component_id,
+            "producer_source_type": producer_source_type,
+            "candidate_source_id": plan.get("source_candidate_id"),
+            "expected_artifact_id": expected_artifact_id,
+            "produced_artifact_id": produced_artifact_id,
+            "captured_artifact_id": captured_artifact_id,
+            "artifact_state": artifact_state,
+            "payload_state": payload_state,
+            "payload_reference": (
+                captured_artifact_id if captured_artifact_id else None
+            ),
+            "measurement_receipt_id": plan.get("measurement_receipt_id"),
+            "execution_receipt_id": plan.get("execution_receipt_id"),
+            "capture_timestamp": self._now(),
+            "provenance_state": provenance_state,
+            "binding_integrity_state": binding_state,
+            "binding_conflict_count": len(missing_inputs) + len(type_conflicts),
+            "binding_conflicts": missing_inputs + type_conflicts,
+            "finalized_state": "RAW_RESULT_FINALIZED",
+            "immutable_state": "RAW_RESULT_IMMUTABLE",
+            "downstream_structural_eligibility": structural_eligibility,
+            "structural_ineligibility_reason": ineligibility_reason,
+            "failure_cause": failure_cause,
+            "evidence_evaluation_invoked": False,
+            "evidence_record_id": None,
+            "raw_result_fingerprint": fingerprint,
+            "constitutional_boundary": self.RAW_RESULT_BOUNDARY,
+        }
+        envelope["raw_validation_result_envelope_fingerprint"] = self._scoped_id(
+            "raw_validation_result_envelope",
+            envelope,
+        )
+        return envelope
+
+    def _scoped_id(self, prefix: str, payload: Any) -> str:
+        encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True, default=str)
+        digest = hashlib.sha1(encoded.encode("utf-8")).hexdigest()[:12]
+        return f"{prefix}_{digest}"
 
     def _link_raw_result(
         self,
@@ -517,11 +845,18 @@ class ValidationTaskExecutionPipeline:
         linked_plan = {
             **plan,
             "updated_at": now,
-            "lifecycle_state": "RAW_RESULT_CAPTURED",
-            "execution_state": "RAW_RESULT_CAPTURED",
+            "lifecycle_state": raw_result.get("result_state", "RAW_RESULT_CAPTURED"),
+            "execution_state": raw_result.get("result_state", "RAW_RESULT_CAPTURED"),
             "execution_id": raw_result.get("execution_id"),
             "raw_result_id": raw_result.get("raw_result_id"),
+            "raw_validation_result_id": raw_result.get("raw_validation_result_id"),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
+            "RAW_VALIDATION_RESULT_ENVELOPE": raw_result.get(
+                "RAW_VALIDATION_RESULT_ENVELOPE",
+            ),
+            "raw_validation_result_envelope": raw_result.get(
+                "raw_validation_result_envelope",
+            ),
             "evidence_state": "NOT_EVALUATED",
             "active_execution_lease": False,
             "boot_recovery_route": "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR",
@@ -534,8 +869,15 @@ class ValidationTaskExecutionPipeline:
             **schedule,
             "execution_id": raw_result.get("execution_id"),
             "raw_result_id": raw_result.get("raw_result_id"),
+            "raw_validation_result_id": raw_result.get("raw_validation_result_id"),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
-            "execution_state": "RAW_RESULT_CAPTURED",
+            "RAW_VALIDATION_RESULT_ENVELOPE": raw_result.get(
+                "RAW_VALIDATION_RESULT_ENVELOPE",
+            ),
+            "raw_validation_result_envelope": raw_result.get(
+                "raw_validation_result_envelope",
+            ),
+            "execution_state": raw_result.get("result_state", "RAW_RESULT_CAPTURED"),
             "execution_invoked": True,
             "active_execution_lease": False,
             "attempt_count": int(raw_result.get("attempt_number", 1) or 1),
@@ -555,12 +897,51 @@ class ValidationTaskExecutionPipeline:
         *,
         invoked: bool,
     ) -> dict[str, Any]:
+        envelope = raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE") or raw_result.get(
+            "raw_validation_result_envelope",
+            {},
+        )
+        result_state = raw_result.get("result_state", "RAW_RESULT_CAPTURED")
+        captured = result_state in {
+            "RAW_RESULT_CAPTURED",
+            "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED",
+        }
         return {
             **base,
             **self._schedule_identity(schedule),
             "execution_id": raw_result.get("execution_id"),
             "raw_result_id": raw_result.get("raw_result_id"),
+            "raw_validation_result_id": raw_result.get("raw_validation_result_id"),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
+            "raw_validation_result_fingerprint": raw_result.get(
+                "raw_validation_result_fingerprint",
+            ),
+            "raw_validation_result_schema_version": raw_result.get(
+                "raw_validation_result_schema_version",
+            ),
+            "RAW_VALIDATION_RESULT_ENVELOPE": envelope,
+            "raw_validation_result_envelope": envelope,
+            "run_id": raw_result.get("run_id"),
+            "batch_id": raw_result.get("batch_id"),
+            "task_id": raw_result.get("task_id"),
+            "execution_plan_id": raw_result.get("execution_plan_id"),
+            "execution_node_id": raw_result.get("execution_node_id"),
+            "executor_id": raw_result.get("executor_id"),
+            "executor_invocation_id": raw_result.get("executor_invocation_id"),
+            "validation_attempt_id": raw_result.get("validation_attempt_id"),
+            "expected_artifact_id": raw_result.get("expected_artifact_id"),
+            "produced_artifact_id": raw_result.get("produced_artifact_id"),
+            "captured_artifact_id": raw_result.get("captured_artifact_id"),
+            "artifact_state": raw_result.get("artifact_state"),
+            "payload_state": raw_result.get("payload_state"),
+            "provenance_state": raw_result.get("provenance_state"),
+            "binding_integrity_state": raw_result.get("binding_integrity_state"),
+            "downstream_structural_eligibility": raw_result.get(
+                "downstream_structural_eligibility",
+            ),
+            "structural_ineligibility_reason": raw_result.get(
+                "structural_ineligibility_reason",
+            ),
             "selected_curriculum_id": schedule.get("selected_curriculum_id"),
             "execution_admission_evaluated": True,
             "execution_admission_state": "ADMITTED",
@@ -571,14 +952,14 @@ class ValidationTaskExecutionPipeline:
             "execution_invoked": bool(invoked),
             "execution_started": True,
             "execution_completed": True,
-            "execution_state": "RAW_RESULT_CAPTURED",
+            "execution_state": result_state,
             "execution_attempt_count": int(raw_result.get("attempt_number", 1) or 1),
             "runner_id": raw_result.get("runner_id"),
             "runner_status": raw_result.get("runner_status"),
             "executed_task_count": 1,
             "executed_case_count": len(raw_result.get("case_outputs") or []),
             "execution_duration": raw_result.get("execution_duration"),
-            "raw_result_captured": True,
+            "raw_result_captured": captured,
             "raw_result_creation_result": result,
             "raw_result_persistence_state": "RAW_RESULT_PERSISTED",
             "predicted_output_available": raw_result.get("predicted_output") is not None,
@@ -601,7 +982,12 @@ class ValidationTaskExecutionPipeline:
             "graduation_authority": "NONE",
             "constitutional_boundary": self.BOUNDARY,
             "raw_result_constitutional_boundary": self.RAW_RESULT_BOUNDARY,
-            "next_consumer": "VALIDATION_EVIDENCE_EVALUATOR",
+            "next_consumer": (
+                "VALIDATION_EVIDENCE_EVALUATOR"
+                if raw_result.get("downstream_structural_eligibility")
+                == "STRUCTURALLY_ELIGIBLE"
+                else "NONE"
+            ),
         }
 
     def _base_report(self, schedule_id: str | None) -> dict[str, Any]:
@@ -612,6 +998,26 @@ class ValidationTaskExecutionPipeline:
             "plan_id": "Not Available",
             "execution_id": "Not Available",
             "raw_result_id": "Not Available",
+            "raw_validation_result_id": "Not Available",
+            "raw_validation_result_schema_version": "Not Available",
+            "RAW_VALIDATION_RESULT_ENVELOPE": {},
+            "raw_validation_result_envelope": {},
+            "run_id": "Not Available",
+            "batch_id": "Not Available",
+            "task_id": "Not Available",
+            "execution_plan_id": "Not Available",
+            "execution_node_id": "Not Available",
+            "executor_invocation_id": "Not Available",
+            "validation_attempt_id": "Not Available",
+            "expected_artifact_id": "Not Available",
+            "produced_artifact_id": "Not Available",
+            "captured_artifact_id": "Not Available",
+            "artifact_state": "ARTIFACT_NOT_EXPECTED",
+            "payload_state": "PAYLOAD_NOT_EXPECTED",
+            "provenance_state": "RAW_RESULT_NOT_APPLICABLE",
+            "binding_integrity_state": "NOT_APPLICABLE",
+            "downstream_structural_eligibility": "STRUCTURALLY_INELIGIBLE",
+            "structural_ineligibility_reason": "RAW_RESULT_NOT_APPLICABLE",
             "selected_validation_task_id": "Not Available",
             "selected_curriculum_id": "Not Available",
             "execution_admission_evaluated": False,
@@ -699,6 +1105,13 @@ class ValidationTaskExecutionPipeline:
         return {
             "plan_id": schedule.get("plan_id", "Not Available"),
             "plan_fingerprint": schedule.get("plan_fingerprint", "Not Available"),
+            "run_id": schedule.get("source_run_id", "Not Available"),
+            "batch_id": schedule.get("batch_id", "Not Available"),
+            "task_id": schedule.get("source_task_id", "Not Available"),
+            "execution_plan_id": schedule.get(
+                "execution_plan_id",
+                schedule.get("plan_id", "Not Available"),
+            ),
             "schedule_id": schedule.get("schedule_id", "Not Available"),
             "schedule_fingerprint": schedule.get(
                 "schedule_fingerprint",
@@ -738,10 +1151,19 @@ class ValidationTaskExecutionPipeline:
     def _raw_result_fingerprint(
         self,
         schedule: dict[str, Any],
+        plan: dict[str, Any],
         execution_id: str,
         attempt_number: int,
     ) -> str:
         payload = {
+            "source_run_id": plan.get("source_run_id"),
+            "source_task_id": plan.get("source_task_id"),
+            "batch_id": plan.get("batch_id") or schedule.get("batch_id"),
+            "execution_plan_id": (
+                plan.get("execution_plan_id")
+                or schedule.get("execution_plan_id")
+                or plan.get("plan_id")
+            ),
             "plan_id": schedule.get("plan_id"),
             "plan_fingerprint": schedule.get("plan_fingerprint"),
             "schedule_id": schedule.get("schedule_id"),

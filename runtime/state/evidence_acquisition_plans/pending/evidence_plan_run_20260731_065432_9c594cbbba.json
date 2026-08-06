@@ -1,4 +1,5 @@
 {
+  "RAW_VALIDATION_RESULT_ENVELOPE": null,
   "active_execution_lease": false,
   "authority_boundary": "EVIDENCE_PLAN_DOES_NOT_GRANT_TRUTH_TRUST_GRADUATION_OR_EXECUTION_AUTHORITY",
   "boot_recovery_route": "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR",
@@ -273,17 +274,74 @@
       "source_run_id": "run_20260805_005212",
       "state": "RAW_RESULT_CAPTURED",
       "timestamp": "2026-08-05T00:53:11.280504+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T00:30:33.082343+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260806_003033",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T00:31:14.887466+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:43:33.871845+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260806_054333",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:44:45.791303+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:48:21.322382+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260806_054821",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:49:34.655175+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:56:51.176369+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260806_055651",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:57:47.553742+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T05:59:50.036186+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260806_055949",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-06T06:00:38.274908+00:00"
     }
   ],
   "lifecycle_state": "RAW_RESULT_CAPTURED",
   "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
   "matching_score": 88.0,
-  "observation_count": 11,
+  "observation_count": 16,
   "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "priority": 65,
   "raw_result_fingerprint": "466436141e74d5648fdc3d91a3e4c8ffd5d417280a6ddf0d2da55f3bda5ec120",
   "raw_result_id": "raw_validation_result_e8d6e6cad0fb",
+  "raw_validation_result_envelope": null,
+  "raw_validation_result_id": null,
   "required_evidence": "cross_source_consensus_evidence",
   "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
   "required_validation_task": "select_cross_source_tie_break_validation_task",
@@ -308,7 +366,7 @@
   "tie_break_strategy": "cross_source_consensus",
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-08-05T00:53:11.280504+00:00",
+  "updated_at": "2026-08-06T06:00:38.274908+00:00",
   "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
   "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY"
 }

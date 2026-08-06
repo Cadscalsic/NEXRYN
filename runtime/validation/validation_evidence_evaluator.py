@@ -417,6 +417,34 @@ class ValidationEvidenceEvaluator:
                 "record_alignment",
                 "repair_plan_schedule_raw_result_alignment",
             )
+        envelope = (
+            raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE")
+            or raw_result.get("raw_validation_result_envelope")
+            or {}
+        )
+        if not isinstance(envelope, dict) or not envelope:
+            return self._admission_block(
+                "BLOCKED_RAW_VALIDATION_PROVENANCE_UNBOUND",
+                "RAW_VALIDATION_IDENTITY_INPUT_UNAVAILABLE",
+                "raw_validation_result_provenance",
+                "repair_raw_validation_result_identity_without_evidence_evaluation",
+            )
+        if envelope.get("binding_integrity_state") != "BOUND":
+            return self._admission_block(
+                "BLOCKED_RAW_VALIDATION_BINDING_CONFLICTED",
+                envelope.get("structural_ineligibility_reason")
+                or "RAW_RESULT_BINDING_CONFLICTED",
+                "raw_validation_result_binding",
+                "repair_raw_validation_result_binding_without_evidence_evaluation",
+            )
+        if envelope.get("downstream_structural_eligibility") != "STRUCTURALLY_ELIGIBLE":
+            return self._admission_block(
+                "BLOCKED_RAW_VALIDATION_STRUCTURALLY_INELIGIBLE",
+                envelope.get("structural_ineligibility_reason")
+                or "RAW_RESULT_STRUCTURALLY_INELIGIBLE",
+                "raw_validation_result_structural_eligibility",
+                "do_not_evaluate_raw_result_until_identity_and_provenance_are_bound",
+            )
         if raw_result.get("result_state") != "RAW_RESULT_CAPTURED":
             return self._admission_block(
                 "BLOCKED_INVALID_RAW_RESULT_STATE",
@@ -1218,7 +1246,10 @@ class ValidationEvidenceEvaluator:
             "evidence_plan_id": plan.get("plan_id"),
             "validation_schedule_id": schedule.get("schedule_id"),
             "validation_execution_id": raw_result.get("execution_id"),
-            "raw_validation_result_id": raw_result.get("raw_result_id"),
+            "raw_validation_result_id": (
+                raw_result.get("raw_validation_result_id")
+                or raw_result.get("raw_result_id")
+            ),
             "raw_validation_result_fingerprint": raw_result.get(
                 "raw_result_fingerprint"
             ),

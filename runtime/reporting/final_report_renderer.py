@@ -776,18 +776,33 @@ class DeterministicFinalReportRenderer:
             "VALIDATION_EVIDENCE_EVALUATION_REPORT",
             "validation_evidence_evaluation_report",
         )
+        raw_envelope = self._first_dict(
+            validation,
+            "RAW_VALIDATION_RESULT_ENVELOPE",
+            "raw_validation_result_envelope",
+        )
         raw_result_id = self._first_meaningful(
+            raw_envelope.get("raw_validation_result_id"),
             validation.get("raw_validation_result_id"),
             validation.get("raw_result_id"),
             state.get("raw_validation_result_id"),
             default=None,
         )
         validation_execution_state = self._first_meaningful(
+            raw_envelope.get("raw_validation_result_state"),
             validation.get("execution_state"),
             validation.get("validation_execution_lifecycle_state"),
             default=None,
         )
-        raw_result_captured = str(validation_execution_state).upper() == "RAW_RESULT_CAPTURED"
+        raw_result_captured = str(validation_execution_state).upper() in {
+            "RAW_RESULT_CAPTURED",
+            "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED",
+        }
+        raw_result_identity_missing = (
+            raw_result_captured
+            and raw_result_id is None
+            and not raw_envelope
+        )
 
         bind(
             "run_id",
@@ -840,15 +855,34 @@ class DeterministicFinalReportRenderer:
         bind("scheduled_validation_task", "Scheduled Validation Task", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_validation_task", "report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_task", "report_state.EVIDENCE_GENERATION_REPORT.scheduled_validation_task"], required=False, absence="NOT_PRODUCED")
         bind("validation_schedule_id", "Validation Schedule Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_schedule_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.schedule_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_schedule_id"], required=False, absence="NOT_PRODUCED")
         bind("execution_admission", "Execution Admission", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_admission", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_admission_state"], required=False, absence="NOT_PRODUCED")
-        bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
+        bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_id", "Validation Execution Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_execution_id"], required=False, absence="NOT_PRODUCED")
-        if raw_result_id is not None:
+        if raw_envelope:
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                raw_envelope.get("raw_validation_result_state"),
+                "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state",
+            )
+        elif raw_result_identity_missing:
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                "RAW_RESULT_ENVELOPE_INCOMPLETE",
+                "compatibility.raw_result_identity_missing",
+            )
+        elif raw_result_id is not None:
             fields["raw_result_state"] = self._resolved_human_field("raw_result_state", "Raw Result State", "RAW_RESULT_CAPTURED" if raw_result_captured else "RAW_RESULT_ATTACHED", "compatibility.raw_result_id")
-        elif raw_result_captured:
-            fields["raw_result_state"] = self._absent_human_field("raw_result_state", "Raw Result State", "EXPECTED_BUT_MISSING", True)
+        elif str(validation_execution_state).upper().startswith("RAW_RESULT"):
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                validation_execution_state,
+                "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state",
+            )
         else:
             bind("raw_result_state", "Raw Result State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_lifecycle_state"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
-        bind("raw_validation_result_id", "Raw Validation Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.raw_validation_result_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.raw_validation_result_id"], required=raw_result_captured, absence="EXPECTED_BUT_MISSING" if raw_result_captured else "NOT_EXPECTED_AT_CURRENT_STATE")
+        bind("raw_validation_result_id", "Raw Validation Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.raw_validation_result_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.raw_validation_result_id"], required=raw_result_captured, absence="RAW_VALIDATION_RESULT_ID_NOT_ISSUED" if raw_result_captured else "NOT_EXPECTED_AT_CURRENT_STATE")
         if evaluation:
             bind("evidence_evaluation_state", "Evidence Evaluation State", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.decision_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_acceptance_state"], required=False, absence="NOT_PRODUCED")
         else:
@@ -1459,6 +1493,17 @@ class DeterministicFinalReportRenderer:
             "DEPENDENCY_EXECUTION_RECEIPT",
             "dependency_execution_receipt",
         )
+        budget_report = self._first_dict(
+            state,
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+            "runtime_budget_enforcement_report",
+        )
+        if not budget_report:
+            budget_report = source.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT") or source.get(
+                "runtime_budget_enforcement_report",
+                {},
+            )
+        budget_report = budget_report if isinstance(budget_report, dict) else {}
         return self._section("EXECUTION PLAN REPORT", [
             f"Execution Plan State: {self._first_meaningful(source.get('execution_plan_state'), source.get('planning_state'), default='LEGACY_PLAN_UNAVAILABLE')}",
             f"Execution Plan Id: {self._first_meaningful(source.get('execution_plan_id'), default='Canonical source unbound')}",
@@ -1476,6 +1521,20 @@ class DeterministicFinalReportRenderer:
             f"Dependency Execution State: {self._first_meaningful(dependency_execution.get('execution_state'), default='LEGACY_DEPENDENCY_EXECUTION_UNAVAILABLE')}",
             f"Dependency Chains Executed: {self._first_meaningful(dependency_execution.get('executed_chain_count'), default=0)}",
             f"Dependency Results Captured: {self._first_meaningful(dependency_execution.get('result_count'), default=0)}",
+            "RUNTIME BUDGET ENFORCEMENT REPORT",
+            f"Budget State: {self._first_meaningful(budget_report.get('runtime_budget_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Budget Scope: {self._first_meaningful(budget_report.get('runtime_budget_scope'), default='RUNTIME_BUDGET_SCOPE_UNRESOLVED')}",
+            f"Maximum Active Routes: {self._first_meaningful(budget_report.get('maximum_active_routes'), default='Not produced in this run')}",
+            f"Selected Routes: {self._first_meaningful(budget_report.get('selected_route_count'), default=0)}",
+            f"Admitted Routes: {self._first_meaningful(budget_report.get('admitted_route_count'), default=0)}",
+            f"Peak Concurrent Active Routes: {self._first_meaningful(budget_report.get('peak_concurrent_active_route_count'), default=0)}",
+            f"Routes Deferred or Rejected by Budget: {self._value((self._number(budget_report.get('deferred_by_budget_route_count')) or 0) + (self._number(budget_report.get('rejected_by_budget_route_count')) or 0))}",
+            f"Maximum Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_reasoning_depth'), default='Not produced in this run')}",
+            f"Maximum Entered Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_entered_reasoning_depth'), default=0)}",
+            f"Maximum Completed Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_completed_reasoning_depth'), default=0)}",
+            f"Route Enforcement State: {self._first_meaningful(budget_report.get('route_budget_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Depth Enforcement State: {self._first_meaningful(budget_report.get('depth_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Violation Reason: {self._first_meaningful(budget_report.get('violation_reason'), default='NONE')}",
         ])
 
     def _render_human_engineering_conclusion(self, canonical: dict[str, Any]) -> str:
@@ -7694,6 +7753,12 @@ class DeterministicFinalReportRenderer:
                     arena.get("raw_result_captured") is True
                     and arena.get("execution_state") == "RAW_RESULT_CAPTURED"
                 )
+                raw_structural_eligibility = arena.get(
+                    "downstream_structural_eligibility"
+                )
+                raw_result_structurally_eligible = (
+                    raw_structural_eligibility == "STRUCTURALLY_ELIGIBLE"
+                )
                 evidence_acceptance_state = arena.get("evidence_acceptance_state")
                 evidence_terminal = evidence_acceptance_state in {
                     "ACCEPTED",
@@ -7912,7 +7977,7 @@ class DeterministicFinalReportRenderer:
                     )
                     responsible_component = "VALIDATION_EVIDENCE_EVALUATOR"
                     next_task = "review_rejected_evidence_without_candidate_penalty"
-                elif raw_result_captured:
+                elif raw_result_captured and raw_result_structurally_eligible:
                     largest_success = (
                         "scheduled_validation_task_executed_and_raw_result_captured"
                     )
@@ -7922,6 +7987,19 @@ class DeterministicFinalReportRenderer:
                     root_cause = "raw_validation_result_not_yet_evaluated"
                     responsible_component = "VALIDATION_EVIDENCE_EVALUATOR"
                     next_task = "evaluate_raw_validation_result_without_truth_grant"
+                elif raw_result_captured:
+                    largest_success = (
+                        "scheduled_validation_task_executed_and_raw_result_contained"
+                    )
+                    current_open_decision = "WAITING_RAW_RESULT_PROVENANCE_REPAIR"
+                    next_decision_gate = "repair_raw_validation_result_identity"
+                    current_bottleneck = "raw_validation_result_provenance"
+                    root_cause = (
+                        arena.get("structural_ineligibility_reason")
+                        or "raw_validation_result_not_structurally_eligible"
+                    )
+                    responsible_component = "VALIDATION_EXECUTION_PIPELINE"
+                    next_task = "repair_raw_validation_result_identity_without_evidence_evaluation"
                 elif task_scheduled and scheduling_state == "SCHEDULED":
                     largest_success = "selected_validation_task_governedly_scheduled"
                     current_open_decision = "WAITING_VALIDATION_TASK_EXECUTION"

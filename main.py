@@ -4027,6 +4027,12 @@ try:
         validation_task_execution_report.get("execution_state")
         == "RAW_RESULT_CAPTURED"
     ):
+        raw_result_structurally_eligible = (
+            validation_task_execution_report.get(
+                "downstream_structural_eligibility"
+            )
+            == "STRUCTURALLY_ELIGIBLE"
+        )
         training_alignment.update({
             "task_execution_started": True,
             "task_execution_completed": True,
@@ -4036,6 +4042,27 @@ try:
             "raw_result_id": validation_task_execution_report.get(
                 "raw_result_id"
             ),
+            "raw_validation_result_id": validation_task_execution_report.get(
+                "raw_validation_result_id"
+            ),
+            "RAW_VALIDATION_RESULT_ENVELOPE": validation_task_execution_report.get(
+                "RAW_VALIDATION_RESULT_ENVELOPE",
+                {},
+            ),
+            "raw_validation_result_envelope": validation_task_execution_report.get(
+                "raw_validation_result_envelope",
+                {},
+            ),
+            "downstream_structural_eligibility": (
+                validation_task_execution_report.get(
+                    "downstream_structural_eligibility"
+                )
+            ),
+            "structural_ineligibility_reason": (
+                validation_task_execution_report.get(
+                    "structural_ineligibility_reason"
+                )
+            ),
             "evidence_state": "NOT_EVALUATED",
             "evidence_evaluation_invoked": False,
             "evidence_produced": False,
@@ -4043,6 +4070,8 @@ try:
             "arena_reentry_invoked": False,
             "decision_orchestration_state": (
                 "RAW_RESULT_CAPTURED_AWAITING_EVIDENCE_EVALUATION"
+                if raw_result_structurally_eligible
+                else "RAW_RESULT_CAPTURED_AWAITING_PROVENANCE_REPAIR"
             ),
         })
     if validation_evidence_evaluation_report.get(
@@ -4497,6 +4526,30 @@ try:
             "arena_evidence_admission_report": arena_evidence_admission_report,
             "arena_formal_selection_report": arena_formal_selection_report,
             "training_report": training_report,
+            "EXECUTION_PLAN_REPORT": training_report.get(
+                "EXECUTION_PLAN_REPORT",
+                {},
+            ),
+            "execution_plan_report": training_report.get(
+                "execution_plan_report",
+                {},
+            ),
+            "canonical_execution_plan": training_report.get(
+                "canonical_execution_plan",
+                {},
+            ),
+            "CANONICAL_EXECUTION_PLAN_REPORT": training_report.get(
+                "CANONICAL_EXECUTION_PLAN_REPORT",
+                training_report.get("canonical_execution_plan", {}),
+            ),
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": training_report.get(
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                training_report.get("runtime_budget_enforcement_report", {}),
+            ),
+            "runtime_budget_enforcement_report": training_report.get(
+                "runtime_budget_enforcement_report",
+                training_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+            ),
             "evidence_plan_store_report": evidence_plan_store_report,
             "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
             "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
@@ -7389,6 +7442,30 @@ try:
         "arena_evidence_admission_report": arena_evidence_admission_report,
         "arena_formal_selection_report": arena_formal_selection_report,
         "training_report": training_report,
+        "EXECUTION_PLAN_REPORT": training_report.get(
+            "EXECUTION_PLAN_REPORT",
+            {},
+        ),
+        "execution_plan_report": training_report.get(
+            "execution_plan_report",
+            {},
+        ),
+        "canonical_execution_plan": training_report.get(
+            "canonical_execution_plan",
+            {},
+        ),
+        "CANONICAL_EXECUTION_PLAN_REPORT": training_report.get(
+            "CANONICAL_EXECUTION_PLAN_REPORT",
+            training_report.get("canonical_execution_plan", {}),
+        ),
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT": training_report.get(
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+            training_report.get("runtime_budget_enforcement_report", {}),
+        ),
+        "runtime_budget_enforcement_report": training_report.get(
+            "runtime_budget_enforcement_report",
+            training_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+        ),
         "evidence_plan_store_report": evidence_plan_store_report,
         "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
         "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,

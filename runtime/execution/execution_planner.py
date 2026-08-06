@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.budget.runtime_budget_enforcer import runtime_budget_enforcer
+
 
 @dataclass
 class ExecutionIntent:
@@ -745,8 +747,26 @@ class ExecutionPlanner:
             if row.get("final_disposition") == "FAILED_TO_MATERIALIZE"
         )
         route_balance = self._route_balance(route_reconciliation, len(route_records))
+        budget_receipt = runtime_budget_enforcer.build_receipt(
+            budget=budget,
+            context=context,
+            execution_plan_id=execution_plan_id,
+            route_records=route_records,
+            nodes=nodes,
+        )
         validation_state = "VALID"
         failure_cause = None
+        if budget_receipt.get("runtime_budget_state") in {
+            "RUNTIME_BUDGET_AUTHORITY_CONFLICT",
+            "BUDGET_SNAPSHOT_STALE",
+            "ROUTE_BUDGET_CROSS_RUN_CONTAMINATION",
+            "ROUTE_BUDGET_CROSS_TASK_CONTAMINATION",
+            "ROUTE_LIFECYCLE_IDENTITY_CONFLICT",
+            "REASONING_DEPTH_IDENTITY_CONFLICT",
+            "RUNTIME_BUDGET_INTEGRITY_FAILED",
+        }:
+            validation_state = "CONFLICTED"
+            failure_cause = budget_receipt.get("runtime_budget_state")
         if unresolved:
             validation_state = "INCOMPLETE"
             failure_cause = "SELECTED_ITEM_FAILED_TO_MATERIALIZE"
@@ -791,6 +811,8 @@ class ExecutionPlanner:
             "nodes": nodes,
             "route_reconciliation": route_reconciliation,
             "route_balance": route_balance,
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_receipt,
+            "runtime_budget_enforcement_report": budget_receipt,
             "tool_reconciliation": tool_reconciliation,
             "layer_reconciliation": layer_reconciliation,
             "dependency_activation_requests": dependency_activation_requests,
@@ -1138,6 +1160,10 @@ class ExecutionPlanner:
             confidence = node_count / max(len(selected_tools), 1)
             if blocked_count:
                 confidence *= 0.85
+        budget_receipt = canonical_plan.get(
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+            {},
+        )
         return {
             "system": self.system_name,
             "report_state": "final",
@@ -1188,6 +1214,8 @@ class ExecutionPlanner:
             "execution_plan_failure_cause": canonical_plan.get("execution_plan_failure_cause"),
             "dependency_activation_state": canonical_plan.get("dependency_activation_state"),
             "process_stage_state": canonical_plan.get("process_stage_state"),
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_receipt,
+            "runtime_budget_enforcement_report": budget_receipt,
             "canonical_execution_plan": canonical_plan,
         }
 
@@ -1253,6 +1281,7 @@ class ExecutionPlanner:
             for key in (
                 "mode",
                 "max_active_routes",
+                "max_reasoning_depth",
                 "max_dependency_depth",
                 "process_semantics_enabled",
                 "max_execution_cost",

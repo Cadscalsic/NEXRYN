@@ -177,6 +177,24 @@ def test_scheduled_validation_task_executes_and_captures_raw_result(tmp_path):
     assert schedule_record["raw_result_id"] == raw_result["raw_result_id"]
     assert raw_result["plan_id"] == plan["plan_id"]
     assert raw_result["schedule_id"] == schedule_record["schedule_id"]
+    assert raw_result["raw_validation_result_schema_version"] == "1.0"
+    assert raw_result["raw_validation_result_id"] == raw_result["raw_result_id"]
+    envelope = raw_result["RAW_VALIDATION_RESULT_ENVELOPE"]
+    assert envelope["raw_validation_result_id"] == raw_result["raw_result_id"]
+    assert envelope["run_id"] == plan["source_run_id"]
+    assert envelope["task_id"] == plan["source_task_id"]
+    assert envelope["execution_plan_id"] == plan["plan_id"]
+    assert envelope["executor_invocation_id"] == raw_result["execution_id"]
+    assert envelope["validation_attempt_id"].startswith("validation_attempt_")
+    assert envelope["expected_artifact_id"].startswith("expected_artifact_")
+    assert envelope["captured_artifact_id"].startswith("captured_artifact_")
+    assert envelope["artifact_state"] == "ARTIFACT_CAPTURED"
+    assert envelope["payload_state"] == "PAYLOAD_CAPTURED"
+    assert envelope["provenance_state"] == "RAW_RESULT_PROVENANCE_BOUND"
+    assert envelope["binding_integrity_state"] == "BOUND"
+    assert envelope["downstream_structural_eligibility"] == "STRUCTURALLY_ELIGIBLE"
+    assert envelope["evidence_evaluation_invoked"] is False
+    assert envelope["evidence_record_id"] is None
     assert raw_result["comparison_state"] == "NOT_COMPARED"
     assert raw_result["evidence_state"] == "NOT_EVALUATED"
 
@@ -203,6 +221,131 @@ def test_reprocessing_reuses_existing_raw_result_without_runner_invocation(tmp_p
     assert second["execution_invoked"] is False
     assert pipeline.calls == 1
     assert len(list((tmp_path / "raw_results").glob("*.json"))) == 1
+
+
+def test_raw_validation_result_identity_is_deterministic_and_not_random(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    _, schedule = _scheduled_plan(tmp_path, _registry(curriculum))
+
+    pipeline = ValidationTaskExecutionPipeline(tmp_path, _registry(curriculum))
+    first = pipeline.execute_schedule(schedule["schedule_id"])
+    second = pipeline.execute_schedule(schedule["schedule_id"])
+
+    assert first["raw_validation_result_id"] == second["raw_validation_result_id"]
+    assert first["RAW_VALIDATION_RESULT_ENVELOPE"]["raw_validation_result_id"] == (
+        second["RAW_VALIDATION_RESULT_ENVELOPE"]["raw_validation_result_id"]
+    )
+    assert first["raw_validation_result_id"].startswith("raw_validation_result_")
+
+
+def test_missing_artifact_is_not_reported_as_captured_or_eligible(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    _, schedule = _scheduled_plan(tmp_path, _registry(curriculum))
+
+    class MissingOutputPipeline(ValidationTaskExecutionPipeline):
+        def _run_task(self, task, schedule, plan):
+            return {}
+
+    report = MissingOutputPipeline(tmp_path, _registry(curriculum)).execute_schedule(
+        schedule["schedule_id"]
+    )
+    envelope = report["RAW_VALIDATION_RESULT_ENVELOPE"]
+
+    assert report["execution_state"] == "RAW_RESULT_ARTIFACT_MISSING"
+    assert report["raw_result_captured"] is False
+    assert report["raw_validation_result_id"].startswith("raw_validation_result_")
+    assert envelope["artifact_state"] == "ARTIFACT_MISSING"
+    assert envelope["payload_state"] == "PAYLOAD_MISSING"
+    assert envelope["captured_artifact_id"] is None
+    assert envelope["downstream_structural_eligibility"] == "STRUCTURALLY_INELIGIBLE"
+    assert envelope["structural_ineligibility_reason"] == "ARTIFACT_MISSING"
+    assert report["next_consumer"] == "NONE"
+
+
+def test_empty_valid_output_is_distinct_from_missing_artifact(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    _, schedule = _scheduled_plan(tmp_path, _registry(curriculum))
+
+    class EmptyValidPipeline(ValidationTaskExecutionPipeline):
+        def _run_task(self, task, schedule, plan):
+            return {"empty_output_valid": True}
+
+    report = EmptyValidPipeline(tmp_path, _registry(curriculum)).execute_schedule(
+        schedule["schedule_id"]
+    )
+    envelope = report["RAW_VALIDATION_RESULT_ENVELOPE"]
+
+    assert report["execution_state"] == "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED"
+    assert report["raw_result_captured"] is True
+    assert envelope["artifact_state"] == "ARTIFACT_EMPTY_VALID_OUTPUT"
+    assert envelope["payload_state"] == "EMPTY_VALID_OUTPUT"
+    assert envelope["downstream_structural_eligibility"] == "STRUCTURALLY_ELIGIBLE"
+
+
+def test_source_label_is_not_silently_treated_as_task_identity(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    persisted, schedule = _scheduled_plan(
+        tmp_path,
+        _registry(curriculum),
+    )
+    plan_path = tmp_path / "pending" / f"{persisted['evidence_plan_id']}.json"
+    schedule_path = tmp_path / "schedules" / f"{schedule['schedule_id']}.json"
+    plan = _read_json(plan_path)
+    schedule_record = _read_json(schedule_path)
+    plan["source_task_id"] = "semantic_to_transformation_compiler_0"
+    schedule_record["source_task_id"] = "semantic_to_transformation_compiler_0"
+    plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    schedule_path.write_text(json.dumps(schedule_record, indent=2), encoding="utf-8")
+
+    report = ValidationTaskExecutionPipeline(
+        tmp_path,
+        _registry(curriculum),
+    ).execute_schedule(schedule["schedule_id"])
+    envelope = report["RAW_VALIDATION_RESULT_ENVELOPE"]
+
+    assert envelope["task_id"] == "semantic_to_transformation_compiler_0"
+    assert envelope["producer_component_id"] == "VALIDATION_TASK_EXECUTION_PIPELINE"
+    assert envelope["binding_integrity_state"] == "CONFLICTED"
+    assert envelope["raw_validation_result_identity_state"] == (
+        "RAW_VALIDATION_IDENTITY_TYPE_CONFLICT"
+    )
+    assert envelope["downstream_structural_eligibility"] == "STRUCTURALLY_INELIGIBLE"
+
+
+def test_three_batch_results_remain_task_local_and_distinct(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    reports = []
+    for index in range(3):
+        root = tmp_path / f"task_{index}"
+        persisted, schedule = _scheduled_plan(
+            root,
+            _registry(curriculum),
+        )
+        plan_path = root / "pending" / f"{persisted['evidence_plan_id']}.json"
+        schedule_path = root / "schedules" / f"{schedule['schedule_id']}.json"
+        plan = _read_json(plan_path)
+        schedule_record = _read_json(schedule_path)
+        plan["source_task_id"] = f"task_{index}"
+        schedule_record["source_task_id"] = f"task_{index}"
+        plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+        schedule_path.write_text(json.dumps(schedule_record, indent=2), encoding="utf-8")
+        reports.append(
+            ValidationTaskExecutionPipeline(root, _registry(curriculum))
+            .execute_schedule(schedule["schedule_id"])
+        )
+
+    ids = {report["raw_validation_result_id"] for report in reports}
+    tasks = {
+        report["RAW_VALIDATION_RESULT_ENVELOPE"]["task_id"]
+        for report in reports
+    }
+    assert len(ids) == 3
+    assert tasks == {"task_0", "task_1", "task_2"}
 
 
 def test_scheduler_alone_does_not_execute_task(tmp_path):

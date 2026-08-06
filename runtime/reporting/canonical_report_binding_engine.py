@@ -8998,6 +8998,11 @@ class CanonicalReportBindingEngine:
         report = summary.get("validation_task_execution_report")
         if not isinstance(report, Mapping) or not report:
             return {}
+        envelope = self._first_dict(
+            report,
+            "RAW_VALIDATION_RESULT_ENVELOPE",
+            "raw_validation_result_envelope",
+        )
         return {
             "validation_task_execution_plan_id": self._first_present(
                 report.get("plan_id"),
@@ -9014,8 +9019,99 @@ class CanonicalReportBindingEngine:
                 "Not Available",
             ),
             "raw_result_id": self._first_present(
+                report.get("raw_validation_result_id"),
+                envelope.get("raw_validation_result_id"),
                 report.get("raw_result_id"),
                 "Not Available",
+            ),
+            "raw_validation_result_id": self._first_present(
+                envelope.get("raw_validation_result_id"),
+                report.get("raw_validation_result_id"),
+                report.get("raw_result_id"),
+                "Not Available",
+            ),
+            "RAW_VALIDATION_RESULT_ENVELOPE": envelope,
+            "raw_validation_result_envelope": envelope,
+            "run_id": self._first_present(
+                envelope.get("run_id"),
+                report.get("run_id"),
+                "Not Available",
+            ),
+            "batch_id": self._first_present(
+                envelope.get("batch_id"),
+                report.get("batch_id"),
+                "Not Available",
+            ),
+            "task_id": self._first_present(
+                envelope.get("task_id"),
+                report.get("task_id"),
+                "Not Available",
+            ),
+            "execution_plan_id": self._first_present(
+                envelope.get("execution_plan_id"),
+                report.get("execution_plan_id"),
+                "Not Available",
+            ),
+            "execution_node_id": self._first_present(
+                envelope.get("execution_node_id"),
+                report.get("execution_node_id"),
+                "Not Available",
+            ),
+            "executor_invocation_id": self._first_present(
+                envelope.get("executor_invocation_id"),
+                report.get("executor_invocation_id"),
+                report.get("execution_id"),
+                "Not Available",
+            ),
+            "validation_attempt_id": self._first_present(
+                envelope.get("validation_attempt_id"),
+                report.get("validation_attempt_id"),
+                "Not Available",
+            ),
+            "expected_artifact_id": self._first_present(
+                envelope.get("expected_artifact_id"),
+                report.get("expected_artifact_id"),
+                "Not Available",
+            ),
+            "produced_artifact_id": self._first_present(
+                envelope.get("produced_artifact_id"),
+                report.get("produced_artifact_id"),
+                "Not Available",
+            ),
+            "captured_artifact_id": self._first_present(
+                envelope.get("captured_artifact_id"),
+                report.get("captured_artifact_id"),
+                "Not Available",
+            ),
+            "artifact_state": self._first_present(
+                envelope.get("artifact_state"),
+                report.get("artifact_state"),
+                "ARTIFACT_NOT_EXPECTED",
+            ),
+            "payload_state": self._first_present(
+                envelope.get("payload_state"),
+                report.get("payload_state"),
+                "PAYLOAD_NOT_EXPECTED",
+            ),
+            "provenance_state": self._first_present(
+                envelope.get("provenance_state"),
+                report.get("provenance_state"),
+                "RAW_RESULT_NOT_APPLICABLE",
+            ),
+            "binding_integrity_state": self._first_present(
+                envelope.get("binding_integrity_state"),
+                report.get("binding_integrity_state"),
+                "NOT_APPLICABLE",
+            ),
+            "downstream_structural_eligibility": self._first_present(
+                envelope.get("downstream_structural_eligibility"),
+                report.get("downstream_structural_eligibility"),
+                "STRUCTURALLY_INELIGIBLE",
+            ),
+            "structural_ineligibility_reason": self._first_present(
+                envelope.get("structural_ineligibility_reason"),
+                report.get("structural_ineligibility_reason"),
+                "RAW_RESULT_NOT_APPLICABLE",
             ),
             "raw_result_fingerprint": self._first_present(
                 report.get("raw_result_fingerprint"),

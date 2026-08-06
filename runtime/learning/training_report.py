@@ -1388,16 +1388,117 @@ def build_training_report(
 
     def aggregate_execution_plan_report():
         reports = []
+        canonical_plans = []
         for item in multi_task_results:
             result = item.get("result", {})
             if not isinstance(result, dict):
                 continue
+            canonical_plan = (
+                result.get("canonical_execution_plan")
+                or result.get("CANONICAL_EXECUTION_PLAN_REPORT")
+            )
+            if isinstance(canonical_plan, dict):
+                canonical_plans.append({
+                    "task": item.get("task"),
+                    "status": item.get("status"),
+                    "plan": canonical_plan,
+                })
             report = (
                 result.get("EXECUTION_PLAN_REPORT")
                 or result.get("execution_plan_report")
             )
             if isinstance(report, dict):
                 reports.append(report)
+
+        def plan_sort_key(item):
+            plan = item["plan"]
+            return (
+                0 if plan.get("execution_plan_validation_state") == "VALID" else 1,
+                0 if plan.get("execution_plan_finalized") is True else 1,
+                str(item.get("task") or ""),
+                str(plan.get("execution_plan_id") or ""),
+            )
+
+        selected_plan_record = (
+            sorted(canonical_plans, key=plan_sort_key)[0]
+            if canonical_plans
+            else None
+        )
+        if selected_plan_record is not None:
+            selected_plan = dict(selected_plan_record["plan"])
+            return {
+                "system": "execution_planner",
+                "report_state": "final",
+                "EXECUTION_PLAN_REPORT": True,
+                "execution_plan_schema_version": selected_plan.get(
+                    "execution_plan_schema_version"
+                ),
+                "execution_plan_id": selected_plan.get("execution_plan_id"),
+                "execution_plan_state": selected_plan.get("planning_state"),
+                "execution_plan_finalized": selected_plan.get(
+                    "execution_plan_finalized"
+                ),
+                "execution_plan_immutable": selected_plan.get(
+                    "execution_plan_immutable"
+                ),
+                "execution_plan_forwarded": selected_plan.get(
+                    "execution_plan_forwarded"
+                ),
+                "selected_tool_count": selected_plan.get("selected_tool_count", 0),
+                "reconciled_tool_count": len(
+                    selected_plan.get("tool_reconciliation", []) or []
+                ),
+                "selected_layer_count": selected_plan.get("selected_layer_count", 0),
+                "reconciled_layer_count": len(
+                    selected_plan.get("layer_reconciliation", []) or []
+                ),
+                "active_route_count": selected_plan.get("active_route_count", 0),
+                "reconciled_route_count": len(
+                    selected_plan.get("route_reconciliation", []) or []
+                ),
+                "execution_node_count": selected_plan.get("execution_node_count", 0),
+                "dependency_activation_request_count": len(
+                    selected_plan.get("dependency_activation_requests", []) or []
+                ),
+                "process_stage_request_count": len(
+                    selected_plan.get("process_stage_requests", []) or []
+                ),
+                "unresolved_selected_item_count": selected_plan.get(
+                    "unresolved_selected_item_count",
+                    0,
+                ),
+                "execution_plan_reconciliation_state": selected_plan.get(
+                    "execution_plan_reconciliation_state"
+                ),
+                "execution_plan_validation_state": selected_plan.get(
+                    "execution_plan_validation_state"
+                ),
+                "execution_plan_failure_cause": selected_plan.get(
+                    "execution_plan_failure_cause"
+                ),
+                "dependency_activation_state": selected_plan.get(
+                    "dependency_activation_state",
+                    "NOT_REQUESTED",
+                ),
+                "process_stage_state": selected_plan.get(
+                    "process_stage_state",
+                    "NOT_REQUESTED",
+                ),
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT": selected_plan.get(
+                    "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                    selected_plan.get("runtime_budget_enforcement_report", {}),
+                ),
+                "runtime_budget_enforcement_report": selected_plan.get(
+                    "runtime_budget_enforcement_report",
+                    selected_plan.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+                ),
+                "canonical_execution_plan": selected_plan,
+                "CANONICAL_EXECUTION_PLAN_REPORT": selected_plan,
+                "batch_plan_propagation_state": "CANONICAL_PLAN_PROPAGATED",
+                "batch_plan_source_task": selected_plan_record.get("task"),
+                "batch_task_plan_count": len(canonical_plans),
+                "batch_task_report_count": len(reports),
+            }
 
         def to_int(value, default=0):
             try:
@@ -1552,6 +1653,12 @@ def build_training_report(
             "system": "execution_planner",
             "report_state": "final",
             "EXECUTION_PLAN_REPORT": True,
+            "batch_plan_propagation_state": (
+                "PLAN_DROPPED_BY_BATCH_AGGREGATION"
+                if reports
+                else "PLAN_BUILDER_NOT_INVOKED"
+            ),
+            "execution_plan_state": "LEGACY_PLAN_UNAVAILABLE",
             "selected_tools": selected_tools_union,
             "attributed_concepts": union_list("attributed_concepts"),
             "generated_intents": [
@@ -3958,6 +4065,22 @@ def build_training_report(
         "training_report_projection_guard": projection_guard,
         "EXECUTION_PLAN_REPORT": execution_plan_report,
         "execution_plan_report": dict(execution_plan_report),
+        "canonical_execution_plan": execution_plan_report.get(
+            "canonical_execution_plan",
+            {},
+        ),
+        "CANONICAL_EXECUTION_PLAN_REPORT": execution_plan_report.get(
+            "CANONICAL_EXECUTION_PLAN_REPORT",
+            execution_plan_report.get("canonical_execution_plan", {}),
+        ),
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT": execution_plan_report.get(
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+            execution_plan_report.get("runtime_budget_enforcement_report", {}),
+        ),
+        "runtime_budget_enforcement_report": execution_plan_report.get(
+            "runtime_budget_enforcement_report",
+            execution_plan_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+        ),
         "EXECUTION_DISPATCH_REPORT": execution_dispatch_report,
         "execution_dispatch_report": dict(execution_dispatch_report),
         "EXECUTION_LAYER_AUDIT_REPORT": execution_layer_audit_report,

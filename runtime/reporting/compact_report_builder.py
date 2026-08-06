@@ -150,6 +150,10 @@ class CompactReportBuilder:
         "performance_report",
         "EXECUTION_PLAN_REPORT",
         "execution_plan_report",
+        "CANONICAL_EXECUTION_PLAN_REPORT",
+        "canonical_execution_plan",
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+        "runtime_budget_enforcement_report",
         "EXECUTION_DISPATCH_REPORT",
         "execution_dispatch_report",
         "EXECUTION_LAYER_AUDIT_REPORT",
@@ -1255,6 +1259,10 @@ class CompactReportBuilder:
             elif key in {
                 "EXECUTION_PLAN_REPORT",
                 "execution_plan_report",
+                "CANONICAL_EXECUTION_PLAN_REPORT",
+                "canonical_execution_plan",
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                "runtime_budget_enforcement_report",
                 "EXECUTION_DISPATCH_REPORT",
                 "execution_dispatch_report",
             } and isinstance(value, dict):
@@ -1333,6 +1341,10 @@ class CompactReportBuilder:
                 if key in {
                     "EXECUTION_PLAN_REPORT",
                     "execution_plan_report",
+                    "CANONICAL_EXECUTION_PLAN_REPORT",
+                    "canonical_execution_plan",
+                    "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                    "runtime_budget_enforcement_report",
                     "EXECUTION_DISPATCH_REPORT",
                     "execution_dispatch_report",
                 } and isinstance(item, dict):
