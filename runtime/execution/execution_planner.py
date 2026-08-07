@@ -799,13 +799,19 @@ class ExecutionPlanner:
             "task_id": task_id,
             "task_profile_id": task_profile_id,
             "planning_state": planning_state,
+            "execution_plan_state": planning_state,
             "source_selection_record_ids": [
                 row["tool_selection_record_id"] for row in selection_records
             ],
             "selected_tool_count": len(selection_records),
+            "selected_tools_count": len(selection_records),
             "selected_layer_count": len(layer_records),
+            "selected_layers_count": len(layer_records),
             "active_route_count": len(route_records),
+            "selected_route_count": len(route_records),
+            "selected_routes_count": len(route_records),
             "execution_node_count": len(nodes),
+            "execution_nodes_materialized": len(nodes),
             "route_disposition_count": len(route_reconciliation),
             "unresolved_selected_item_count": unresolved,
             "nodes": nodes,
@@ -825,7 +831,9 @@ class ExecutionPlanner:
             "materialization_failures": failures,
             "immutability_state": "IMMUTABLE" if validation_state == "VALID" else "NOT_FINALIZED",
             "execution_plan_finalized": validation_state == "VALID",
+            "finalized": validation_state == "VALID",
             "execution_plan_immutable": validation_state == "VALID",
+            "immutable": validation_state == "VALID",
             "execution_plan_forwarded": validation_state == "VALID",
             "execution_plan_reconciliation_state": "COMPLETE" if validation_state == "VALID" else "FAILED",
             "execution_plan_validation_state": validation_state,
@@ -835,6 +843,16 @@ class ExecutionPlanner:
             "orchestrator_consumption_state": "READY_FOR_ORCHESTRATOR" if validation_state == "VALID" else "BLOCKED_BY_PLAN_VALIDATION",
             "constitutional_boundary": "CANONICAL_EXECUTION_PLAN_MATERIALIZES_EXISTING_SELECTIONS_WITHOUT_GRANTING_NEW_COGNITIVE_AUTHORITY",
         }
+        plan["reconciled_tool_count"] = len(tool_reconciliation)
+        plan["reconciled_tools_count"] = len(tool_reconciliation)
+        plan["reconciled_layer_count"] = len(layer_reconciliation)
+        plan["reconciled_layers_count"] = len(layer_reconciliation)
+        plan["reconciled_route_count"] = len(route_reconciliation)
+        plan["reconciled_routes_count"] = len(route_reconciliation)
+        plan["maximum_active_routes"] = budget_receipt.get("maximum_active_routes")
+        plan["maximum_reasoning_depth"] = budget_receipt.get("maximum_reasoning_depth")
+        plan["maximum_dependency_depth"] = budget.get("max_dependency_depth")
+        plan["maximum_hypotheses"] = budget.get("max_hypotheses")
         plan["execution_plan_fingerprint"] = self._fingerprint_plan(plan)
         return plan
 

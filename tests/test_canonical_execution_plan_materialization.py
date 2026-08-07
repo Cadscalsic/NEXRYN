@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 from runtime.execution.execution_planner import ExecutionPlanner
+from runtime.learning.training_report import build_training_report
 from runtime.reporting.final_report_renderer import DeterministicFinalReportRenderer
 
 
@@ -27,7 +28,9 @@ def _context():
         },
         "current_reasoning_budget": {
             "max_active_routes": 3,
+            "max_reasoning_depth": 2,
             "max_dependency_depth": 3,
+            "max_hypotheses": 4,
             "process_semantics_enabled": True,
         },
     }
@@ -48,6 +51,9 @@ def test_canonical_execution_plan_has_version_and_distinct_id_domains():
     assert plan["execution_plan_schema_version"] == "1.0"
     assert plan["execution_plan_id"].startswith("execution_plan_")
     assert plan["execution_plan_id"] != plan["run_id"]
+    assert plan["execution_plan_state"] == "EXECUTION_PLAN_FINALIZED"
+    assert plan["finalized"] is True
+    assert plan["immutable"] is True
     assert plan["task_id"] not in {row["route_id"] for row in plan["route_reconciliation"]}
     for node in plan["nodes"]:
         assert node["execution_plan_id"] == plan["execution_plan_id"]
@@ -60,11 +66,22 @@ def test_selected_tools_layers_and_routes_receive_one_disposition():
     plan = _plan_result()["canonical_execution_plan"]
 
     assert plan["selected_tool_count"] == 2
+    assert plan["selected_tools_count"] == 2
     assert len(plan["tool_reconciliation"]) == 2
+    assert plan["reconciled_tools_count"] == 2
     assert plan["selected_layer_count"] == 2
+    assert plan["selected_layers_count"] == 2
     assert len(plan["layer_reconciliation"]) == 2
+    assert plan["reconciled_layers_count"] == 2
     assert plan["active_route_count"] == 3
+    assert plan["selected_routes_count"] == 3
     assert len(plan["route_reconciliation"]) == 3
+    assert plan["reconciled_routes_count"] == 3
+    assert plan["execution_nodes_materialized"] == plan["execution_node_count"]
+    assert plan["maximum_active_routes"] == 3
+    assert plan["maximum_reasoning_depth"] == 2
+    assert plan["maximum_dependency_depth"] == 3
+    assert plan["maximum_hypotheses"] == 4
     assert plan["route_balance"]["balanced"] is True
     for collection in ("tool_reconciliation", "layer_reconciliation", "route_reconciliation"):
         for row in plan[collection]:
@@ -181,11 +198,83 @@ def test_execution_plan_report_is_concise_and_renderer_is_read_only():
     )
 
     assert "EXECUTION PLAN REPORT" in report
-    assert "Execution Plan State: EXECUTION_PLAN_FINALIZED" in report
+    assert "Execution Plan State: CANONICAL_EXECUTION_PLAN_BOUND" in report
+    assert "Planning State: EXECUTION_PLAN_FINALIZED" in report
     assert "Selected Tools Reconciled: 2/2" in report
     assert "Active Routes Reconciled: 3/3" in report
     assert "dependency_activation_requests" not in report
     assert result["canonical_execution_plan"]["execution_plan_validation_state"] == "VALID"
+
+
+def test_current_run_canonical_plan_survives_training_report_and_human_binding():
+    result = _plan_result()
+    plan = result["canonical_execution_plan"]
+    training_report = build_training_report(
+        training_batch={"selected_task_count": 1},
+        multi_task_results=[{
+            "task": plan["task_id"],
+            "status": "completed",
+            "result": {
+                **result,
+                "retry_allowed": True,
+                "episode_completed": False,
+                "repair_attempts": 0,
+            },
+        }],
+    )
+
+    assert training_report["canonical_execution_plan"]["execution_plan_id"] == plan["execution_plan_id"]
+    assert training_report["EXECUTION_PLAN_REPORT"]["execution_plan_id"] == plan["execution_plan_id"]
+    assert training_report["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]["execution_plan_id"] == plan["execution_plan_id"]
+    assert (
+        "CANONICAL_EXECUTION_PLAN_NOT_BOUND"
+        not in training_report["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]["reachability_gaps"]
+    )
+
+    rendered = DeterministicFinalReportRenderer().render(
+        {
+            "runtime_status": "completed",
+            "operation": "training_batch",
+            **training_report,
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": plan["run_id"],
+            "timestamp": "now",
+            "mode": "test",
+        },
+    )
+
+    assert f"Execution Plan Id: {plan['execution_plan_id']}" in rendered
+    assert "Execution Plan State: CANONICAL_EXECUTION_PLAN_BOUND" in rendered
+    assert "Canonical Execution Plan Present: TRUE" in rendered
+
+
+def test_legacy_plan_cannot_override_valid_canonical_plan_in_renderer():
+    result = _plan_result()
+    plan = result["canonical_execution_plan"]
+
+    rendered = DeterministicFinalReportRenderer().render(
+        {
+            "runtime_status": "completed",
+            "operation": "training_batch",
+            "EXECUTION_PLAN_REPORT": {
+                "execution_plan_id": "legacy_plan_wrong",
+                "execution_plan_state": "LEGACY_PLAN_UNAVAILABLE",
+                "selected_tool_count": 0,
+            },
+            "CANONICAL_EXECUTION_PLAN_REPORT": plan,
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": plan["run_id"],
+            "timestamp": "now",
+            "mode": "test",
+        },
+    )
+
+    assert f"Execution Plan Id: {plan['execution_plan_id']}" in rendered
+    assert "legacy_plan_wrong" not in rendered
 
 
 def test_runtime_handoff_consumes_plan_without_invoking_components():

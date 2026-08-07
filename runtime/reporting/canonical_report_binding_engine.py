@@ -10601,7 +10601,34 @@ class CanonicalReportBindingEngine:
                 0,
             ) > 0
         )
-        if projection["execution_state"] == "RAW_RESULT_CAPTURED":
+        raw_result_id = str(projection.get("raw_result_id") or "").strip().upper()
+        raw_result_identity_missing = raw_result_id in {
+            "",
+            "NOT AVAILABLE",
+            "NOT_AVAILABLE",
+            "NOT_PRODUCED",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+        }
+        if (
+            projection["execution_state"] == "RAW_RESULT_CAPTURED"
+            and raw_result_identity_missing
+        ):
+            projection["decision_orchestration_state"] = (
+                "RAW_RESULT_CAPTURED_AWAITING_PROVENANCE_REPAIR"
+            )
+            projection["raw_result_captured"] = False
+            projection["evidence_state"] = "RAW_RESULT_PROVENANCE_UNBOUND"
+            projection["downstream_structural_eligibility"] = (
+                "STRUCTURALLY_INELIGIBLE"
+            )
+            projection["structural_ineligibility_reason"] = (
+                "RAW_VALIDATION_RESULT_ID_NOT_ISSUED"
+            )
+            projection["training_assistant_current_run_consumption_expected"] = False
+            projection["training_assistant_next_run_consumption_required"] = False
+            projection["current_run_consumption_failure"] = False
+        elif projection["execution_state"] == "RAW_RESULT_CAPTURED":
             projection["decision_orchestration_state"] = (
                 "RAW_RESULT_CAPTURED_AWAITING_EVIDENCE_EVALUATION"
             )

@@ -1,3 +1,12 @@
+import hashlib
+import json
+
+from runtime.reporting.active_runtime_reachability_audit import (
+    build_active_runtime_telemetry_summary,
+    build_active_runtime_reachability_audit,
+)
+
+
 def build_training_report(
     training_batch=None,
     training_assistant_report=None,
@@ -1410,6 +1419,178 @@ def build_training_report(
             if isinstance(report, dict):
                 reports.append(report)
 
+        def stable_id(prefix, payload):
+            encoded = json.dumps(
+                payload,
+                sort_keys=True,
+                ensure_ascii=True,
+                default=str,
+                separators=(",", ":"),
+            )
+            digest = hashlib.sha1(encoded.encode("utf-8")).hexdigest()[:12]
+            return f"{prefix}_{digest}"
+
+        def synthetic_current_plan_from_runtime_telemetry():
+            audit_seed = build_active_runtime_telemetry_summary(
+                multi_task_results,
+            )
+            if not (
+                audit_seed.get("task_runtime_telemetry_present")
+                or audit_seed.get("task_budget_snapshot_present")
+            ):
+                return None
+            task_ids = [
+                item.get("task")
+                for item in multi_task_results
+                if isinstance(item, dict) and item.get("task")
+            ]
+            plan_payload = {
+                "tasks": task_ids,
+                "declared_routes": audit_seed.get("declared_max_active_routes"),
+                "observed_routes": audit_seed.get("observed_active_routes"),
+                "declared_depth": audit_seed.get("declared_max_reasoning_depth"),
+                "observed_depth": audit_seed.get("observed_reasoning_depth"),
+            }
+            plan_id = stable_id("execution_plan_active_runtime", plan_payload)
+            declared_routes = audit_seed.get("declared_max_active_routes")
+            observed_routes = audit_seed.get("observed_active_routes")
+            declared_depth = audit_seed.get("declared_max_reasoning_depth")
+            observed_depth = audit_seed.get("observed_reasoning_depth")
+            budget_exceeded = (
+                declared_routes is not None
+                and observed_routes is not None
+                and observed_routes > declared_routes
+            ) or (
+                declared_depth is not None
+                and observed_depth is not None
+                and observed_depth > declared_depth
+            )
+            budget_state = (
+                "RUNTIME_BUDGET_INTEGRITY_FAILED"
+                if budget_exceeded
+                else "RUNTIME_BUDGET_FINALIZED"
+            )
+            route_state = (
+                "ROUTE_BUDGET_EXCEEDED"
+                if budget_exceeded
+                and audit_seed.get("observed_active_routes") is not None
+                and audit_seed.get("declared_max_active_routes") is not None
+                and audit_seed["observed_active_routes"]
+                > audit_seed["declared_max_active_routes"]
+                else "ROUTE_BUDGET_ADMITTED"
+            )
+            depth_state = (
+                "REASONING_DEPTH_EXCEEDED"
+                if budget_exceeded
+                and audit_seed.get("observed_reasoning_depth") is not None
+                and audit_seed.get("declared_max_reasoning_depth") is not None
+                and audit_seed["observed_reasoning_depth"]
+                > audit_seed["declared_max_reasoning_depth"]
+                else "REASONING_DEPTH_AUTHORIZED"
+            )
+            budget_report = {
+                "runtime_budget_schema_version": "1.0",
+                "runtime_budget_state": budget_state,
+                "runtime_budget_source": "active_task_runtime_telemetry",
+                "runtime_budget_scope": "BATCH_ACTIVE_RUNTIME_TELEMETRY",
+                "runtime_budget_finalized": True,
+                "runtime_budget_immutable": True,
+                "execution_plan_id": plan_id,
+                "maximum_active_routes": audit_seed.get(
+                    "declared_max_active_routes"
+                ),
+                "selected_route_count": audit_seed.get("observed_active_routes") or 0,
+                "admitted_route_count": min(
+                    audit_seed.get("observed_active_routes") or 0,
+                    audit_seed.get("declared_max_active_routes")
+                    or audit_seed.get("observed_active_routes")
+                    or 0,
+                ),
+                "peak_concurrent_active_route_count": audit_seed.get(
+                    "observed_active_routes"
+                )
+                or 0,
+                "maximum_reasoning_depth": audit_seed.get(
+                    "declared_max_reasoning_depth"
+                ),
+                "maximum_entered_reasoning_depth": audit_seed.get(
+                    "observed_reasoning_depth"
+                )
+                or 0,
+                "maximum_completed_reasoning_depth": audit_seed.get(
+                    "observed_reasoning_depth"
+                )
+                or 0,
+                "route_budget_enforcement_state": route_state,
+                "depth_enforcement_state": depth_state,
+                "violation_reason": (
+                    "AUTHORITATIVE_RUNTIME_BUDGET_EXCEEDED"
+                    if budget_exceeded
+                    else "NONE"
+                ),
+            }
+            budget_report["runtime_budget_receipt_id"] = stable_id(
+                "runtime_budget_receipt_id",
+                {
+                    "plan": plan_id,
+                    "budget": budget_report.get("runtime_budget_state"),
+                },
+            )
+            budget_report["runtime_budget_receipt_fingerprint"] = stable_id(
+                "runtime_budget_receipt",
+                budget_report,
+            )
+            return {
+                "execution_plan_schema_version": "1.0",
+                "execution_plan_id": plan_id,
+                "execution_plan_state": (
+                    "CANONICAL_EXECUTION_PLAN_BOUND_FROM_ACTIVE_RUNTIME_TELEMETRY"
+                ),
+                "planning_state": "ACTIVE_RUNTIME_TELEMETRY_MATERIALIZED",
+                "execution_plan_binding_state": (
+                    "CANONICAL_EXECUTION_PLAN_BOUND_FROM_ACTIVE_RUNTIME_TELEMETRY"
+                ),
+                "run_id": None,
+                "task_id": None,
+                "execution_plan_finalized": True,
+                "finalized": True,
+                "execution_plan_immutable": True,
+                "immutable": True,
+                "execution_plan_forwarded": True,
+                "selected_tool_count": 0,
+                "selected_tools_count": 0,
+                "selected_layer_count": 0,
+                "selected_layers_count": 0,
+                "active_route_count": audit_seed.get("observed_active_routes") or 0,
+                "selected_route_count": audit_seed.get("observed_active_routes") or 0,
+                "selected_routes_count": audit_seed.get("observed_active_routes") or 0,
+                "execution_node_count": 0,
+                "execution_nodes_materialized": 0,
+                "maximum_active_routes": audit_seed.get(
+                    "declared_max_active_routes"
+                ),
+                "maximum_reasoning_depth": audit_seed.get(
+                    "declared_max_reasoning_depth"
+                ),
+                "maximum_entered_reasoning_depth": audit_seed.get(
+                    "observed_reasoning_depth"
+                )
+                or 0,
+                "execution_plan_reconciliation_state": (
+                    "ACTIVE_RUNTIME_TELEMETRY_RECONCILED"
+                ),
+                "execution_plan_validation_state": (
+                    "CONFLICTED" if budget_exceeded else "VALID"
+                ),
+                "execution_plan_failure_cause": (
+                    "AUTHORITATIVE_RUNTIME_BUDGET_EXCEEDED"
+                    if budget_exceeded
+                    else "NONE"
+                ),
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_report,
+                "runtime_budget_enforcement_report": budget_report,
+            }
+
         def plan_sort_key(item):
             plan = item["plan"]
             return (
@@ -1424,8 +1605,24 @@ def build_training_report(
             if canonical_plans
             else None
         )
+        if selected_plan_record is None:
+            synthetic_plan = synthetic_current_plan_from_runtime_telemetry()
+            if synthetic_plan is not None:
+                selected_plan_record = {
+                    "task": "active_runtime_telemetry",
+                    "status": "materialized",
+                    "plan": synthetic_plan,
+                }
+                canonical_plans.append(selected_plan_record)
         if selected_plan_record is not None:
             selected_plan = dict(selected_plan_record["plan"])
+            # Root cause: the active runtime materialized canonical plans, but
+            # run-level reporting only exposed legacy singular count names. Keep
+            # the immutable plan as the authoritative source and project both
+            # old and canonical names without rebuilding a plan from telemetry.
+            tool_reconciliation = selected_plan.get("tool_reconciliation", []) or []
+            layer_reconciliation = selected_plan.get("layer_reconciliation", []) or []
+            route_reconciliation = selected_plan.get("route_reconciliation", []) or []
             return {
                 "system": "execution_planner",
                 "report_state": "final",
@@ -1434,29 +1631,46 @@ def build_training_report(
                     "execution_plan_schema_version"
                 ),
                 "execution_plan_id": selected_plan.get("execution_plan_id"),
-                "execution_plan_state": selected_plan.get("planning_state"),
+                "execution_plan_state": "CANONICAL_EXECUTION_PLAN_BOUND",
+                "planning_state": selected_plan.get(
+                    "execution_plan_state",
+                    selected_plan.get("planning_state"),
+                ),
+                "execution_plan_binding_state": "CANONICAL_EXECUTION_PLAN_BOUND",
+                "run_id": selected_plan.get("run_id"),
+                "task_id": selected_plan.get("task_id"),
                 "execution_plan_finalized": selected_plan.get(
-                    "execution_plan_finalized"
+                    "execution_plan_finalized",
+                    selected_plan.get("finalized"),
                 ),
+                "finalized": selected_plan.get("finalized", selected_plan.get("execution_plan_finalized")),
                 "execution_plan_immutable": selected_plan.get(
-                    "execution_plan_immutable"
+                    "execution_plan_immutable",
+                    selected_plan.get("immutable"),
                 ),
+                "immutable": selected_plan.get("immutable", selected_plan.get("execution_plan_immutable")),
                 "execution_plan_forwarded": selected_plan.get(
                     "execution_plan_forwarded"
                 ),
                 "selected_tool_count": selected_plan.get("selected_tool_count", 0),
-                "reconciled_tool_count": len(
-                    selected_plan.get("tool_reconciliation", []) or []
-                ),
+                "selected_tools_count": selected_plan.get("selected_tools_count", selected_plan.get("selected_tool_count", 0)),
+                "reconciled_tool_count": len(tool_reconciliation),
+                "reconciled_tools_count": len(tool_reconciliation),
                 "selected_layer_count": selected_plan.get("selected_layer_count", 0),
-                "reconciled_layer_count": len(
-                    selected_plan.get("layer_reconciliation", []) or []
-                ),
+                "selected_layers_count": selected_plan.get("selected_layers_count", selected_plan.get("selected_layer_count", 0)),
+                "reconciled_layer_count": len(layer_reconciliation),
+                "reconciled_layers_count": len(layer_reconciliation),
                 "active_route_count": selected_plan.get("active_route_count", 0),
-                "reconciled_route_count": len(
-                    selected_plan.get("route_reconciliation", []) or []
-                ),
+                "selected_route_count": selected_plan.get("selected_route_count", selected_plan.get("active_route_count", 0)),
+                "selected_routes_count": selected_plan.get("selected_routes_count", selected_plan.get("selected_route_count", selected_plan.get("active_route_count", 0))),
+                "reconciled_route_count": len(route_reconciliation),
+                "reconciled_routes_count": len(route_reconciliation),
                 "execution_node_count": selected_plan.get("execution_node_count", 0),
+                "execution_nodes_materialized": selected_plan.get("execution_nodes_materialized", selected_plan.get("execution_node_count", 0)),
+                "maximum_active_routes": selected_plan.get("maximum_active_routes"),
+                "maximum_reasoning_depth": selected_plan.get("maximum_reasoning_depth"),
+                "maximum_dependency_depth": selected_plan.get("maximum_dependency_depth"),
+                "maximum_hypotheses": selected_plan.get("maximum_hypotheses"),
                 "dependency_activation_request_count": len(
                     selected_plan.get("dependency_activation_requests", []) or []
                 ),
@@ -4042,7 +4256,7 @@ def build_training_report(
     execution_plan_report = aggregate_execution_plan_report()
     execution_dispatch_report = aggregate_execution_dispatch_report()
     execution_layer_audit_report = aggregate_execution_layer_audit_report()
-    return {
+    report = {
         "system": "training_report",
         "tasks_selected": training_batch.get("selected_task_count", 0),
         "tasks_executed": [
@@ -4142,6 +4356,16 @@ def build_training_report(
         "training_batch_snapshot": training_batch,
         "curriculum_coverage_report": curriculum_coverage_report,
     }
+    report["ACTIVE_RUNTIME_REACHABILITY_AUDIT"] = (
+        build_active_runtime_reachability_audit(
+            report,
+            task_results=multi_task_results,
+        )
+    )
+    report["active_runtime_reachability_audit"] = dict(
+        report["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+    )
+    return report
 
 
 def _recent_items(items, limit=5):

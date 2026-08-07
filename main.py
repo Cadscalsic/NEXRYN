@@ -4550,6 +4550,14 @@ try:
                 "runtime_budget_enforcement_report",
                 training_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
             ),
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": training_report.get(
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                training_report.get("active_runtime_reachability_audit", {}),
+            ),
+            "active_runtime_reachability_audit": training_report.get(
+                "active_runtime_reachability_audit",
+                training_report.get("ACTIVE_RUNTIME_REACHABILITY_AUDIT", {}),
+            ),
             "evidence_plan_store_report": evidence_plan_store_report,
             "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
             "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
@@ -4560,6 +4568,26 @@ try:
             "incomplete_tasks": incomplete_tasks,
             "runtime_status": "completed",
         }
+        from runtime.reporting.active_runtime_reachability_audit import (
+            mark_active_runtime_audit_attached_to_run,
+        )
+
+        results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"] = (
+            mark_active_runtime_audit_attached_to_run(
+                results.get("ACTIVE_RUNTIME_REACHABILITY_AUDIT")
+                or results.get("active_runtime_reachability_audit")
+            )
+        )
+        results["active_runtime_reachability_audit"] = dict(
+            results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+        )
+        if isinstance(results.get("training_report"), dict):
+            results["training_report"]["ACTIVE_RUNTIME_REACHABILITY_AUDIT"] = dict(
+                results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+            )
+            results["training_report"]["active_runtime_reachability_audit"] = dict(
+                results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+            )
         runtime_metadata = build_runtime_metadata(
             args,
             execution_time,
@@ -7466,6 +7494,14 @@ try:
             "runtime_budget_enforcement_report",
             training_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
         ),
+        "ACTIVE_RUNTIME_REACHABILITY_AUDIT": training_report.get(
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+            training_report.get("active_runtime_reachability_audit", {}),
+        ),
+        "active_runtime_reachability_audit": training_report.get(
+            "active_runtime_reachability_audit",
+            training_report.get("ACTIVE_RUNTIME_REACHABILITY_AUDIT", {}),
+        ),
         "evidence_plan_store_report": evidence_plan_store_report,
         "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
         "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
@@ -8402,6 +8438,26 @@ if runtime_status == "completed":
             results["training_report"]["evidence_plan_store_report"] = (
                 evidence_plan_store_report
             )
+    from runtime.reporting.active_runtime_reachability_audit import (
+        mark_active_runtime_audit_attached_to_run,
+    )
+
+    results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"] = (
+        mark_active_runtime_audit_attached_to_run(
+            results.get("ACTIVE_RUNTIME_REACHABILITY_AUDIT")
+            or results.get("active_runtime_reachability_audit")
+        )
+    )
+    results["active_runtime_reachability_audit"] = dict(
+        results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+    )
+    if isinstance(results.get("training_report"), dict):
+        results["training_report"]["ACTIVE_RUNTIME_REACHABILITY_AUDIT"] = dict(
+            results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+        )
+        results["training_report"]["active_runtime_reachability_audit"] = dict(
+            results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+        )
     pre_final_report_diagnostics.collection_snapshot(
         "REPORT_SOURCE_COLLECTION",
         {

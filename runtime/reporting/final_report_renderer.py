@@ -18,6 +18,9 @@ from runtime.reporting.compact_report_compression_engine import (
 from runtime.reporting.pre_final_report_diagnostics import (
     pre_final_report_diagnostics,
 )
+from runtime.reporting.active_runtime_reachability_audit import (
+    mark_active_runtime_audit_bound_to_canonical_report,
+)
 
 
 REPORT_SCHEMA_VERSION = "1.0"
@@ -103,6 +106,7 @@ HUMAN_SECTION_ORDER = [
     "COGNITIVE OUTCOME",
     "EVIDENCE LIFECYCLE",
     "EXECUTION PLAN REPORT",
+    "ACTIVE RUNTIME REACHABILITY",
     "ENGINEERING CONCLUSION",
     "CONSTITUTIONAL BOUNDARY",
     "CRITICAL OBSERVABILITY NOTES",
@@ -732,6 +736,7 @@ class DeterministicFinalReportRenderer:
             ("COGNITIVE OUTCOME", self._render_human_cognitive_outcome),
             ("EVIDENCE LIFECYCLE", self._render_human_evidence_lifecycle),
             ("EXECUTION PLAN REPORT", self._render_human_execution_plan_report),
+            ("ACTIVE RUNTIME REACHABILITY", self._render_human_active_runtime_reachability),
             ("ENGINEERING CONCLUSION", self._render_human_engineering_conclusion),
             ("CONSTITUTIONAL BOUNDARY", self._render_human_constitutional_boundary),
         ]
@@ -788,6 +793,16 @@ class DeterministicFinalReportRenderer:
             state.get("raw_validation_result_id"),
             default=None,
         )
+        raw_result_id_state = str(raw_result_id).strip().upper()
+        raw_result_id_missing = raw_result_id is None or raw_result_id_state in {
+            "",
+            "NOT_ISSUED",
+            "NOT AVAILABLE",
+            "NOT_AVAILABLE",
+            "NOT_PRODUCED",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+        }
         validation_execution_state = self._first_meaningful(
             raw_envelope.get("raw_validation_result_state"),
             validation.get("execution_state"),
@@ -798,11 +813,7 @@ class DeterministicFinalReportRenderer:
             "RAW_RESULT_CAPTURED",
             "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED",
         }
-        raw_result_identity_missing = (
-            raw_result_captured
-            and raw_result_id is None
-            and not raw_envelope
-        )
+        raw_result_identity_missing = raw_result_captured and raw_result_id_missing
 
         bind(
             "run_id",
@@ -857,7 +868,7 @@ class DeterministicFinalReportRenderer:
         bind("execution_admission", "Execution Admission", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_admission", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_admission_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_id", "Validation Execution Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_execution_id"], required=False, absence="NOT_PRODUCED")
-        if raw_envelope:
+        if raw_envelope and not raw_result_identity_missing:
             fields["raw_result_state"] = self._resolved_human_field(
                 "raw_result_state",
                 "Raw Result State",
@@ -871,7 +882,7 @@ class DeterministicFinalReportRenderer:
                 "RAW_RESULT_ENVELOPE_INCOMPLETE",
                 "compatibility.raw_result_identity_missing",
             )
-        elif raw_result_id is not None:
+        elif raw_result_id is not None and not raw_result_id_missing:
             fields["raw_result_state"] = self._resolved_human_field("raw_result_state", "Raw Result State", "RAW_RESULT_CAPTURED" if raw_result_captured else "RAW_RESULT_ATTACHED", "compatibility.raw_result_id")
         elif str(validation_execution_state).upper().startswith("RAW_RESULT"):
             fields["raw_result_state"] = self._resolved_human_field(
@@ -1444,6 +1455,18 @@ class DeterministicFinalReportRenderer:
         ])
 
     def _render_human_evidence_lifecycle(self, canonical: dict[str, Any]) -> str:
+        raw_state = self._human_value(canonical, "raw_result_state")
+        raw_id = self._human_value(canonical, "raw_validation_result_id")
+        raw_id_missing = str(raw_id).strip().upper() in {
+            "",
+            "NOT_ISSUED",
+            "NOT PRODUCED IN THIS RUN",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+            "NOT AVAILABLE",
+        }
+        if str(raw_state).strip().upper() == "RAW_RESULT_CAPTURED" and raw_id_missing:
+            raw_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
         return self._section("EVIDENCE LIFECYCLE", [
             f"Evidence Plan State: {self._human_value(canonical, 'evidence_plan_state')}",
             f"Evidence Plan Id: {self._human_value(canonical, 'evidence_plan_id')}",
@@ -1452,8 +1475,8 @@ class DeterministicFinalReportRenderer:
             f"Execution Admission: {self._human_value(canonical, 'execution_admission')}",
             f"Validation Execution State: {self._human_value(canonical, 'validation_execution_state')}",
             f"Validation Execution Id: {self._human_value(canonical, 'validation_execution_id')}",
-            f"Raw Result State: {self._human_value(canonical, 'raw_result_state')}",
-            f"Raw Validation Result Id: {self._human_value(canonical, 'raw_validation_result_id')}",
+            f"Raw Result State: {raw_state}",
+            f"Raw Validation Result Id: {raw_id}",
             f"Evidence Evaluation State: {self._human_value(canonical, 'evidence_evaluation_state')}",
             f"Evidence Evaluation Decision Id: {self._human_value(canonical, 'evidence_decision_id')}",
             f"Accepted Evidence Artifact Id: {self._human_value(canonical, 'accepted_evidence_id')}",
@@ -1466,26 +1489,68 @@ class DeterministicFinalReportRenderer:
         state = canonical["report_state"]
         report = self._first_dict(
             state,
-            "EXECUTION_PLAN_REPORT",
             "CANONICAL_EXECUTION_PLAN_REPORT",
             "canonical_execution_plan",
+            "EXECUTION_PLAN_REPORT",
+            "execution_plan_report",
+        )
+        wrapper_report = self._first_dict(
+            state,
+            "EXECUTION_PLAN_REPORT",
             "execution_plan_report",
         )
         canonical_plan = report.get("canonical_execution_plan")
         if isinstance(canonical_plan, dict):
-            source = {**canonical_plan, **report}
+            source = {**wrapper_report, **report, **canonical_plan}
         else:
             source = report
-        selected_tools = self._number(source.get("selected_tool_count"))
-        reconciled_tools = self._number(source.get("reconciled_tool_count"))
+        selected_tools = self._number(
+            self._first_meaningful(
+                source.get("selected_tools_count"),
+                source.get("selected_tool_count"),
+                default=None,
+            )
+        )
+        reconciled_tools = self._number(
+            self._first_meaningful(
+                source.get("reconciled_tools_count"),
+                source.get("reconciled_tool_count"),
+                default=None,
+            )
+        )
         if reconciled_tools is None:
             reconciled_tools = len(source.get("tool_reconciliation", []) or [])
-        selected_layers = self._number(source.get("selected_layer_count"))
-        reconciled_layers = self._number(source.get("reconciled_layer_count"))
+        selected_layers = self._number(
+            self._first_meaningful(
+                source.get("selected_layers_count"),
+                source.get("selected_layer_count"),
+                default=None,
+            )
+        )
+        reconciled_layers = self._number(
+            self._first_meaningful(
+                source.get("reconciled_layers_count"),
+                source.get("reconciled_layer_count"),
+                default=None,
+            )
+        )
         if reconciled_layers is None:
             reconciled_layers = len(source.get("layer_reconciliation", []) or [])
-        active_routes = self._number(source.get("active_route_count"))
-        reconciled_routes = self._number(source.get("reconciled_route_count"))
+        active_routes = self._number(
+            self._first_meaningful(
+                source.get("selected_routes_count"),
+                source.get("selected_route_count"),
+                source.get("active_route_count"),
+                default=None,
+            )
+        )
+        reconciled_routes = self._number(
+            self._first_meaningful(
+                source.get("reconciled_routes_count"),
+                source.get("reconciled_route_count"),
+                default=None,
+            )
+        )
         if reconciled_routes is None:
             reconciled_routes = len(source.get("route_reconciliation", []) or [])
         dependency_execution = self._first_dict(
@@ -1504,16 +1569,37 @@ class DeterministicFinalReportRenderer:
                 {},
             )
         budget_report = budget_report if isinstance(budget_report, dict) else {}
+        canonical_bound = (
+            bool(source.get("execution_plan_id"))
+            and bool(source.get("execution_plan_schema_version"))
+            and self._first_meaningful(
+                source.get("finalized"),
+                source.get("execution_plan_finalized"),
+                default=False,
+            )
+            is True
+        )
+        display_plan_state = (
+            "CANONICAL_EXECUTION_PLAN_BOUND"
+            if canonical_bound
+            else self._first_meaningful(
+                source.get("execution_plan_binding_state"),
+                source.get("execution_plan_state"),
+                source.get("planning_state"),
+                default="LEGACY_PLAN_UNAVAILABLE",
+            )
+        )
         return self._section("EXECUTION PLAN REPORT", [
-            f"Execution Plan State: {self._first_meaningful(source.get('execution_plan_state'), source.get('planning_state'), default='LEGACY_PLAN_UNAVAILABLE')}",
+            f"Execution Plan State: {display_plan_state}",
+            f"Planning State: {self._first_meaningful(source.get('planning_state'), default='NOT_APPLICABLE')}",
             f"Execution Plan Id: {self._first_meaningful(source.get('execution_plan_id'), default='Canonical source unbound')}",
             f"Execution Plan Schema Version: {self._first_meaningful(source.get('execution_plan_schema_version'), default='Not produced in this run')}",
-            f"Execution Plan Finalized: {self._value(self._first_meaningful(source.get('execution_plan_finalized'), default=False))}",
-            f"Execution Plan Immutable: {self._value(self._first_meaningful(source.get('execution_plan_immutable'), default=False))}",
+            f"Execution Plan Finalized: {self._value(self._first_meaningful(source.get('finalized'), source.get('execution_plan_finalized'), default=False))}",
+            f"Execution Plan Immutable: {self._value(self._first_meaningful(source.get('immutable'), source.get('execution_plan_immutable'), default=False))}",
             f"Selected Tools Reconciled: {self._count_pair(reconciled_tools, selected_tools)}",
             f"Selected Layers Reconciled: {self._count_pair(reconciled_layers, selected_layers)}",
             f"Active Routes Reconciled: {self._count_pair(reconciled_routes, active_routes)}",
-            f"Execution Nodes Materialized: {self._first_meaningful(source.get('execution_node_count'), default=0)}",
+            f"Execution Nodes Materialized: {self._first_meaningful(source.get('execution_nodes_materialized'), source.get('execution_node_count'), default=0)}",
             f"Dependency Activation State: {self._first_meaningful(source.get('dependency_activation_state'), default='NOT_REQUESTED')}",
             f"Process Stage State: {self._first_meaningful(source.get('process_stage_state'), default='NOT_REQUESTED')}",
             f"Unresolved Selected Items: {self._first_meaningful(source.get('unresolved_selected_item_count'), default=0)}",
@@ -1530,11 +1616,202 @@ class DeterministicFinalReportRenderer:
             f"Peak Concurrent Active Routes: {self._first_meaningful(budget_report.get('peak_concurrent_active_route_count'), default=0)}",
             f"Routes Deferred or Rejected by Budget: {self._value((self._number(budget_report.get('deferred_by_budget_route_count')) or 0) + (self._number(budget_report.get('rejected_by_budget_route_count')) or 0))}",
             f"Maximum Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_reasoning_depth'), default='Not produced in this run')}",
+            f"Maximum Dependency Depth: {self._first_meaningful(source.get('maximum_dependency_depth'), budget_report.get('maximum_dependency_depth'), default='Not produced in this run')}",
+            f"Maximum Hypotheses: {self._first_meaningful(source.get('maximum_hypotheses'), budget_report.get('maximum_hypotheses'), default='Not produced in this run')}",
             f"Maximum Entered Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_entered_reasoning_depth'), default=0)}",
             f"Maximum Completed Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_completed_reasoning_depth'), default=0)}",
             f"Route Enforcement State: {self._first_meaningful(budget_report.get('route_budget_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
             f"Depth Enforcement State: {self._first_meaningful(budget_report.get('depth_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
             f"Violation Reason: {self._first_meaningful(budget_report.get('violation_reason'), default='NONE')}",
+        ])
+
+    def _render_human_active_runtime_reachability(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        audit = self._first_dict(
+            state,
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+            "active_runtime_reachability_audit",
+        )
+        if not audit:
+            training_report = self._first_dict(state, "training_report")
+            audit = self._first_dict(
+                training_report,
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                "active_runtime_reachability_audit",
+            )
+        gaps = audit.get("reachability_gaps") if isinstance(audit, dict) else []
+        if not isinstance(gaps, list):
+            gaps = []
+        gap_summary = ", ".join(str(gap) for gap in gaps) if gaps else "none"
+        try:
+            conclusion = self._engineering_conclusion(canonical)
+        except Exception:
+            conclusion = {}
+        late_run_id = (
+            audit.get("audit_run_id") in {None, "", "RUN_ID_UNBOUND"}
+            and conclusion.get("conclusion_run_id")
+        )
+        late_timestamp = (
+            audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"}
+            and conclusion.get("conclusion_source_timestamp")
+        )
+        if late_run_id or late_timestamp:
+            audit = {
+                **audit,
+                "audit_run_id": (
+                    conclusion.get("conclusion_run_id")
+                    if late_run_id
+                    else audit.get("audit_run_id")
+                ),
+                "run_id": (
+                    conclusion.get("conclusion_run_id")
+                    if late_run_id
+                    else audit.get("run_id")
+                ),
+                "source_timestamp": (
+                    conclusion.get("conclusion_source_timestamp")
+                    if late_timestamp
+                    else audit.get("source_timestamp")
+                ),
+                "lifecycle_transitions": [
+                    {
+                        **row,
+                        "run_id": (
+                            conclusion.get("conclusion_run_id")
+                            if late_run_id
+                            else row.get("run_id")
+                        ),
+                        "source_timestamp": (
+                            conclusion.get("conclusion_source_timestamp")
+                            if late_timestamp
+                            else row.get("source_timestamp")
+                        ),
+                    }
+                    for row in audit.get("lifecycle_transitions", [])
+                    if isinstance(row, dict)
+                ],
+            }
+        if audit:
+            audit = mark_active_runtime_audit_bound_to_canonical_report(audit)
+        conclusion_conflicts = conclusion.get("integrity_conflicts") or []
+        if (
+            conclusion.get("integrity") == "INVALID"
+            and conclusion.get("conclusion_is_current") is not False
+            and "ENGINEERING_CONCLUSION_CONFLICT" not in gaps
+        ):
+            gaps = [*gaps, "ENGINEERING_CONCLUSION_CONFLICT"]
+            audit = {
+                **audit,
+                "engineering_conclusion_state": "ENGINEERING_CONCLUSION_CONFLICT",
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        elif "ENGINEERING_CONCLUSION_CONFLICT" in gaps:
+            gaps = [
+                gap for gap in gaps
+                if gap != "ENGINEERING_CONCLUSION_CONFLICT"
+            ]
+            audit = {
+                **audit,
+                "engineering_conclusion_state": (
+                    "ENGINEERING_CONCLUSION_NOT_CONFLICTING"
+                ),
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        raw_state = str(self._human_value(canonical, "raw_result_state")).upper()
+        raw_id = str(self._human_value(canonical, "raw_validation_result_id")).upper()
+        raw_id_missing = raw_id in {
+            "",
+            "NOT_ISSUED",
+            "NOT PRODUCED IN THIS RUN",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+            "NOT AVAILABLE",
+        }
+        if raw_state == "RAW_RESULT_CAPTURED" and raw_id_missing:
+            raw_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
+        if (
+            raw_state == "RAW_RESULT_CAPTURED"
+            and raw_id_missing
+            and "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY" not in gaps
+        ):
+            gaps = [*gaps, "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY"]
+            audit = {
+                **audit,
+                "raw_result_identity_state": "RAW_RESULT_IDENTITY_MISSING",
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        elif (
+            raw_state != "RAW_RESULT_CAPTURED" or not raw_id_missing
+        ) and "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY" in gaps:
+            gaps = [
+                gap for gap in gaps
+                if gap != "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY"
+            ]
+            audit = {
+                **audit,
+                "raw_result_identity_state": "RAW_RESULT_IDENTITY_CLEAR",
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        if audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"} and conclusion.get(
+            "conclusion_source_timestamp"
+        ):
+            audit = {
+                **audit,
+                "source_timestamp": conclusion.get("conclusion_source_timestamp"),
+                "source_stage": self._first_meaningful(
+                    audit.get("source_stage"),
+                    "active_runtime_reachability_audit",
+                ),
+            }
+        gap_summary = ", ".join(str(gap) for gap in gaps) if gaps else "none"
+        transitions = [
+            row for row in audit.get("lifecycle_transitions", [])
+            if isinstance(row, dict)
+        ]
+        transition_lines = [
+            (
+                "Audit Lifecycle Transition "
+                f"{row.get('sequence_index')}: "
+                f"{row.get('transition_name') or row.get('state')} "
+                f"| audit_id={row.get('audit_id')} "
+                f"| schema={row.get('audit_schema_version')} "
+                f"| run_id={row.get('run_id')}"
+            )
+            for row in transitions
+        ]
+        return self._section("ACTIVE RUNTIME REACHABILITY", [
+            f"Audit State: {self._first_meaningful(audit.get('audit_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Audit Id: {self._first_meaningful(audit.get('audit_id'), default='AUDIT_ID_UNBOUND')}",
+            f"Audit Schema Version: {self._first_meaningful(audit.get('audit_schema_version'), default='SCHEMA_VERSION_UNBOUND')}",
+            f"Audit Run Id: {self._first_meaningful(audit.get('audit_run_id'), audit.get('run_id'), default='RUN_ID_UNBOUND')}",
+            f"Audit Source Stage: {self._first_meaningful(audit.get('source_stage'), default='SOURCE_STAGE_UNBOUND')}",
+            f"Audit Source Timestamp: {self._first_meaningful(audit.get('source_timestamp'), default='TIMESTAMP_UNBOUND')}",
+            f"Audit Is Current Run: {self._value(self._first_meaningful(audit.get('is_current_run'), default=False))}",
+            f"Execution Plan Id: {self._first_meaningful(audit.get('execution_plan_id'), default='EXECUTION_PLAN_ID_UNBOUND')}",
+            f"Execution Plan Identity State: {self._first_meaningful(audit.get('execution_plan_identity_state'), default='PLAN_IDENTITY_UNBOUND')}",
+            f"Canonical Execution Plan Present: {self._value(self._first_meaningful(audit.get('canonical_execution_plan_present'), default=False))}",
+            f"Budget Report Present: {self._value(self._first_meaningful(audit.get('budget_report_present'), default=False))}",
+            f"Task Runtime Telemetry Present: {self._value(self._first_meaningful(audit.get('task_runtime_telemetry_present'), default=False))}",
+            f"Task Budget Snapshot Present: {self._value(self._first_meaningful(audit.get('task_budget_snapshot_present'), default=False))}",
+            f"Budget State: {self._first_meaningful(audit.get('budget_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Budget Exceeded Detected: {self._value(self._first_meaningful(audit.get('budget_exceeded_detected'), default=False))}",
+            f"Declared/Observed Active Routes: {self._count_pair(self._first_meaningful(audit.get('declared_active_routes'), audit.get('declared_max_active_routes')), audit.get('observed_active_routes'))}",
+            f"Declared/Observed Reasoning Depth: {self._count_pair(self._first_meaningful(audit.get('declared_reasoning_depth'), audit.get('declared_max_reasoning_depth')), audit.get('observed_reasoning_depth'))}",
+            f"Repair Reachability State: {self._first_meaningful(audit.get('repair_reachability_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Raw Result Identity State: {self._first_meaningful(audit.get('raw_result_identity_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Engineering Conclusion State: {self._first_meaningful(audit.get('engineering_conclusion_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Audit Lifecycle Integrity State: {self._first_meaningful(audit.get('audit_lifecycle_integrity_state'), default='AUDIT_LIFECYCLE_NOT_PRODUCED')}",
+            f"Audit Lifecycle Transition Count: {self._first_meaningful(audit.get('audit_lifecycle_transition_count'), default=0)}",
+            f"Audit Lifecycle Order State: {self._first_meaningful(audit.get('audit_lifecycle_order_state'), default='AUDIT_LIFECYCLE_ORDER_UNKNOWN')}",
+            f"Audit Lifecycle Identity State: {self._first_meaningful(audit.get('audit_lifecycle_identity_state'), default='AUDIT_LIFECYCLE_IDENTITY_UNKNOWN')}",
+            *transition_lines,
+            f"Reachability Gap Count: {self._first_meaningful(audit.get('reachability_gap_count'), default=0)}",
+            f"Reachability Gaps: {gap_summary}",
+            f"Recommended Next Fix: {self._first_meaningful(audit.get('recommended_next_fix'), default='produce_active_runtime_reachability_audit')}",
         ])
 
     def _render_human_engineering_conclusion(self, canonical: dict[str, Any]) -> str:
@@ -8323,6 +8600,7 @@ class DeterministicFinalReportRenderer:
             "validation_execution_pipeline",
             "validation_task_execution",
             "validation_evidence_evaluation",
+            "raw_validation_result_provenance",
             "arena_evidence_admission",
             "formal_arena_selection",
             "selected_candidate_execution_admission",

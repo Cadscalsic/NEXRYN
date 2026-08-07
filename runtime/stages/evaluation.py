@@ -245,6 +245,7 @@ def _run_residual_repair(
             "system": "final_repair_report",
             "report_state": "final",
             "repair_accepted": False,
+            "repair_applicable": False,
             "reason": local_repair_report["reason"],
             "before_accuracy": evaluation_result.get("accuracy", 0.0),
             "after_accuracy": evaluation_result.get("accuracy", 0.0),
@@ -289,6 +290,7 @@ def _run_residual_repair(
         minimum_repair_accuracy=repair_gate["minimum_repair_accuracy"],
     )
     repaired_output = final_report.get("repaired_output", predicted_output)
+    final_report["repair_applicable"] = True
     if final_report.get("repair_accepted") is True:
         repaired_evaluation = evaluation_engine.evaluate(
             repaired_output,
@@ -1033,6 +1035,9 @@ def evaluation_stage(context):
             "repair_accepted": repair_result[
                 "final_repair_report"
             ].get("repair_accepted", False),
+            "repair_applicable": repair_result[
+                "final_repair_report"
+            ].get("repair_applicable", False),
             "repair_attempts": repair_result[
                 "final_repair_report"
             ].get("repair_attempts", 0),
