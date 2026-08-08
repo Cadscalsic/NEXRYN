@@ -264,3 +264,69 @@ def test_regression_fixture_distinguishes_selected_twelve_from_active_routes():
     assert receipt["maximum_entered_reasoning_depth"] == 0
     assert receipt["route_budget_enforcement_state"] == "ROUTE_BUDGET_LIMIT_REACHED"
     assert receipt["depth_enforcement_state"] == "REASONING_DEPTH_LIMIT_REACHED"
+
+
+def test_budget_gate_prevents_route_and_depth_overruns_before_entry():
+    routes = [
+        {"route_id": f"route_{index:02d}", "rank": index, "score": 1.0 - index / 100}
+        for index in range(1, 13)
+    ]
+    route_lifecycle = []
+    for index, route in enumerate(routes, start=1):
+        state = "ACTIVE_ROUTE" if index <= 2 else "DEFERRED_BY_BUDGET"
+        route_lifecycle.append({
+            "event_id": f"route_{index:02d}_{state.lower()}",
+            "route_id": route["route_id"],
+            "state": state,
+        })
+    for index, route in enumerate(routes[:2], start=1):
+        route_lifecycle.append({
+            "event_id": f"route_{index:02d}_released",
+            "route_id": route["route_id"],
+            "state": "RELEASED_ROUTE",
+        })
+    depth_lifecycle = [
+        {"event_id": "depth_1_attempted", "depth": 1, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_1_entered", "depth": 1, "state": "REASONING_DEPTH_ENTRY_AUTHORIZED"},
+        {"event_id": "depth_1_exited", "depth": 1, "state": "REASONING_DEPTH_EXITED"},
+        {"event_id": "depth_2_attempted", "depth": 2, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_2_entered", "depth": 2, "state": "REASONING_DEPTH_ENTRY_AUTHORIZED"},
+        {"event_id": "depth_2_exited", "depth": 2, "state": "REASONING_DEPTH_EXITED"},
+        {"event_id": "depth_3_attempted", "depth": 3, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_3_blocked", "depth": 3, "state": "DEPTH_ENTRY_BLOCKED_BY_BUDGET"},
+        {"event_id": "depth_4_attempted", "depth": 4, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_4_blocked", "depth": 4, "state": "DEPTH_ENTRY_BLOCKED_BY_BUDGET"},
+    ]
+    result = ExecutionPlanner().plan(
+        runtime_context=_context(
+            route_selection_report={
+                "available_routes": routes,
+                "candidate_routes": routes,
+                "active_routes": routes,
+            },
+            route_lifecycle_records=route_lifecycle,
+            reasoning_depth_lifecycle_records=depth_lifecycle,
+            planned_reasoning_depth=4,
+            current_reasoning_budget=_budget(
+                budget_snapshot_id="budget_gate_2_12_4",
+                max_active_routes=2,
+                max_reasoning_depth=2,
+            ),
+        )
+    )
+    receipt = result["canonical_execution_plan"]["RUNTIME_BUDGET_ENFORCEMENT_REPORT"]
+
+    assert receipt["runtime_budget_state"] == "RUNTIME_BUDGET_FINALIZED"
+    assert receipt["selected_route_count"] == 12
+    assert receipt["admitted_route_count"] == 2
+    assert receipt["deferred_by_budget_route_count"] == 10
+    assert receipt["peak_concurrent_active_route_count"] == 2
+    assert receipt["maximum_entered_reasoning_depth"] == 2
+    assert receipt["maximum_completed_reasoning_depth"] == 2
+    assert receipt["maximum_requested_reasoning_depth"] == 4
+    assert receipt["depth_admission_count"] == 2
+    assert receipt["depth_block_count"] == 2
+    assert receipt["attempted_overrun_state"] == "ATTEMPTED_OVERRUN_DETECTED"
+    assert receipt["prevented_overrun_state"] == "OVERRUN_PREVENTED"
+    assert receipt["realized_overrun_state"] == "NO_REALIZED_OVERRUN"
+    assert receipt["violation_reason"] == "NONE"

@@ -11,6 +11,10 @@ from typing import Any
 from runtime.training.validation_curriculum_registry import (
     ValidationCurriculumRegistry,
 )
+from runtime.validation.raw_result_lifecycle_applicability import (
+    APPLICABLE,
+    raw_result_lifecycle_applicability_evaluator,
+)
 
 
 class ValidationTaskExecutionPipeline:
@@ -185,6 +189,13 @@ class ValidationTaskExecutionPipeline:
                 "evidence_state": "NOT_EVALUATED",
             }
 
+        applicability_report = self._producer_applicability_report(
+            started_schedule,
+            started_plan,
+            execution_id,
+            attempt_number,
+            completed_at,
+        )
         raw_result = self._raw_result_record(
             started_schedule,
             started_plan,
@@ -195,6 +206,7 @@ class ValidationTaskExecutionPipeline:
             started_at,
             completed_at,
             duration,
+            applicability_report,
         )
         raw_identity = raw_result.get("raw_result_id")
         if self._term(raw_identity) == "Not Available":
@@ -478,8 +490,18 @@ class ValidationTaskExecutionPipeline:
         started_at: str,
         completed_at: str,
         duration: float,
+        applicability_report: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         runner_output = runner_output if isinstance(runner_output, dict) else {}
+        applicability_report = (
+            applicability_report if isinstance(applicability_report, dict) else {}
+        )
+        raw_result_applicable = (
+            applicability_report.get("raw_result_applicability_state")
+            == APPLICABLE
+            and applicability_report.get("raw_result_applicability_finalized")
+            is True
+        )
         fingerprint = self._raw_result_fingerprint(
             schedule,
             plan,
@@ -533,7 +555,20 @@ class ValidationTaskExecutionPipeline:
             failure_cause = "expected_artifact_missing"
         raw_result_id = None
         identity_state = "RAW_RESULT_IDENTIFIED"
-        if missing_inputs:
+        identity_issuance_count = 0
+        identity_created_at = None
+        identity_issuable = artifact_state in {
+            "ARTIFACT_CAPTURED",
+            "ARTIFACT_EMPTY_VALID_OUTPUT",
+        } and raw_result_applicable
+        if not identity_issuable:
+            identity_state = (
+                "RAW_RESULT_ARTIFACT_MISSING_IDENTITY_NOT_ISSUABLE"
+                if artifact_state == "ARTIFACT_MISSING"
+                else "RAW_RESULT_APPLICABILITY_NOT_FINALIZED_IDENTITY_NOT_ISSUABLE"
+            )
+            raw_result_id = None
+        elif missing_inputs:
             identity_state = "RAW_VALIDATION_IDENTITY_INPUT_UNAVAILABLE"
             raw_result_id = None
             structural_eligibility = "STRUCTURALLY_INELIGIBLE"
@@ -541,9 +576,15 @@ class ValidationTaskExecutionPipeline:
             if result_state == "RAW_RESULT_CAPTURED":
                 result_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
         else:
-            raw_result_id = (
-                f"raw_validation_result_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+            identity_created_at = self._now()
+            raw_result_id = self._raw_result_occurrence_id(
+                schedule=schedule,
+                plan=plan,
+                execution_id=execution_id,
+                validation_attempt_id=validation_attempt_id,
+                attempt_number=attempt_number,
             )
+            identity_issuance_count = 1
         produced_artifact_id = (
             self._produced_artifact_id(runner_output, validation_attempt_id)
             if payload_present or empty_valid
@@ -572,12 +613,50 @@ class ValidationTaskExecutionPipeline:
             ineligibility_reason=ineligibility_reason,
             failure_cause=failure_cause,
             missing_inputs=missing_inputs,
+            identity_created_at=identity_created_at,
         )
+        identity_fingerprint = (
+            self._raw_result_identity_fingerprint(envelope)
+            if raw_result_id else None
+        )
+        if identity_fingerprint:
+            envelope["immutable_identity_fingerprint"] = identity_fingerprint
+            envelope["raw_result_identity_fingerprint"] = identity_fingerprint
         return {
             "schema_version": "1.0",
             "raw_validation_result_schema_version": "1.0",
+            "raw_result_identity_schema_version": "1.0",
             "raw_result_id": raw_result_id,
             "raw_validation_result_id": raw_result_id,
+            "canonical_raw_result_id": raw_result_id,
+            "raw_result_identity_state": self._raw_result_identity_state(
+                raw_result_id,
+                artifact_state,
+            ),
+            "raw_result_identity_reason": (
+                "RAW_RESULT_IDENTITY_ISSUED_AT_PRODUCER_BOUNDARY"
+                if raw_result_id else (
+                    "RAW_RESULT_ARTIFACT_MISSING_IDENTITY_NOT_ISSUABLE"
+                    if not identity_issuable else "RAW_RESULT_IDENTITY_INPUT_UNAVAILABLE"
+                )
+            ),
+            "raw_result_identity_issuance_count": identity_issuance_count,
+            "raw_result_identity_binding_state": (
+                "RAW_RESULT_IDENTITY_BOUND_TO_ARTIFACT"
+                if raw_result_id else "RAW_RESULT_IDENTITY_NOT_BOUND"
+            ),
+            "raw_result_identity_integrity_state": (
+                "RAW_RESULT_IDENTITY_INTACT"
+                if raw_result_id else (
+                    "NOT_EVALUATED_ARTIFACT_MISSING"
+                    if not identity_issuable else "RAW_RESULT_IDENTITY_MISSING"
+                )
+            ),
+            "raw_result_identity_conflict_count": 0 if raw_result_id else len(missing_inputs),
+            "identity_schema_version": "1.0",
+            "identity_issued_at": identity_created_at,
+            "identity_evaluation_source": "validation_task_execution_pipeline",
+            "immutable_identity_fingerprint": identity_fingerprint,
             "raw_result_fingerprint": fingerprint,
             "raw_validation_result_fingerprint": fingerprint,
             "raw_validation_result_envelope": envelope,
@@ -636,6 +715,30 @@ class ValidationTaskExecutionPipeline:
             "runtime_error": None,
             "resource_usage": {"executed_case_count": 1},
             "raw_result_created_at": self._now(),
+            "raw_result_identity_lifecycle_transitions": self._raw_result_identity_transitions(
+                applicability_report=applicability_report,
+                run_id=plan.get("source_run_id"),
+                execution_plan_id=(
+                    plan.get("execution_plan_id")
+                    or schedule.get("execution_plan_id")
+                    or plan.get("plan_id")
+                ),
+                task_id=plan.get("source_task_id"),
+                producer_operation_id=execution_id,
+                validation_attempt_id=validation_attempt_id,
+                raw_result_id=raw_result_id,
+                source_timestamp=identity_created_at or completed_at,
+            ),
+            "raw_result_applicability_report": applicability_report,
+            "RAW_RESULT_APPLICABILITY_REPORT": applicability_report,
+            "raw_result_applicability_state": applicability_report.get(
+                "raw_result_applicability_state",
+            ),
+            "raw_result_applicability_finalized": applicability_report.get(
+                "raw_result_applicability_finalized",
+                False,
+            ),
+            "producer_obligation_boundary_crossed": raw_result_applicable,
             "result_state": result_state,
             "comparison_state": "NOT_COMPARED",
             "evidence_state": "NOT_EVALUATED",
@@ -722,6 +825,249 @@ class ValidationTaskExecutionPipeline:
             },
         )
 
+    def _raw_result_occurrence_id(
+        self,
+        *,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        execution_id: str,
+        validation_attempt_id: str,
+        attempt_number: int,
+    ) -> str:
+        return self._scoped_id(
+            "raw_validation_result",
+            {
+                "identity_schema_version": "1.0",
+                "run_id": plan.get("source_run_id"),
+                "execution_plan_id": (
+                    plan.get("execution_plan_id")
+                    or schedule.get("execution_plan_id")
+                    or plan.get("plan_id")
+                ),
+                "task_id": plan.get("source_task_id"),
+                "producer_operation_id": execution_id,
+                "validation_attempt_id": validation_attempt_id,
+                "schedule_id": schedule.get("schedule_id"),
+                "attempt_number": attempt_number,
+                "producer_type": "scheduled_validation_execution",
+            },
+        )
+
+    def _raw_result_identity_fingerprint(
+        self,
+        envelope: dict[str, Any],
+    ) -> str:
+        return self._scoped_id(
+            "raw_result_identity_fingerprint",
+            {
+                "identity_schema_version": envelope.get("identity_schema_version"),
+                "raw_validation_result_id": envelope.get("raw_validation_result_id"),
+                "run_id": envelope.get("run_id"),
+                "execution_plan_id": envelope.get("execution_plan_id"),
+                "task_id": envelope.get("task_id"),
+                "producer_operation_id": envelope.get("executor_invocation_id"),
+                "validation_attempt_id": envelope.get("validation_attempt_id"),
+                "producer_type": envelope.get("producer_source_type"),
+            },
+        )
+
+    def _raw_result_identity_state(
+        self,
+        raw_result_id: str | None,
+        artifact_state: str | None,
+    ) -> str:
+        if raw_result_id:
+            return "APPLICABLE_ARTIFACT_PRESENT_IDENTITY_BOUND"
+        if artifact_state == "ARTIFACT_MISSING":
+            return "APPLICABLE_ARTIFACT_MISSING_IDENTITY_NOT_ISSUABLE"
+        return "APPLICABLE_ARTIFACT_PRESENT_IDENTITY_MISSING"
+
+    def evaluate_raw_result_identity_integrity(
+        self,
+        raw_result: dict[str, Any] | None,
+        *,
+        run_id: str | None,
+        execution_plan_id: str | None,
+        observed_results: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        raw_result = raw_result if isinstance(raw_result, dict) else {}
+        envelope = (
+            raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE")
+            or raw_result.get("raw_validation_result_envelope")
+            or {}
+        )
+        envelope = envelope if isinstance(envelope, dict) else {}
+        canonical_id = (
+            raw_result.get("canonical_raw_result_id")
+            or raw_result.get("raw_validation_result_id")
+            or raw_result.get("raw_result_id")
+        )
+        conflicts = []
+        if self._term(canonical_id) == "Not Available":
+            conflicts.append("canonical_raw_result_id_missing")
+        if envelope:
+            envelope_id = (
+                envelope.get("canonical_raw_result_id")
+                or envelope.get("raw_validation_result_id")
+            )
+            if envelope_id != canonical_id:
+                conflicts.append("envelope_identity_mismatch")
+        if raw_result.get("run_id") != run_id:
+            conflicts.append("previous_or_foreign_run_identity")
+        if raw_result.get("execution_plan_id") != execution_plan_id:
+            conflicts.append("execution_plan_identity_mismatch")
+        expected_fingerprint = (
+            self._raw_result_identity_fingerprint(envelope)
+            if envelope and canonical_id
+            else None
+        )
+        if (
+            expected_fingerprint
+            and raw_result.get("immutable_identity_fingerprint")
+            != expected_fingerprint
+        ):
+            conflicts.append("immutable_identity_fingerprint_mismatch")
+        for observed in observed_results or []:
+            if not isinstance(observed, dict) or observed is raw_result:
+                continue
+            observed_id = (
+                observed.get("canonical_raw_result_id")
+                or observed.get("raw_validation_result_id")
+                or observed.get("raw_result_id")
+            )
+            if observed_id == canonical_id and (
+                observed.get("validation_attempt_id")
+                != raw_result.get("validation_attempt_id")
+                or observed.get("producer_operation_id")
+                != raw_result.get("producer_operation_id")
+                or observed.get("executor_invocation_id")
+                != raw_result.get("executor_invocation_id")
+            ):
+                conflicts.append("identity_collision_between_attempts")
+                break
+        state = (
+            "RAW_RESULT_IDENTITY_INTACT"
+            if not conflicts
+            else "RAW_RESULT_IDENTITY_CONFLICT_DETECTED"
+        )
+        return {
+            "raw_result_identity_integrity_state": state,
+            "raw_result_identity_conflict_count": len(conflicts),
+            "raw_result_identity_conflicts": conflicts,
+            "canonical_raw_result_id": canonical_id,
+            "immutable_identity_fingerprint": raw_result.get(
+                "immutable_identity_fingerprint",
+            ),
+            "recomputed_immutable_identity_fingerprint": expected_fingerprint,
+            "identity_rewritten": False,
+            "identity_evaluation_source": "validation_task_execution_pipeline",
+        }
+
+    def _raw_result_identity_transitions(
+        self,
+        *,
+        applicability_report: dict[str, Any] | None = None,
+        run_id: str | None,
+        execution_plan_id: str | None,
+        task_id: str | None,
+        producer_operation_id: str | None,
+        validation_attempt_id: str | None,
+        raw_result_id: str | None,
+        source_timestamp: str,
+    ) -> list[dict[str, Any]]:
+        base = {
+            "run_id": run_id,
+            "execution_plan_id": execution_plan_id,
+            "task_id": task_id,
+            "producer_operation_id": producer_operation_id,
+            "validation_attempt_id": validation_attempt_id,
+            "raw_result_id": raw_result_id,
+            "source_stage": "validation_task_execution_pipeline",
+            "source_timestamp": source_timestamp,
+            "is_current_run": True,
+        }
+        applicability_report = (
+            applicability_report if isinstance(applicability_report, dict) else {}
+        )
+        applicability_finalized = []
+        for transition in (
+            applicability_report.get("raw_result_applicability_lifecycle_transitions")
+            or applicability_report.get("lifecycle_transitions")
+            or []
+        ):
+            if (
+                isinstance(transition, dict)
+                and transition.get("transition_name")
+                == "RAW_RESULT_APPLICABILITY_FINALIZED"
+            ):
+                applicability_finalized.append({
+                    **base,
+                    "transition_name": "RAW_RESULT_APPLICABILITY_FINALIZED",
+                    "source_stage": transition.get(
+                        "source_stage",
+                        "raw_result_lifecycle_applicability_evaluator",
+                    ),
+                    "source_timestamp": transition.get(
+                        "source_timestamp",
+                        source_timestamp,
+                    ),
+                    "sequence_index": 1,
+                })
+                break
+        names = [
+            "PRODUCER_OBLIGATION_BOUNDARY_CROSSED",
+            "RAW_RESULT_MATERIALIZED",
+            "RAW_RESULT_IDENTITY_ISSUANCE_REQUESTED",
+            "RAW_RESULT_IDENTITY_ISSUED",
+            "RAW_RESULT_IDENTITY_BOUND_TO_ARTIFACT",
+            "RAW_RESULT_IDENTITY_PROPAGATED",
+            "RAW_RESULT_IDENTITY_INTEGRITY_EVALUATED",
+        ]
+        offset = 1 if applicability_finalized else 0
+        return applicability_finalized + [
+            {**base, "transition_name": name, "sequence_index": index + offset}
+            for index, name in enumerate(names, start=1)
+        ]
+
+    def _producer_applicability_report(
+        self,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        execution_id: str,
+        attempt_number: int,
+        source_timestamp: str,
+    ) -> dict[str, Any]:
+        validation_attempt_id = self._validation_attempt_id(
+            schedule,
+            execution_id,
+            attempt_number,
+        )
+        execution_plan_id = (
+            plan.get("execution_plan_id")
+            or schedule.get("execution_plan_id")
+            or plan.get("plan_id")
+        )
+        return raw_result_lifecycle_applicability_evaluator.evaluate(
+            run_id=plan.get("source_run_id"),
+            execution_plan_id=execution_plan_id,
+            task_id=plan.get("source_task_id"),
+            validation_task_execution_report={
+                "run_id": plan.get("source_run_id"),
+                "execution_plan_id": execution_plan_id,
+                "task_id": plan.get("source_task_id"),
+                "execution_id": execution_id,
+                "producer_operation_id": execution_id,
+                "validation_attempt_id": validation_attempt_id,
+                "execution_admission_state": "ADMITTED",
+                "execution_started": True,
+                "execution_invoked": True,
+                "current_run_producer_activation": True,
+                "execution_state": "EXECUTION_COMPLETED_RESULT_CAPTURE_PENDING",
+            },
+            validation_scheduling_report=schedule,
+            source_timestamp=source_timestamp,
+        )
+
     def _raw_result_envelope(
         self,
         *,
@@ -743,6 +1089,7 @@ class ValidationTaskExecutionPipeline:
         ineligibility_reason: str,
         failure_cause: str | None,
         missing_inputs: list[str],
+        identity_created_at: str | None,
     ) -> dict[str, Any]:
         run_id = plan.get("source_run_id")
         task_id = plan.get("source_task_id")
@@ -767,7 +1114,9 @@ class ValidationTaskExecutionPipeline:
         envelope = {
             "schema_version": "1.0",
             "raw_validation_result_schema_version": "1.0",
+            "identity_schema_version": "1.0",
             "raw_validation_result_id": raw_result_id,
+            "canonical_raw_result_id": raw_result_id,
             "raw_validation_result_state": result_state,
             "raw_validation_result_identity_state": (
                 identity_state
@@ -793,6 +1142,7 @@ class ValidationTaskExecutionPipeline:
             "dependency_chain_id": plan.get("dependency_chain_id"),
             "executor_id": self.RUNNER_ID,
             "executor_invocation_id": execution_id,
+            "producer_operation_id": execution_id,
             "validation_attempt_id": validation_attempt_id,
             "producer_component_id": producer_component_id,
             "producer_source_type": producer_source_type,
@@ -808,6 +1158,33 @@ class ValidationTaskExecutionPipeline:
             "measurement_receipt_id": plan.get("measurement_receipt_id"),
             "execution_receipt_id": plan.get("execution_receipt_id"),
             "capture_timestamp": self._now(),
+            "identity_issued_at": identity_created_at,
+            "raw_result_identity_state": self._raw_result_identity_state(
+                raw_result_id,
+                artifact_state,
+            ),
+            "raw_result_identity_reason": (
+                "RAW_RESULT_IDENTITY_ISSUED_AT_PRODUCER_BOUNDARY"
+                if raw_result_id else (
+                    "RAW_RESULT_ARTIFACT_MISSING_IDENTITY_NOT_ISSUABLE"
+                    if artifact_state == "ARTIFACT_MISSING"
+                    else "RAW_RESULT_IDENTITY_INPUT_UNAVAILABLE"
+                )
+            ),
+            "raw_result_identity_issuance_count": 1 if raw_result_id else 0,
+            "raw_result_identity_binding_state": (
+                "RAW_RESULT_IDENTITY_BOUND_TO_ARTIFACT"
+                if raw_result_id else "RAW_RESULT_IDENTITY_NOT_BOUND"
+            ),
+            "raw_result_identity_integrity_state": (
+                "RAW_RESULT_IDENTITY_INTACT"
+                if raw_result_id else (
+                    "NOT_EVALUATED_ARTIFACT_MISSING"
+                    if artifact_state == "ARTIFACT_MISSING"
+                    else "RAW_RESULT_IDENTITY_MISSING"
+                )
+            ),
+            "raw_result_identity_conflict_count": 0 if raw_result_id else len(missing_inputs),
             "provenance_state": provenance_state,
             "binding_integrity_state": binding_state,
             "binding_conflict_count": len(missing_inputs) + len(type_conflicts),
@@ -850,6 +1227,49 @@ class ValidationTaskExecutionPipeline:
             "execution_id": raw_result.get("execution_id"),
             "raw_result_id": raw_result.get("raw_result_id"),
             "raw_validation_result_id": raw_result.get("raw_validation_result_id"),
+            "canonical_raw_result_id": raw_result.get("canonical_raw_result_id"),
+            "raw_result_identity_schema_version": raw_result.get(
+                "raw_result_identity_schema_version",
+            ),
+            "identity_schema_version": raw_result.get("identity_schema_version"),
+            "raw_result_identity_state": raw_result.get("raw_result_identity_state"),
+            "raw_result_identity_reason": raw_result.get("raw_result_identity_reason"),
+            "raw_result_identity_issuance_count": raw_result.get(
+                "raw_result_identity_issuance_count",
+            ),
+            "raw_result_identity_binding_state": raw_result.get(
+                "raw_result_identity_binding_state",
+            ),
+            "raw_result_identity_integrity_state": raw_result.get(
+                "raw_result_identity_integrity_state",
+            ),
+            "raw_result_identity_conflict_count": raw_result.get(
+                "raw_result_identity_conflict_count",
+            ),
+            "immutable_identity_fingerprint": raw_result.get(
+                "immutable_identity_fingerprint",
+            ),
+            "raw_result_identity_lifecycle_transitions": raw_result.get(
+                "raw_result_identity_lifecycle_transitions",
+                [],
+            ),
+            "raw_result_applicability_report": raw_result.get(
+                "raw_result_applicability_report",
+                {},
+            ),
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_result.get(
+                "RAW_RESULT_APPLICABILITY_REPORT",
+                {},
+            ),
+            "raw_result_applicability_state": raw_result.get(
+                "raw_result_applicability_state",
+            ),
+            "raw_result_applicability_finalized": raw_result.get(
+                "raw_result_applicability_finalized",
+            ),
+            "producer_obligation_boundary_crossed": raw_result.get(
+                "producer_obligation_boundary_crossed",
+            ),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
             "RAW_VALIDATION_RESULT_ENVELOPE": raw_result.get(
                 "RAW_VALIDATION_RESULT_ENVELOPE",
@@ -870,6 +1290,49 @@ class ValidationTaskExecutionPipeline:
             "execution_id": raw_result.get("execution_id"),
             "raw_result_id": raw_result.get("raw_result_id"),
             "raw_validation_result_id": raw_result.get("raw_validation_result_id"),
+            "canonical_raw_result_id": raw_result.get("canonical_raw_result_id"),
+            "raw_result_identity_schema_version": raw_result.get(
+                "raw_result_identity_schema_version",
+            ),
+            "identity_schema_version": raw_result.get("identity_schema_version"),
+            "raw_result_identity_state": raw_result.get("raw_result_identity_state"),
+            "raw_result_identity_reason": raw_result.get("raw_result_identity_reason"),
+            "raw_result_identity_issuance_count": raw_result.get(
+                "raw_result_identity_issuance_count",
+            ),
+            "raw_result_identity_binding_state": raw_result.get(
+                "raw_result_identity_binding_state",
+            ),
+            "raw_result_identity_integrity_state": raw_result.get(
+                "raw_result_identity_integrity_state",
+            ),
+            "raw_result_identity_conflict_count": raw_result.get(
+                "raw_result_identity_conflict_count",
+            ),
+            "immutable_identity_fingerprint": raw_result.get(
+                "immutable_identity_fingerprint",
+            ),
+            "raw_result_identity_lifecycle_transitions": raw_result.get(
+                "raw_result_identity_lifecycle_transitions",
+                [],
+            ),
+            "raw_result_applicability_report": raw_result.get(
+                "raw_result_applicability_report",
+                {},
+            ),
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_result.get(
+                "RAW_RESULT_APPLICABILITY_REPORT",
+                {},
+            ),
+            "raw_result_applicability_state": raw_result.get(
+                "raw_result_applicability_state",
+            ),
+            "raw_result_applicability_finalized": raw_result.get(
+                "raw_result_applicability_finalized",
+            ),
+            "producer_obligation_boundary_crossed": raw_result.get(
+                "producer_obligation_boundary_crossed",
+            ),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
             "RAW_VALIDATION_RESULT_ENVELOPE": raw_result.get(
                 "RAW_VALIDATION_RESULT_ENVELOPE",
@@ -912,6 +1375,53 @@ class ValidationTaskExecutionPipeline:
             "execution_id": raw_result.get("execution_id"),
             "raw_result_id": raw_result.get("raw_result_id"),
             "raw_validation_result_id": raw_result.get("raw_validation_result_id"),
+            "canonical_raw_result_id": raw_result.get("canonical_raw_result_id"),
+            "raw_result_identity_schema_version": raw_result.get(
+                "raw_result_identity_schema_version",
+            ),
+            "identity_schema_version": raw_result.get("identity_schema_version"),
+            "raw_result_identity_state": raw_result.get("raw_result_identity_state"),
+            "raw_result_identity_reason": raw_result.get("raw_result_identity_reason"),
+            "raw_result_identity_issuance_count": raw_result.get(
+                "raw_result_identity_issuance_count",
+            ),
+            "raw_result_identity_binding_state": raw_result.get(
+                "raw_result_identity_binding_state",
+            ),
+            "raw_result_identity_integrity_state": raw_result.get(
+                "raw_result_identity_integrity_state",
+            ),
+            "raw_result_identity_conflict_count": raw_result.get(
+                "raw_result_identity_conflict_count",
+            ),
+            "immutable_identity_fingerprint": raw_result.get(
+                "immutable_identity_fingerprint",
+            ),
+            "identity_issued_at": raw_result.get("identity_issued_at"),
+            "identity_evaluation_source": raw_result.get(
+                "identity_evaluation_source",
+            ),
+            "raw_result_identity_lifecycle_transitions": raw_result.get(
+                "raw_result_identity_lifecycle_transitions",
+                [],
+            ),
+            "raw_result_applicability_report": raw_result.get(
+                "raw_result_applicability_report",
+                {},
+            ),
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_result.get(
+                "RAW_RESULT_APPLICABILITY_REPORT",
+                {},
+            ),
+            "raw_result_applicability_state": raw_result.get(
+                "raw_result_applicability_state",
+            ),
+            "raw_result_applicability_finalized": raw_result.get(
+                "raw_result_applicability_finalized",
+            ),
+            "producer_obligation_boundary_crossed": raw_result.get(
+                "producer_obligation_boundary_crossed",
+            ),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
             "raw_validation_result_fingerprint": raw_result.get(
                 "raw_validation_result_fingerprint",
@@ -999,7 +1509,19 @@ class ValidationTaskExecutionPipeline:
             "execution_id": "Not Available",
             "raw_result_id": "Not Available",
             "raw_validation_result_id": "Not Available",
+            "canonical_raw_result_id": "Not Available",
             "raw_validation_result_schema_version": "Not Available",
+            "raw_result_identity_schema_version": "Not Available",
+            "identity_schema_version": "Not Available",
+            "raw_result_identity_state": "NOT_EVALUATED_NOT_APPLICABLE",
+            "raw_result_identity_reason": "RAW_RESULT_IDENTITY_NOT_EXPECTED",
+            "raw_result_identity_issuance_count": 0,
+            "raw_result_identity_binding_state": "NOT_EVALUATED_NOT_APPLICABLE",
+            "raw_result_identity_integrity_state": "NOT_EVALUATED_NOT_APPLICABLE",
+            "raw_result_identity_conflict_count": 0,
+            "immutable_identity_fingerprint": "Not Available",
+            "identity_evaluation_source": "validation_task_execution_pipeline",
+            "raw_result_identity_lifecycle_transitions": [],
             "RAW_VALIDATION_RESULT_ENVELOPE": {},
             "raw_validation_result_envelope": {},
             "run_id": "Not Available",

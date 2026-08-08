@@ -399,3 +399,82 @@ def test_blocked_process_semantics_has_exact_non_materialization_state():
     assert process_row["disposition_reason"] == "process_semantics_enabled=False"
     assert plan["process_stage_state"] == "BLOCKED"
     assert process_request["non_materialization_reason"] == "process_semantics_enabled=False"
+
+
+def test_authoritative_run_plan_survives_training_aggregation_over_runtime_reconstruction():
+    planner = ExecutionPlanner()
+    plan = planner.build_authoritative_run_plan(
+        run_id="run_authoritative_001",
+        task_files=["task_a.json", "task_b.json", "task_c.json"],
+        selected_mode="adaptive",
+        execution_profile={"execution_profile": "adaptive"},
+        cognitive_pipeline="adaptive",
+        declared_budget={
+            "budget_source": "test_pre_execution_budget",
+            "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "max_active_routes": 2,
+            "max_reasoning_depth": 2,
+            "max_dependency_depth": 2,
+            "max_hypotheses": 2,
+        },
+    )
+    admitted = planner.admit_authoritative_run_plan(plan, task_id="task_a.json")
+    fingerprint = admitted["immutable_fingerprint"]
+
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 3,
+            "authoritative_execution_plan": admitted,
+        },
+        multi_task_results=[
+            {
+                "task": name,
+                "status": "completed",
+                "result": {
+                    "run_id": admitted["run_id"],
+                    "execution_plan_id": admitted["execution_plan_id"],
+                    "cognitive_budget_report": {
+                        "max_active_routes": 2,
+                        "max_reasoning_depth": 2,
+                    },
+                    "introspection_report": {
+                        "latest_report": {
+                            "reasoning_depth": 4,
+                            "active_routes": 12,
+                            "pipeline_activity": {
+                                "route_count": 12,
+                                "reasoning_depth": 4,
+                            },
+                        }
+                    },
+                },
+            }
+            for name in ["task_a.json", "task_b.json", "task_c.json"]
+        ],
+    )
+
+    aggregate = report["EXECUTION_PLAN_REPORT"]
+    canonical = report["canonical_execution_plan"]
+    budget = report["RUNTIME_BUDGET_ENFORCEMENT_REPORT"]
+
+    assert canonical["execution_plan_id"] == admitted["execution_plan_id"]
+    assert canonical["planning_authority"] == "AUTHORITATIVE"
+    assert aggregate["planning_state"] == "AUTHORITATIVE_PRE_EXECUTION_PLAN_FINALIZED"
+    assert aggregate["temporal_authority_state"] == "PRE_EXECUTION_AUTHORITY_CONFIRMED"
+    assert budget["runtime_budget_scope"] == "RUN_WITH_TASK_ENTRIES"
+    assert budget["peak_concurrent_active_route_count"] == 12
+    assert budget["maximum_entered_reasoning_depth"] == 4
+    assert aggregate["retrospective_execution_plan"]["planning_authority"] == "DIAGNOSTIC_ONLY"
+    assert canonical["immutable_fingerprint"] == fingerprint
+    assert canonical["execution_plan_fingerprint"] == fingerprint
+    assert [
+        row["transition_name"]
+        for row in aggregate["lifecycle_transitions"]
+    ] == [
+        "PLAN_BUILD_REQUESTED",
+        "PLAN_BUILD_COMPLETED",
+        "PLAN_FINALIZED",
+        "PLAN_BOUND_TO_CURRENT_RUN",
+        "EXECUTION_ADMITTED_WITH_PLAN_REFERENCE",
+    ]

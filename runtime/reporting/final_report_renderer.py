@@ -21,6 +21,12 @@ from runtime.reporting.pre_final_report_diagnostics import (
 from runtime.reporting.active_runtime_reachability_audit import (
     mark_active_runtime_audit_bound_to_canonical_report,
 )
+from runtime.reporting.engineering_conclusion_integrity import (
+    engineering_conclusion_integrity_evaluator,
+)
+from runtime.validation.raw_result_lifecycle_applicability import (
+    raw_result_lifecycle_applicability_evaluator,
+)
 
 
 REPORT_SCHEMA_VERSION = "1.0"
@@ -209,6 +215,18 @@ class DeterministicFinalReportRenderer:
                 output_keys=len(report_state),
                 projected_tasks=len(report_state.get("multi_task_results", []) or []),
             )
+        if self._first_dict(
+            report_state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        ):
+            report_state = (
+                engineering_conclusion_integrity_evaluator
+                .ensure_authoritative_conclusion(
+                    report_state,
+                    runtime_metadata=runtime_metadata,
+                )
+            )
         pre_final_report_diagnostics.phase_enter(
             "CANONICAL_BIND",
             report_keys=len(report_state),
@@ -235,6 +253,82 @@ class DeterministicFinalReportRenderer:
         bound_report_state["binding_diagnostics"] = (
             binding_result["binding_diagnostics"]
         )
+        raw_applicability = self._first_dict(
+            bound_report_state,
+            "RAW_RESULT_APPLICABILITY_REPORT",
+            "raw_result_applicability_report",
+        )
+        if raw_applicability:
+            raw_applicability = (
+                raw_result_lifecycle_applicability_evaluator
+                .bind_to_canonical_report(raw_applicability)
+            )
+            bound_report_state["RAW_RESULT_APPLICABILITY_REPORT"] = (
+                raw_applicability
+            )
+            bound_report_state["raw_result_applicability_report"] = dict(
+                raw_applicability
+            )
+        validation_execution = self._first_dict(
+            bound_report_state,
+            "VALIDATION_TASK_EXECUTION_REPORT",
+            "validation_task_execution_report",
+        )
+        raw_result_id = (
+            validation_execution.get("canonical_raw_result_id")
+            or validation_execution.get("raw_validation_result_id")
+            or validation_execution.get("raw_result_id")
+        )
+        identity_transitions = list(
+            validation_execution.get("raw_result_identity_lifecycle_transitions")
+            or []
+        )
+        if raw_result_id and str(raw_result_id).lower() not in {
+            "not available",
+            "none",
+            "null",
+        }:
+            if not any(
+                isinstance(row, dict)
+                and row.get("transition_name")
+                == "RAW_RESULT_IDENTITY_BOUND_TO_CANONICAL_REPORT"
+                for row in identity_transitions
+            ):
+                identity_transitions.append({
+                    "transition_name": (
+                        "RAW_RESULT_IDENTITY_BOUND_TO_CANONICAL_REPORT"
+                    ),
+                    "sequence_index": len(identity_transitions) + 1,
+                    "run_id": validation_execution.get("run_id"),
+                    "execution_plan_id": validation_execution.get(
+                        "execution_plan_id",
+                    ),
+                    "task_id": validation_execution.get("task_id"),
+                    "producer_operation_id": validation_execution.get(
+                        "producer_operation_id",
+                    )
+                    or validation_execution.get("executor_invocation_id")
+                    or validation_execution.get("execution_id"),
+                    "validation_attempt_id": validation_execution.get(
+                        "validation_attempt_id",
+                    ),
+                    "raw_result_id": raw_result_id,
+                    "source_stage": "final_report_renderer",
+                    "source_timestamp": runtime_metadata.get(
+                        "timestamp",
+                        "Not Available",
+                    ),
+                    "is_current_run": True,
+                })
+                validation_execution[
+                    "raw_result_identity_lifecycle_transitions"
+                ] = identity_transitions
+                bound_report_state[
+                    "VALIDATION_TASK_EXECUTION_REPORT"
+                ] = validation_execution
+                bound_report_state[
+                    "validation_task_execution_report"
+                ] = dict(validation_execution)
 
         pre_final_report_diagnostics.phase_enter(
             "REPORT_RENDER_PREP",
@@ -274,6 +368,21 @@ class DeterministicFinalReportRenderer:
             compressed_report_state,
         )
 
+        existing_conclusion = self._first_dict(
+            compressed_report_state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        )
+        if existing_conclusion:
+            bound_conclusion = (
+                engineering_conclusion_integrity_evaluator.bind_to_canonical_report(
+                    existing_conclusion,
+                    report_state=compressed_report_state,
+                    runtime_metadata=runtime_metadata,
+                )
+            )
+            compressed_report_state["ENGINEERING_CONCLUSION"] = bound_conclusion
+            compressed_report_state["engineering_conclusion"] = dict(bound_conclusion)
         canonical = self._canonical_state(
             compressed_report_state,
             runtime_metadata=runtime_metadata,
@@ -346,6 +455,17 @@ class DeterministicFinalReportRenderer:
             emission_measurement=self._last_emission_measurement,
             receipt=self._last_detached_receipt,
         )
+        if identity_transitions:
+            self.metrics["raw_result_identity_lifecycle_transitions"] = (
+                identity_transitions
+            )
+        if report_level == "minimal" and rendered_report.startswith(
+            REPORT_BEGIN_MARKER
+        ):
+            rendered_report = (
+                "==================================================\n"
+                + rendered_report
+            )
         return rendered_report
 
     def emit(self, rendered_report: str, stream: Any | None = None) -> None:
@@ -549,6 +669,22 @@ class DeterministicFinalReportRenderer:
                 ),
             },
             "performance_report": self._compact_metric_map(performance),
+            "validation_task_execution_report": report_state.get(
+                "validation_task_execution_report",
+                report_state.get("VALIDATION_TASK_EXECUTION_REPORT", {}),
+            ),
+            "VALIDATION_TASK_EXECUTION_REPORT": report_state.get(
+                "VALIDATION_TASK_EXECUTION_REPORT",
+                report_state.get("validation_task_execution_report", {}),
+            ),
+            "RAW_RESULT_APPLICABILITY_REPORT": report_state.get(
+                "RAW_RESULT_APPLICABILITY_REPORT",
+                report_state.get("raw_result_applicability_report", {}),
+            ),
+            "raw_result_applicability_report": report_state.get(
+                "raw_result_applicability_report",
+                report_state.get("RAW_RESULT_APPLICABILITY_REPORT", {}),
+            ),
             "execution_timing": self._compact_metric_map(
                 report_state.get("execution_timing", {})
             ),
@@ -781,6 +917,14 @@ class DeterministicFinalReportRenderer:
             "VALIDATION_EVIDENCE_EVALUATION_REPORT",
             "validation_evidence_evaluation_report",
         )
+        raw_applicability = self._first_dict(
+            state,
+            "RAW_RESULT_APPLICABILITY_REPORT",
+            "raw_result_applicability_report",
+        )
+        raw_applicability_state = str(
+            raw_applicability.get("raw_result_applicability_state") or ""
+        ).upper()
         raw_envelope = self._first_dict(
             validation,
             "RAW_VALIDATION_RESULT_ENVELOPE",
@@ -868,7 +1012,73 @@ class DeterministicFinalReportRenderer:
         bind("execution_admission", "Execution Admission", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_admission", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_admission_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_id", "Validation Execution Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_execution_id"], required=False, absence="NOT_PRODUCED")
-        if raw_envelope and not raw_result_identity_missing:
+        bind("raw_result_applicability_state", "Raw Result Applicability State", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_state", "report_state.raw_result_applicability_report.raw_result_applicability_state"], required=False, absence="RAW_RESULT_APPLICABILITY_UNDETERMINED")
+        bind("raw_result_applicability_reason", "Raw Result Applicability Reason", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_reason", "report_state.raw_result_applicability_report.raw_result_applicability_reason"], required=False, absence="RAW_RESULT_PRODUCER_PROVENANCE_UNDETERMINED")
+        bind("raw_result_producer_obligation_count", "Raw Result Producer Obligation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_producer_obligation_count", "report_state.raw_result_applicability_report.raw_result_producer_obligation_count"], required=False, absence="0")
+        bind("qualifying_producer_count", "Qualifying Producer Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.qualifying_producer_count", "report_state.raw_result_applicability_report.qualifying_producer_count"], required=False, absence="0")
+        bind("applicable_operation_count", "Applicable Operation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicable_operation_count", "report_state.raw_result_applicability_report.applicable_operation_count"], required=False, absence="0")
+        bind("non_applicable_operation_count", "Non-Applicable Operation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.non_applicable_operation_count", "report_state.raw_result_applicability_report.non_applicable_operation_count"], required=False, absence="0")
+        bind("undetermined_operation_count", "Undetermined Operation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.undetermined_operation_count", "report_state.raw_result_applicability_report.undetermined_operation_count"], required=False, absence="0")
+        bind("raw_result_required_count", "Raw Result Required Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_required_count", "report_state.raw_result_applicability_report.raw_result_required_count"], required=False, absence="0")
+        bind("applicable_raw_result_present_count", "Applicable Raw Result Present Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicable_raw_result_present_count", "report_state.raw_result_applicability_report.applicable_raw_result_present_count"], required=False, absence="0")
+        bind("applicable_raw_result_missing_count", "Applicable Raw Result Missing Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicable_raw_result_missing_count", "report_state.raw_result_applicability_report.applicable_raw_result_missing_count"], required=False, absence="0")
+        bind("pre_obligation_deferred_count", "Pre-Obligation Deferred Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.pre_obligation_deferred_count", "report_state.raw_result_applicability_report.pre_obligation_deferred_count"], required=False, absence="0")
+        bind("pre_obligation_blocked_count", "Pre-Obligation Blocked Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.pre_obligation_blocked_count", "report_state.raw_result_applicability_report.pre_obligation_blocked_count"], required=False, absence="0")
+        bind("raw_result_current_run_binding_state", "Current Run Binding State", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.current_run_binding_state", "report_state.raw_result_applicability_report.current_run_binding_state"], required=False, absence="RAW_RESULT_APPLICABILITY_UNDETERMINED")
+        bind("raw_result_authoritative_execution_plan_id", "Authoritative Execution Plan Id", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.authoritative_execution_plan_id", "report_state.raw_result_applicability_report.authoritative_execution_plan_id"], required=False, absence="EXECUTION_PLAN_ID_UNBOUND")
+        bind("raw_result_applicability_evaluation_source", "Applicability Evaluation Source", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicability_evaluation_source", "report_state.raw_result_applicability_report.applicability_evaluation_source"], required=False, absence="NOT_PRODUCED")
+        bind("raw_result_lifecycle_completeness", "Raw Result Lifecycle Completeness", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_lifecycle_completeness_state", "report_state.raw_result_applicability_report.raw_result_lifecycle_completeness_state"], required=False, absence="NOT_EVALUATED_APPLICABILITY_UNDETERMINED")
+        if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
+            identity_absence = {
+                "raw_result_identity_state": ("Raw Result Identity State", "NOT_EVALUATED_NOT_APPLICABLE"),
+                "raw_result_identity_reason": ("Raw Result Identity Reason", "RAW_RESULT_IDENTITY_NOT_EXPECTED"),
+                "canonical_raw_result_id": ("Canonical Raw Result Id", "Not expected at current lifecycle state"),
+                "raw_result_identity_issuance_count": ("Raw Result Identity Issuance Count", 0),
+                "raw_result_identity_binding_state": ("Raw Result Identity Binding State", "NOT_EVALUATED_NOT_APPLICABLE"),
+                "raw_result_identity_integrity_state": ("Raw Result Identity Integrity State", "NOT_EVALUATED_NOT_APPLICABLE"),
+                "raw_result_identity_conflict_count": ("Raw Result Identity Conflict Count", 0),
+                "applicable_present_result_missing_identity_count": ("Applicable Present Result Missing Identity Count", 0),
+                "foreign_raw_result_ignored_count": ("Foreign Raw Result Ignored Count", 0),
+                "previous_run_raw_result_ignored_count": ("Previous-Run Raw Result Ignored Count", 0),
+                "authoritative_run_id": ("Authoritative Run Id", raw_applicability.get("run_id") or "RUN_ID_UNBOUND"),
+                "producer_operation_id": ("Producer Operation Id", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "validation_attempt_id": ("Validation Attempt Id", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "identity_schema_version": ("Identity Schema Version", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "immutable_identity_fingerprint": ("Immutable Identity Fingerprint", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "identity_evaluation_source": ("Identity Evaluation Source", "raw_result_lifecycle_applicability_evaluator"),
+            }
+            for field_name, (label, value) in identity_absence.items():
+                fields[field_name] = self._resolved_human_field(
+                    field_name,
+                    label,
+                    value,
+                    "report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_state",
+                )
+        else:
+            bind("raw_result_identity_state", "Raw Result Identity State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_state", "report_state.validation_task_execution_report.raw_result_identity_state"], required=False, absence="IDENTITY_EVALUATION_UNDETERMINED")
+            bind("raw_result_identity_reason", "Raw Result Identity Reason", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_reason", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_reason", "report_state.validation_task_execution_report.raw_result_identity_reason"], required=False, absence="RAW_RESULT_IDENTITY_PROVENANCE_UNDETERMINED")
+            bind("canonical_raw_result_id", "Canonical Raw Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.canonical_raw_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.validation_task_execution_report.canonical_raw_result_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("raw_result_identity_issuance_count", "Raw Result Identity Issuance Count", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_issuance_count", "report_state.validation_task_execution_report.raw_result_identity_issuance_count"], required=False, absence="0")
+            bind("raw_result_identity_binding_state", "Raw Result Identity Binding State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_binding_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_binding_state", "report_state.validation_task_execution_report.raw_result_identity_binding_state"], required=False, absence="IDENTITY_EVALUATION_UNDETERMINED")
+            bind("raw_result_identity_integrity_state", "Raw Result Identity Integrity State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_integrity_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_integrity_state", "report_state.validation_task_execution_report.raw_result_identity_integrity_state"], required=False, absence="IDENTITY_EVALUATION_UNDETERMINED")
+            bind("raw_result_identity_conflict_count", "Raw Result Identity Conflict Count", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_conflict_count", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_conflict_count", "report_state.validation_task_execution_report.raw_result_identity_conflict_count"], required=False, absence="0")
+            bind("applicable_present_result_missing_identity_count", "Applicable Present Result Missing Identity Count", ["report_state.RAW_RESULT_IDENTITY_REPORT.applicable_present_result_missing_identity_count", "report_state.VALIDATION_TASK_EXECUTION_REPORT.applicable_present_result_missing_identity_count"], required=False, absence="0")
+            bind("foreign_raw_result_ignored_count", "Foreign Raw Result Ignored Count", ["report_state.RAW_RESULT_IDENTITY_REPORT.foreign_raw_result_ignored_count"], required=False, absence="0")
+            bind("previous_run_raw_result_ignored_count", "Previous-Run Raw Result Ignored Count", ["report_state.RAW_RESULT_IDENTITY_REPORT.previous_run_raw_result_ignored_count"], required=False, absence="0")
+            bind("authoritative_run_id", "Authoritative Run Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.run_id", "report_state.RAW_RESULT_APPLICABILITY_REPORT.run_id"], required=False, absence="RUN_ID_UNBOUND")
+            bind("producer_operation_id", "Producer Operation Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.producer_operation_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.executor_invocation_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("validation_attempt_id", "Validation Attempt Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_attempt_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.validation_attempt_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("identity_schema_version", "Identity Schema Version", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.identity_schema_version", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_schema_version", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.identity_schema_version"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("immutable_identity_fingerprint", "Immutable Identity Fingerprint", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.immutable_identity_fingerprint", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.immutable_identity_fingerprint"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("identity_evaluation_source", "Identity Evaluation Source", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.identity_evaluation_source"], required=False, absence="NOT_PRODUCED")
+        if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                "RAW_RESULT_NOT_APPLICABLE",
+                "report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_state",
+            )
+        elif raw_envelope and not raw_result_identity_missing:
             fields["raw_result_state"] = self._resolved_human_field(
                 "raw_result_state",
                 "Raw Result State",
@@ -893,7 +1103,15 @@ class DeterministicFinalReportRenderer:
             )
         else:
             bind("raw_result_state", "Raw Result State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_lifecycle_state"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
-        bind("raw_validation_result_id", "Raw Validation Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.raw_validation_result_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.raw_validation_result_id"], required=raw_result_captured, absence="RAW_VALIDATION_RESULT_ID_NOT_ISSUED" if raw_result_captured else "NOT_EXPECTED_AT_CURRENT_STATE")
+        if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
+            fields["raw_validation_result_id"] = self._absent_human_field(
+                "raw_validation_result_id",
+                "Raw Validation Result Id",
+                "NOT_EXPECTED_AT_CURRENT_STATE",
+                False,
+            )
+        else:
+            bind("raw_validation_result_id", "Raw Validation Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.raw_validation_result_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.raw_validation_result_id"], required=raw_result_captured, absence="RAW_VALIDATION_RESULT_ID_NOT_ISSUED" if raw_result_captured else "NOT_EXPECTED_AT_CURRENT_STATE")
         if evaluation:
             bind("evidence_evaluation_state", "Evidence Evaluation State", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.decision_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_acceptance_state"], required=False, absence="NOT_PRODUCED")
         else:
@@ -911,9 +1129,26 @@ class DeterministicFinalReportRenderer:
         bind("next_decision_gate", "Next Decision Gate", ["report_state.ENGINEERING_CONCLUSION.next_decision_gate", "report_state.engineering_conclusion.next_decision_gate"], required=False, absence="NOT_PRODUCED")
         bind("current_bottleneck", "Current Bottleneck", ["report_state.ENGINEERING_CONCLUSION.current_bottleneck", "report_state.engineering_conclusion.current_bottleneck"], required=False, absence="NOT_PRODUCED")
         bind("root_cause", "Root Cause", ["report_state.ENGINEERING_CONCLUSION.root_cause", "report_state.engineering_conclusion.root_cause"], required=False, absence="NOT_PRODUCED")
+        bind("failure_reason", "Failure Reason", ["report_state.ENGINEERING_CONCLUSION.failure_reason", "report_state.engineering_conclusion.failure_reason"], required=False, absence="NOT_PRODUCED")
+        bind("recommended_action", "Recommended Action", ["report_state.ENGINEERING_CONCLUSION.recommended_action", "report_state.ENGINEERING_CONCLUSION.next_task", "report_state.engineering_conclusion.recommended_action"], required=False, absence="NOT_PRODUCED")
+        bind("responsible_area", "Responsible Area", ["report_state.ENGINEERING_CONCLUSION.responsible_area", "report_state.ENGINEERING_CONCLUSION.responsible_component", "report_state.engineering_conclusion.responsible_area"], required=False, absence="NOT_PRODUCED")
+        bind("next_gate", "Next Gate", ["report_state.ENGINEERING_CONCLUSION.next_gate", "report_state.ENGINEERING_CONCLUSION.next_decision_gate", "report_state.engineering_conclusion.next_gate"], required=False, absence="NOT_PRODUCED")
         bind("responsible_component", "Responsible Component", ["report_state.ENGINEERING_CONCLUSION.responsible_component", "report_state.ENGINEERING_CONCLUSION.exact_responsible_component", "report_state.engineering_conclusion.responsible_component"], required=False, absence="NOT_PRODUCED")
         bind("immediate_next_development_task", "Immediate Next Development Task", ["report_state.ENGINEERING_CONCLUSION.immediate_next_development_task", "report_state.engineering_conclusion.immediate_next_development_task"], required=False, absence="NOT_PRODUCED")
         bind("engineering_priority", "Engineering Priority", ["report_state.ENGINEERING_CONCLUSION.engineering_priority", "report_state.engineering_conclusion.engineering_priority"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_conclusion_state", "Engineering Conclusion State", ["report_state.ENGINEERING_CONCLUSION.engineering_conclusion_state", "report_state.engineering_conclusion.engineering_conclusion_state"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_conclusion_integrity_state", "Engineering Conclusion Integrity State", ["report_state.ENGINEERING_CONCLUSION.engineering_conclusion_integrity_state", "report_state.engineering_conclusion.engineering_conclusion_integrity_state"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_conclusion_integrity_reason", "Engineering Conclusion Integrity Reason", ["report_state.ENGINEERING_CONCLUSION.engineering_conclusion_integrity_reason", "report_state.engineering_conclusion.engineering_conclusion_integrity_reason"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_source", "Conclusion Source", ["report_state.ENGINEERING_CONCLUSION.conclusion_source", "report_state.ENGINEERING_CONCLUSION.conclusion_source_stage", "report_state.engineering_conclusion.conclusion_source"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_evaluation_source", "Conclusion Evaluation Source", ["report_state.ENGINEERING_CONCLUSION.conclusion_evaluation_source", "report_state.engineering_conclusion.conclusion_evaluation_source"], required=False, absence="NOT_PRODUCED")
+        bind("current_run_binding_state", "Current Run Binding State", ["report_state.ENGINEERING_CONCLUSION.current_run_binding_state", "report_state.engineering_conclusion.current_run_binding_state"], required=False, absence="NOT_PRODUCED")
+        bind("authoritative_run_id", "Authoritative Run Id", ["report_state.ENGINEERING_CONCLUSION.authoritative_run_id", "report_state.ENGINEERING_CONCLUSION.conclusion_run_id", "report_state.engineering_conclusion.authoritative_run_id"], required=False, absence="NOT_PRODUCED")
+        bind("authoritative_execution_plan_id", "Authoritative Execution Plan Id", ["report_state.ENGINEERING_CONCLUSION.authoritative_execution_plan_id", "report_state.engineering_conclusion.authoritative_execution_plan_id"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_persistence_applicability", "Conclusion Persistence Applicability", ["report_state.ENGINEERING_CONCLUSION.persistence_applicability", "report_state.engineering_conclusion.persistence_applicability"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_persistence_integrity", "Conclusion Persistence Integrity", ["report_state.ENGINEERING_CONCLUSION.persistence_integrity", "report_state.engineering_conclusion.persistence_integrity"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_emission_integrity", "Conclusion Emission Integrity", ["report_state.ENGINEERING_CONCLUSION.emission_integrity", "report_state.engineering_conclusion.emission_integrity"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_persistence_matches_emission", "Conclusion Persistence Matches Emission", ["report_state.ENGINEERING_CONCLUSION.persistence_matches_emission", "report_state.engineering_conclusion.persistence_matches_emission"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_conflict_count", "Conclusion Conflict Count", ["report_state.ENGINEERING_CONCLUSION.conclusion_conflict_count", "report_state.engineering_conclusion.conclusion_conflict_count"], required=False, absence="0")
 
         required_fields = [field for field in fields.values() if field.get("required")]
         conflict_count = sum(1 for field in fields.values() if field.get("state") == "SOURCE_CONFLICT")
@@ -1475,6 +1710,38 @@ class DeterministicFinalReportRenderer:
             f"Execution Admission: {self._human_value(canonical, 'execution_admission')}",
             f"Validation Execution State: {self._human_value(canonical, 'validation_execution_state')}",
             f"Validation Execution Id: {self._human_value(canonical, 'validation_execution_id')}",
+            f"Raw Result Applicability State: {self._human_value(canonical, 'raw_result_applicability_state')}",
+            f"Raw Result Applicability Reason: {self._human_value(canonical, 'raw_result_applicability_reason')}",
+            f"Raw Result Producer Obligation Count: {self._human_value(canonical, 'raw_result_producer_obligation_count')}",
+            f"Qualifying Producer Count: {self._human_value(canonical, 'qualifying_producer_count')}",
+            f"Applicable Operation Count: {self._human_value(canonical, 'applicable_operation_count')}",
+            f"Non-Applicable Operation Count: {self._human_value(canonical, 'non_applicable_operation_count')}",
+            f"Undetermined Operation Count: {self._human_value(canonical, 'undetermined_operation_count')}",
+            f"Raw Result Required Count: {self._human_value(canonical, 'raw_result_required_count')}",
+            f"Applicable Raw Result Present Count: {self._human_value(canonical, 'applicable_raw_result_present_count')}",
+            f"Applicable Raw Result Missing Count: {self._human_value(canonical, 'applicable_raw_result_missing_count')}",
+            f"Pre-Obligation Deferred Count: {self._human_value(canonical, 'pre_obligation_deferred_count')}",
+            f"Pre-Obligation Blocked Count: {self._human_value(canonical, 'pre_obligation_blocked_count')}",
+            f"Current Run Binding State: {self._human_value(canonical, 'raw_result_current_run_binding_state')}",
+            f"Authoritative Execution Plan Id: {self._human_value(canonical, 'raw_result_authoritative_execution_plan_id')}",
+            f"Applicability Evaluation Source: {self._human_value(canonical, 'raw_result_applicability_evaluation_source')}",
+            f"Raw Result Lifecycle Completeness: {self._human_value(canonical, 'raw_result_lifecycle_completeness')}",
+            f"Raw Result Identity State: {self._human_value(canonical, 'raw_result_identity_state')}",
+            f"Raw Result Identity Reason: {self._human_value(canonical, 'raw_result_identity_reason')}",
+            f"Canonical Raw Result Id: {self._human_value(canonical, 'canonical_raw_result_id')}",
+            f"Raw Result Identity Issuance Count: {self._human_value(canonical, 'raw_result_identity_issuance_count')}",
+            f"Raw Result Identity Binding State: {self._human_value(canonical, 'raw_result_identity_binding_state')}",
+            f"Raw Result Identity Integrity State: {self._human_value(canonical, 'raw_result_identity_integrity_state')}",
+            f"Raw Result Identity Conflict Count: {self._human_value(canonical, 'raw_result_identity_conflict_count')}",
+            f"Applicable Present Result Missing Identity Count: {self._human_value(canonical, 'applicable_present_result_missing_identity_count')}",
+            f"Foreign Raw Result Ignored Count: {self._human_value(canonical, 'foreign_raw_result_ignored_count')}",
+            f"Previous-Run Raw Result Ignored Count: {self._human_value(canonical, 'previous_run_raw_result_ignored_count')}",
+            f"Authoritative Run Id: {self._human_value(canonical, 'authoritative_run_id')}",
+            f"Producer Operation Id: {self._human_value(canonical, 'producer_operation_id')}",
+            f"Validation Attempt Id: {self._human_value(canonical, 'validation_attempt_id')}",
+            f"Identity Schema Version: {self._human_value(canonical, 'identity_schema_version')}",
+            f"Immutable Identity Fingerprint: {self._human_value(canonical, 'immutable_identity_fingerprint')}",
+            f"Identity Evaluation Source: {self._human_value(canonical, 'identity_evaluation_source')}",
             f"Raw Result State: {raw_state}",
             f"Raw Validation Result Id: {raw_id}",
             f"Evidence Evaluation State: {self._human_value(canonical, 'evidence_evaluation_state')}",
@@ -1579,9 +1846,18 @@ class DeterministicFinalReportRenderer:
             )
             is True
         )
+        canonical_binding_context = (
+            bool(source.get("execution_plan_binding_state"))
+            or bool(self._first_dict(
+                state,
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                "active_runtime_reachability_audit",
+            ))
+            or state.get("operation") != "training_batch"
+        )
         display_plan_state = (
             "CANONICAL_EXECUTION_PLAN_BOUND"
-            if canonical_bound
+            if canonical_bound and canonical_binding_context
             else self._first_meaningful(
                 source.get("execution_plan_binding_state"),
                 source.get("execution_plan_state"),
@@ -1594,8 +1870,26 @@ class DeterministicFinalReportRenderer:
             f"Planning State: {self._first_meaningful(source.get('planning_state'), default='NOT_APPLICABLE')}",
             f"Execution Plan Id: {self._first_meaningful(source.get('execution_plan_id'), default='Canonical source unbound')}",
             f"Execution Plan Schema Version: {self._first_meaningful(source.get('execution_plan_schema_version'), default='Not produced in this run')}",
+            f"Plan Origin: {self._first_meaningful(source.get('plan_origin'), default='Not produced in this run')}",
+            f"Planning Authority: {self._first_meaningful(source.get('planning_authority'), default='Not produced in this run')}",
+            f"Temporal Authority State: {self._first_meaningful(source.get('temporal_authority_state'), default='Not produced in this run')}",
+            f"Plan Scope: {self._first_meaningful(source.get('plan_scope'), default='Not produced in this run')}",
+            f"Plan Created At: {self._first_meaningful(source.get('plan_created_at'), default='Not produced in this run')}",
+            f"Plan Finalized At: {self._first_meaningful(source.get('plan_finalized_at'), default='Not produced in this run')}",
+            f"Execution Admission Started At: {self._first_meaningful(source.get('execution_admission_started_at'), default='Not produced in this run')}",
+            f"Immutable Fingerprint: {self._first_meaningful(source.get('immutable_fingerprint'), source.get('execution_plan_fingerprint'), default='Not produced in this run')}",
             f"Execution Plan Finalized: {self._value(self._first_meaningful(source.get('finalized'), source.get('execution_plan_finalized'), default=False))}",
             f"Execution Plan Immutable: {self._value(self._first_meaningful(source.get('immutable'), source.get('execution_plan_immutable'), default=False))}",
+            *[
+                "Plan Lifecycle Transition "
+                f"{index + 1}: {self._first_meaningful(row.get('transition_name'), row.get('state'), default='TRANSITION_UNBOUND')}"
+                f" | plan_id={self._first_meaningful(row.get('execution_plan_id'), default='EXECUTION_PLAN_ID_UNBOUND')}"
+                f" | run_id={self._first_meaningful(row.get('run_id'), default='RUN_ID_UNBOUND')}"
+                for index, row in enumerate(
+                    source.get("lifecycle_transitions", []) or []
+                )
+                if isinstance(row, dict)
+            ],
             f"Selected Tools Reconciled: {self._count_pair(reconciled_tools, selected_tools)}",
             f"Selected Layers Reconciled: {self._count_pair(reconciled_layers, selected_layers)}",
             f"Active Routes Reconciled: {self._count_pair(reconciled_routes, active_routes)}",
@@ -1620,8 +1914,14 @@ class DeterministicFinalReportRenderer:
             f"Maximum Hypotheses: {self._first_meaningful(source.get('maximum_hypotheses'), budget_report.get('maximum_hypotheses'), default='Not produced in this run')}",
             f"Maximum Entered Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_entered_reasoning_depth'), default=0)}",
             f"Maximum Completed Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_completed_reasoning_depth'), default=0)}",
+            f"Maximum Requested Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_requested_reasoning_depth'), default=0)}",
+            f"Depth Admission Count: {self._first_meaningful(budget_report.get('depth_admission_count'), default=0)}",
+            f"Depth Block Count: {self._first_meaningful(budget_report.get('depth_block_count'), default=0)}",
             f"Route Enforcement State: {self._first_meaningful(budget_report.get('route_budget_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
             f"Depth Enforcement State: {self._first_meaningful(budget_report.get('depth_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Attempted Overrun State: {self._first_meaningful(budget_report.get('attempted_overrun_state'), default='NOT_PRODUCED')}",
+            f"Prevented Overrun State: {self._first_meaningful(budget_report.get('prevented_overrun_state'), default='NOT_PRODUCED')}",
+            f"Realized Overrun State: {self._first_meaningful(budget_report.get('realized_overrun_state'), default='NOT_PRODUCED')}",
             f"Violation Reason: {self._first_meaningful(budget_report.get('violation_reason'), default='NONE')}",
         ])
 
@@ -1694,8 +1994,11 @@ class DeterministicFinalReportRenderer:
         if audit:
             audit = mark_active_runtime_audit_bound_to_canonical_report(audit)
         conclusion_conflicts = conclusion.get("integrity_conflicts") or []
+        conclusion_has_conflict = (
+            engineering_conclusion_integrity_evaluator.has_conflict(conclusion)
+        )
         if (
-            conclusion.get("integrity") == "INVALID"
+            conclusion_has_conflict
             and conclusion.get("conclusion_is_current") is not False
             and "ENGINEERING_CONCLUSION_CONFLICT" not in gaps
         ):
@@ -1721,6 +2024,9 @@ class DeterministicFinalReportRenderer:
             }
         raw_state = str(self._human_value(canonical, "raw_result_state")).upper()
         raw_id = str(self._human_value(canonical, "raw_validation_result_id")).upper()
+        raw_applicability_state = str(
+            self._human_value(canonical, "raw_result_applicability_state")
+        ).upper()
         raw_id_missing = raw_id in {
             "",
             "NOT_ISSUED",
@@ -1732,6 +2038,8 @@ class DeterministicFinalReportRenderer:
         if raw_state == "RAW_RESULT_CAPTURED" and raw_id_missing:
             raw_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
         if (
+            raw_applicability_state != "RAW_RESULT_NOT_APPLICABLE"
+            and
             raw_state == "RAW_RESULT_CAPTURED"
             and raw_id_missing
             and "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY" not in gaps
@@ -3090,15 +3398,28 @@ class DeterministicFinalReportRenderer:
     ) -> str:
         conclusion = self._engineering_conclusion(canonical)
         lines = [
+            "Engineering Conclusion State: "
+            f"{self._value(conclusion.get('engineering_conclusion_state'))}",
+            "Substantive Conclusion State: "
+            f"{self._value(conclusion.get('conclusion_state'))}",
+            "Engineering Conclusion Integrity State: "
+            f"{self._value(conclusion.get('engineering_conclusion_integrity_state'))}",
+            "Engineering Conclusion Integrity Reason: "
+            f"{self._value(conclusion.get('engineering_conclusion_integrity_reason'))}",
             f"Largest Success: {self._value(conclusion.get('largest_success'))}",
             f"Largest Regression: {self._value(conclusion.get('largest_regression'))}",
             "Current Open Decision: "
             f"{self._value(conclusion.get('current_open_decision'))}",
             "Next Decision Gate: "
             f"{self._value(conclusion.get('next_decision_gate'))}",
+            f"Next Gate: {self._value(conclusion.get('next_gate'))}",
             "Current Bottleneck: "
             f"{self._value(conclusion.get('current_bottleneck'))}",
+            f"Failure Reason: {self._value(conclusion.get('failure_reason'))}",
             f"Root Cause: {self._value(conclusion.get('root_cause'))}",
+            "Recommended Action: "
+            f"{self._value(conclusion.get('recommended_action'))}",
+            f"Responsible Area: {self._value(conclusion.get('responsible_area'))}",
             "Exact Responsible Component: "
             f"{self._value(conclusion.get('responsible_component'))}",
             "Immediate Next Development Task: "
@@ -3109,12 +3430,37 @@ class DeterministicFinalReportRenderer:
             f"{self._value(conclusion.get('integrity'))}",
             f"Conclusion Scope: {self._value(conclusion.get('conclusion_scope'))}",
             f"Conclusion Run Id: {self._value(conclusion.get('conclusion_run_id'))}",
+            "Authoritative Run Id: "
+            f"{self._value(conclusion.get('authoritative_run_id'))}",
+            "Authoritative Execution Plan Id: "
+            f"{self._value(conclusion.get('authoritative_execution_plan_id'))}",
             f"Conclusion Task Id: {self._value(conclusion.get('conclusion_task_id'))}",
+            "Canonical Raw Result Id: "
+            f"{self._value(conclusion.get('canonical_raw_result_id'), 'Not expected at current lifecycle state')}",
+            f"Conclusion Source: {self._value(conclusion.get('conclusion_source'))}",
+            "Conclusion Evaluation Source: "
+            f"{self._value(conclusion.get('conclusion_evaluation_source'))}",
             "Conclusion Source Stage: "
             f"{self._value(conclusion.get('conclusion_source_stage'))}",
             "Conclusion Source Timestamp: "
             f"{self._value(conclusion.get('conclusion_source_timestamp'))}",
             f"Conclusion Is Current: {self._value(conclusion.get('conclusion_is_current'))}",
+            "Current Run Binding State: "
+            f"{self._value(conclusion.get('current_run_binding_state'))}",
+            "Persistence Applicability: "
+            f"{self._value(conclusion.get('persistence_applicability'))}",
+            "Persistence Integrity: "
+            f"{self._value(conclusion.get('persistence_integrity'))}",
+            "Emission Integrity: "
+            f"{self._value(conclusion.get('emission_integrity'))}",
+            "Persistence Matches Emission: "
+            f"{self._value(conclusion.get('persistence_matches_emission'))}",
+            "Conclusion Conflict Count: "
+            f"{self._value(conclusion.get('conclusion_conflict_count'))}",
+            "Pre-Reconciliation Fingerprint: "
+            f"{self._value(conclusion.get('pre_reconciliation_fingerprint'))}",
+            "Post-Reconciliation Fingerprint: "
+            f"{self._value(conclusion.get('post_reconciliation_fingerprint'))}",
             "Conclusion Historical Issue Count: "
             f"{self._value(conclusion.get('conclusion_historical_issue_count'))}",
         ]
@@ -7941,11 +8287,40 @@ class DeterministicFinalReportRenderer:
         self,
         canonical: dict[str, Any],
     ) -> dict[str, Any]:
+        state = canonical.get("report_state", {})
+        state = state if isinstance(state, dict) else {}
+        metadata = canonical.get("runtime_metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        existing = self._first_dict(
+            state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        )
+        if existing.get("engineering_conclusion_state"):
+            return engineering_conclusion_integrity_evaluator.bind_to_canonical_report(
+                existing,
+                report_state=state,
+                runtime_metadata=metadata,
+            )
+        return {
+            "engineering_conclusion_state": "ENGINEERING_CONCLUSION_NOT_PRODUCED",
+            "conclusion_state": "UNDETERMINED",
+            "engineering_conclusion_integrity_state": "NOT_EVALUATED",
+            "engineering_conclusion_integrity_reason": (
+                "authoritative_engineering_conclusion_not_attached"
+            ),
+            "integrity": "NOT_EVALUATED",
+            "integrity_conflicts": [],
+            "conclusion_conflict_count": 0,
+        }
+
+    def _legacy_derive_engineering_conclusion(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
         coverage = self._coverage_summary(canonical)
         arena = self._arena_summary(canonical)
         executable, _activation = self._executable_report_pair(canonical)
-        metadata = canonical.get("runtime_metadata", {})
-        metadata = metadata if isinstance(metadata, dict) else {}
         current_row = self._current_critical_resolution_row(canonical)
         current_failure = self._critical_compiler_failure(canonical)
         largest_success = self._largest_current_success(arena, executable)

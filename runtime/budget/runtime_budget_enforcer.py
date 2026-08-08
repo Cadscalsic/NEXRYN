@@ -184,6 +184,9 @@ class RuntimeBudgetEnforcer:
             "admitted_route_count": len(admitted_routes),
             "deferred_by_budget_route_count": route_counts["deferred_by_budget_route_count"],
             "rejected_by_budget_route_count": route_counts["rejected_by_budget_route_count"],
+            "route_admission_count": len(admitted_routes),
+            "route_deferral_count": route_counts["deferred_by_budget_route_count"],
+            "route_rejection_count": route_counts["rejected_by_budget_route_count"],
             "total_route_activation_count": route_counts["total_route_activation_count"],
             "current_active_route_count": route_counts["current_active_route_count"],
             "peak_concurrent_active_route_count": route_counts["peak_concurrent_active_route_count"],
@@ -200,10 +203,30 @@ class RuntimeBudgetEnforcer:
             "current_reasoning_depth": depth_counts["current_reasoning_depth"],
             "maximum_entered_reasoning_depth": depth_counts["maximum_entered_reasoning_depth"],
             "maximum_completed_reasoning_depth": depth_counts["maximum_completed_reasoning_depth"],
+            "maximum_requested_reasoning_depth": depth_counts["attempted_reasoning_depth"],
+            "depth_admission_count": depth_counts["depth_admission_count"],
+            "depth_block_count": depth_counts["depth_block_count"],
             "available_graph_depth": depth_counts["available_graph_depth"],
             "dependency_execution_depth": depth_counts["dependency_execution_depth"],
             "depth_enforcement_state": depth_state,
             "depth_violation_count": depth_violations,
+            "attempted_overrun_state": (
+                "ATTEMPTED_OVERRUN_DETECTED"
+                if route_counts["selected_route_count"] > (route_limit or route_counts["selected_route_count"])
+                or depth_counts["attempted_reasoning_depth"] > (depth_limit or depth_counts["attempted_reasoning_depth"])
+                else "NO_ATTEMPTED_OVERRUN"
+            ),
+            "prevented_overrun_state": (
+                "OVERRUN_PREVENTED"
+                if route_counts["deferred_by_budget_route_count"] > 0
+                or depth_counts["depth_block_count"] > 0
+                else "NO_OVERRUN_PREVENTED"
+            ),
+            "realized_overrun_state": (
+                "REALIZED_OVERRUN"
+                if route_violations > 0 or depth_violations > 0
+                else "NO_REALIZED_OVERRUN"
+            ),
             "violation_reason": (
                 "NONE"
                 if route_violations == 0 and depth_violations == 0
@@ -279,6 +302,8 @@ class RuntimeBudgetEnforcer:
             if state in {"REASONING_DEPTH_EXITED", "COMPLETED", "MAXIMUM_COMPLETED_REASONING_DEPTH"}:
                 completed.append(depth)
                 current = max(0, min(current, depth - 1))
+            if state in {"DEPTH_ENTRY_BLOCKED_BY_BUDGET", "BRANCH_PRUNED_BY_BUDGET", "BOUNDED_REASONING_LIMIT_REACHED"}:
+                attempted.append(depth)
         planned = self._int_or_none(context.get("planned_reasoning_depth"))
         if planned is None:
             introspection = context.get("introspection_report")
@@ -292,6 +317,17 @@ class RuntimeBudgetEnforcer:
             "current_reasoning_depth": current if records else 0,
             "maximum_entered_reasoning_depth": max(entered or [0]),
             "maximum_completed_reasoning_depth": max(completed or [0]),
+            "depth_admission_count": len(entered),
+            "depth_block_count": len([
+                row for row in records
+                if isinstance(row, Mapping)
+                and str(row.get("state") or row.get("event") or "")
+                in {
+                    "DEPTH_ENTRY_BLOCKED_BY_BUDGET",
+                    "BRANCH_PRUNED_BY_BUDGET",
+                    "BOUNDED_REASONING_LIMIT_REACHED",
+                }
+            ]),
             "available_graph_depth": self._int_or_none(context.get("available_graph_depth")) or 0,
             "dependency_execution_depth": self._int_or_none(context.get("dependency_execution_depth")) or 0,
         }

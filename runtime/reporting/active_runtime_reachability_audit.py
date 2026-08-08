@@ -6,6 +6,9 @@ import hashlib
 import json
 from typing import Any
 
+from runtime.reporting.engineering_conclusion_integrity import (
+    engineering_conclusion_integrity_evaluator,
+)
 
 _MISSING_VALUES = {None, "", "Not Available", "NOT_AVAILABLE", "NOT_PRODUCED"}
 _RAW_RESULT_IDENTITY_NOT_ISSUED = {
@@ -97,23 +100,9 @@ def _raw_result_identity_missing(
 
 
 def _engineering_conclusion_conflict(engineering: dict[str, Any]) -> bool:
-    integrity = str(
-        _first_meaningful(
-            engineering.get("integrity"),
-            engineering.get("engineering_conclusion_integrity"),
-            engineering.get("conclusion_integrity"),
-            default="",
-        )
-    ).upper()
-    is_current = _to_bool(engineering.get("conclusion_is_current"))
-    conflicts = engineering.get("integrity_conflicts") or engineering.get(
-        "conclusion_integrity_conflicts"
-    ) or []
-    if integrity == "INVALID" and is_current is not False:
-        return True
-    if isinstance(conflicts, list) and conflicts and is_current is not False:
-        return True
-    return False
+    if _to_bool(engineering.get("conclusion_is_current")) is False:
+        return False
+    return engineering_conclusion_integrity_evaluator.has_conflict(engineering)
 
 
 def _stable_id(prefix: str, payload: Any) -> str:
@@ -261,7 +250,14 @@ def _task_runtime_summary(task_results: list[dict[str, Any]]) -> dict[str, Any]:
     declared_dependency_depths: list[int] = []
     declared_hypotheses: list[int] = []
     observed_routes: list[int] = []
+    observed_peak_routes: list[int] = []
+    selected_routes: list[int] = []
     observed_depths: list[int] = []
+    observed_entered_depths: list[int] = []
+    observed_completed_depths: list[int] = []
+    requested_depths: list[int] = []
+    depth_block_counts: list[int] = []
+    depth_admission_counts: list[int] = []
     retry_allowed_seen = False
     incomplete_episode_seen = False
     repair_applicable_seen = False
@@ -276,6 +272,35 @@ def _task_runtime_summary(task_results: list[dict[str, Any]]) -> dict[str, Any]:
         for row in _iter_dicts(result):
             if any(key in row for key in ("max_active_routes", "max_reasoning_depth", "active_routes", "route_count", "reasoning_depth")):
                 telemetry_present = True
+            peak = _to_int(row.get("peak_concurrent_active_route_count"))
+            if peak is not None:
+                observed_peak_routes.append(peak)
+                telemetry_present = True
+            selected = _to_int(row.get("selected_route_count"))
+            if selected is not None:
+                selected_routes.append(selected)
+            entered = _to_int(row.get("maximum_entered_reasoning_depth"))
+            if entered is not None:
+                observed_entered_depths.append(entered)
+                telemetry_present = True
+            completed = _to_int(row.get("maximum_completed_reasoning_depth"))
+            if completed is not None:
+                observed_completed_depths.append(completed)
+            requested = _to_int(
+                _first_meaningful(
+                    row.get("maximum_requested_reasoning_depth"),
+                    row.get("attempted_reasoning_depth"),
+                    default=None,
+                )
+            )
+            if requested is not None:
+                requested_depths.append(requested)
+            block_count = _to_int(row.get("depth_block_count"))
+            if block_count is not None:
+                depth_block_counts.append(block_count)
+            admission_count = _to_int(row.get("depth_admission_count"))
+            if admission_count is not None:
+                depth_admission_counts.append(admission_count)
             for key, target in (
                 ("max_active_routes", declared_routes),
                 ("maximum_active_routes", declared_routes),
@@ -328,8 +353,33 @@ def _task_runtime_summary(task_results: list[dict[str, Any]]) -> dict[str, Any]:
         "declared_max_reasoning_depth": min(declared_depths) if declared_depths else None,
         "declared_max_dependency_depth": min(declared_dependency_depths) if declared_dependency_depths else None,
         "declared_max_hypotheses": min(declared_hypotheses) if declared_hypotheses else None,
-        "observed_active_routes": max(observed_routes) if observed_routes else None,
-        "observed_reasoning_depth": max(observed_depths) if observed_depths else None,
+        "selected_route_count": max(selected_routes) if selected_routes else None,
+        "observed_active_routes": (
+            max(observed_peak_routes)
+            if observed_peak_routes
+            else max(observed_routes)
+            if observed_routes
+            else None
+        ),
+        "observed_reasoning_depth": (
+            max(observed_entered_depths)
+            if observed_entered_depths
+            else max(observed_depths)
+            if observed_depths
+            else None
+        ),
+        "observed_completed_reasoning_depth": (
+            max(observed_completed_depths)
+            if observed_completed_depths
+            else None
+        ),
+        "maximum_requested_reasoning_depth": (
+            max(requested_depths)
+            if requested_depths
+            else None
+        ),
+        "depth_block_count": max(depth_block_counts) if depth_block_counts else None,
+        "depth_admission_count": max(depth_admission_counts) if depth_admission_counts else None,
         "retry_allowed": True if retry_allowed_seen else None,
         "episode_completed": False if incomplete_episode_seen else None,
         "repair_applicable": (
@@ -394,6 +444,14 @@ def build_active_runtime_reachability_audit(
         "VALIDATION_TASK_EXECUTION_REPORT",
         "validation_task_execution_report",
     )
+    raw_applicability = _first_dict(
+        state,
+        "RAW_RESULT_APPLICABILITY_REPORT",
+        "raw_result_applicability_report",
+    )
+    raw_applicability_state = str(
+        raw_applicability.get("raw_result_applicability_state") or ""
+    ).upper()
     evaluation_report = _first_dict(
         state,
         "VALIDATION_EVIDENCE_EVALUATION_REPORT",
@@ -425,6 +483,25 @@ def build_active_runtime_reachability_audit(
     )
     plan_run_id = _first_meaningful(canonical_plan.get("run_id"), default=None)
     plan_task_id = _first_meaningful(canonical_plan.get("task_id"), default=None)
+    plan_authority = _first_meaningful(
+        canonical_plan.get("planning_authority"),
+        canonical_plan.get("temporal_authority_state"),
+        default=None,
+    )
+    authoritative_plan_state = "AUTHORITATIVE_PLAN_UNAVAILABLE"
+    retrospective_reconstruction_state = "RETROSPECTIVE_RECONSTRUCTION_ABSENT"
+    if canonical_plan and plan_authority == "AUTHORITATIVE":
+        authoritative_plan_state = "AUTHORITATIVE_PRE_EXECUTION_PLAN_PRESENT"
+    elif canonical_plan and canonical_plan.get("plan_origin") == (
+        "POST_EXECUTION_TELEMETRY_RECONSTRUCTION"
+    ):
+        retrospective_reconstruction_state = "RETROSPECTIVE_RECONSTRUCTION_PRESENT"
+    retrospective_plan = _first_dict(
+        execution_report,
+        "retrospective_execution_plan",
+    )
+    if retrospective_plan:
+        retrospective_reconstruction_state = "RETROSPECTIVE_RECONSTRUCTION_PRESENT"
     plan_identity_state = "PLAN_IDENTITY_CURRENT"
     if not canonical_plan:
         plan_identity_state = "PLAN_IDENTITY_UNBOUND"
@@ -547,7 +624,10 @@ def build_active_runtime_reachability_audit(
         and repair_attempts == 0
     ):
         gaps.append("RETRY_ALLOWED_REPAIR_NOT_ATTEMPTED")
-    if _raw_result_identity_missing(validation_report, evaluation_report, state):
+    if (
+        raw_applicability_state != "RAW_RESULT_NOT_APPLICABLE"
+        and _raw_result_identity_missing(validation_report, evaluation_report, state)
+    ):
         gaps.append("RAW_RESULT_CAPTURED_WITHOUT_IDENTITY")
     if _engineering_conclusion_conflict(engineering):
         gaps.append("ENGINEERING_CONCLUSION_CONFLICT")
@@ -625,6 +705,12 @@ def build_active_runtime_reachability_audit(
         ),
         "execution_plan_identity_state": plan_identity_state,
         "canonical_execution_plan_present": bool(canonical_plan),
+        "authoritative_plan_state": authoritative_plan_state,
+        "retrospective_reconstruction_state": retrospective_reconstruction_state,
+        "temporal_authority_state": _first_meaningful(
+            canonical_plan.get("temporal_authority_state"),
+            default="AUTHORITATIVE_PLAN_UNAVAILABLE",
+        ),
         "execution_plan_report_present": bool(execution_report),
         "budget_report_present": bool(budget_report),
         "task_runtime_telemetry_present": bool(task_summary["task_runtime_telemetry_present"]),
@@ -641,6 +727,22 @@ def build_active_runtime_reachability_audit(
         "episode_completed": episode_completed,
         "repair_attempts": repair_attempts,
         "repair_applicable": repair_applicable,
+        "raw_result_applicability_state": raw_applicability.get(
+            "raw_result_applicability_state",
+            "RAW_RESULT_APPLICABILITY_UNDETERMINED",
+        ),
+        "raw_result_applicability_reason": raw_applicability.get(
+            "raw_result_applicability_reason",
+            "RAW_RESULT_PRODUCER_PROVENANCE_UNDETERMINED",
+        ),
+        "raw_result_producer_obligation_count": raw_applicability.get(
+            "raw_result_producer_obligation_count",
+            0,
+        ),
+        "applicable_raw_result_missing_count": raw_applicability.get(
+            "applicable_raw_result_missing_count",
+            0,
+        ),
         "repair_reachability_state": (
             "REPAIR_REACHABILITY_BLOCKED"
             if "RETRY_ALLOWED_REPAIR_NOT_ATTEMPTED" in gaps

@@ -1,5 +1,6 @@
 import hashlib
 import json
+from copy import deepcopy
 
 from runtime.reporting.active_runtime_reachability_audit import (
     build_active_runtime_telemetry_summary,
@@ -14,6 +15,7 @@ def build_training_report(
     ledger_report=None,
     concept_lifecycle_report=None,
     curriculum_coverage_report=None,
+    authoritative_execution_plan=None,
     include_truth_evaluations=False,
     report_level="normal",
 ):
@@ -25,6 +27,33 @@ def build_training_report(
     ledger_report = ledger_report or {}
     concept_lifecycle_report = concept_lifecycle_report or {}
     curriculum_coverage_report = curriculum_coverage_report or {}
+    authoritative_execution_plan = (
+        authoritative_execution_plan
+        if isinstance(authoritative_execution_plan, dict)
+        else training_batch.get("authoritative_execution_plan", {})
+    )
+    authoritative_execution_plan = (
+        deepcopy(authoritative_execution_plan)
+        if isinstance(authoritative_execution_plan, dict)
+        else {}
+    )
+    training_alignment_snapshot = (
+        training_batch.get("training_economy_alignment_report", {})
+        if isinstance(training_batch.get("training_economy_alignment_report"), dict)
+        else {}
+    )
+    raw_result_applicability_report = (
+        training_batch.get("RAW_RESULT_APPLICABILITY_REPORT")
+        or training_batch.get("raw_result_applicability_report")
+        or training_alignment_snapshot.get("RAW_RESULT_APPLICABILITY_REPORT")
+        or training_alignment_snapshot.get("raw_result_applicability_report")
+        or {}
+    )
+    raw_result_applicability_report = (
+        deepcopy(raw_result_applicability_report)
+        if isinstance(raw_result_applicability_report, dict)
+        else {}
+    )
 
     def candidate_metric(evaluation, metric_name):
         return next(
@@ -1448,8 +1477,10 @@ def build_training_report(
                 "tasks": task_ids,
                 "declared_routes": audit_seed.get("declared_max_active_routes"),
                 "observed_routes": audit_seed.get("observed_active_routes"),
+                "selected_routes": audit_seed.get("selected_route_count"),
                 "declared_depth": audit_seed.get("declared_max_reasoning_depth"),
                 "observed_depth": audit_seed.get("observed_reasoning_depth"),
+                "requested_depth": audit_seed.get("maximum_requested_reasoning_depth"),
             }
             plan_id = stable_id("execution_plan_active_runtime", plan_payload)
             declared_routes = audit_seed.get("declared_max_active_routes")
@@ -1499,10 +1530,17 @@ def build_training_report(
                 "maximum_active_routes": audit_seed.get(
                     "declared_max_active_routes"
                 ),
-                "selected_route_count": audit_seed.get("observed_active_routes") or 0,
+                "selected_route_count": (
+                    audit_seed.get("selected_route_count")
+                    or audit_seed.get("observed_active_routes")
+                    or 0
+                ),
                 "admitted_route_count": min(
-                    audit_seed.get("observed_active_routes") or 0,
+                    audit_seed.get("selected_route_count")
+                    or audit_seed.get("observed_active_routes")
+                    or 0,
                     audit_seed.get("declared_max_active_routes")
+                    or audit_seed.get("selected_route_count")
                     or audit_seed.get("observed_active_routes")
                     or 0,
                 ),
@@ -1518,11 +1556,74 @@ def build_training_report(
                 )
                 or 0,
                 "maximum_completed_reasoning_depth": audit_seed.get(
-                    "observed_reasoning_depth"
+                    "observed_completed_reasoning_depth"
+                )
+                or audit_seed.get("observed_reasoning_depth")
+                or 0,
+                "maximum_requested_reasoning_depth": audit_seed.get(
+                    "maximum_requested_reasoning_depth"
+                )
+                or audit_seed.get("observed_reasoning_depth")
+                or 0,
+                "depth_admission_count": audit_seed.get(
+                    "depth_admission_count"
                 )
                 or 0,
+                "depth_block_count": audit_seed.get("depth_block_count") or 0,
+                "deferred_by_budget_route_count": max(
+                    0,
+                    (
+                        audit_seed.get("selected_route_count")
+                        or audit_seed.get("observed_active_routes")
+                        or 0
+                    )
+                    - (
+                        audit_seed.get("declared_max_active_routes")
+                        or 0
+                    ),
+                ),
+                "rejected_by_budget_route_count": 0,
                 "route_budget_enforcement_state": route_state,
                 "depth_enforcement_state": depth_state,
+                "attempted_overrun_state": (
+                    "ATTEMPTED_OVERRUN_DETECTED"
+                    if budget_exceeded
+                    or (
+                        (
+                            audit_seed.get("selected_route_count")
+                            or 0
+                        )
+                        > (audit_seed.get("observed_active_routes") or 0)
+                    )
+                    or (
+                        (
+                            audit_seed.get("maximum_requested_reasoning_depth")
+                            or 0
+                        )
+                        > (audit_seed.get("observed_reasoning_depth") or 0)
+                    )
+                    else "NO_ATTEMPTED_OVERRUN"
+                ),
+                "prevented_overrun_state": (
+                    "OVERRUN_PREVENTED"
+                    if not budget_exceeded
+                    and (
+                        (
+                            audit_seed.get("selected_route_count")
+                            or 0
+                        )
+                        > (audit_seed.get("observed_active_routes") or 0)
+                        or (
+                            audit_seed.get("maximum_requested_reasoning_depth")
+                            or 0
+                        )
+                        > (audit_seed.get("observed_reasoning_depth") or 0)
+                    )
+                    else "NO_OVERRUN_PREVENTED"
+                ),
+                "realized_overrun_state": (
+                    "REALIZED_OVERRUN" if budget_exceeded else "NO_REALIZED_OVERRUN"
+                ),
                 "violation_reason": (
                     "AUTHORITATIVE_RUNTIME_BUDGET_EXCEEDED"
                     if budget_exceeded
@@ -1605,8 +1706,23 @@ def build_training_report(
             if canonical_plans
             else None
         )
-        if selected_plan_record is None:
-            synthetic_plan = synthetic_current_plan_from_runtime_telemetry()
+        synthetic_plan = synthetic_current_plan_from_runtime_telemetry()
+        if synthetic_plan is not None:
+            synthetic_plan = {
+                **synthetic_plan,
+                "plan_origin": "POST_EXECUTION_TELEMETRY_RECONSTRUCTION",
+                "temporal_authority_state": "NONE",
+                "planning_authority": "DIAGNOSTIC_ONLY",
+                "execution_plan_binding_state": "DIAGNOSTIC_ONLY",
+            }
+        if authoritative_execution_plan:
+            selected_plan_record = {
+                "task": "run_authoritative_pre_execution_plan",
+                "status": "finalized",
+                "plan": authoritative_execution_plan,
+            }
+            canonical_plans.insert(0, selected_plan_record)
+        elif selected_plan_record is None:
             if synthetic_plan is not None:
                 selected_plan_record = {
                     "task": "active_runtime_telemetry",
@@ -1616,6 +1732,59 @@ def build_training_report(
                 canonical_plans.append(selected_plan_record)
         if selected_plan_record is not None:
             selected_plan = dict(selected_plan_record["plan"])
+            if (
+                selected_plan.get("planning_authority") == "AUTHORITATIVE"
+                and synthetic_plan is not None
+            ):
+                observed_budget = dict(
+                    synthetic_plan.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT")
+                    or synthetic_plan.get("runtime_budget_enforcement_report")
+                    or {}
+                )
+                declared_budget = dict(selected_plan.get("declared_budget") or {})
+                budget_report = {
+                    **observed_budget,
+                    "runtime_budget_source": (
+                        declared_budget.get("budget_source")
+                        or selected_plan.get("plan_origin")
+                        or "authoritative_pre_execution_plan"
+                    ),
+                    "runtime_budget_scope": selected_plan.get(
+                        "budget_scope",
+                        selected_plan.get("plan_scope"),
+                    ),
+                    "execution_plan_id": selected_plan.get("execution_plan_id"),
+                    "run_id": selected_plan.get("run_id"),
+                    "maximum_active_routes": declared_budget.get(
+                        "max_active_routes",
+                        selected_plan.get("maximum_active_routes"),
+                    ),
+                    "maximum_reasoning_depth": declared_budget.get(
+                        "max_reasoning_depth",
+                        selected_plan.get("maximum_reasoning_depth"),
+                    ),
+                }
+                selected_plan["RUNTIME_BUDGET_ENFORCEMENT_REPORT"] = budget_report
+                selected_plan["runtime_budget_enforcement_report"] = budget_report
+                selected_plan["runtime_observation_summary"] = {
+                    "observed_active_routes": synthetic_plan.get(
+                        "active_route_count"
+                    ),
+                    "observed_reasoning_depth": synthetic_plan.get(
+                        "maximum_entered_reasoning_depth"
+                    ),
+                    "retrospective_reconstruction_plan_id": (
+                        synthetic_plan.get("execution_plan_id")
+                    ),
+                    "retrospective_reconstruction_authority": "DIAGNOSTIC_ONLY",
+                }
+                if budget_report.get("runtime_budget_state") == (
+                    "RUNTIME_BUDGET_INTEGRITY_FAILED"
+                ):
+                    selected_plan["runtime_reconciliation_state"] = "DIVERGED"
+                    selected_plan["execution_plan_reconciliation_state"] = (
+                        "RUNTIME_OBSERVATION_DIVERGED_FROM_PLAN"
+                    )
             # Root cause: the active runtime materialized canonical plans, but
             # run-level reporting only exposed legacy singular count names. Keep
             # the immutable plan as the authoritative source and project both
@@ -1705,6 +1874,32 @@ def build_training_report(
                 "runtime_budget_enforcement_report": selected_plan.get(
                     "runtime_budget_enforcement_report",
                     selected_plan.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+                ),
+                "plan_origin": selected_plan.get("plan_origin"),
+                "planning_authority": selected_plan.get("planning_authority"),
+                "temporal_authority_state": selected_plan.get(
+                    "temporal_authority_state"
+                ),
+                "plan_scope": selected_plan.get("plan_scope"),
+                "budget_scope": selected_plan.get("budget_scope"),
+                "plan_created_at": selected_plan.get("plan_created_at"),
+                "plan_finalized_at": selected_plan.get("plan_finalized_at"),
+                "execution_admission_started_at": selected_plan.get(
+                    "execution_admission_started_at"
+                ),
+                "immutable_fingerprint": selected_plan.get(
+                    "immutable_fingerprint"
+                ),
+                "execution_plan_fingerprint": selected_plan.get(
+                    "execution_plan_fingerprint"
+                ),
+                "lifecycle_transitions": list(
+                    selected_plan.get("lifecycle_transitions", []) or []
+                ),
+                "retrospective_execution_plan": (
+                    synthetic_plan
+                    if selected_plan.get("planning_authority") == "AUTHORITATIVE"
+                    else {}
                 ),
                 "canonical_execution_plan": selected_plan,
                 "CANONICAL_EXECUTION_PLAN_REPORT": selected_plan,
@@ -4295,6 +4490,8 @@ def build_training_report(
             "runtime_budget_enforcement_report",
             execution_plan_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
         ),
+        "RAW_RESULT_APPLICABILITY_REPORT": raw_result_applicability_report,
+        "raw_result_applicability_report": dict(raw_result_applicability_report),
         "EXECUTION_DISPATCH_REPORT": execution_dispatch_report,
         "execution_dispatch_report": dict(execution_dispatch_report),
         "EXECUTION_LAYER_AUDIT_REPORT": execution_layer_audit_report,

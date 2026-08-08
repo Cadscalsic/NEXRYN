@@ -4191,6 +4191,39 @@ try:
         training_batch.get("selection_diversity_report", {})
     )
     task_files = training_batch["selected_task_files"]
+    from runtime.execution.execution_planner import ExecutionPlanner
+
+    authoritative_plan_builder = ExecutionPlanner()
+    authoritative_declared_budget = {
+        **execution_profile.as_budget_defaults(),
+        "budget_source": "main_adaptive_pre_execution_governed_defaults",
+        "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
+        "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
+        "max_active_routes": 2,
+        "max_reasoning_depth": 2,
+        "max_dependency_depth": 2,
+        "max_hypotheses": execution_profile.max_hypotheses,
+    }
+    authoritative_execution_plan = (
+        authoritative_plan_builder.build_authoritative_run_plan(
+            run_id=runtime_metrics["run_id"],
+            task_files=list(task_files),
+            selected_mode=args.mode,
+            execution_profile=execution_profile.as_runtime_metadata(),
+            cognitive_pipeline=execution_profile.pipeline_name,
+            declared_budget=authoritative_declared_budget,
+        )
+    )
+    runtime_metrics["execution_plan_id"] = (
+        authoritative_execution_plan.get("execution_plan_id")
+    )
+    training_batch["authoritative_execution_plan"] = dict(
+        authoritative_execution_plan
+    )
+    training_batch["execution_plan_id"] = (
+        authoritative_execution_plan.get("execution_plan_id")
+    )
+    training_batch["run_id"] = runtime_metrics["run_id"]
 
     print_training_batch_summary(
         training_batch,
@@ -4254,6 +4287,19 @@ try:
 
         task_execution_started_at = time.perf_counter()
         try:
+            authoritative_execution_plan = (
+                authoritative_plan_builder.admit_authoritative_run_plan(
+                    authoritative_execution_plan,
+                    task_id=task_file,
+                )
+                if not authoritative_execution_plan.get(
+                    "execution_admission_started_at"
+                )
+                else authoritative_execution_plan
+            )
+            training_batch["authoritative_execution_plan"] = dict(
+                authoritative_execution_plan
+            )
             with minimal_runtime_output(args.report_level == "minimal"):
                 task_result = pipeline.run(
                     task_path=task_path,
@@ -4282,6 +4328,33 @@ try:
                     profile_level=args.profile_level,
                     audit_sections_requested=deep_audit_sections,
                     deep_budget_overrides=deep_budget.as_dict(),
+                    authoritative_execution_plan=authoritative_execution_plan,
+                )
+            if isinstance(task_result, dict):
+                task_plan_reference = {
+                    "run_id": authoritative_execution_plan.get("run_id"),
+                    "execution_plan_id": authoritative_execution_plan.get(
+                        "execution_plan_id"
+                    ),
+                    "execution_plan_schema_version": (
+                        authoritative_execution_plan.get(
+                            "execution_plan_schema_version"
+                        )
+                    ),
+                    "task_id": task_file,
+                    "plan_scope": authoritative_execution_plan.get("plan_scope"),
+                    "temporal_authority_state": (
+                        authoritative_execution_plan.get(
+                            "temporal_authority_state"
+                        )
+                    ),
+                }
+                task_result["authoritative_execution_plan_reference"] = (
+                    task_plan_reference
+                )
+                task_result["run_id"] = task_plan_reference["run_id"]
+                task_result["execution_plan_id"] = (
+                    task_plan_reference["execution_plan_id"]
                 )
             if first_task_started and "first_task_completed" not in (
                 runtime_watchdog.checkpoints
@@ -4418,6 +4491,49 @@ try:
             4,
         )
 
+    from runtime.validation.raw_result_lifecycle_applicability import (
+        raw_result_lifecycle_applicability_evaluator,
+    )
+
+    raw_result_applicability_report = (
+        raw_result_lifecycle_applicability_evaluator.evaluate(
+            run_id=runtime_metrics.get("run_id"),
+            execution_plan_id=authoritative_execution_plan.get(
+                "execution_plan_id"
+            ),
+            validation_task_execution_report=validation_task_execution_report,
+            validation_scheduling_report=validation_scheduling_report,
+            route_lifecycle_records=[
+                row
+                for item in all_results
+                if isinstance(item.get("result"), dict)
+                for row in item["result"].get("route_lifecycle_records", [])
+            ],
+            reasoning_depth_lifecycle_records=[
+                row
+                for item in all_results
+                if isinstance(item.get("result"), dict)
+                for row in item["result"].get(
+                    "reasoning_depth_lifecycle_records",
+                    [],
+                )
+            ],
+        )
+    )
+    evidence_plan_store_report["RAW_RESULT_APPLICABILITY_REPORT"] = (
+        raw_result_applicability_report
+    )
+    evidence_plan_store_report["raw_result_applicability_report"] = (
+        raw_result_applicability_report
+    )
+    training_alignment["RAW_RESULT_APPLICABILITY_REPORT"] = (
+        raw_result_applicability_report
+    )
+    training_alignment["raw_result_applicability_report"] = (
+        raw_result_applicability_report
+    )
+    training_batch["training_economy_alignment_report"] = training_alignment
+
     minimal_terminal_closure = (
         args.mode == "fast"
         and args.report_level in {"minimal", "normal"}
@@ -4477,8 +4593,15 @@ try:
                 "reason": "fast_minimal_concept_lifecycle_deferred",
                 "concepts": [],
             },
+            authoritative_execution_plan=authoritative_execution_plan,
             report_level="minimal",
             include_truth_evaluations=False,
+        )
+        training_report["RAW_RESULT_APPLICABILITY_REPORT"] = dict(
+            raw_result_applicability_report
+        )
+        training_report["raw_result_applicability_report"] = dict(
+            raw_result_applicability_report
         )
         pre_final_report_diagnostics.phase_exit(
             "TRAINING_REPORT_GENERATION",
@@ -4523,6 +4646,8 @@ try:
             "validation_evidence_evaluation_report": (
                 validation_evidence_evaluation_report
             ),
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_result_applicability_report,
+            "raw_result_applicability_report": raw_result_applicability_report,
             "arena_evidence_admission_report": arena_evidence_admission_report,
             "arena_formal_selection_report": arena_formal_selection_report,
             "training_report": training_report,
@@ -4605,6 +4730,24 @@ try:
         runtime_metadata["requested_report_level"] = args.report_level
         runtime_metadata["report_level"] = "minimal"
         runtime_metadata["projected_report_level"] = "minimal"
+        from runtime.reporting.engineering_conclusion_integrity import (
+            engineering_conclusion_integrity_evaluator,
+        )
+
+        results = (
+            engineering_conclusion_integrity_evaluator
+            .ensure_authoritative_conclusion(
+                results,
+                runtime_metadata=runtime_metadata,
+            )
+        )
+        if isinstance(results.get("training_report"), dict):
+            results["training_report"]["ENGINEERING_CONCLUSION"] = dict(
+                results["ENGINEERING_CONCLUSION"]
+            )
+            results["training_report"]["engineering_conclusion"] = dict(
+                results["ENGINEERING_CONCLUSION"]
+            )
         pre_final_report_diagnostics.collection_snapshot(
             "REPORT_SOURCE_COLLECTION",
             {
@@ -4783,6 +4926,7 @@ try:
         multi_task_results=all_results,
         ledger_report=ledger_report,
         concept_lifecycle_report=concept_lifecycle_report,
+        authoritative_execution_plan=authoritative_execution_plan,
         report_level=args.report_level,
         include_truth_evaluations=(
             args.mode not in {"deep", "full"}
@@ -4791,6 +4935,12 @@ try:
                 deep_audit_flags,
             )
         ),
+    )
+    training_report["RAW_RESULT_APPLICABILITY_REPORT"] = dict(
+        raw_result_applicability_report
+    )
+    training_report["raw_result_applicability_report"] = dict(
+        raw_result_applicability_report
     )
     if (
         selection_training_diversity_report.get(
@@ -7467,6 +7617,8 @@ try:
         "validation_evidence_evaluation_report": (
             validation_evidence_evaluation_report
         ),
+        "RAW_RESULT_APPLICABILITY_REPORT": raw_result_applicability_report,
+        "raw_result_applicability_report": raw_result_applicability_report,
         "arena_evidence_admission_report": arena_evidence_admission_report,
         "arena_formal_selection_report": arena_formal_selection_report,
         "training_report": training_report,
@@ -8457,6 +8609,21 @@ if runtime_status == "completed":
         )
         results["training_report"]["active_runtime_reachability_audit"] = dict(
             results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+        )
+    from runtime.reporting.engineering_conclusion_integrity import (
+        engineering_conclusion_integrity_evaluator,
+    )
+
+    results = engineering_conclusion_integrity_evaluator.ensure_authoritative_conclusion(
+        results,
+        runtime_metadata=runtime_metadata,
+    )
+    if isinstance(results.get("training_report"), dict):
+        results["training_report"]["ENGINEERING_CONCLUSION"] = dict(
+            results["ENGINEERING_CONCLUSION"]
+        )
+        results["training_report"]["engineering_conclusion"] = dict(
+            results["ENGINEERING_CONCLUSION"]
         )
     pre_final_report_diagnostics.collection_snapshot(
         "REPORT_SOURCE_COLLECTION",

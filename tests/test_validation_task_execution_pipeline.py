@@ -255,7 +255,10 @@ def test_missing_artifact_is_not_reported_as_captured_or_eligible(tmp_path):
 
     assert report["execution_state"] == "RAW_RESULT_ARTIFACT_MISSING"
     assert report["raw_result_captured"] is False
-    assert report["raw_validation_result_id"].startswith("raw_validation_result_")
+    assert report["raw_validation_result_id"] is None
+    assert report["raw_result_identity_state"] == (
+        "APPLICABLE_ARTIFACT_MISSING_IDENTITY_NOT_ISSUABLE"
+    )
     assert envelope["artifact_state"] == "ARTIFACT_MISSING"
     assert envelope["payload_state"] == "PAYLOAD_MISSING"
     assert envelope["captured_artifact_id"] is None

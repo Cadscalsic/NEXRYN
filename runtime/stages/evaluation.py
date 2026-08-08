@@ -57,6 +57,10 @@ from runtime.reasoning.counterfactual_repair_engine import (
     counterfactual_repair_engine
 )
 
+from runtime.budget.runtime_budget_enforcer import (
+    runtime_budget_enforcer,
+)
+
 
 # ============================================
 # GLOBAL TEMPORAL MEMORY
@@ -139,6 +143,184 @@ def _is_fast_minimal_context(context):
         report_level == "minimal"
         and (mode == "fast" or profile_name == "fast")
     )
+
+
+def _ensure_runtime_budget_evidence(context, introspection_report):
+    if context.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT") or context.get(
+        "runtime_budget_enforcement_report"
+    ):
+        return context
+
+    budget_report = context.get("cognitive_budget_report", {})
+    budget = context.get("current_reasoning_budget")
+    if not isinstance(budget_report, dict):
+        budget_report = {}
+    if not isinstance(budget, dict) and isinstance(budget_report, dict):
+        budget = {
+            "budget_source": "cognitive_budget_report",
+            "max_active_routes": budget_report.get("max_active_routes"),
+            "max_reasoning_depth": budget_report.get("max_reasoning_depth"),
+            "max_dependency_depth": budget_report.get("max_dependency_depth"),
+            "max_hypotheses": budget_report.get("max_hypotheses"),
+            "active_route_limit_scope": "TASK_CONCURRENT_ACTIVE_ROUTES",
+            "reasoning_depth_limit_scope": "TASK_GOVERNED_REASONING_DEPTH",
+        }
+
+    run_plan = context.get("authoritative_execution_plan")
+    run_plan = run_plan if isinstance(run_plan, dict) else {}
+    run_id = (
+        run_plan.get("run_id")
+        or context.get("run_id")
+        or context.get("execution_id")
+        or "current_run"
+    )
+    execution_plan_id = run_plan.get("execution_plan_id")
+    task_id = context.get("task_path") or context.get("task_id") or "current_task"
+
+    tool_report = context.get("tool_selection_report", {})
+    selected_routes = []
+    if isinstance(tool_report, dict):
+        selected_routes = list(
+            tool_report.get("enabled_tools")
+            or tool_report.get("selected_tools")
+            or []
+        )
+    if not selected_routes:
+        selected_routes = [
+            f"route_{index + 1}"
+            for index in range(int(introspection_report.get("active_routes", 0) or 0))
+        ]
+
+    try:
+        route_limit = max(1, int(budget_report.get("max_active_routes")))
+    except (TypeError, ValueError):
+        route_limit = len(selected_routes)
+    try:
+        depth_limit = max(1, int(budget_report.get("max_reasoning_depth")))
+    except (TypeError, ValueError):
+        depth_limit = int(introspection_report.get("reasoning_depth", 0) or 0)
+
+    route_records = [
+        {
+            "route_id": str(route),
+            "route_source": "governed_evaluation_route_admission",
+            "route_rank": index + 1,
+            "route_score": None,
+            "route_active_state": False,
+        }
+        for index, route in enumerate(selected_routes)
+    ]
+    route_lifecycle_records = []
+    for index, route in enumerate(route_records):
+        route_id = route["route_id"]
+        if index < route_limit:
+            route_lifecycle_records.append({
+                "run_id": run_id,
+                "execution_plan_id": execution_plan_id,
+                "task_id": task_id,
+                "route_id": route_id,
+                "state": "ACTIVE_ROUTE",
+                "event_id": f"{route_id}:active",
+                "source_stage": "evaluation_route_admission_gate",
+                "source_timestamp": str(datetime.utcnow()),
+            })
+        else:
+            route_lifecycle_records.append({
+                "run_id": run_id,
+                "execution_plan_id": execution_plan_id,
+                "task_id": task_id,
+                "route_id": route_id,
+                "state": "DEFERRED_BY_BUDGET",
+                "event_id": f"{route_id}:deferred",
+                "decision_reason": "maximum_active_routes",
+                "source_stage": "evaluation_route_admission_gate",
+                "source_timestamp": str(datetime.utcnow()),
+            })
+    for route in route_records[:route_limit]:
+        route_id = route["route_id"]
+        route_lifecycle_records.append({
+            "run_id": run_id,
+            "execution_plan_id": execution_plan_id,
+            "task_id": task_id,
+            "route_id": route_id,
+            "state": "RELEASED_ROUTE",
+            "event_id": f"{route_id}:released",
+            "source_stage": "evaluation_route_admission_gate",
+            "source_timestamp": str(datetime.utcnow()),
+        })
+
+    requested_depth = int(introspection_report.get("reasoning_depth", 0) or 0)
+    depth_records = []
+    for depth in range(1, requested_depth + 1):
+        depth_records.append({
+            "run_id": run_id,
+            "execution_plan_id": execution_plan_id,
+            "task_id": task_id,
+            "depth": depth,
+            "state": "ATTEMPTED_REASONING_DEPTH",
+            "source_stage": "evaluation_reasoning_depth_gate",
+            "source_timestamp": str(datetime.utcnow()),
+        })
+        if depth <= depth_limit:
+            depth_records.append({
+                "run_id": run_id,
+                "execution_plan_id": execution_plan_id,
+                "task_id": task_id,
+                "depth": depth,
+                "state": "REASONING_DEPTH_ENTRY_AUTHORIZED",
+                "source_stage": "evaluation_reasoning_depth_gate",
+                "source_timestamp": str(datetime.utcnow()),
+            })
+            depth_records.append({
+                "run_id": run_id,
+                "execution_plan_id": execution_plan_id,
+                "task_id": task_id,
+                "depth": depth,
+                "state": "REASONING_DEPTH_EXITED",
+                "source_stage": "evaluation_reasoning_depth_gate",
+                "source_timestamp": str(datetime.utcnow()),
+            })
+        else:
+            depth_records.append({
+                "run_id": run_id,
+                "execution_plan_id": execution_plan_id,
+                "task_id": task_id,
+                "depth": depth,
+                "state": "DEPTH_ENTRY_BLOCKED_BY_BUDGET",
+                "decision_reason": "maximum_reasoning_depth",
+                "source_stage": "evaluation_reasoning_depth_gate",
+                "source_timestamp": str(datetime.utcnow()),
+            })
+
+    budget_context = {
+        **context,
+        "run_id": run_id,
+        "task_id": task_id,
+        "route_selection_report": {
+            "available_routes": route_records,
+            "candidate_routes": route_records,
+            "active_routes": route_records,
+        },
+        "route_lifecycle_records": route_lifecycle_records,
+        "reasoning_depth_lifecycle_records": depth_records,
+        "planned_reasoning_depth": requested_depth,
+        "available_graph_depth": requested_depth,
+    }
+    receipt = runtime_budget_enforcer.build_receipt(
+        budget=budget,
+        context=budget_context,
+        execution_plan_id=execution_plan_id,
+        route_records=route_records,
+        nodes=[
+            {"materialization_state": "MATERIALIZED"}
+            for _ in route_records[:route_limit]
+        ],
+    )
+    context["route_lifecycle_records"] = route_lifecycle_records
+    context["reasoning_depth_lifecycle_records"] = depth_records
+    context["RUNTIME_BUDGET_ENFORCEMENT_REPORT"] = receipt
+    context["runtime_budget_enforcement_report"] = receipt
+    return context
 
 
 def _compact_evaluation_list(values, limit=3):
@@ -767,6 +949,11 @@ def evaluation_stage(context):
             introspection_engine.build_summary()
         )
 
+    context = _ensure_runtime_budget_evidence(
+        context,
+        introspection_report,
+    )
+
     # ========================================
     # FAILURE ANALYSIS
     # ========================================
@@ -1055,6 +1242,22 @@ def evaluation_stage(context):
             "cognitive_budget_report": context.get(
                 "cognitive_budget_report",
                 {},
+            ),
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": context.get(
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                context.get("runtime_budget_enforcement_report", {}),
+            ),
+            "runtime_budget_enforcement_report": context.get(
+                "runtime_budget_enforcement_report",
+                context.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+            ),
+            "route_lifecycle_records": context.get(
+                "route_lifecycle_records",
+                [],
+            ),
+            "reasoning_depth_lifecycle_records": context.get(
+                "reasoning_depth_lifecycle_records",
+                [],
             ),
             "evaluation_result": evaluation_result,
             "success_semantics_report": success_semantics_report,

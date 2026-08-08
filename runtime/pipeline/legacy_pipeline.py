@@ -13121,6 +13121,7 @@ class AdaptiveCognitivePipeline:
         profile_level="minimal",
         audit_sections_requested=None,
         deep_budget_overrides=None,
+        authoritative_execution_plan=None,
     ):
 
         self.profiling_enabled = bool(profile)
@@ -13175,6 +13176,31 @@ class AdaptiveCognitivePipeline:
                 )
             )
         self.prepare_task_run()
+        if isinstance(authoritative_execution_plan, dict):
+            self.runtime.update_context(
+                "authoritative_execution_plan",
+                dict(authoritative_execution_plan),
+            )
+            self.runtime.update_context(
+                "authoritative_execution_plan_reference",
+                {
+                    "run_id": authoritative_execution_plan.get("run_id"),
+                    "execution_plan_id": authoritative_execution_plan.get(
+                        "execution_plan_id"
+                    ),
+                    "execution_plan_schema_version": (
+                        authoritative_execution_plan.get(
+                            "execution_plan_schema_version"
+                        )
+                    ),
+                    "plan_scope": authoritative_execution_plan.get("plan_scope"),
+                    "temporal_authority_state": (
+                        authoritative_execution_plan.get(
+                            "temporal_authority_state"
+                        )
+                    ),
+                },
+            )
         self.runtime.update_context(
             "execution_profile",
             self.execution_profile.as_runtime_metadata(),

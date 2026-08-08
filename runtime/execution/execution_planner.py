@@ -265,6 +265,212 @@ class ExecutionPlanner:
         plan_result = plan_result if isinstance(plan_result, Mapping) else {}
         return dict(plan_result.get("EXECUTION_PLAN_REPORT", {}))
 
+    def build_authoritative_run_plan(
+        self,
+        *,
+        run_id: str,
+        task_files: list[str],
+        selected_mode: str,
+        execution_profile: Mapping[str, Any] | None = None,
+        cognitive_pipeline: str | None = None,
+        declared_budget: Mapping[str, Any] | None = None,
+        source_stage: str = "main_adaptive_pre_execution_planner",
+    ) -> dict[str, Any]:
+        """Build one finalized run-scoped plan before governed execution starts."""
+
+        created_at = str(datetime.utcnow())
+        schema_version = "1.0"
+        task_entries = [
+            {
+                "task_id": str(task_file),
+                "task_file": str(task_file),
+                "task_entry_state": "SELECTED_FOR_GOVERNED_EXECUTION",
+                "governed_execution_admission_state": "PENDING_PLAN_REFERENCE",
+            }
+            for task_file in task_files
+        ]
+        budget = dict(declared_budget or {})
+        profile = dict(execution_profile or {})
+        plan_scope = "RUN_WITH_TASK_ENTRIES"
+        execution_plan_id = self._stable_id(
+            "execution_plan_authoritative_run",
+            {
+                "run_id": run_id,
+                "plan_scope": plan_scope,
+                "task_files": list(task_files),
+                "selected_mode": selected_mode,
+            },
+        )
+        lifecycle_seed = {
+            "execution_plan_id": execution_plan_id,
+            "execution_plan_schema_version": schema_version,
+            "run_id": run_id,
+            "source_stage": source_stage,
+            "source_timestamp": created_at,
+            "is_current_run": True,
+        }
+        lifecycle = [
+            self._plan_transition(lifecycle_seed, "PLAN_BUILD_REQUESTED", 1),
+            self._plan_transition(lifecycle_seed, "PLAN_BUILD_COMPLETED", 2),
+        ]
+        finalized_at = str(datetime.utcnow())
+        lifecycle_seed["source_timestamp"] = finalized_at
+        lifecycle.extend([
+            self._plan_transition(lifecycle_seed, "PLAN_FINALIZED", 3),
+            self._plan_transition(lifecycle_seed, "PLAN_BOUND_TO_CURRENT_RUN", 4),
+        ])
+        planned_routes = [
+            {
+                "route_id": self._stable_id(
+                    "planned_task_route",
+                    {
+                        "execution_plan_id": execution_plan_id,
+                        "task_file": task_file,
+                    },
+                ),
+                "task_id": str(task_file),
+                "route_state": "PLANNED_SELECTED_TASK_ROUTE",
+            }
+            for task_file in task_files
+        ]
+        planned_execution_nodes = [
+            {
+                "execution_node_id": self._stable_id(
+                    "planned_execution_node",
+                    {
+                        "execution_plan_id": execution_plan_id,
+                        "task_file": task_file,
+                    },
+                ),
+                "execution_plan_id": execution_plan_id,
+                "task_id": str(task_file),
+                "node_type": "governed_task_execution",
+                "admission_requirement": "EXECUTION_ADMITTED_WITH_PLAN_REFERENCE",
+                "invocation_state": "NOT_INVOKED",
+            }
+            for task_file in task_files
+        ]
+        plan = {
+            "execution_plan_schema_version": schema_version,
+            "execution_plan_id": execution_plan_id,
+            "run_id": str(run_id),
+            "task_id": "RUN_WITH_TASK_ENTRIES",
+            "plan_scope": plan_scope,
+            "budget_scope": plan_scope,
+            "planning_state": "AUTHORITATIVE_PRE_EXECUTION_PLAN_FINALIZED",
+            "execution_plan_state": "AUTHORITATIVE_PRE_EXECUTION_PLAN_FINALIZED",
+            "plan_origin": source_stage,
+            "planning_authority": "AUTHORITATIVE",
+            "temporal_authority_state": "PRE_EXECUTION_AUTHORITY_CONFIRMED",
+            "plan_created_at": created_at,
+            "plan_finalized_at": finalized_at,
+            "execution_admission_started_at": None,
+            "selected_mode": str(selected_mode or ""),
+            "execution_profile": profile,
+            "cognitive_pipeline": cognitive_pipeline or profile.get("cognitive_pipeline") or profile.get("pipeline_name"),
+            "declared_budget": budget,
+            "selected_tools": [],
+            "selected_layers": [],
+            "planned_routes": planned_routes,
+            "planned_execution_nodes": planned_execution_nodes,
+            "planned_reasoning_depth": budget.get("max_reasoning_depth"),
+            "task_entries": task_entries,
+            "lifecycle_transitions": lifecycle,
+            "execution_plan_finalized": True,
+            "finalized": True,
+            "execution_plan_immutable": True,
+            "immutable": True,
+            "execution_plan_forwarded": True,
+            "selected_tool_count": 0,
+            "selected_tools_count": 0,
+            "selected_layer_count": 0,
+            "selected_layers_count": 0,
+            "active_route_count": len(planned_routes),
+            "selected_route_count": len(planned_routes),
+            "selected_routes_count": len(planned_routes),
+            "execution_node_count": len(planned_execution_nodes),
+            "execution_nodes_materialized": len(planned_execution_nodes),
+            "reconciled_tool_count": 0,
+            "reconciled_tools_count": 0,
+            "reconciled_layer_count": 0,
+            "reconciled_layers_count": 0,
+            "reconciled_route_count": 0,
+            "reconciled_routes_count": 0,
+            "maximum_active_routes": budget.get("max_active_routes"),
+            "maximum_reasoning_depth": budget.get("max_reasoning_depth"),
+            "maximum_dependency_depth": budget.get("max_dependency_depth"),
+            "maximum_hypotheses": budget.get("max_hypotheses"),
+            "execution_plan_reconciliation_state": "PENDING_RUNTIME_OBSERVATION",
+            "runtime_reconciliation_state": "PENDING_RUNTIME_OBSERVATION",
+            "execution_plan_validation_state": "VALID",
+            "execution_plan_failure_cause": None,
+            "dependency_activation_state": "NOT_REQUESTED",
+            "process_stage_state": "NOT_REQUESTED",
+            "retrospective_reconstruction_authority": "DIAGNOSTIC_ONLY_WHEN_PRESENT",
+            "constitutional_boundary": "TEMPORAL_PLANNING_AUTHORITY_ONLY_NO_RUNTIME_BUDGET_ENFORCEMENT",
+        }
+        fingerprint = self._fingerprint_authoritative_run_plan(plan)
+        plan["immutable_fingerprint"] = fingerprint
+        plan["execution_plan_fingerprint"] = fingerprint
+        return plan
+
+    def admit_authoritative_run_plan(
+        self,
+        canonical_plan: Mapping[str, Any] | None,
+        *,
+        task_id: str,
+        source_stage: str = "main_adaptive_governed_task_admission",
+    ) -> dict[str, Any]:
+        """Record the real governed admission boundary without invoking work."""
+
+        plan = dict(canonical_plan or {})
+        timestamp = str(datetime.utcnow())
+        transitions = [
+            dict(row)
+            for row in plan.get("lifecycle_transitions", []) or []
+            if isinstance(row, Mapping)
+        ]
+        if not any(
+            row.get("transition_name") == "EXECUTION_ADMITTED_WITH_PLAN_REFERENCE"
+            for row in transitions
+        ):
+            transitions.append(
+                self._plan_transition(
+                    {
+                        "execution_plan_id": plan.get("execution_plan_id"),
+                        "execution_plan_schema_version": plan.get(
+                            "execution_plan_schema_version",
+                            "1.0",
+                        ),
+                        "run_id": plan.get("run_id"),
+                        "source_stage": source_stage,
+                        "source_timestamp": timestamp,
+                        "is_current_run": True,
+                    },
+                    "EXECUTION_ADMITTED_WITH_PLAN_REFERENCE",
+                    len(transitions) + 1,
+                )
+            )
+        task_entries = []
+        for entry in plan.get("task_entries", []) or []:
+            if not isinstance(entry, Mapping):
+                continue
+            updated = dict(entry)
+            if updated.get("task_id") == task_id or updated.get("task_file") == task_id:
+                updated["governed_execution_admission_state"] = (
+                    "EXECUTION_ADMITTED_WITH_PLAN_REFERENCE"
+                )
+                updated["execution_admission_started_at"] = timestamp
+            task_entries.append(updated)
+        plan["task_entries"] = task_entries
+        plan["lifecycle_transitions"] = transitions
+        plan["execution_admission_started_at"] = (
+            plan.get("execution_admission_started_at") or timestamp
+        )
+        plan["runtime_reconciliation_state"] = "RUNTIME_OBSERVATION_PENDING"
+        plan["execution_plan_reconciliation_state"] = "RUNTIME_OBSERVATION_PENDING"
+        return plan
+
     def consume_finalized_plan(
         self,
         canonical_plan: Mapping[str, Any] | None,
@@ -1129,6 +1335,58 @@ class ExecutionPlanner:
     def _stable_id(self, prefix: str, payload: Any) -> str:
         text = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
         return f"{prefix}_{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}"
+
+    def _plan_transition(
+        self,
+        plan: Mapping[str, Any],
+        transition_name: str,
+        sequence_index: int,
+    ) -> dict[str, Any]:
+        return {
+            "transition_name": transition_name,
+            "state": transition_name,
+            "execution_plan_id": plan.get("execution_plan_id"),
+            "execution_plan_schema_version": plan.get(
+                "execution_plan_schema_version",
+                "1.0",
+            ),
+            "run_id": plan.get("run_id"),
+            "budget_scope": plan.get("budget_scope") or plan.get("plan_scope"),
+            "source_stage": plan.get("source_stage", "execution_planner"),
+            "source_timestamp": plan.get("source_timestamp", str(datetime.utcnow())),
+            "sequence_index": sequence_index,
+            "is_current_run": bool(plan.get("is_current_run", True)),
+        }
+
+    def _fingerprint_authoritative_run_plan(self, plan: Mapping[str, Any]) -> str:
+        planned_only = {
+            key: plan.get(key)
+            for key in (
+                "execution_plan_schema_version",
+                "execution_plan_id",
+                "run_id",
+                "task_id",
+                "plan_scope",
+                "planning_state",
+                "plan_origin",
+                "plan_created_at",
+                "plan_finalized_at",
+                "selected_mode",
+                "execution_profile",
+                "cognitive_pipeline",
+                "declared_budget",
+                "selected_tools",
+                "selected_layers",
+                "planned_routes",
+                "planned_execution_nodes",
+                "planned_reasoning_depth",
+                "task_entries",
+                "finalized",
+                "immutable",
+                "temporal_authority_state",
+            )
+        }
+        return self._stable_id("execution_plan_fingerprint", planned_only)
 
     def _identity_value(self, value: Any) -> str:
         text = str(value or "").strip()
