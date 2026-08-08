@@ -3532,6 +3532,65 @@ class DeterministicFinalReportRenderer:
         canonical: dict[str, Any],
     ) -> str:
         conclusion = self._engineering_conclusion(canonical)
+        conclusion = (
+            engineering_conclusion_integrity_evaluator
+            .mark_human_report_projected(conclusion)
+        )
+        transitions = [
+            row for row in (
+                conclusion.get("engineering_conclusion_lifecycle_transitions")
+                or []
+            )
+            if isinstance(row, dict)
+        ]
+        transition_lines = [
+            (
+                "Engineering Conclusion Lifecycle Transition "
+                f"{row.get('sequence_index')}: "
+                f"{row.get('transition_name') or row.get('state')} "
+                f"| run_id={row.get('run_id')} "
+                f"| execution_plan_id={row.get('execution_plan_id')} "
+                f"| timestamp={row.get('source_timestamp')}"
+            )
+            for row in transitions
+        ]
+        emission_comparison = (
+            conclusion.get("authoritative_emitted_stable_field_comparison") or []
+        )
+        if isinstance(emission_comparison, list) and emission_comparison:
+            emission_comparison_value = "; ".join(
+                (
+                    f"{row.get('field')}={row.get('state')}"
+                    if isinstance(row, dict)
+                    else self._value(row)
+                )
+                for row in emission_comparison
+            )
+        else:
+            emission_comparison_value = "none"
+        emission_conflict_fields = conclusion.get("emission_conflict_fields")
+        if emission_conflict_fields == []:
+            emission_conflict_fields_value = "none"
+        else:
+            emission_conflict_fields_value = self._value(emission_conflict_fields)
+        persistence_triple_comparison = (
+            conclusion.get(
+                "authoritative_persisted_emitted_stable_field_comparison"
+            )
+            or []
+        )
+        if isinstance(persistence_triple_comparison, list) and persistence_triple_comparison:
+            persistence_triple_comparison_value = "; ".join(
+                (
+                    f"{row.get('field')}={row.get('comparison_result')}"
+                    f"/{row.get('conflict_type')}"
+                    if isinstance(row, dict)
+                    else self._value(row)
+                )
+                for row in persistence_triple_comparison
+            )
+        else:
+            persistence_triple_comparison_value = "none"
         lines = [
             "Engineering Conclusion State: "
             f"{self._value(conclusion.get('engineering_conclusion_state'))}",
@@ -3584,12 +3643,58 @@ class DeterministicFinalReportRenderer:
             f"{self._value(conclusion.get('current_run_binding_state'))}",
             "Persistence Applicability: "
             f"{self._value(conclusion.get('persistence_applicability'))}",
+            "Persistence Applicability Reason: "
+            f"{self._value(conclusion.get('persistence_applicability_reason'))}",
+            "Persistence Write Attempted: "
+            f"{self._value(conclusion.get('persistence_write_attempted'))}",
+            "Persistence Write Completed: "
+            f"{self._value(conclusion.get('persistence_write_completed'))}",
+            "Persistence Readback Attempted: "
+            f"{self._value(conclusion.get('persistence_readback_attempted'))}",
+            "Persistence Readback Completed: "
+            f"{self._value(conclusion.get('persistence_readback_completed'))}",
             "Persistence Integrity: "
             f"{self._value(conclusion.get('persistence_integrity'))}",
+            "Persistence Integrity Reason: "
+            f"{self._value(conclusion.get('persistence_integrity_reason'))}",
             "Emission Integrity: "
             f"{self._value(conclusion.get('emission_integrity'))}",
+            "Emission Integrity Reason: "
+            f"{self._value(conclusion.get('emission_integrity_reason'))}",
+            "Authoritative Fingerprint: "
+            f"{self._value(conclusion.get('authoritative_fingerprint'), 'Not produced in this run')}",
+            "Stored Fingerprint: "
+            f"{self._value(conclusion.get('stored_fingerprint'), 'Not produced in this run')}",
+            "Recomputed Readback Fingerprint: "
+            f"{self._value(conclusion.get('recomputed_readback_fingerprint'), 'Not produced in this run')}",
+            "Emitted Fingerprint: "
+            f"{self._value(conclusion.get('emitted_fingerprint'), 'Not produced in this run')}",
+            "Persisted Run Id: "
+            f"{self._value(conclusion.get('persisted_run_id'), 'Not produced in this run')}",
+            "Readback Run Id: "
+            f"{self._value(conclusion.get('readback_run_id'), 'Not produced in this run')}",
+            "Emitted Run Id: "
+            f"{self._value(conclusion.get('emitted_run_id'), 'Not produced in this run')}",
+            "Persisted Execution Plan Id: "
+            f"{self._value(conclusion.get('persisted_execution_plan_id'), 'Not produced in this run')}",
+            "Readback Execution Plan Id: "
+            f"{self._value(conclusion.get('readback_execution_plan_id'), 'Not produced in this run')}",
+            "Emitted Execution Plan Id: "
+            f"{self._value(conclusion.get('emitted_execution_plan_id'), 'Not produced in this run')}",
+            "Authoritative/Emitted Stable Field Comparison: "
+            f"{emission_comparison_value}",
+            "Authoritative/Persisted/Emitted Stable Field Comparison: "
+            f"{persistence_triple_comparison_value}",
+            "Emission Conflict Count: "
+            f"{self._value(conclusion.get('emission_conflict_count'))}",
+            "Emission Conflict Fields: "
+            f"{emission_conflict_fields_value}",
             "Persistence Matches Emission: "
             f"{self._value(conclusion.get('persistence_matches_emission'))}",
+            "Persistence/Emission Conflict Count: "
+            f"{self._value(conclusion.get('persistence_emission_conflict_count'))}",
+            "Persistence/Emission Conflict Fields: "
+            f"{self._value(conclusion.get('persistence_emission_conflict_fields'))}",
             "Conclusion Conflict Count: "
             f"{self._value(conclusion.get('conclusion_conflict_count'))}",
             "Pre-Reconciliation Fingerprint: "
@@ -3598,6 +3703,7 @@ class DeterministicFinalReportRenderer:
             f"{self._value(conclusion.get('post_reconciliation_fingerprint'))}",
             "Conclusion Historical Issue Count: "
             f"{self._value(conclusion.get('conclusion_historical_issue_count'))}",
+            *transition_lines,
         ]
         conflicts = conclusion.get("integrity_conflicts") or []
         if conflicts:
