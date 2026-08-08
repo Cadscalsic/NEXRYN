@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 
@@ -15,6 +16,21 @@ _LIFECYCLE_ORDER = [
     _FINALIZED_TRANSITION,
     _EVALUATED_TRANSITION,
     _BOUND_TRANSITION,
+]
+STABLE_SEMANTIC_FIELDS = [
+    "conclusion_state",
+    "failure_reason",
+    "root_cause",
+    "recommended_action",
+    "responsible_area",
+    "next_gate",
+    "conclusion_source_stage",
+    "conclusion_run_id",
+    "authoritative_run_id",
+    "authoritative_execution_plan_id",
+    "conclusion_task_id",
+    "canonical_raw_result_id",
+    "engineering_conclusion_integrity_state",
 ]
 
 
@@ -92,28 +108,7 @@ def _append_transition(
 
 
 def _canonical_payload(conclusion: dict[str, Any]) -> dict[str, Any]:
-    fields = [
-        "largest_success",
-        "largest_regression",
-        "current_open_decision",
-        "next_decision_gate",
-        "conclusion_state",
-        "current_bottleneck",
-        "root_cause",
-        "failure_reason",
-        "recommended_action",
-        "responsible_area",
-        "responsible_component",
-        "next_task",
-        "engineering_priority",
-        "conclusion_scope",
-        "conclusion_run_id",
-        "authoritative_run_id",
-        "authoritative_execution_plan_id",
-        "conclusion_task_id",
-        "canonical_raw_result_id",
-    ]
-    return {field: conclusion.get(field) for field in fields}
+    return {field: conclusion.get(field) for field in STABLE_SEMANTIC_FIELDS}
 
 
 def _infer_execution_plan_id(report_state: dict[str, Any]) -> Any:
@@ -351,19 +346,40 @@ class EngineeringConclusionIntegrityEvaluator:
         state = report_state if isinstance(report_state, dict) else {}
         metadata = runtime_metadata if isinstance(runtime_metadata, dict) else {}
         normalized = dict(conclusion if isinstance(conclusion, dict) else {})
-        run_id = _first_meaningful(
-            normalized.get("authoritative_run_id"),
-            normalized.get("conclusion_run_id"),
+        expected_run_id = _first_meaningful(
             metadata.get("run_id"),
             metadata.get("execution_id"),
             state.get("run_id"),
             state.get("execution_id"),
             default="RUN_ID_UNBOUND",
         )
-        execution_plan_id = _first_meaningful(
+        observed_run_id = _first_meaningful(
+            normalized.get("authoritative_run_id"),
+            normalized.get("conclusion_run_id"),
+            default=expected_run_id,
+        )
+        expected_execution_plan_id = _infer_execution_plan_id(state)
+        observed_execution_plan_id = _first_meaningful(
             normalized.get("authoritative_execution_plan_id"),
             normalized.get("execution_plan_id"),
-            _infer_execution_plan_id(state),
+            default=expected_execution_plan_id,
+        )
+        run_mismatch = (
+            expected_run_id not in {"RUN_ID_UNBOUND", None, ""}
+            and observed_run_id not in {"RUN_ID_UNBOUND", None, ""}
+            and observed_run_id != expected_run_id
+        )
+        plan_mismatch = (
+            expected_execution_plan_id not in {"EXECUTION_PLAN_ID_UNBOUND", None, ""}
+            and observed_execution_plan_id not in {"EXECUTION_PLAN_ID_UNBOUND", None, ""}
+            and observed_execution_plan_id != expected_execution_plan_id
+        )
+        run_id = _first_meaningful(
+            observed_run_id,
+            default="RUN_ID_UNBOUND",
+        )
+        execution_plan_id = _first_meaningful(
+            observed_execution_plan_id,
             default="EXECUTION_PLAN_ID_UNBOUND",
         )
         validation = _first_dict(
@@ -484,10 +500,17 @@ class EngineeringConclusionIntegrityEvaluator:
             default="NOT_APPLICABLE",
         )
         normalized["current_run_binding_state"] = (
+            "PREVIOUS_RUN_REJECTED"
+            if run_mismatch
+            else "EXECUTION_PLAN_MISMATCH_REJECTED"
+            if plan_mismatch
+            else
             "BOUND_TO_CURRENT_RUN"
             if run_id not in {"RUN_ID_UNBOUND", None, ""}
             else "RUN_ID_UNBOUND"
         )
+        normalized["_run_binding_mismatch"] = run_mismatch
+        normalized["_execution_plan_binding_mismatch"] = plan_mismatch
         normalized["conclusion_historical_issue_count"] = _first_meaningful(
             normalized.get("conclusion_historical_issue_count"),
             default=0,
@@ -496,10 +519,7 @@ class EngineeringConclusionIntegrityEvaluator:
             normalized.get("engineering_conclusion_id"),
             f"engineering_conclusion_{_stable_fingerprint(_canonical_payload(normalized))[:16]}",
         )
-        normalized["pre_reconciliation_fingerprint"] = _first_meaningful(
-            normalized.get("pre_reconciliation_fingerprint"),
-            _stable_fingerprint(_canonical_payload(normalized)),
-        )
+        supplied_pre_fingerprint = normalized.get("pre_reconciliation_fingerprint")
         conflicts = self.integrity_conflicts(normalized)
         normalized["integrity_conflicts"] = conflicts
         normalized["conclusion_conflict_count"] = len(conflicts)
@@ -517,6 +537,13 @@ class EngineeringConclusionIntegrityEvaluator:
         normalized["post_reconciliation_fingerprint"] = _stable_fingerprint(
             _canonical_payload(normalized)
         )
+        normalized["pre_reconciliation_fingerprint"] = _first_meaningful(
+            supplied_pre_fingerprint,
+            normalized["post_reconciliation_fingerprint"],
+        )
+        normalized["conclusion_fingerprint"] = normalized[
+            "post_reconciliation_fingerprint"
+        ]
         _append_transition(
             normalized,
             _FINALIZED_TRANSITION,
@@ -553,6 +580,10 @@ class EngineeringConclusionIntegrityEvaluator:
         ).upper()
         if integrity == "INVALID" and not conflicts:
             conflicts.append("engineering_conclusion_marked_invalid")
+        if conclusion.get("_run_binding_mismatch") is True:
+            conflicts.append("previous_run_conclusion_cannot_bind_to_current_run")
+        if conclusion.get("_execution_plan_binding_mismatch") is True:
+            conflicts.append("execution_plan_id_mismatch_rejected")
         failure = str(conclusion.get("failure_reason") or "none").lower()
         root = str(conclusion.get("root_cause") or "none").lower()
         if failure == "none" and root not in {"none", ""}:
@@ -598,6 +629,98 @@ class EngineeringConclusionIntegrityEvaluator:
             ),
         )
         return bound
+
+    def stable_payload(self, conclusion: dict[str, Any]) -> dict[str, Any]:
+        normalized = self.normalize(conclusion)
+        return _canonical_payload(normalized)
+
+    def compare_semantic_payloads(
+        self,
+        expected: dict[str, Any],
+        observed: dict[str, Any],
+    ) -> dict[str, Any]:
+        expected_payload = self.stable_payload(expected)
+        observed_payload = self.stable_payload(observed)
+        mismatches = []
+        for field in STABLE_SEMANTIC_FIELDS:
+            expected_value = expected_payload.get(field)
+            observed_value = observed_payload.get(field)
+            if self._format_insensitive_value(expected_value) != (
+                self._format_insensitive_value(observed_value)
+            ):
+                mismatches.append({
+                    "field": field,
+                    "expected_value": expected_value,
+                    "observed_value": observed_value,
+                })
+        return {
+            "comparison_state": (
+                "SEMANTIC_PAYLOAD_MATCH"
+                if not mismatches
+                else "SEMANTIC_PAYLOAD_MISMATCH"
+            ),
+            "mismatch_count": len(mismatches),
+            "mismatches": mismatches,
+            "expected_fingerprint": _stable_fingerprint(expected_payload),
+            "observed_fingerprint": _stable_fingerprint(observed_payload),
+        }
+
+    def persist_conclusion(
+        self,
+        conclusion: dict[str, Any],
+        artifact_path: str | Path,
+    ) -> dict[str, Any]:
+        path = Path(artifact_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        normalized = self.normalize(conclusion)
+        payload = self.stable_payload(normalized)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        return {
+            "persistence_applicability": "PERSISTENCE_APPLICABLE",
+            "persistence_integrity": "VERIFIED",
+            "artifact_path": str(path),
+            "conclusion_fingerprint": _stable_fingerprint(payload),
+        }
+
+    def read_persisted_conclusion(self, artifact_path: str | Path) -> dict[str, Any]:
+        path = Path(artifact_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return self.normalize(payload)
+
+    def persistence_emission_parity(
+        self,
+        persisted: dict[str, Any] | None,
+        emitted: dict[str, Any],
+    ) -> dict[str, Any]:
+        if persisted is None:
+            return {
+                "persistence_applicability": "PERSISTENCE_NOT_APPLICABLE",
+                "persistence_integrity": "NOT_APPLICABLE",
+                "emission_integrity": "VERIFIED",
+                "persistence_matches_emission": "NOT_APPLICABLE",
+                "mismatch_count": 0,
+                "mismatches": [],
+            }
+        comparison = self.compare_semantic_payloads(persisted, emitted)
+        matches = comparison["comparison_state"] == "SEMANTIC_PAYLOAD_MATCH"
+        return {
+            "persistence_applicability": "PERSISTENCE_APPLICABLE",
+            "persistence_integrity": "VERIFIED" if matches else "FAILED",
+            "emission_integrity": "VERIFIED",
+            "persistence_matches_emission": matches,
+            "mismatch_count": comparison["mismatch_count"],
+            "mismatches": comparison["mismatches"],
+            "persisted_fingerprint": comparison["expected_fingerprint"],
+            "emitted_fingerprint": comparison["observed_fingerprint"],
+        }
+
+    def _format_insensitive_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return " ".join(value.strip().split())
+        return value
 
 
 engineering_conclusion_integrity_evaluator = EngineeringConclusionIntegrityEvaluator()

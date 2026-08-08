@@ -1155,6 +1155,14 @@ class DeterministicFinalReportRenderer:
         unbound_required = sum(1 for field in required_fields if field.get("state") in {"SOURCE_UNBOUND", "SOURCE_NOT_ATTACHED"})
         expected_missing = sum(1 for field in fields.values() if field.get("state") == "EXPECTED_BUT_MISSING")
         generic_not_available = sum(1 for field in fields.values() if field.get("display_value") == "Not Available")
+        conflict_attribution = self._human_report_conflict_attribution(
+            fields,
+            canonical,
+        )
+        engineering_conflicts = [
+            row for row in conflict_attribution
+            if row.get("engineering_conclusion_related") is True
+        ]
         binding_integrity = "CONFLICTED" if conflict_count else ("INCOMPLETE" if unbound_required or expected_missing else "COMPLETE")
         semantic_complete = binding_integrity == "COMPLETE"
         return {
@@ -1176,8 +1184,78 @@ class DeterministicFinalReportRenderer:
             "Human Report Unbound Required Field Count": unbound_required,
             "Human Report Expected Missing Count": expected_missing,
             "Human Report Binding Conflict Count": conflict_count,
+            "Human Report Conflict Attribution": conflict_attribution,
+            "Engineering Conclusion Binding Conflict Count": len(engineering_conflicts),
+            "Engineering Conclusion Projection Divergence Count": len(engineering_conflicts),
             "Human Report Generic Unavailable Value Count": generic_not_available,
         }
+
+    def _human_report_conflict_attribution(
+        self,
+        fields: dict[str, dict[str, Any]],
+        canonical: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        state = canonical.get("report_state", {})
+        state = state if isinstance(state, dict) else {}
+        conclusion = self._first_dict(
+            state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        )
+        run_id = self._first_meaningful(
+            conclusion.get("authoritative_run_id"),
+            conclusion.get("conclusion_run_id"),
+            state.get("run_id"),
+            canonical.get("runtime_metadata", {}).get("execution_id")
+            if isinstance(canonical.get("runtime_metadata"), dict)
+            else None,
+            default="RUN_ID_UNBOUND",
+        )
+        execution_plan_id = self._first_meaningful(
+            conclusion.get("authoritative_execution_plan_id"),
+            default="EXECUTION_PLAN_ID_UNBOUND",
+        )
+        rows: list[dict[str, Any]] = []
+        for key, field in fields.items():
+            if field.get("state") != "SOURCE_CONFLICT":
+                continue
+            source_path = str(field.get("source_path") or "")
+            conflicts = field.get("conflicts")
+            conflicts = conflicts if isinstance(conflicts, list) else []
+            expected_value = self._value(field.get("value"))
+            for conflict in conflicts or [{}]:
+                observed_path = str(conflict.get("source_path") or "")
+                engineering_related = (
+                    "ENGINEERING_CONCLUSION" in source_path
+                    or "engineering_conclusion" in source_path
+                    or "ENGINEERING_CONCLUSION" in observed_path
+                    or "engineering_conclusion" in observed_path
+                    or key.startswith("conclusion_")
+                    or key.startswith("engineering_conclusion")
+                    or key in {
+                        "failure_reason",
+                        "root_cause",
+                        "recommended_action",
+                        "responsible_area",
+                        "next_gate",
+                        "authoritative_run_id",
+                        "authoritative_execution_plan_id",
+                    }
+                )
+                rows.append({
+                    "field": key,
+                    "conflict_type": "SOURCE_CONFLICT",
+                    "source_component": observed_path.split(".")[1]
+                    if "." in observed_path
+                    else observed_path or "SOURCE_UNBOUND",
+                    "authoritative_source": source_path,
+                    "expected_value": expected_value,
+                    "observed_value": self._value(conflict.get("value")),
+                    "engineering_conclusion_related": engineering_related,
+                    "run_id": run_id,
+                    "execution_plan_id": execution_plan_id,
+                })
+        return rows
 
     def _bind_human_field(
         self,
@@ -1955,21 +2033,41 @@ class DeterministicFinalReportRenderer:
             audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"}
             and conclusion.get("conclusion_source_timestamp")
         )
+        metadata = canonical.get("runtime_metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        metadata_run_id = self._first_meaningful(
+            metadata.get("run_id"),
+            metadata.get("execution_id"),
+            self._run_id_from_timestamp(metadata.get("timestamp")),
+            default=None,
+        )
+        metadata_timestamp = self._first_meaningful(
+            metadata.get("timestamp"),
+            default=None,
+        )
+        late_run_id = late_run_id or (
+            audit.get("audit_run_id") in {None, "", "RUN_ID_UNBOUND"}
+            and metadata_run_id
+        )
+        late_timestamp = late_timestamp or (
+            audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"}
+            and metadata_timestamp
+        )
         if late_run_id or late_timestamp:
             audit = {
                 **audit,
                 "audit_run_id": (
-                    conclusion.get("conclusion_run_id")
+                    conclusion.get("conclusion_run_id") or metadata_run_id
                     if late_run_id
                     else audit.get("audit_run_id")
                 ),
                 "run_id": (
-                    conclusion.get("conclusion_run_id")
+                    conclusion.get("conclusion_run_id") or metadata_run_id
                     if late_run_id
                     else audit.get("run_id")
                 ),
                 "source_timestamp": (
-                    conclusion.get("conclusion_source_timestamp")
+                    conclusion.get("conclusion_source_timestamp") or metadata_timestamp
                     if late_timestamp
                     else audit.get("source_timestamp")
                 ),
@@ -1977,12 +2075,12 @@ class DeterministicFinalReportRenderer:
                     {
                         **row,
                         "run_id": (
-                            conclusion.get("conclusion_run_id")
+                            conclusion.get("conclusion_run_id") or metadata_run_id
                             if late_run_id
                             else row.get("run_id")
                         ),
                         "source_timestamp": (
-                            conclusion.get("conclusion_source_timestamp")
+                            conclusion.get("conclusion_source_timestamp") or metadata_timestamp
                             if late_timestamp
                             else row.get("source_timestamp")
                         ),
@@ -2144,9 +2242,34 @@ class DeterministicFinalReportRenderer:
         return self._section("CRITICAL OBSERVABILITY NOTES", self._human_observability_notes(canonical))
 
     def _render_human_report_integrity(self, integrity: dict[str, Any]) -> str:
-        return self._section("REPORT INTEGRITY", [
+        attribution = integrity.get("Human Report Conflict Attribution")
+        attribution = attribution if isinstance(attribution, list) else []
+        scalar_lines = [
             f"{key}: {self._value(value)}"
             for key, value in integrity.items()
+            if key != "Human Report Conflict Attribution"
+        ]
+        attribution_lines = [
+            (
+                "Human Report Conflict Attribution "
+                f"{index + 1}: "
+                f"field={self._value(row.get('field'))}; "
+                f"conflict_type={self._value(row.get('conflict_type'))}; "
+                f"source_component={self._value(row.get('source_component'))}; "
+                f"authoritative_source={self._value(row.get('authoritative_source'))}; "
+                f"expected_value={self._value(row.get('expected_value'))}; "
+                f"observed_value={self._value(row.get('observed_value'))}; "
+                "engineering_conclusion_related="
+                f"{self._value(row.get('engineering_conclusion_related'))}; "
+                f"run_id={self._value(row.get('run_id'))}; "
+                f"execution_plan_id={self._value(row.get('execution_plan_id'))}"
+            )
+            for index, row in enumerate(attribution)
+            if isinstance(row, dict)
+        ]
+        return self._section("REPORT INTEGRITY", [
+            *scalar_lines,
+            *attribution_lines,
         ])
 
     def _human_report_integrity(
@@ -2237,6 +2360,18 @@ class DeterministicFinalReportRenderer:
             "Human Report Unbound Required Field Count": binding.get("Human Report Unbound Required Field Count", 0),
             "Human Report Expected Missing Count": binding.get("Human Report Expected Missing Count", 0),
             "Human Report Binding Conflict Count": binding.get("Human Report Binding Conflict Count", 0),
+            "Human Report Conflict Attribution": binding.get(
+                "Human Report Conflict Attribution",
+                [],
+            ),
+            "Engineering Conclusion Binding Conflict Count": binding.get(
+                "Engineering Conclusion Binding Conflict Count",
+                0,
+            ),
+            "Engineering Conclusion Projection Divergence Count": binding.get(
+                "Engineering Conclusion Projection Divergence Count",
+                0,
+            ),
             "Human Report Generic Unavailable Value Count": binding.get("Human Report Generic Unavailable Value Count", 0),
             "Character Count/Fingerprint Attestation": "OUT_OF_SCOPE_UNCHANGED",
             "Human Report Transport Limit Encountered": False,
