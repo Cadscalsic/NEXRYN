@@ -124,6 +124,32 @@ def build_runtime_metadata(
     }
 
 
+def ensure_engineering_conclusion_bound(results, runtime_metadata=None):
+    from runtime.reporting.engineering_conclusion_integrity import (
+        engineering_conclusion_integrity_evaluator,
+    )
+
+    bound_results = (
+        engineering_conclusion_integrity_evaluator
+        .ensure_authoritative_conclusion(
+            results if isinstance(results, dict) else {},
+            runtime_metadata=runtime_metadata,
+        )
+    )
+    conclusion = bound_results.get("ENGINEERING_CONCLUSION")
+    if isinstance(conclusion, dict) and isinstance(
+        bound_results.get("training_report"),
+        dict,
+    ):
+        bound_results["training_report"]["ENGINEERING_CONCLUSION"] = dict(
+            conclusion
+        )
+        bound_results["training_report"]["engineering_conclusion"] = dict(
+            conclusion
+        )
+    return bound_results
+
+
 def load_core_knowledge_from_truth_registry(
     registry_path="runtime/memory/storage/truth_registry.json",
 ):
@@ -4730,24 +4756,10 @@ try:
         runtime_metadata["requested_report_level"] = args.report_level
         runtime_metadata["report_level"] = "minimal"
         runtime_metadata["projected_report_level"] = "minimal"
-        from runtime.reporting.engineering_conclusion_integrity import (
-            engineering_conclusion_integrity_evaluator,
+        results = ensure_engineering_conclusion_bound(
+            results,
+            runtime_metadata=runtime_metadata,
         )
-
-        results = (
-            engineering_conclusion_integrity_evaluator
-            .ensure_authoritative_conclusion(
-                results,
-                runtime_metadata=runtime_metadata,
-            )
-        )
-        if isinstance(results.get("training_report"), dict):
-            results["training_report"]["ENGINEERING_CONCLUSION"] = dict(
-                results["ENGINEERING_CONCLUSION"]
-            )
-            results["training_report"]["engineering_conclusion"] = dict(
-                results["ENGINEERING_CONCLUSION"]
-            )
         pre_final_report_diagnostics.collection_snapshot(
             "REPORT_SOURCE_COLLECTION",
             {
@@ -8610,21 +8622,10 @@ if runtime_status == "completed":
         results["training_report"]["active_runtime_reachability_audit"] = dict(
             results["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
         )
-    from runtime.reporting.engineering_conclusion_integrity import (
-        engineering_conclusion_integrity_evaluator,
-    )
-
-    results = engineering_conclusion_integrity_evaluator.ensure_authoritative_conclusion(
+    results = ensure_engineering_conclusion_bound(
         results,
         runtime_metadata=runtime_metadata,
     )
-    if isinstance(results.get("training_report"), dict):
-        results["training_report"]["ENGINEERING_CONCLUSION"] = dict(
-            results["ENGINEERING_CONCLUSION"]
-        )
-        results["training_report"]["engineering_conclusion"] = dict(
-            results["ENGINEERING_CONCLUSION"]
-        )
     pre_final_report_diagnostics.collection_snapshot(
         "REPORT_SOURCE_COLLECTION",
         {

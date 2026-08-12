@@ -482,6 +482,8 @@ class RuntimeBudgetEnforcer:
         return text or "unidentified"
 
     def _int_or_none(self, value: Any) -> int | None:
+        if value is None or isinstance(value, bool):
+            return None
         try:
             return int(value)
         except (TypeError, ValueError):

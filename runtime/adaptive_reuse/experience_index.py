@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -204,10 +205,15 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 def _score(*values: Any) -> float:
     for value in values:
+        if value is None:
+            continue
         try:
-            return round(max(0.0, min(1.0, float(value))), 4)
+            number = float(value)
         except (TypeError, ValueError):
             continue
+        if not math.isfinite(number):
+            continue
+        return round(max(0.0, min(1.0, number)), 4)
     return 0.0
 
 

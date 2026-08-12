@@ -72,6 +72,22 @@ def test_runtime_budget_receipt_has_schema_version_and_uses_authority():
     assert RuntimeBudgetEnforcer().verify_receipt(receipt) is True
 
 
+def test_execution_planner_treats_none_active_routes_as_missing():
+    result = ExecutionPlanner().plan(
+        runtime_context=_context(
+            introspection_report={"active_routes": None},
+            route_selection_report={},
+            planned_reasoning_depth=None,
+        )
+    )
+    receipt = result["canonical_execution_plan"][
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT"
+    ]
+
+    assert result["canonical_execution_plan"]["active_route_count"] == 3
+    assert receipt["planned_reasoning_depth"] == 0
+
+
 def test_missing_conflicting_and_stale_budget_inputs_fail_closed():
     enforcer = RuntimeBudgetEnforcer()
     missing = enforcer.build_receipt(

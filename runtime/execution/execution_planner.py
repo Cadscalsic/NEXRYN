@@ -1626,6 +1626,8 @@ class ExecutionPlanner:
         return 1
 
     def _int_value(self, value: Any, default: int = 0) -> int:
+        if value is None:
+            return default
         try:
             return int(value)
         except (TypeError, ValueError):

@@ -72,6 +72,24 @@ def test_adaptive_reuse_engine_recomputes_when_governance_uncertain(tmp_path):
     assert report["cache_misses"] >= 1
 
 
+def test_adaptive_reuse_engine_treats_none_numeric_context_as_default(tmp_path):
+    manager = CacheManager(cache_dir=tmp_path, auto_migrate=False)
+    engine = AdaptiveReuseEngine(cache_manager=manager)
+
+    report = engine.evaluate_reuse(
+        _stable_context(
+            semantic_drift=None,
+            effective_contradiction=None,
+            context_compatibility=None,
+            dependency_compatibility=None,
+            world_model_compatibility=None,
+        )
+    )
+
+    assert report["eligible"] is True
+    assert report["eligibility_reason"] == "eligible"
+
+
 def test_metric_bridge_synchronizes_required_timing_fields():
     report = runtime_metric_bridge.synchronize(
         {"total_runtime_seconds": 2.0},

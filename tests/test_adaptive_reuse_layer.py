@@ -172,6 +172,36 @@ def test_adaptive_reuse_layer_marks_cognitive_reuse_without_executable_payload(t
     assert report["reuse_output_mode"] == "COGNITIVE_REUSE_ONLY"
 
 
+def test_experience_index_treats_none_scores_as_missing(tmp_path):
+    storage = tmp_path / "storage"
+    experiences = storage / "experiences"
+    experiences.mkdir(parents=True)
+    (experiences / "experience_null_scores.json").write_text(
+        json.dumps({
+            "experience_id": "experience_null_scores",
+            "execution_cost": None,
+            "reasoning_depth": None,
+            "winner_hypothesis": {
+                "type": "color_replacement",
+                "confidence": None,
+            },
+            "evaluation_result": {
+                "success": False,
+                "final_score": None,
+                "accuracy": None,
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    loaded = ExperienceIndex(storage).load()
+
+    assert len(loaded) == 1
+    assert loaded[0].execution_cost == 0.0
+    assert loaded[0].reasoning_depth == 0
+    assert loaded[0].confidence == 0.0
+
+
 def test_program_reuse_converts_cognitive_strategy_to_executable_operation():
     report = ProgramReuseEngine(_EmptyProgramMemory()).retrieve(
         {"concept": "directional_motion"},

@@ -417,6 +417,8 @@ class AdaptiveReuseEngine:
         return context.get("concept") or fallback
 
     def _number(self, value, default):
+        if value is None:
+            return default
         try:
             return float(value)
         except (TypeError, ValueError):
