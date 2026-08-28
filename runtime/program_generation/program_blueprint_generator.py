@@ -140,6 +140,7 @@ class ProgramGenerationLayer:
             "generated_programs": len(generated),
             "eligible_concepts": len(eligible),
             "generated_blueprints": len(generated),
+            "program_blueprint_generation_success_count": len(generated),
             "blocked_programs": len(blocked),
             "missing_requirements": missing,
             "generation_success_rate": success_rate,

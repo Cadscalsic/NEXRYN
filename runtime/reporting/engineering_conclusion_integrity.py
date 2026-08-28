@@ -294,7 +294,7 @@ class EngineeringConclusionIntegrityEvaluator:
         if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
             payload = {
                 "conclusion_state": "NOT_APPLICABLE",
-                "largest_success": "scheduled_validation_task_executed_and_raw_result_contained",
+                "largest_success": "no_current_run_raw_result_obligation_required",
                 "largest_regression": "none",
                 "current_open_decision": "none",
                 "next_decision_gate": "none",

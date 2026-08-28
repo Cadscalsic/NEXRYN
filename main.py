@@ -6875,8 +6875,21 @@ try:
             else {}
         )
         operational_capability_materialization_report = {}
+        blueprint_generation_success_count = int(
+            program_generation_report.get(
+                "program_blueprint_generation_success_count",
+                program_generation_report.get("generated_programs", 0),
+            )
+            or 0
+        )
+        program_generation_report[
+            "program_blueprint_generation_success_count"
+        ] = blueprint_generation_success_count
         if executable_candidate_proposals:
             activated_candidate_count = len(executable_candidate_proposals)
+            program_generation_report[
+                "executable_candidate_activation_count"
+            ] = activated_candidate_count
             program_generation_report["generated_programs"] = max(
                 int(program_generation_report.get("generated_programs", 0) or 0),
                 activated_candidate_count,

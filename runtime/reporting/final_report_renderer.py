@@ -1048,16 +1048,18 @@ class DeterministicFinalReportRenderer:
             or self._meaningful_token(validation.get("target_operation"))
         )
         evaluation_target_required = bool(evaluation) and not raw_result_not_applicable
+        arena = self._first_dict(
+            state,
+            "ARENA_EVIDENCE_ADMISSION_REPORT",
+            "arena_evidence_admission_report",
+        )
+        arena_target_required = self._arena_target_operation_required(arena)
         target_operation_required = bool(
             self._meaningful_token(state.get("target_operation"))
             or self._first_dict(state, "leading_candidate")
             or validation_target_required
             or evaluation_target_required
-            or self._first_dict(
-                state,
-                "ARENA_EVIDENCE_ADMISSION_REPORT",
-                "arena_evidence_admission_report",
-            )
+            or arena_target_required
         )
 
         bind(
@@ -1095,7 +1097,41 @@ class DeterministicFinalReportRenderer:
         bind("search_efficiency", "Search Efficiency", ["search.search_efficiency", "report_binding.field_values.search_efficiency"], required=False, absence="NOT_PRODUCED")
         bind("search_coverage", "Search Coverage", ["search.search_coverage", "report_binding.field_values.search_coverage"], required=False, absence="NOT_PRODUCED")
         bind("average_route_quality", "Average Route Quality", ["search.average_route_quality", "report_binding.field_values.average_route_quality"], required=False, absence="NOT_PRODUCED")
-        bind("generated_programs", "Generated Programs", ["report_binding.field_values.generated_programs", "program.generated_programs", "report_state.generated_programs"], required=False, absence="NOT_PRODUCED")
+        bind(
+            "program_type_lifecycle_entry_count",
+            "Program Type Lifecycle Entries",
+            [
+                "report_binding.field_values.program_type_lifecycle_entry_count",
+                "report_state.program_type_lifecycle_entry_count",
+                "report_state.COGNITIVE_PROGRAM_LIFECYCLE_REPORT.total_program_blueprints",
+                "report_state.cognitive_program_lifecycle_report.total_program_blueprints",
+            ],
+            required=False,
+            absence="NOT_PRODUCED",
+        )
+        bind(
+            "program_blueprint_generation_success_count",
+            "Successful Blueprint Generations",
+            [
+                "report_binding.field_values.program_blueprint_generation_success_count",
+                "report_state.program_blueprint_generation_success_count",
+                "report_state.PROGRAM_GENERATION_REPORT.program_blueprint_generation_success_count",
+                "report_state.program_generation_report.program_blueprint_generation_success_count",
+            ],
+            required=False,
+            absence="NOT_PRODUCED",
+        )
+        bind(
+            "synthesized_program_persisted_count",
+            "Synthesized Programs Persisted",
+            [
+                "report_binding.field_values.synthesized_program_persisted_count",
+                "report_state.synthesized_program_persisted_count",
+                "program.generated_programs",
+            ],
+            required=False,
+            absence="NOT_PRODUCED",
+        )
 
         bind(
             "target_operation",
@@ -1885,7 +1921,9 @@ class DeterministicFinalReportRenderer:
             f"Search Efficiency: {self._human_value(canonical, 'search_efficiency')}",
             f"Search Coverage: {self._human_value(canonical, 'search_coverage')}",
             f"Average Route Quality: {self._human_value(canonical, 'average_route_quality')}",
-            f"Generated Programs: {self._human_value(canonical, 'generated_programs')}",
+            f"Program Type Lifecycle Entries: {self._human_value(canonical, 'program_type_lifecycle_entry_count')}",
+            f"Successful Blueprint Generations: {self._human_value(canonical, 'program_blueprint_generation_success_count')}",
+            f"Synthesized Programs Persisted: {self._human_value(canonical, 'synthesized_program_persisted_count')}",
         ])
 
     def _render_human_cognitive_outcome(self, canonical: dict[str, Any]) -> str:
@@ -2662,6 +2700,76 @@ class DeterministicFinalReportRenderer:
             if text == "FALSE":
                 return False
         return None
+
+    def _arena_target_operation_required(self, arena: dict[str, Any]) -> bool:
+        if not isinstance(arena, dict) or not arena:
+            return False
+        for key in (
+            "arena_evidence_admission_attempted",
+            "arena_evidence_admission_invoked",
+            "arena_admission_invoked",
+            "arena_evidence_admitted",
+            "arena_evidence_consumed",
+            "redeliberation_invoked",
+            "redeliberation_completed",
+            "formal_selection_invoked",
+            "formal_selection_admission_invoked",
+            "formal_selection_review_completed",
+            "tie_resolved",
+            "winner_selected",
+        ):
+            if self._boolish(arena.get(key)) is True:
+                return True
+        non_applicable_states = {
+            "NOT_EXPECTED_AT_CURRENT_STATE",
+            "NOT_APPLICABLE",
+            "NOT_AVAILABLE",
+            "NOT_PRODUCED",
+            "NOT_PRODUCED_IN_THIS_RUN",
+            "NOT_EVALUATED",
+            "FALSE",
+            "NONE",
+            "NULL",
+            "UNKNOWN",
+        }
+        applicable_states = {
+            "ADMITTED",
+            "ADMISSION_INVOKED",
+            "ARENA_EVIDENCE_ADMITTED",
+            "ARENA_EVIDENCE_CONSUMED",
+            "REDELIBERATION_INVOKED",
+            "REDELIBERATION_COMPLETED",
+            "FORMAL_SELECTION_INVOKED",
+            "FORMAL_SELECTION_REVIEW_COMPLETED",
+            "TIE_RESOLVED",
+            "WINNER_SELECTED",
+        }
+        for key in (
+            "arena_evidence_admission",
+            "admission_state",
+            "arena_admission_state",
+            "redeliberation_outcome",
+            "formal_selection_outcome",
+            "selection_state",
+        ):
+            value = arena.get(key)
+            bool_value = self._boolish(value)
+            if bool_value is True:
+                return True
+            if bool_value is False or not self._meaningful_token(value):
+                continue
+            normalized = str(value).strip().upper().replace(" ", "_")
+            if normalized in non_applicable_states or normalized.startswith("NOT_"):
+                continue
+            if (
+                normalized in applicable_states
+                or normalized.endswith("_ADMITTED")
+                or normalized.endswith("_INVOKED")
+                or normalized.endswith("_COMPLETED")
+                or normalized.endswith("_CONSUMED")
+            ):
+                return True
+        return False
 
     def _fingerprint(self, text: str) -> str:
         return self._sha256_bytes(self._encode_canonical_text(text))

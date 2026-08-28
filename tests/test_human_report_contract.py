@@ -175,6 +175,50 @@ def test_human_report_detects_canonical_source_conflict():
     assert "Human Report Binding Conflict Count: 1" in report
 
 
+def test_human_report_splits_program_lifecycle_counts_without_legacy_conflict():
+    state = _state()
+    state["COGNITIVE_PROGRAM_LIFECYCLE_REPORT"] = {
+        "total_program_blueprints": 10,
+    }
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "program_blueprint_generation_success_count": 15,
+    }
+    state["PROGRAM_SYNTHESIS_REPORT"] = {
+        "generated_programs": 6,
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Generated Programs:" not in report
+    assert "Program Blueprint Inventory:" not in report
+    assert "Program Type Lifecycle Entries: 10" in report
+    assert "Successful Blueprint Generations: 15" in report
+    assert "Synthesized Programs Persisted: 6" in report
+    assert "Human Report Binding Conflict Count: 0" in report
+
+
+def test_human_report_still_detects_same_semantic_program_count_conflict():
+    state = _state()
+    state["program_blueprint_generation_success_count"] = 14
+    state["PROGRAM_GENERATION_REPORT"] = {
+        "program_blueprint_generation_success_count": 15,
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Successful Blueprint Generations: Canonical source conflict" in report
+    assert "field=program_blueprint_generation_success_count" in report
+    assert "expected_value=14" in report
+    assert "observed_value=15" in report
+    assert "Human Report Binding Conflict Count: 1" in report
+
+
 def test_human_report_preserves_false_and_zero_values_as_bound_values():
     report = DeterministicFinalReportRenderer().render(
         _state(),
@@ -186,6 +230,114 @@ def test_human_report_preserves_false_and_zero_values_as_bound_values():
     assert "Untracked Time: 0 s" in report
     assert "Winner Selected: FALSE" in report
     assert "Target Reference Forwarded To Solver: FALSE" in report
+
+
+def test_inert_arena_report_does_not_require_target_operation_when_raw_result_not_applicable():
+    report = DeterministicFinalReportRenderer().render(
+        {
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                "raw_result_producer_obligation_count": 0,
+                "raw_result_required_count": 0,
+            },
+            "ARENA_EVIDENCE_ADMISSION_REPORT": {
+                "admission_state": "NOT_EXPECTED_AT_CURRENT_STATE",
+            },
+        },
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Target Operation: Not expected at current lifecycle state" in report
+    assert "Arena Evidence Admission: NOT_EXPECTED_AT_CURRENT_STATE" in report
+    assert "Raw Result Applicability State: RAW_RESULT_NOT_APPLICABLE" in report
+    assert "Human Report Expected Missing Count: 0" in report
+    assert "Expected artifact missing" not in report
+
+
+def test_explicit_target_operation_remains_bound_when_raw_result_not_applicable():
+    report = DeterministicFinalReportRenderer().render(
+        {
+            "target_operation": "replace_color",
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                "raw_result_producer_obligation_count": 0,
+                "raw_result_required_count": 0,
+            },
+            "ARENA_EVIDENCE_ADMISSION_REPORT": {
+                "arena_evidence_admission_attempted": False,
+            },
+        },
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Target Operation: replace_color" in report
+    assert "Human Report Expected Missing Count: 0" in report
+    assert "Expected artifact missing" not in report
+
+
+def test_validation_applicable_missing_target_operation_stays_expected_missing():
+    report = DeterministicFinalReportRenderer().render(
+        {
+            "VALIDATION_TASK_EXECUTION_REPORT": {
+                "execution_state": "RAW_RESULT_CAPTURED",
+                "raw_validation_result_id": "raw_validation_result_target_required",
+            },
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_APPLICABLE",
+                "raw_result_producer_obligation_count": 1,
+                "raw_result_required_count": 1,
+            },
+        },
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Target Operation: Expected artifact missing" in report
+    assert "Human Report Expected Missing Count: 1" in report
+
+
+def test_applicable_arena_report_without_target_operation_stays_expected_missing():
+    report = DeterministicFinalReportRenderer().render(
+        {
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                "raw_result_producer_obligation_count": 0,
+                "raw_result_required_count": 0,
+            },
+            "ARENA_EVIDENCE_ADMISSION_REPORT": {
+                "admission_state": "ADMITTED",
+            },
+        },
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Target Operation: Expected artifact missing" in report
+    assert "Arena Evidence Admission: ADMITTED" in report
+    assert "Human Report Expected Missing Count: 1" in report
+
+
+def test_non_applicable_arena_states_do_not_require_target_operation():
+    for state in (
+        "NOT_EXPECTED_AT_CURRENT_STATE",
+        "NOT_APPLICABLE",
+        "Not expected at current lifecycle state",
+    ):
+        report = DeterministicFinalReportRenderer().render(
+            {
+                "RAW_RESULT_APPLICABILITY_REPORT": {
+                    "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                    "raw_result_producer_obligation_count": 0,
+                    "raw_result_required_count": 0,
+                },
+                "ARENA_EVIDENCE_ADMISSION_REPORT": {
+                    "arena_evidence_admission": state,
+                    "arena_evidence_admission_invoked": False,
+                },
+            },
+            runtime_metadata=_metadata(),
+        )
+
+        assert "Target Operation: Not expected at current lifecycle state" in report
+        assert "Human Report Expected Missing Count: 0" in report
 
 
 def test_raw_result_captured_without_raw_result_id_fails_identity_closed():

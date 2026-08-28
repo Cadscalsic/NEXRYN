@@ -1109,7 +1109,10 @@ class CanonicalReportBindingEngine:
             bind("parent_execution_duration", "Execution Runtime", "execution_registry", ("parent_execution_duration",), "duration"),
             bind("total_wall_time", "Runtime Metrics", "performance_report", ("total_runtime_seconds", "execution_time"), "duration", visibility=all_levels),
             bind("generated_concepts", "Concept Runtime", "report_state", ("generated_concepts", "concept_count", "semantic_concept_count"), "count", visibility=all_levels),
-            bind("generated_programs", "Program Runtime", "report_state", ("generated_programs", "program_candidates", "canonical_programs", "candidate_count"), "count", visibility=all_levels, required=True),
+            bind("program_type_lifecycle_entry_count", "Program Runtime", "report_state", ("program_type_lifecycle_entry_count",), "count", visibility=all_levels),
+            bind("program_blueprint_generation_success_count", "Program Runtime", "report_state", ("program_blueprint_generation_success_count",), "count", visibility=all_levels),
+            bind("executable_candidate_activation_count", "Program Runtime", "report_state", ("executable_candidate_activation_count",), "count", visibility=all_levels),
+            bind("synthesized_program_persisted_count", "Program Runtime", "report_state", ("synthesized_program_persisted_count",), "count", visibility=all_levels),
             bind("validated_programs", "Program Runtime", "report_state", ("validated_programs",), "count", visibility=all_levels),
             bind("truth_candidates", "Truth Runtime", "report_state", ("truth_candidates", "truth_candidate_count"), "count", visibility=all_levels),
             bind("generated_memory_entries", "Semantic Memory", "knowledge_pipeline_metrics", ("generated_memory_entries",), "count"),
@@ -7461,6 +7464,40 @@ class CanonicalReportBindingEngine:
             len(synthesis.get("generated_transformations", []) or []) if synthesis.get("generated_transformations") else None,
             compiler.get("candidate_count"),
         )
+        program_generation = self._merge_dicts(
+            self._first_dict(report_state, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
+            self._first_dict(performance, "PROGRAM_GENERATION_REPORT", "program_generation_report"),
+        )
+        program_lifecycle = self._merge_dicts(
+            self._first_dict(report_state, "COGNITIVE_PROGRAM_LIFECYCLE_REPORT", "cognitive_program_lifecycle_report"),
+            self._first_dict(performance, "COGNITIVE_PROGRAM_LIFECYCLE_REPORT", "cognitive_program_lifecycle_report"),
+        )
+        blueprints = program_generation.get("program_blueprints", [])
+        blueprint_registry = program_lifecycle.get("program_registry", [])
+        executable_activation = self._merge_dicts(
+            self._first_dict(report_state, "EXECUTABLE_ACTIVATION_REPORT", "executable_activation_report"),
+            self._first_dict(performance, "EXECUTABLE_ACTIVATION_REPORT", "executable_activation_report"),
+        )
+        program_type_lifecycle_entry_count = self._first_number(
+            visible.get("program_type_lifecycle_entry_count"),
+            program_lifecycle.get("total_program_blueprints"),
+            len(blueprint_registry) if isinstance(blueprint_registry, list) else None,
+        )
+        program_blueprint_generation_success_count = self._first_number(
+            visible.get("program_blueprint_generation_success_count"),
+            program_generation.get("program_blueprint_generation_success_count"),
+        )
+        executable_candidate_activation_count = self._first_number(
+            visible.get("executable_candidate_activation_count"),
+            program_generation.get("executable_candidate_activation_count"),
+            program_generation.get("activation_bridge_generated_programs"),
+            executable_activation.get("candidate_proposal_count"),
+        )
+        synthesized_program_persisted_count = self._first_number(
+            visible.get("synthesized_program_persisted_count"),
+            self._first_dict(report_state, "PROGRAM_SYNTHESIS_REPORT", "program_synthesis_report").get("generated_programs"),
+            self._first_dict(performance, "PROGRAM_SYNTHESIS_REPORT", "program_synthesis_report").get("generated_programs"),
+        )
         task_results = visible.get("multi_task_results")
         if not isinstance(task_results, list):
             task_results = []
@@ -7491,6 +7528,23 @@ class CanonicalReportBindingEngine:
         visible.setdefault("generated_programs", generated_programs)
         visible.setdefault("program_candidates", generated_programs)
         visible.setdefault("candidate_count", generated_programs)
+        if program_type_lifecycle_entry_count is not None:
+            visible.setdefault("program_type_lifecycle_entry_count", program_type_lifecycle_entry_count)
+        if program_blueprint_generation_success_count is not None:
+            visible.setdefault(
+                "program_blueprint_generation_success_count",
+                program_blueprint_generation_success_count,
+            )
+        if executable_candidate_activation_count is not None:
+            visible.setdefault(
+                "executable_candidate_activation_count",
+                executable_candidate_activation_count,
+            )
+        if synthesized_program_persisted_count is not None:
+            visible.setdefault(
+                "synthesized_program_persisted_count",
+                synthesized_program_persisted_count,
+            )
         if total_executions is not None:
             visible.setdefault("total_executions", total_executions)
             visible.setdefault("executions_total", total_executions)

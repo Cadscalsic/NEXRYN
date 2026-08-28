@@ -188,6 +188,106 @@ def test_not_applicable_raw_result_does_not_request_identity_repair():
     )
 
 
+def test_not_applicable_raw_result_does_not_claim_scheduled_execution_containment():
+    conclusion = engineering_conclusion_integrity_evaluator.create_authoritative_conclusion(
+        {
+            "run_id": "run_not_applicable_zero_obligation",
+            "CANONICAL_EXECUTION_PLAN": {
+                "execution_plan_id": "plan_not_applicable_zero_obligation",
+            },
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                "raw_result_producer_obligation_count": 0,
+                "raw_result_required_count": 0,
+                "applicable_raw_result_present_count": 0,
+                "producer_operation_id": "NOT_EXPECTED_AT_CURRENT_STATE",
+                "validation_attempt_id": "NOT_EXPECTED_AT_CURRENT_STATE",
+            },
+            "VALIDATION_TASK_EXECUTION_REPORT": {
+                "execution_state": "RAW_RESULT_CAPTURED",
+                "execution_id": "validation_execution_historical",
+                "raw_result_id": "raw_result_historical",
+                "canonical_raw_result_id": None,
+                "validation_attempt_id": None,
+            },
+        },
+        runtime_metadata={"execution_id": "run_not_applicable_zero_obligation"},
+    )
+
+    assert conclusion["conclusion_state"] == "NOT_APPLICABLE"
+    assert conclusion["largest_success"] == (
+        "no_current_run_raw_result_obligation_required"
+    )
+    assert conclusion["largest_success"] != (
+        "scheduled_validation_task_executed_and_raw_result_contained"
+    )
+    assert "canonical_raw_result_id" not in conclusion
+
+
+def test_historical_raw_result_reuse_does_not_satisfy_current_run_largest_success():
+    conclusion = engineering_conclusion_integrity_evaluator.create_authoritative_conclusion(
+        {
+            "run_id": "run_current",
+            "CANONICAL_EXECUTION_PLAN": {"execution_plan_id": "plan_current"},
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                "raw_result_producer_obligation_count": 0,
+                "raw_result_required_count": 0,
+                "applicable_raw_result_present_count": 0,
+            },
+            "VALIDATION_TASK_EXECUTION_REPORT": {
+                "run_id": "run_previous",
+                "execution_plan_id": "plan_previous",
+                "execution_state": "RAW_RESULT_CAPTURED",
+                "execution_id": "validation_execution_previous",
+                "raw_result_id": "raw_result_previous",
+                "canonical_raw_result_id": "raw_result_previous",
+                "validation_attempt_id": "validation_attempt_previous",
+            },
+        },
+        runtime_metadata={"execution_id": "run_current"},
+    )
+
+    assert conclusion["largest_success"] == (
+        "no_current_run_raw_result_obligation_required"
+    )
+    assert conclusion["current_run_binding_state"] == "BOUND_TO_CURRENT_RUN"
+    assert conclusion["engineering_conclusion_integrity_state"] == (
+        "ENGINEERING_CONCLUSION_INTEGRITY_VERIFIED"
+    )
+
+
+def test_current_run_raw_result_authority_can_support_strong_largest_success():
+    conclusion = engineering_conclusion_integrity_evaluator.create_authoritative_conclusion(
+        {
+            "run_id": "run_current_raw",
+            "CANONICAL_EXECUTION_PLAN": {"execution_plan_id": "plan_current_raw"},
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_APPLICABLE",
+                "raw_result_producer_obligation_count": 1,
+                "raw_result_required_count": 1,
+                "applicable_raw_result_present_count": 1,
+            },
+            "VALIDATION_TASK_EXECUTION_REPORT": {
+                "run_id": "run_current_raw",
+                "execution_plan_id": "plan_current_raw",
+                "execution_state": "RAW_RESULT_CAPTURED",
+                "execution_id": "validation_execution_current",
+                "raw_validation_result_id": "raw_result_current",
+                "canonical_raw_result_id": "raw_result_current",
+                "validation_attempt_id": "validation_attempt_current",
+                "scheduled_validation_task": "elite_validation_task_31",
+            },
+        },
+        runtime_metadata={"execution_id": "run_current_raw"},
+    )
+
+    assert conclusion["largest_success"] == (
+        "scheduled_validation_task_executed_and_raw_result_captured"
+    )
+    assert conclusion["canonical_raw_result_id"] == "raw_result_current"
+
+
 def test_not_applicable_identity_repair_gate_is_integrity_conflict():
     conclusion = engineering_conclusion_integrity_evaluator.normalize({
         "conclusion_state": "NOT_APPLICABLE",

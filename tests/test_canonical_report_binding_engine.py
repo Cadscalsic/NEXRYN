@@ -123,7 +123,7 @@ def test_field_binding_resolves_visible_values():
         report_level="normal",
     )
 
-    assert result["field_values"]["generated_programs"] == "21"
+    assert "generated_programs" not in result["field_values"]
     assert result["field_values"]["overall_search_quality"] == "0.499"
     assert result["field_values"]["average_program_confidence"] == "0.6148"
     assert result["field_values"]["execution_coverage"] == "100%"
@@ -173,7 +173,7 @@ def test_generated_outputs_bind_from_semantic_synthesis_when_top_level_missing()
     semantic_summary = result["field_bindings"]["semantic_compilation_summary"]["value"]
 
     assert result["field_values"]["generated_concepts"] == "8"
-    assert result["field_values"]["generated_programs"] == "3"
+    assert "generated_programs" not in result["field_values"]
     assert semantic_summary["generated_concepts"] == 8
     assert semantic_summary["generated_programs"] == 3
     assert semantic_summary["execution_intent_count"] == 1
@@ -958,9 +958,9 @@ def test_legacy_unknown_value_elimination_in_binding_and_final_report():
         runtime_metadata=_metadata(),
     )
 
-    assert result["field_values"]["generated_programs"] == "Not Available"
+    assert "generated_programs" not in result["field_values"]
     assert "UNKNOWN" not in report
-    assert "Generated Programs: Not produced in this run" in report
+    assert "Generated Programs:" not in report
 
 
 def test_prediction_provenance_binding_resolves_decision_summary():
