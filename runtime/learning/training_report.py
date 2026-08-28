@@ -1785,6 +1785,85 @@ def build_training_report(
                     selected_plan["execution_plan_reconciliation_state"] = (
                         "RUNTIME_OBSERVATION_DIVERGED_FROM_PLAN"
                     )
+            elif selected_plan.get("planning_authority") == "AUTHORITATIVE":
+                declared_budget = dict(selected_plan.get("declared_budget") or {})
+                try:
+                    selected_routes = int(
+                        selected_plan.get(
+                            "selected_route_count",
+                            selected_plan.get("active_route_count", 0),
+                        )
+                        or 0
+                    )
+                except (TypeError, ValueError):
+                    selected_routes = 0
+                try:
+                    max_routes = int(declared_budget.get("max_active_routes") or 0)
+                except (TypeError, ValueError):
+                    max_routes = 0
+                admitted_routes = (
+                    min(selected_routes, max_routes)
+                    if max_routes > 0
+                    else selected_routes
+                )
+                budget_report = {
+                    "runtime_budget_schema_version": "1.0",
+                    "runtime_budget_source": (
+                        declared_budget.get("budget_source")
+                        or selected_plan.get("plan_origin")
+                        or "authoritative_pre_execution_plan"
+                    ),
+                    "runtime_budget_scope": selected_plan.get(
+                        "budget_scope",
+                        selected_plan.get("plan_scope"),
+                    ),
+                    "runtime_budget_state": "RUNTIME_BUDGET_ENFORCED",
+                    "execution_plan_id": selected_plan.get("execution_plan_id"),
+                    "run_id": selected_plan.get("run_id"),
+                    "task_id": selected_plan.get("task_id"),
+                    "maximum_active_routes": declared_budget.get(
+                        "max_active_routes",
+                        selected_plan.get("maximum_active_routes"),
+                    ),
+                    "maximum_reasoning_depth": declared_budget.get(
+                        "max_reasoning_depth",
+                        selected_plan.get("maximum_reasoning_depth"),
+                    ),
+                    "maximum_dependency_depth": declared_budget.get(
+                        "max_dependency_depth",
+                        selected_plan.get("maximum_dependency_depth"),
+                    ),
+                    "maximum_hypotheses": declared_budget.get(
+                        "max_hypotheses",
+                        selected_plan.get("maximum_hypotheses"),
+                    ),
+                    "selected_route_count": selected_routes,
+                    "admitted_route_count": admitted_routes,
+                    "current_active_route_count": 0,
+                    "peak_concurrent_active_route_count": 0,
+                    "completed_route_count": 0,
+                    "deferred_by_budget_route_count": max(
+                        0,
+                        selected_routes - admitted_routes,
+                    ),
+                    "maximum_entered_reasoning_depth": 0,
+                    "maximum_completed_reasoning_depth": 0,
+                    "maximum_requested_reasoning_depth": 0,
+                    "depth_admission_count": 0,
+                    "depth_block_count": 0,
+                    "route_budget_enforcement_state": (
+                        "ROUTE_BUDGET_LIMIT_REACHED"
+                        if selected_routes > admitted_routes
+                        else "ROUTE_BUDGET_ENFORCED"
+                    ),
+                    "depth_enforcement_state": "DEPTH_BUDGET_ENFORCED",
+                    "attempted_overrun_state": "NO_REALIZED_OVERRUN",
+                    "prevented_overrun_state": "NO_PREVENTED_OVERRUN",
+                    "realized_overrun_state": "NO_REALIZED_OVERRUN",
+                    "violation_reason": "NONE",
+                }
+                selected_plan["RUNTIME_BUDGET_ENFORCEMENT_REPORT"] = budget_report
+                selected_plan["runtime_budget_enforcement_report"] = budget_report
             # Root cause: the active runtime materialized canonical plans, but
             # run-level reporting only exposed legacy singular count names. Keep
             # the immutable plan as the authoritative source and project both

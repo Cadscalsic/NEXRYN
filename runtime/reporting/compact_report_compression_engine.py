@@ -133,6 +133,20 @@ class CompactReportCompressionEngine:
         "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
         "executable_intelligence_engine_report",
     }
+    RUNTIME_AUTHORITY_REPORT_KEYS = {
+        "EXECUTION_PLAN_REPORT",
+        "execution_plan_report",
+        "CANONICAL_EXECUTION_PLAN_REPORT",
+        "canonical_execution_plan",
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+        "runtime_budget_enforcement_report",
+        "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+        "active_runtime_reachability_audit",
+        "RAW_RESULT_APPLICABILITY_REPORT",
+        "raw_result_applicability_report",
+        "ENGINEERING_CONCLUSION",
+        "engineering_conclusion",
+    }
 
     def __init__(self, console_budgets: dict[str, int] | None = None):
         self.console_budgets = dict(CONSOLE_BUDGETS)
@@ -189,6 +203,10 @@ class CompactReportCompressionEngine:
             canonical_report,
             compressed,
             profile_name,
+        )
+        compressed = self._preserve_runtime_authority_reports(
+            canonical_report,
+            compressed,
         )
         warnings = self._collect_anomalies(canonical_report)
         if warnings:
@@ -657,6 +675,104 @@ class CompactReportCompressionEngine:
                 compressed[key] = deepcopy(canonical[key])
                 self.stats["canonical_fields_preserved"] += 1
         return compressed
+
+    def _preserve_runtime_authority_reports(
+        self,
+        canonical: dict[str, Any],
+        compressed: dict[str, Any],
+    ) -> dict[str, Any]:
+        for key in sorted(self.RUNTIME_AUTHORITY_REPORT_KEYS):
+            source = self._runtime_authority_source(canonical, key)
+            if not source:
+                continue
+            if compressed.get(key) != source:
+                compressed[key] = deepcopy(source)
+                self.stats["canonical_fields_preserved"] += 1
+        return compressed
+
+    def _runtime_authority_source(
+        self,
+        canonical: dict[str, Any],
+        key: str,
+    ) -> dict[str, Any]:
+        sources = [canonical]
+        training_report = canonical.get("training_report")
+        if isinstance(training_report, dict):
+            sources.append(training_report)
+        fallback: dict[str, Any] = {}
+        for source in sources:
+            value = source.get(key) if isinstance(source, dict) else None
+            if not isinstance(value, dict) or self._is_structure_summary(value):
+                continue
+            if not fallback:
+                fallback = value
+            if self._authority_report_usable(key, value):
+                return value
+        return fallback
+
+    def _authority_report_usable(self, key: str, value: dict[str, Any]) -> bool:
+        key_upper = key.upper()
+        if "EXECUTION_PLAN" in key_upper:
+            plan = value.get("canonical_execution_plan")
+            if isinstance(plan, dict) and self._meaningful_token(
+                plan.get("execution_plan_id")
+            ):
+                return True
+            return self._meaningful_token(value.get("execution_plan_id"))
+        if "BUDGET" in key_upper:
+            return (
+                self._meaningful_token(value.get("execution_plan_id"))
+                or self._meaningful_token(value.get("maximum_active_routes"))
+                or (
+                    self._meaningful_token(value.get("runtime_budget_state"))
+                    and str(value.get("runtime_budget_state")).upper()
+                    != "RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE"
+                )
+            )
+        if "REACHABILITY_AUDIT" in key_upper:
+            return (
+                self._meaningful_token(value.get("audit_id"))
+                or (
+                    self._meaningful_token(value.get("audit_state"))
+                    and str(value.get("audit_state")).upper()
+                    != "AUDIT_NOT_PRODUCED"
+                )
+            )
+        if "RAW_RESULT_APPLICABILITY" in key_upper:
+            return (
+                self._meaningful_token(value.get("authoritative_execution_plan_id"))
+                or self._meaningful_token(value.get("current_run_binding_state"))
+            )
+        if "ENGINEERING_CONCLUSION" in key_upper:
+            return True
+        return bool(value)
+
+    def _is_structure_summary(self, value: dict[str, Any]) -> bool:
+        return value.get("summary") == "structure_summarized"
+
+    def _meaningful_token(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            token = value.strip()
+            if not token:
+                return False
+            normalized = token.upper().replace(" ", "_")
+            return normalized not in {
+                "UNKNOWN",
+                "NOT_AVAILABLE",
+                "NOT_PRODUCED",
+                "NOT_PRODUCED_IN_THIS_RUN",
+                "NONE",
+                "NULL",
+                "UNBOUND",
+                "SOURCE_UNBOUND",
+                "CANONICAL_SOURCE_UNBOUND",
+                "EXECUTION_PLAN_ID_UNBOUND",
+                "RUN_ID_UNBOUND",
+                "TIMESTAMP_UNBOUND",
+            }
+        return True
 
     def _collect_anomalies(self, value: Any) -> list[str]:
         anomalies: list[str] = []

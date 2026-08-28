@@ -7,7 +7,7 @@ import tempfile
 import hashlib
 import unicodedata
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from runtime.reporting.canonical_report_binding_engine import (
     canonical_report_binding_engine,
@@ -641,33 +641,110 @@ class DeterministicFinalReportRenderer:
             for item in list(training.get("multi_task_results", []) or [])[:20]
             if isinstance(item, dict)
         ]
+        execution_plan_report = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=("EXECUTION_PLAN_REPORT", "execution_plan_report"),
+            usable=self._usable_execution_plan_report,
+        )
+        canonical_execution_plan = self._first_available_report_dict(
+            report_state,
+            training,
+            execution_plan_report,
+            keys=(
+                "CANONICAL_EXECUTION_PLAN_REPORT",
+                "canonical_execution_plan",
+            ),
+            usable=self._usable_execution_plan_report,
+        )
+        budget_report = self._first_available_report_dict(
+            report_state,
+            training,
+            execution_plan_report,
+            canonical_execution_plan,
+            keys=(
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                "runtime_budget_enforcement_report",
+            ),
+            usable=self._usable_budget_report,
+        )
+        reachability_audit = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=(
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                "active_runtime_reachability_audit",
+            ),
+            usable=self._usable_active_runtime_audit,
+        )
+        raw_applicability = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=(
+                "RAW_RESULT_APPLICABILITY_REPORT",
+                "raw_result_applicability_report",
+            ),
+            usable=self._usable_raw_result_applicability_report,
+        )
+        engineering_conclusion = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=("ENGINEERING_CONCLUSION", "engineering_conclusion"),
+            usable=lambda value: bool(value),
+        )
+        projected_training_report = {
+            "system": training.get("system", "training_report"),
+            "training_batch_size": self._first_meaningful(
+                training.get("training_batch_size"),
+                training.get("tasks_selected"),
+                default=None,
+            ),
+            "tasks_selected": training.get("tasks_selected"),
+            "tasks_executed": training.get("tasks_executed"),
+            "successful_tasks": training.get("successful_tasks"),
+            "failed_tasks": training.get("failed_tasks"),
+            "incomplete_tasks": training.get("incomplete_tasks"),
+            "multi_task_results": training_task_results,
+            "concepts_discovered": dict(
+                list((training.get("concepts_discovered", {}) or {}).items())[:24]
+            ) if isinstance(training.get("concepts_discovered"), dict) else {},
+            "training_report_projection_guard": {
+                **dict(training.get("training_report_projection_guard", {}) or {}),
+                "final_renderer_minimal_projection": True,
+            },
+            "performance_report": self._compact_metric_map(
+                training.get("performance_report", {})
+            ),
+            "EXECUTION_PLAN_REPORT": execution_plan_report,
+            "execution_plan_report": execution_plan_report,
+            "CANONICAL_EXECUTION_PLAN_REPORT": canonical_execution_plan,
+            "canonical_execution_plan": canonical_execution_plan,
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_report,
+            "runtime_budget_enforcement_report": budget_report,
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": reachability_audit,
+            "active_runtime_reachability_audit": reachability_audit,
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_applicability,
+            "raw_result_applicability_report": raw_applicability,
+            "ENGINEERING_CONCLUSION": engineering_conclusion,
+            "engineering_conclusion": engineering_conclusion,
+        }
         return {
             "system": report_state.get("system", "nexryn_runtime"),
             "runtime_status": report_state.get("runtime_status"),
+            "operation": report_state.get("operation"),
+            "target_operation": report_state.get("target_operation"),
+            "training_batch_size": self._first_meaningful(
+                report_state.get("training_batch_size"),
+                training.get("training_batch_size"),
+                training.get("tasks_selected"),
+                default=None,
+            ),
             "tasks_executed": report_state.get("tasks_executed"),
             "successful_tasks": report_state.get("successful_tasks"),
             "failed_tasks": report_state.get("failed_tasks"),
             "incomplete_tasks": report_state.get("incomplete_tasks"),
             "multi_task_results": task_results,
-            "training_report": {
-                "system": training.get("system", "training_report"),
-                "tasks_selected": training.get("tasks_selected"),
-                "tasks_executed": training.get("tasks_executed"),
-                "successful_tasks": training.get("successful_tasks"),
-                "failed_tasks": training.get("failed_tasks"),
-                "incomplete_tasks": training.get("incomplete_tasks"),
-                "multi_task_results": training_task_results,
-                "concepts_discovered": dict(
-                    list((training.get("concepts_discovered", {}) or {}).items())[:24]
-                ) if isinstance(training.get("concepts_discovered"), dict) else {},
-                "training_report_projection_guard": {
-                    **dict(training.get("training_report_projection_guard", {}) or {}),
-                    "final_renderer_minimal_projection": True,
-                },
-                "performance_report": self._compact_metric_map(
-                    training.get("performance_report", {})
-                ),
-            },
+            "training_report": projected_training_report,
             "performance_report": self._compact_metric_map(performance),
             "validation_task_execution_report": report_state.get(
                 "validation_task_execution_report",
@@ -677,14 +754,18 @@ class DeterministicFinalReportRenderer:
                 "VALIDATION_TASK_EXECUTION_REPORT",
                 report_state.get("validation_task_execution_report", {}),
             ),
-            "RAW_RESULT_APPLICABILITY_REPORT": report_state.get(
-                "RAW_RESULT_APPLICABILITY_REPORT",
-                report_state.get("raw_result_applicability_report", {}),
-            ),
-            "raw_result_applicability_report": report_state.get(
-                "raw_result_applicability_report",
-                report_state.get("RAW_RESULT_APPLICABILITY_REPORT", {}),
-            ),
+            "EXECUTION_PLAN_REPORT": execution_plan_report,
+            "execution_plan_report": execution_plan_report,
+            "CANONICAL_EXECUTION_PLAN_REPORT": canonical_execution_plan,
+            "canonical_execution_plan": canonical_execution_plan,
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_report,
+            "runtime_budget_enforcement_report": budget_report,
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": reachability_audit,
+            "active_runtime_reachability_audit": reachability_audit,
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_applicability,
+            "raw_result_applicability_report": raw_applicability,
+            "ENGINEERING_CONCLUSION": engineering_conclusion,
+            "engineering_conclusion": engineering_conclusion,
             "execution_timing": self._compact_metric_map(
                 report_state.get("execution_timing", {})
             ),
@@ -958,6 +1039,26 @@ class DeterministicFinalReportRenderer:
             "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED",
         }
         raw_result_identity_missing = raw_result_captured and raw_result_id_missing
+        raw_result_not_applicable = (
+            raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE"
+        )
+        validation_target_required = bool(validation) and not raw_result_not_applicable and (
+            raw_result_captured
+            or self._meaningful_token(validation.get("scheduled_validation_task"))
+            or self._meaningful_token(validation.get("target_operation"))
+        )
+        evaluation_target_required = bool(evaluation) and not raw_result_not_applicable
+        target_operation_required = bool(
+            self._meaningful_token(state.get("target_operation"))
+            or self._first_dict(state, "leading_candidate")
+            or validation_target_required
+            or evaluation_target_required
+            or self._first_dict(
+                state,
+                "ARENA_EVIDENCE_ADMISSION_REPORT",
+                "arena_evidence_admission_report",
+            )
+        )
 
         bind(
             "run_id",
@@ -996,7 +1097,21 @@ class DeterministicFinalReportRenderer:
         bind("average_route_quality", "Average Route Quality", ["search.average_route_quality", "report_binding.field_values.average_route_quality"], required=False, absence="NOT_PRODUCED")
         bind("generated_programs", "Generated Programs", ["report_binding.field_values.generated_programs", "program.generated_programs", "report_state.generated_programs"], required=False, absence="NOT_PRODUCED")
 
-        bind("target_operation", "Target Operation", ["report_state.target_operation", "report_state.operation", "report_state.leading_candidate.operation"], absence="EXPECTED_BUT_MISSING")
+        bind(
+            "target_operation",
+            "Target Operation",
+            [
+                "report_state.target_operation",
+                "report_state.operation",
+                "report_state.leading_candidate.operation",
+            ],
+            required=target_operation_required,
+            absence=(
+                "EXPECTED_BUT_MISSING"
+                if target_operation_required
+                else "NOT_EXPECTED_AT_CURRENT_STATE"
+            ),
+        )
         bind("relevant_candidate", "Relevant Candidate", ["report_state.leading_candidate.candidate_id", "report_state.leading_candidate.name", "report_state.leading_candidate.candidate"], required=False, absence="NOT_PRODUCED")
         bind("candidate_source", "Candidate Source", ["report_state.leading_candidate.source", "report_state.leading_candidate.candidate_source"], required=False, absence="NOT_PRODUCED")
         bind("candidate_entered_arena", "Candidate Entered Arena", ["report_state.leading_candidate.entered_arena", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.candidate_entered_arena", "report_state.cognitive_candidate_arena_report.candidate_entered_arena"], required=False, absence="NOT_PRODUCED")
@@ -1383,7 +1498,25 @@ class DeterministicFinalReportRenderer:
 
     def _semantic_value(self, value: Any) -> Any:
         if isinstance(value, str):
-            return value.strip().lower()
+            s = value.strip()
+            # Conservative numeric normalization: convert purely numeric strings
+            # (integers or floats, including scientific notation) to numeric types.
+            # Leave non-numeric and boolean-like strings alone (lowercased) to
+            # avoid changing semantics for textual tokens.
+            if s:
+                # integer pattern
+                if re.fullmatch(r"[+-]?\d+", s):
+                    try:
+                        return int(s)
+                    except Exception:
+                        pass
+                # float pattern (allows decimals and scientific notation)
+                if re.fullmatch(r"[+-]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:[eE][+-]?\d+)?", s):
+                    try:
+                        return float(s)
+                    except Exception:
+                        pass
+            return s.lower()
         if isinstance(value, (bool, int, float)) or value is None:
             return value
         return self._value(value)
@@ -1832,23 +1965,49 @@ class DeterministicFinalReportRenderer:
 
     def _render_human_execution_plan_report(self, canonical: dict[str, Any]) -> str:
         state = canonical["report_state"]
-        report = self._first_dict(
+        training_report = self._first_dict(
             state,
-            "CANONICAL_EXECUTION_PLAN_REPORT",
-            "canonical_execution_plan",
-            "EXECUTION_PLAN_REPORT",
-            "execution_plan_report",
+            "training_report",
+            "TRAINING_REPORT",
         )
-        wrapper_report = self._first_dict(
+        report = self._first_available_report_dict(
             state,
-            "EXECUTION_PLAN_REPORT",
-            "execution_plan_report",
+            training_report,
+            keys=(
+                "CANONICAL_EXECUTION_PLAN_REPORT",
+                "canonical_execution_plan",
+                "EXECUTION_PLAN_REPORT",
+                "execution_plan_report",
+            ),
+            usable=self._usable_execution_plan_report,
+        )
+        wrapper_report = self._first_available_report_dict(
+            state,
+            training_report,
+            keys=(
+                "EXECUTION_PLAN_REPORT",
+                "execution_plan_report",
+            ),
+            usable=self._usable_execution_plan_report,
         )
         canonical_plan = report.get("canonical_execution_plan")
         if isinstance(canonical_plan, dict):
             source = {**wrapper_report, **report, **canonical_plan}
         else:
             source = report
+        authoritative_plan_id = self._first_meaningful(
+            source.get("execution_plan_id"),
+            self._human_value(
+                canonical,
+                "raw_result_authoritative_execution_plan_id",
+            ),
+            default=None,
+        )
+        if authoritative_plan_id:
+            source = {
+                **source,
+                "execution_plan_id": authoritative_plan_id,
+            }
         selected_tools = self._number(
             self._first_meaningful(
                 source.get("selected_tools_count"),
@@ -1903,16 +2062,16 @@ class DeterministicFinalReportRenderer:
             "DEPENDENCY_EXECUTION_RECEIPT",
             "dependency_execution_receipt",
         )
-        budget_report = self._first_dict(
+        budget_report = self._first_available_report_dict(
             state,
-            "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
-            "runtime_budget_enforcement_report",
-        )
-        if not budget_report:
-            budget_report = source.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT") or source.get(
+            training_report,
+            source,
+            keys=(
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
                 "runtime_budget_enforcement_report",
-                {},
-            )
+            ),
+            usable=self._usable_budget_report,
+        )
         budget_report = budget_report if isinstance(budget_report, dict) else {}
         canonical_bound = (
             bool(source.get("execution_plan_id"))
@@ -1926,10 +2085,14 @@ class DeterministicFinalReportRenderer:
         )
         canonical_binding_context = (
             bool(source.get("execution_plan_binding_state"))
-            or bool(self._first_dict(
+            or bool(self._first_available_report_dict(
                 state,
-                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
-                "active_runtime_reachability_audit",
+                training_report,
+                keys=(
+                    "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                    "active_runtime_reachability_audit",
+                ),
+                usable=self._usable_active_runtime_audit,
             ))
             or state.get("operation") != "training_batch"
         )
@@ -2005,18 +2168,37 @@ class DeterministicFinalReportRenderer:
 
     def _render_human_active_runtime_reachability(self, canonical: dict[str, Any]) -> str:
         state = canonical["report_state"]
-        audit = self._first_dict(
+        training_report = self._first_dict(state, "training_report", "TRAINING_REPORT")
+        audit = self._first_available_report_dict(
             state,
-            "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
-            "active_runtime_reachability_audit",
-        )
-        if not audit:
-            training_report = self._first_dict(state, "training_report")
-            audit = self._first_dict(
-                training_report,
+            training_report,
+            keys=(
                 "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
                 "active_runtime_reachability_audit",
+            ),
+            usable=self._usable_active_runtime_audit,
+        )
+        if (
+            audit
+            and not self._meaningful_token(audit.get("execution_plan_id"))
+            and self._meaningful_token(
+                self._human_value(
+                    canonical,
+                    "raw_result_authoritative_execution_plan_id",
+                )
             )
+        ):
+            audit = {
+                **audit,
+                "execution_plan_id": self._human_value(
+                    canonical,
+                    "raw_result_authoritative_execution_plan_id",
+                ),
+                "execution_plan_identity_state": self._first_meaningful(
+                    audit.get("execution_plan_identity_state"),
+                    "PLAN_IDENTITY_BOUND",
+                ),
+            }
         gaps = audit.get("reachability_gaps") if isinstance(audit, dict) else []
         if not isinstance(gaps, list):
             gaps = []
@@ -8262,6 +8444,121 @@ class DeterministicFinalReportRenderer:
             if isinstance(value, dict):
                 return value
         return {}
+
+    def _meaningful_token(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            token = value.strip()
+            if not token:
+                return False
+            normalized = token.upper().replace(" ", "_")
+            return normalized not in {
+                "UNKNOWN",
+                "NOT_AVAILABLE",
+                "NOT_PRODUCED",
+                "NOT_PRODUCED_IN_THIS_RUN",
+                "NONE",
+                "NULL",
+                "UNBOUND",
+                "SOURCE_UNBOUND",
+                "CANONICAL_SOURCE_UNBOUND",
+                "EXECUTION_PLAN_ID_UNBOUND",
+                "RUN_ID_UNBOUND",
+                "TIMESTAMP_UNBOUND",
+            }
+        return True
+
+    def _first_available_report_dict(
+        self,
+        *sources: dict[str, Any],
+        keys: tuple[str, ...],
+        usable: Callable[[dict[str, Any]], bool],
+    ) -> dict[str, Any]:
+        fallback: dict[str, Any] = {}
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            candidate = self._first_dict(source, *keys)
+            if not candidate:
+                continue
+            if not fallback:
+                fallback = candidate
+            if usable(candidate):
+                return candidate
+        return fallback
+
+    def _usable_execution_plan_report(self, report: dict[str, Any]) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        canonical_plan = report.get("canonical_execution_plan")
+        source = (
+            {**report, **canonical_plan}
+            if isinstance(canonical_plan, dict)
+            else report
+        )
+        if self._meaningful_token(source.get("execution_plan_id")):
+            return True
+        state = self._first_meaningful(
+            source.get("execution_plan_binding_state"),
+            source.get("execution_plan_state"),
+            source.get("planning_state"),
+            default=None,
+        )
+        if not self._meaningful_token(state):
+            return False
+        return str(state).upper() not in {
+            "LEGACY_PLAN_UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "PLAN_IDENTITY_UNBOUND",
+        }
+
+    def _usable_budget_report(self, report: dict[str, Any]) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        state = self._first_meaningful(
+            report.get("runtime_budget_state"),
+            report.get("route_budget_enforcement_state"),
+            report.get("depth_enforcement_state"),
+            default=None,
+        )
+        if self._meaningful_token(state) and str(state).upper() not in {
+            "RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE",
+            "RUNTIME_BUDGET_SCOPE_UNRESOLVED",
+        }:
+            return True
+        return any(
+            self._meaningful_token(report.get(key))
+            for key in (
+                "maximum_active_routes",
+                "maximum_reasoning_depth",
+                "selected_route_count",
+                "admitted_route_count",
+                "peak_concurrent_active_route_count",
+            )
+        )
+
+    def _usable_active_runtime_audit(self, report: dict[str, Any]) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        if self._meaningful_token(report.get("audit_id")):
+            return True
+        state = self._first_meaningful(report.get("audit_state"), default=None)
+        if not self._meaningful_token(state):
+            return False
+        return str(state).upper() != "AUDIT_NOT_PRODUCED"
+
+    def _usable_raw_result_applicability_report(
+        self,
+        report: dict[str, Any],
+    ) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        return (
+            self._meaningful_token(report.get("authoritative_execution_plan_id"))
+            or self._meaningful_token(report.get("current_run_binding_state"))
+            or self._meaningful_token(report.get("raw_result_applicability_state"))
+        )
 
     def _coverage_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
         summary = self._binding_value(

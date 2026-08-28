@@ -211,6 +211,264 @@ def test_training_batch_report_preserves_canonical_execution_plan_identity():
     assert first_plan["task_id"] == "task_batch_001"
 
 
+def test_authoritative_run_plan_projects_budget_and_clear_audit_without_task_telemetry():
+    plan = ExecutionPlanner().build_authoritative_run_plan(
+        run_id="run_minimal_projection",
+        task_files=["elite_cognitive_task_20.json", "elite_cognitive_task_17.json"],
+        selected_mode="fast",
+        execution_profile={},
+        cognitive_pipeline="adaptive",
+        declared_budget={
+            "budget_source": "test_pre_execution_budget",
+            "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "max_active_routes": 2,
+            "max_reasoning_depth": 2,
+            "max_dependency_depth": 2,
+            "max_hypotheses": 4,
+        },
+    )
+
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 2,
+            "authoritative_execution_plan": plan,
+        },
+        multi_task_results=[
+            {
+                "task": "elite_cognitive_task_20.json",
+                "status": "failed",
+                "error": "debugger_interrupted_task",
+            }
+        ],
+        report_level="minimal",
+        include_truth_evaluations=False,
+    )
+    budget = report["RUNTIME_BUDGET_ENFORCEMENT_REPORT"]
+    audit = report["ACTIVE_RUNTIME_REACHABILITY_AUDIT"]
+
+    assert report["EXECUTION_PLAN_REPORT"]["execution_plan_state"] == (
+        "CANONICAL_EXECUTION_PLAN_BOUND"
+    )
+    assert report["CANONICAL_EXECUTION_PLAN_REPORT"]["execution_plan_id"] == (
+        plan["execution_plan_id"]
+    )
+    assert budget["runtime_budget_state"] == "RUNTIME_BUDGET_ENFORCED"
+    assert budget["maximum_active_routes"] == 2
+    assert budget["admitted_route_count"] == 2
+    assert audit["audit_state"] == "REACHABILITY_CLEAR"
+    assert audit["reachability_gaps"] == []
+
+
+def test_minimal_renderer_does_not_drop_authoritative_plan_or_audit():
+    plan = ExecutionPlanner().build_authoritative_run_plan(
+        run_id="run_minimal_render",
+        task_files=["elite_cognitive_task_20.json"],
+        selected_mode="fast",
+        execution_profile={},
+        cognitive_pipeline="adaptive",
+        declared_budget={
+            "budget_source": "test_pre_execution_budget",
+            "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "max_active_routes": 2,
+            "max_reasoning_depth": 2,
+            "max_dependency_depth": 2,
+            "max_hypotheses": 4,
+        },
+    )
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 1,
+            "authoritative_execution_plan": plan,
+        },
+        multi_task_results=[],
+        report_level="minimal",
+        include_truth_evaluations=False,
+    )
+
+    rendered = final_report_renderer.render(
+        {
+            "runtime_status": "completed",
+            "training_report": report,
+            "EXECUTION_PLAN_REPORT": report["EXECUTION_PLAN_REPORT"],
+            "CANONICAL_EXECUTION_PLAN_REPORT": report[
+                "CANONICAL_EXECUTION_PLAN_REPORT"
+            ],
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": report[
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT"
+            ],
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": report[
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT"
+            ],
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": "run_minimal_render",
+            "timestamp": "now",
+            "mode": "fast",
+            "report_level": "minimal",
+            "training_batch_size": 1,
+        },
+        report_level="normal",
+    )
+
+    assert "Execution Plan State: CANONICAL_EXECUTION_PLAN_BOUND" in rendered
+    assert f"Execution Plan Id: {plan['execution_plan_id']}" in rendered
+    assert "Budget State: RUNTIME_BUDGET_ENFORCED" in rendered
+    assert "Audit State: REACHABILITY_CLEAR" in rendered
+    assert "LEGACY_PLAN_UNAVAILABLE" not in rendered
+    assert "AUDIT_NOT_PRODUCED" not in rendered
+
+
+def test_final_renderer_minimal_projection_preserves_runtime_authority():
+    plan = ExecutionPlanner().build_authoritative_run_plan(
+        run_id="run_final_minimal_render",
+        task_files=["elite_cognitive_task_20.json"],
+        selected_mode="fast",
+        execution_profile={},
+        cognitive_pipeline="adaptive",
+        declared_budget={
+            "budget_source": "test_pre_execution_budget",
+            "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "max_active_routes": 2,
+            "max_reasoning_depth": 2,
+            "max_dependency_depth": 2,
+            "max_hypotheses": 4,
+        },
+    )
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 1,
+            "authoritative_execution_plan": plan,
+        },
+        multi_task_results=[],
+        report_level="minimal",
+        include_truth_evaluations=False,
+    )
+
+    rendered = final_report_renderer.render(
+        {
+            "runtime_status": "completed",
+            "training_report": report,
+            "EXECUTION_PLAN_REPORT": report["EXECUTION_PLAN_REPORT"],
+            "CANONICAL_EXECUTION_PLAN_REPORT": report[
+                "CANONICAL_EXECUTION_PLAN_REPORT"
+            ],
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": report[
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT"
+            ],
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": report[
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT"
+            ],
+            "VALIDATION_TASK_EXECUTION_REPORT": {
+                "execution_state": "RAW_RESULT_CAPTURED",
+                "validation_execution_id": "validation_execution_not_applicable",
+            },
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+                "current_run_binding_state": "CURRENT_RUN_BOUND",
+                "authoritative_execution_plan_id": plan["execution_plan_id"],
+            },
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": "run_final_minimal_render",
+            "timestamp": "now",
+            "mode": "fast",
+            "report_level": "minimal",
+        },
+        report_level="minimal",
+    )
+
+    assert "Current Run Binding State: CURRENT_RUN_BOUND" in rendered
+    assert "Target Operation: Not expected at current lifecycle state" in rendered
+    assert "Execution Plan State: CANONICAL_EXECUTION_PLAN_BOUND" in rendered
+    assert f"Execution Plan Id: {plan['execution_plan_id']}" in rendered
+    assert "Budget State: RUNTIME_BUDGET_ENFORCED" in rendered
+    assert "Audit State: REACHABILITY_CLEAR" in rendered
+    assert "Canonical Execution Plan Present: TRUE" in rendered
+    assert "Budget Report Present: TRUE" in rendered
+    assert "Human Report Canonical Binding Integrity: COMPLETE" in rendered
+    assert "Human Report Expected Missing Count: 0" in rendered
+    assert "Expected artifact missing" not in rendered
+    assert "LEGACY_PLAN_UNAVAILABLE" not in rendered
+    assert "RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE" not in rendered
+    assert "AUDIT_NOT_PRODUCED" not in rendered
+
+
+def test_debug_renderer_uses_nested_authority_over_unbound_placeholders():
+    plan = ExecutionPlanner().build_authoritative_run_plan(
+        run_id="run_debug_render",
+        task_files=["elite_cognitive_task_20.json"],
+        selected_mode="fast",
+        execution_profile={},
+        cognitive_pipeline="adaptive",
+        declared_budget={
+            "budget_source": "test_pre_execution_budget",
+            "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
+            "max_active_routes": 2,
+            "max_reasoning_depth": 2,
+            "max_dependency_depth": 2,
+            "max_hypotheses": 4,
+        },
+    )
+    report = build_training_report(
+        training_batch={
+            "selected_task_count": 1,
+            "authoritative_execution_plan": plan,
+        },
+        multi_task_results=[],
+        report_level="minimal",
+        include_truth_evaluations=False,
+    )
+
+    rendered = final_report_renderer.render(
+        {
+            "runtime_status": "completed",
+            "operation": "training_batch",
+            "training_report": report,
+            "RAW_RESULT_APPLICABILITY_REPORT": {
+                "current_run_binding_state": "CURRENT_RUN_BOUND",
+                "authoritative_execution_plan_id": plan["execution_plan_id"],
+            },
+            "EXECUTION_PLAN_REPORT": {
+                "execution_plan_state": "LEGACY_PLAN_UNAVAILABLE",
+            },
+            "CANONICAL_EXECUTION_PLAN_REPORT": {
+                "execution_plan_state": "LEGACY_PLAN_UNAVAILABLE",
+            },
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": {
+                "runtime_budget_state": (
+                    "RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE"
+                ),
+            },
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": {
+                "audit_state": "AUDIT_NOT_PRODUCED",
+            },
+            "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+        },
+        runtime_metadata={
+            "execution_id": "run_debug_render",
+            "timestamp": "now",
+            "mode": "debug",
+            "report_level": "debug",
+        },
+        report_level="debug",
+    )
+
+    assert "Current Run Binding State: CURRENT_RUN_BOUND" in rendered
+    assert f"Authoritative Execution Plan Id: {plan['execution_plan_id']}" in rendered
+    assert f"Execution Plan Id: {plan['execution_plan_id']}" in rendered
+    assert "Budget State: RUNTIME_BUDGET_ENFORCED" in rendered
+    assert "Audit State: REACHABILITY_CLEAR" in rendered
+    assert "LEGACY_PLAN_UNAVAILABLE" not in rendered
+    assert "RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE" not in rendered
+    assert "AUDIT_NOT_PRODUCED" not in rendered
+
+
 def test_training_batch_renderer_consumes_propagated_plan_read_only():
     plan_result = _canonical_plan_result("run_batch_render", "task_batch_render")
     plan = plan_result["canonical_execution_plan"]
