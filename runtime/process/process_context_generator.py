@@ -212,8 +212,22 @@ class ProcessContextGenerator:
             concept=(graph.get("root_concepts", []) or [family])[0],
         )
 
-    def _graphs_from_report(self, report):
+    def _graphs_from_report(self, report, _depth=0, _active_ancestry_ids=None):
+        max_discovery_depth = 32
+        if _depth > max_discovery_depth:
+            return []
         report = report if isinstance(report, Mapping) else {}
+        if not report:
+            return []
+        active_ancestry_ids = (
+            set(_active_ancestry_ids)
+            if _active_ancestry_ids is not None
+            else set()
+        )
+        report_object_id = id(report)
+        if report_object_id in active_ancestry_ids:
+            return []
+        active_ancestry_ids.add(report_object_id)
         if report.get("dependency_graphs"):
             return [
                 dict(graph)
@@ -222,9 +236,13 @@ class ProcessContextGenerator:
             ]
         if report.get("dependency_graph"):
             return [dict(report["dependency_graph"])]
-        discovery = report.get("dependency_graph_discovery_report", {})
-        if isinstance(discovery, Mapping):
-            return self._graphs_from_report(discovery)
+        discovery = report.get("dependency_graph_discovery_report")
+        if isinstance(discovery, Mapping) and discovery:
+            return self._graphs_from_report(
+                discovery,
+                _depth=_depth + 1,
+                _active_ancestry_ids=active_ancestry_ids,
+            )
         return []
 
     def _classify_family(self, graph):

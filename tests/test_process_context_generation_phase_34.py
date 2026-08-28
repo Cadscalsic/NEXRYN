@@ -47,6 +47,46 @@ def test_process_context_generator_turns_dependency_graph_into_process():
     assert selected["transition_sequence"]
 
 
+def test_graph_extraction_empty_absent_and_none_discovery_terminates():
+    generator = ProcessContextGenerator(memory=ProcessContextMemory())
+
+    assert generator._graphs_from_report({}) == []
+    assert generator._graphs_from_report(None) == []
+    assert generator._graphs_from_report({"dependency_graph_discovery_report": {}}) == []
+
+
+def test_graph_extraction_preserves_valid_direct_collection_and_nested_discovery():
+    generator = ProcessContextGenerator(memory=ProcessContextMemory())
+    graph_a = {"graph_id": "graph_a", "nodes": [{"id": "a"}], "edges": []}
+    graph_b = {"graph_id": "graph_b", "nodes": [{"id": "b"}], "edges": []}
+
+    assert generator._graphs_from_report({"dependency_graph": graph_a}) == [graph_a]
+    assert generator._graphs_from_report({"dependency_graphs": [graph_a, graph_b]}) == [
+        graph_a,
+        graph_b,
+    ]
+    assert generator._graphs_from_report(
+        {"dependency_graph_discovery_report": {"dependency_graph": graph_b}}
+    ) == [graph_b]
+
+
+def test_graph_extraction_cyclic_discovery_terminates_without_recursion_error():
+    generator = ProcessContextGenerator(memory=ProcessContextMemory())
+    cyclic = {}
+    cyclic["dependency_graph_discovery_report"] = cyclic
+
+    assert generator._graphs_from_report(cyclic) == []
+
+
+def test_graph_extraction_excessive_acyclic_nesting_terminates_without_recursion_error():
+    generator = ProcessContextGenerator(memory=ProcessContextMemory())
+    report = {"dependency_graph": {"graph_id": "too_deep", "nodes": [], "edges": []}}
+    for _ in range(80):
+        report = {"dependency_graph_discovery_report": report}
+
+    assert generator._graphs_from_report(report) == []
+
+
 def test_process_context_validator_rejects_broken_generated_process():
     validation = ProcessContextValidator().validate_generated(
         {
