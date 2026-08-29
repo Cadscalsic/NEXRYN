@@ -16,6 +16,17 @@ from runtime.budget.budget_ablation_experiment import (
     screening_configs,
     task_set_fingerprint,
 )
+from runtime.budget.experimental_budget_authority import (
+    CURRENT_RUN_ONLY,
+    EXPERIMENTAL_BUDGET_SOURCE,
+    NORMAL_BUDGET_SOURCE,
+    ExperimentalBudgetAuthorityError,
+    ExperimentalBudgetGrant,
+    ExperimentalBudgetRequest,
+    RuntimeBudgetBinding,
+    issue_experimental_budget_grant,
+    resolve_runtime_budget_authority,
+)
 from runtime.budget.runtime_budget_enforcer import (
     RuntimeBudgetEnforcer,
     runtime_budget_enforcer,
@@ -35,6 +46,15 @@ __all__ = [
     "run_screening_ablation",
     "screening_configs",
     "task_set_fingerprint",
+    "CURRENT_RUN_ONLY",
+    "EXPERIMENTAL_BUDGET_SOURCE",
+    "NORMAL_BUDGET_SOURCE",
+    "ExperimentalBudgetAuthorityError",
+    "ExperimentalBudgetGrant",
+    "ExperimentalBudgetRequest",
+    "RuntimeBudgetBinding",
+    "issue_experimental_budget_grant",
+    "resolve_runtime_budget_authority",
     "RuntimeBudgetEnforcer",
     "runtime_budget_enforcer",
 ]

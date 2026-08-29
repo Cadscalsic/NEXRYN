@@ -209,7 +209,11 @@ def _ensure_runtime_budget_evidence(context, introspection_report):
         budget_report = {}
     if not isinstance(budget, dict) and isinstance(budget_report, dict):
         budget = {
-            "budget_source": "cognitive_budget_report",
+            "budget_source": (
+                budget_report.get("runtime_budget_source")
+                or budget_report.get("budget_source")
+                or "cognitive_budget_report"
+            ),
             "max_active_routes": budget_report.get("max_active_routes"),
             "max_reasoning_depth": budget_report.get("max_reasoning_depth"),
             "max_dependency_depth": budget_report.get("max_dependency_depth"),

@@ -3104,7 +3104,11 @@ def inference_stage(context):
         cognitive_budget_report = context.get("cognitive_budget_report", {})
         if isinstance(cognitive_budget_report, dict):
             receipt_budget = {
-                "budget_source": "cognitive_budget_report",
+                "budget_source": (
+                    cognitive_budget_report.get("runtime_budget_source")
+                    or cognitive_budget_report.get("budget_source")
+                    or "cognitive_budget_report"
+                ),
                 "max_active_routes": cognitive_budget_report.get("max_active_routes"),
                 "max_reasoning_depth": cognitive_budget_report.get("max_reasoning_depth"),
                 "max_dependency_depth": cognitive_budget_report.get("max_dependency_depth"),

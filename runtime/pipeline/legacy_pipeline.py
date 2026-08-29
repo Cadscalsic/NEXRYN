@@ -593,6 +593,7 @@ class AdaptiveCognitivePipeline:
         self.profiling_enabled = False
         self.profile_level = "minimal"
         self.requested_budget_mode = None
+        self.run_scoped_budget_authority_context = {}
         self.execution_profile = build_execution_profile("adaptive")
         self.post_success_mode = "fast"
         self.cached_pipeline_result = None
@@ -3534,6 +3535,7 @@ class AdaptiveCognitivePipeline:
     def prepare_task_run(self):
 
         self.runtime = RuntimeState()
+        self.run_scoped_budget_authority_context = {}
         self.stage_execution_history = []
         self.completed_stages = []
         self.failed_stages = []
@@ -3876,6 +3878,23 @@ class AdaptiveCognitivePipeline:
 
                 if not isinstance(runtime_context, dict):
                     runtime_context = {}
+                preserved_context = {
+                    **self.runtime.get_context(),
+                    **self.run_scoped_budget_authority_context,
+                }
+                for authority_key in (
+                    "authoritative_execution_plan",
+                    "authoritative_execution_plan_reference",
+                    "experimental_budget_request",
+                    "experimental_budget_grant",
+                ):
+                    if (
+                        authority_key in preserved_context
+                        and authority_key not in runtime_context
+                    ):
+                        runtime_context[authority_key] = preserved_context[
+                            authority_key
+                        ]
 
                 stage_report[
                     "status"
@@ -4912,6 +4931,9 @@ class AdaptiveCognitivePipeline:
         runtime_context
     ):
 
+        if isinstance(runtime_context, dict):
+            runtime_context.update(self.run_scoped_budget_authority_context)
+
         task_profile = runtime_context.get(
             "current_task_profile"
         )
@@ -4963,6 +4985,24 @@ class AdaptiveCognitivePipeline:
         adaptive_search_policy_engine.apply_budget(
             reasoning_budget,
             adaptive_search_policy_report,
+        )
+        from runtime.budget.experimental_budget_authority import (
+            resolve_runtime_budget_authority,
+        )
+
+        budget_authority_resolution = resolve_runtime_budget_authority(
+            normal_budget=reasoning_budget,
+            runtime_context=runtime_context,
+        )
+        reasoning_budget = budget_authority_resolution["budget"]
+        runtime_context["runtime_budget_binding"] = (
+            budget_authority_resolution["binding"]
+        )
+        runtime_context["RUNTIME_BUDGET_BINDING"] = (
+            budget_authority_resolution["binding"]
+        )
+        runtime_context["experimental_budget_grant_applied"] = (
+            budget_authority_resolution.get("grant_applied") is True
         )
         runtime_context["adaptive_search_policy_report"] = (
             adaptive_search_policy_report
@@ -5057,11 +5097,54 @@ class AdaptiveCognitivePipeline:
         meta_decision_report = self.run_meta_decision_cycle(
             runtime_context
         )
+        budget_authority_resolution = resolve_runtime_budget_authority(
+            normal_budget=reasoning_budget,
+            runtime_context=runtime_context,
+        )
+        reasoning_budget = budget_authority_resolution["budget"]
+        runtime_context["runtime_budget_binding"] = (
+            budget_authority_resolution["binding"]
+        )
+        runtime_context["RUNTIME_BUDGET_BINDING"] = (
+            budget_authority_resolution["binding"]
+        )
+        runtime_context["experimental_budget_grant_applied"] = (
+            budget_authority_resolution.get("grant_applied") is True
+        )
+        self.reasoning_budget.update(
+            self.cognitive_budget_engine
+            .as_legacy_pipeline_budget(reasoning_budget)
+        )
+        self.runtime.apply_reasoning_budget(
+            reasoning_budget
+        )
 
         cognitive_budget_report = (
             self.cognitive_budget_engine
             .build_report(reasoning_budget)
         )
+        budget_binding = runtime_context.get("runtime_budget_binding", {})
+        if isinstance(budget_binding, dict):
+            cognitive_budget_report.update({
+                "runtime_budget_source": budget_binding.get("budget_source"),
+                "budget_source": budget_binding.get("budget_source"),
+                "runtime_budget_binding_state": budget_binding.get(
+                    "binding_state"
+                ),
+                "experiment_id": budget_binding.get("experiment_id"),
+                "effective_max_active_routes": budget_binding.get(
+                    "effective_max_active_routes"
+                ),
+                "effective_max_reasoning_depth": budget_binding.get(
+                    "effective_max_reasoning_depth"
+                ),
+                "effective_max_dependency_depth": budget_binding.get(
+                    "effective_max_dependency_depth"
+                ),
+                "effective_max_hypotheses": budget_binding.get(
+                    "effective_max_hypotheses"
+                ),
+            })
         runtime_context[
             "cognitive_budget_report"
         ] = cognitive_budget_report
@@ -13122,6 +13205,8 @@ class AdaptiveCognitivePipeline:
         audit_sections_requested=None,
         deep_budget_overrides=None,
         authoritative_execution_plan=None,
+        experimental_budget_request=None,
+        experimental_budget_grant=None,
     ):
 
         self.profiling_enabled = bool(profile)
@@ -13177,29 +13262,69 @@ class AdaptiveCognitivePipeline:
             )
         self.prepare_task_run()
         if isinstance(authoritative_execution_plan, dict):
+            self.run_scoped_budget_authority_context[
+                "authoritative_execution_plan"
+            ] = dict(authoritative_execution_plan)
+            self.run_scoped_budget_authority_context[
+                "authoritative_execution_plan_reference"
+            ] = {
+                "run_id": authoritative_execution_plan.get("run_id"),
+                "execution_plan_id": authoritative_execution_plan.get(
+                    "execution_plan_id"
+                ),
+                "execution_plan_schema_version": (
+                    authoritative_execution_plan.get(
+                        "execution_plan_schema_version"
+                    )
+                ),
+                "plan_scope": authoritative_execution_plan.get("plan_scope"),
+                "temporal_authority_state": (
+                    authoritative_execution_plan.get(
+                        "temporal_authority_state"
+                    )
+                ),
+            }
             self.runtime.update_context(
                 "authoritative_execution_plan",
-                dict(authoritative_execution_plan),
+                self.run_scoped_budget_authority_context[
+                    "authoritative_execution_plan"
+                ],
             )
             self.runtime.update_context(
                 "authoritative_execution_plan_reference",
-                {
-                    "run_id": authoritative_execution_plan.get("run_id"),
-                    "execution_plan_id": authoritative_execution_plan.get(
-                        "execution_plan_id"
-                    ),
-                    "execution_plan_schema_version": (
-                        authoritative_execution_plan.get(
-                            "execution_plan_schema_version"
-                        )
-                    ),
-                    "plan_scope": authoritative_execution_plan.get("plan_scope"),
-                    "temporal_authority_state": (
-                        authoritative_execution_plan.get(
-                            "temporal_authority_state"
-                        )
-                    ),
-                },
+                self.run_scoped_budget_authority_context[
+                    "authoritative_execution_plan_reference"
+                ],
+            )
+        if experimental_budget_request is not None:
+            request_report = (
+                experimental_budget_request.as_report()
+                if hasattr(experimental_budget_request, "as_report")
+                else dict(experimental_budget_request)
+                if isinstance(experimental_budget_request, dict)
+                else experimental_budget_request
+            )
+            self.run_scoped_budget_authority_context[
+                "experimental_budget_request"
+            ] = request_report
+            self.runtime.update_context(
+                "experimental_budget_request",
+                request_report,
+            )
+        if experimental_budget_grant is not None:
+            grant_report = (
+                experimental_budget_grant.as_report()
+                if hasattr(experimental_budget_grant, "as_report")
+                else dict(experimental_budget_grant)
+                if isinstance(experimental_budget_grant, dict)
+                else experimental_budget_grant
+            )
+            self.run_scoped_budget_authority_context[
+                "experimental_budget_grant"
+            ] = grant_report
+            self.runtime.update_context(
+                "experimental_budget_grant",
+                grant_report,
             )
         self.runtime.update_context(
             "execution_profile",
