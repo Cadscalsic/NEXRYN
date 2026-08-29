@@ -896,6 +896,37 @@
       "source_run_id": "run_20260828_094246",
       "state": "RAW_RESULT_CAPTURED",
       "timestamp": "2026-08-28T09:43:35.148264+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-28T09:57:07.890379+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260828_095707",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-28T09:57:53.114585+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-28T14:21:19.535830+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-28T14:27:38.198320+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-28T14:39:38.404728+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-08-28T14:45:40.751186+00:00"
     }
   ],
   "identity_schema_version": null,
@@ -903,7 +934,7 @@
   "lifecycle_state": "RAW_RESULT_CAPTURED",
   "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
   "matching_score": 88.0,
-  "observation_count": 66,
+  "observation_count": 67,
   "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "priority": 65,
@@ -947,7 +978,7 @@
   "tie_break_strategy": "cross_source_consensus",
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-08-28T09:43:35.148264+00:00",
+  "updated_at": "2026-08-28T14:45:40.966121+00:00",
   "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
   "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY"
 }
