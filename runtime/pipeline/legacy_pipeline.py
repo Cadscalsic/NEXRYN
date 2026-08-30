@@ -13207,6 +13207,7 @@ class AdaptiveCognitivePipeline:
         authoritative_execution_plan=None,
         experimental_budget_request=None,
         experimental_budget_grant=None,
+        run_id=None,
     ):
 
         self.profiling_enabled = bool(profile)
@@ -13261,6 +13262,14 @@ class AdaptiveCognitivePipeline:
                 )
             )
         self.prepare_task_run()
+        if run_id is not None:
+            self.runtime.update_context(
+                "run_id",
+                str(run_id),
+            )
+            self.run_scoped_budget_authority_context[
+                "run_id"
+            ] = str(run_id)
         if isinstance(authoritative_execution_plan, dict):
             self.run_scoped_budget_authority_context[
                 "authoritative_execution_plan"

@@ -190,7 +190,7 @@ def resolve_runtime_budget_authority(
         effective_max_reasoning_depth=grant.granted_max_reasoning_depth,
         effective_max_dependency_depth=grant.granted_max_dependency_depth,
         effective_max_hypotheses=grant.granted_max_hypotheses,
-        binding_state="EXPERIMENTAL_BUDGET_BOUND_TO_CURRENT_RUN",
+        binding_state="EXPERIMENTAL_BUDGET_GRANT_ACCEPTED",
     )
     return {
         "budget": normal_budget,
