@@ -50,6 +50,7 @@ from runtime.learning.saturation_controller import (
 from runtime.reporting import CompactReportBuilder
 from runtime.cache import CacheManager, concept_lifecycle_cache
 from runtime.planning.execution_profile import build_execution_profile
+from runtime.provenance import build_candidate_origin_report
 from runtime.truth import (
     truth_lifecycle_synchronizer,
     promotion_engine,
@@ -3461,6 +3462,19 @@ class AdaptiveCognitivePipeline:
             return runtime_context
 
         runtime_context["predicted_output"] = predicted_output
+        runtime_context["candidate_origin_report"] = build_candidate_origin_report(
+            producer_component="legacy_pipeline_prediction_guard",
+            producer_operation_id="identity_baseline_fallback",
+            candidate_id="current_candidate",
+            transformation_source="input_grid",
+            prediction_source="identity_baseline",
+            source_report=prediction_pipeline_report,
+            run_id=runtime_context.get("run_id"),
+            task_id=runtime_context.get("task_id") or runtime_context.get("task_path"),
+        )
+        runtime_context["CANDIDATE_ORIGIN_REPORT"] = (
+            runtime_context["candidate_origin_report"]
+        )
         runtime_context["prediction_pipeline_report"] = (
             prediction_pipeline_report
         )

@@ -112,6 +112,9 @@ from runtime.repair.minimal_next_repair_generator import (
 from runtime.repair.repair_session_memory import (
     RepairSessionMemory,
 )
+from runtime.provenance import (
+    build_current_candidate_origin_report,
+)
 
 
 # ============================================
@@ -895,6 +898,12 @@ def _run_recoverable_repair_cycle(
         "source_candidate_id",
         "current_candidate",
     )
+    current_candidate_origin_report = build_current_candidate_origin_report(
+        context=context,
+        residual_evidence=admission.get("residual_evidence", {}),
+    )
+    context["current_candidate_origin_report"] = current_candidate_origin_report
+    context["CURRENT_CANDIDATE_ORIGIN_REPORT"] = current_candidate_origin_report
     latest_candidate_id = current_candidate_id
     repair_final = {
         "system": "runtime_recoverable_repair_cycle",
@@ -917,6 +926,7 @@ def _run_recoverable_repair_cycle(
         else "NO_VALID_REPAIR_CANDIDATE",
         "repair_primary_family": None,
         "repair_supporting_methods": [],
+        "current_candidate_origin_report": current_candidate_origin_report,
     }
     budget_report = _repair_runtime_budget(context, 0)
     if admission.get("repair_required") is True:
@@ -2236,6 +2246,19 @@ def evaluation_stage(context):
                 "report_state": "minimal",
             },
             "FINAL_REPAIR_REPORT": final_repair_report,
+            "candidate_origin_report": context.get("candidate_origin_report"),
+            "CANDIDATE_ORIGIN_REPORT": context.get(
+                "CANDIDATE_ORIGIN_REPORT",
+                context.get("candidate_origin_report"),
+            ),
+            "current_candidate_origin_report": (
+                final_repair_report.get("current_candidate_origin_report")
+                or context.get("current_candidate_origin_report")
+            ),
+            "CURRENT_CANDIDATE_ORIGIN_REPORT": (
+                final_repair_report.get("current_candidate_origin_report")
+                or context.get("CURRENT_CANDIDATE_ORIGIN_REPORT")
+            ),
             "REPAIR_REACHABILITY_AUDIT":
             runtime_repair_result["repair_reachability_audit"],
             "repair_reachability_audit":

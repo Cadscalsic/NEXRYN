@@ -42,6 +42,9 @@ from runtime.learning.operator_reward_engine import (
 from runtime.budget.runtime_budget_enforcer import (
     runtime_budget_enforcer,
 )
+from runtime.provenance import (
+    build_candidate_origin_report,
+)
 
 # ============================================
 # PLANNING
@@ -3258,6 +3261,25 @@ def inference_stage(context):
     context[
         "predicted_output"
     ] = predicted_output
+
+    context[
+        "candidate_origin_report"
+    ] = build_candidate_origin_report(
+        producer_component="inference_stage",
+        producer_operation_id="inference_execution",
+        candidate_id="current_candidate",
+        transformation_source="execution_result",
+        prediction_source="execution_result.output_grid",
+        source_report=inference_report,
+        run_id=context.get("run_id"),
+        task_id=context.get("task_id") or context.get("task_path"),
+    )
+
+    context[
+        "CANDIDATE_ORIGIN_REPORT"
+    ] = context[
+        "candidate_origin_report"
+    ]
 
     # ========================================
     # STORE TRANSFORM REPORTS

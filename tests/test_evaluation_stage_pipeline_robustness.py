@@ -61,6 +61,14 @@ def test_legacy_pipeline_produces_identity_baseline_before_evaluation():
     assert result["prediction_pipeline_report"][
         "pipeline_disconnect_detected"
     ] is True
+    assert result["candidate_origin_report"]["authority"] == "OBSERVATION_ONLY"
+    assert result["candidate_origin_report"]["behavioral_authority"] == "NONE"
+    assert result["candidate_origin_report"]["producer_component"] == (
+        "legacy_pipeline_prediction_guard"
+    )
+    assert result["candidate_origin_report"]["prediction_source"] == (
+        "identity_baseline"
+    )
 
 
 def test_introspection_attributes_contextual_transformation_concepts():

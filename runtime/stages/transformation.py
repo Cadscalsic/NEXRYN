@@ -39,6 +39,9 @@ from runtime.execution.world_model_gate import (
 from runtime.kernel.cognitive_blackboard import (
     cognitive_blackboard_from_context,
 )
+from runtime.provenance import (
+    build_candidate_origin_report,
+)
 
 # ============================================
 # GLOBAL TRANSFORMATION ENGINE
@@ -852,6 +855,25 @@ def transformation_stage(context):
     context[
         "predicted_output"
     ] = predicted_output
+
+    context[
+        "candidate_origin_report"
+    ] = build_candidate_origin_report(
+        producer_component="transformation_stage",
+        producer_operation_id="transformation_execution",
+        candidate_id="current_candidate",
+        transformation_source="transformation_report",
+        prediction_source="execution_result.output_grid",
+        source_report=transformation_report,
+        run_id=context.get("run_id"),
+        task_id=context.get("task_id") or context.get("task_path"),
+    )
+
+    context[
+        "CANDIDATE_ORIGIN_REPORT"
+    ] = context[
+        "candidate_origin_report"
+    ]
 
     context[
         "transformation_report"

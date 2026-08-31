@@ -45,6 +45,15 @@ def test_recoverable_failure_reaches_repair_admission_and_arena_reentry():
     assert audit["repair_engine_reachable"] is True
     assert result["FINAL_REPAIR_REPORT"]["repair_attempts"] >= 1
     assert report["residual_count_after"] < report["residual_count_before"]
+    origin = result["CURRENT_CANDIDATE_ORIGIN_REPORT"]
+    assert origin["authority"] == "OBSERVATION_ONLY"
+    assert origin["behavioral_authority"] == "NONE"
+    assert origin["current_candidate_handoff_observed"] is True
+    assert origin["construction_observable"] is False
+    assert origin["producer_component"] == "NOT_OBSERVABLE"
+    assert origin["handoff_evidence"]["source_candidate_id"] == (
+        "current_candidate"
+    )
 
 
 def test_exact_success_does_not_trigger_repair():
@@ -177,3 +186,43 @@ def test_repair_telemetry_uses_authoritative_admitted_runtime_facts():
     assert telemetry["admitted_route_count"] == 2
     assert telemetry["requested_reasoning_depth"] == 4
     assert telemetry["completed_reasoning_depth"] == 2
+
+
+def test_repair_handoff_preserves_observed_candidate_origin_without_authority():
+    predicted = np.zeros((5, 5), dtype=int)
+    target = predicted.copy()
+    for row, col in [(0, 0), (0, 1), (1, 0), (1, 1), (2, 2)]:
+        target[row, col] = 7
+
+    result = evaluation_stage(
+        _base_context(
+            predicted,
+            target,
+            candidate_origin_report={
+                "system": "candidate_origin_provenance",
+                "report_state": "OBSERVED",
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+                "candidate_id": "current_candidate",
+                "producer_component": "transformation_stage",
+                "producer_operation_id": "transformation_execution",
+                "parent_candidate_id": None,
+                "program_id": None,
+                "strategy_id": "strategy:local",
+                "retrieval_source": None,
+                "transformation_source": "transformation_report",
+                "prediction_source": "execution_result.output_grid",
+                "run_id": "repair_reachability_run",
+                "task_id": "repair_reachability_regression",
+            },
+        )
+    )
+
+    origin = result["CURRENT_CANDIDATE_ORIGIN_REPORT"]
+    assert origin["construction_observable"] is True
+    assert origin["producer_component"] == "transformation_stage"
+    assert origin["producer_operation_id"] == "transformation_execution"
+    assert origin["strategy_id"] == "strategy:local"
+    assert origin["authority"] == "OBSERVATION_ONLY"
+    assert origin["behavioral_authority"] == "NONE"
+    assert result["evaluation_result"]["difference_count"] < 5
