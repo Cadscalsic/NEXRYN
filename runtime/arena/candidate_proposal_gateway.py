@@ -92,6 +92,12 @@ class CandidateProposalGateway:
             reasons.append("missing_operation")
         status = "REJECTED" if reasons else "PROPOSED"
         candidate_id = data.get("candidate_id") or f"candidate:{source}:{index}"
+        metadata = (
+            deepcopy(data.get("metadata", {}))
+            if isinstance(data.get("metadata", {}), Mapping)
+            else {}
+        )
+        provenance_fields = self._provenance_fields(data, metadata)
         return {
             "candidate_id": _normalize_id(candidate_id),
             "source": source,
@@ -113,13 +119,19 @@ class CandidateProposalGateway:
             "localization_support": _score(data.get("localization_support", 0.0)),
             "proposal_status": status,
             "rejection_reasons": reasons,
-            "metadata": deepcopy(data.get("metadata", {})) if isinstance(data.get("metadata", {}), Mapping) else {},
+            **provenance_fields,
+            "metadata": metadata,
             "provenance": {
                 "original_source": data.get("source"),
                 "origin_source": original_source,
                 "normalized_source": source,
                 "gateway_index": index,
                 "received_fields": sorted(str(key) for key in data),
+                **{
+                    key: value
+                    for key, value in provenance_fields.items()
+                    if value is not None
+                },
             },
         }
 
@@ -164,6 +176,47 @@ class CandidateProposalGateway:
 
     def _declares_winner(self, proposal: Mapping[str, Any]) -> bool:
         return any(field in proposal for field in WINNER_DECLARATION_FIELDS)
+
+    def _provenance_fields(
+        self,
+        data: Mapping[str, Any],
+        metadata: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        learned_object_id = (
+            data.get("learned_object_id")
+            or data.get("source_learned_object_id")
+            or metadata.get("learned_object_id")
+            or metadata.get("source_learned_object_id")
+        )
+        return {
+            "learned_object_id": learned_object_id,
+            "source_learned_object_id": (
+                data.get("source_learned_object_id")
+                or metadata.get("source_learned_object_id")
+                or learned_object_id
+            ),
+            "learned_object_type": (
+                data.get("learned_object_type")
+                or metadata.get("learned_object_type")
+            ),
+            "reuse_proposal_id": (
+                data.get("reuse_proposal_id")
+                or metadata.get("reuse_proposal_id")
+            ),
+            "source_run_id": (
+                data.get("source_run_id")
+                or metadata.get("source_run_id")
+            ),
+            "target_run_id": (
+                data.get("target_run_id")
+                or metadata.get("target_run_id")
+            ),
+            "authority": data.get("authority") or metadata.get("authority"),
+            "behavioral_authority": (
+                data.get("behavioral_authority")
+                or metadata.get("behavioral_authority")
+            ),
+        }
 
 
 def _score(value: Any) -> float:

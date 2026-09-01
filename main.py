@@ -19,6 +19,10 @@ from runtime.state.shared_cognitive_state import (
     CognitiveKnowledgeBus,
     SharedCognitiveState,
 )
+from runtime.observability.state_authority_delta import (
+    capture_state_authority_snapshot,
+    finalize_current_run_state_authority_delta,
+)
 from runtime.world_governance.capability_promotion_policy import (
     EXPECTED_OPERATIONAL_DOMAINS,
     capability_promotion_policy_engine,
@@ -55,6 +59,7 @@ def build_runtime_metadata(
     return {
         "tasks_directory": args.tasks_dir,
         "run_id": runtime_metrics.get("run_id"),
+        "execution_plan_id": runtime_metrics.get("execution_plan_id"),
         "mode": args.mode,
         "execution_profile": runtime_metrics.get("execution_profile"),
         "cognitive_pipeline": runtime_metrics.get("cognitive_pipeline"),
@@ -3759,6 +3764,30 @@ evidence_plan_store = None
 evidence_plan_store_report = {}
 evidence_plan_persistence_report = {}
 pending_evidence_acquisition_plans = []
+state_authority_pre_run_snapshot = None
+state_authority_delta_report = None
+try:
+    state_authority_pre_run_snapshot = capture_state_authority_snapshot(
+        run_id=runtime_metrics["run_id"],
+        execution_plan_id=None,
+        task_id="RUN_WITH_TASK_ENTRIES",
+    )
+    state_authority_pre_run_snapshot["execution_plan_binding_state"] = (
+        "PENDING_AUTHORITATIVE_PLAN"
+    )
+    runtime_metrics["state_authority_pre_snapshot_captured"] = True
+except Exception as state_authority_error:
+    state_authority_pre_run_snapshot = {
+        "run_id": runtime_metrics["run_id"],
+        "execution_plan_id": None,
+        "task_id": "RUN_WITH_TASK_ENTRIES",
+        "authority": "OBSERVATION_ONLY",
+        "behavioral_authority": "NONE",
+        "snapshot_error": repr(state_authority_error),
+        "stores": [],
+        "execution_plan_binding_state": "PENDING_AUTHORITATIVE_PLAN",
+    }
+    runtime_metrics["state_authority_pre_snapshot_captured"] = False
 
 
 # ============================================
@@ -4250,6 +4279,13 @@ try:
         authoritative_execution_plan.get("execution_plan_id")
     )
     training_batch["run_id"] = runtime_metrics["run_id"]
+    if isinstance(state_authority_pre_run_snapshot, dict):
+        state_authority_pre_run_snapshot["bound_execution_plan_id"] = (
+            runtime_metrics.get("execution_plan_id")
+        )
+        state_authority_pre_run_snapshot["execution_plan_binding_state"] = (
+            "BOUND_AFTER_AUTHORITATIVE_PLAN_FINALIZED"
+        )
 
     print_training_batch_summary(
         training_batch,
@@ -8615,6 +8651,27 @@ if runtime_status == "completed":
             results["training_report"]["evidence_plan_store_report"] = (
                 evidence_plan_store_report
             )
+    if isinstance(results, dict):
+        state_authority_delta_report = finalize_current_run_state_authority_delta(
+            run_id=runtime_metadata.get("run_id"),
+            execution_plan_id=runtime_metadata.get("execution_plan_id"),
+            task_id="RUN_WITH_TASK_ENTRIES",
+            pre_run_snapshot=state_authority_pre_run_snapshot,
+        )
+        results["CURRENT_RUN_STATE_AUTHORITY_DELTA_REPORT"] = (
+            state_authority_delta_report
+        )
+        results["current_run_state_authority_delta_report"] = (
+            state_authority_delta_report
+        )
+        if isinstance(results.get("performance_report"), dict):
+            results["performance_report"][
+                "CURRENT_RUN_STATE_AUTHORITY_DELTA_REPORT"
+            ] = state_authority_delta_report
+        if isinstance(results.get("training_report"), dict):
+            results["training_report"][
+                "CURRENT_RUN_STATE_AUTHORITY_DELTA_REPORT"
+            ] = state_authority_delta_report
     from runtime.reporting.active_runtime_reachability_audit import (
         mark_active_runtime_audit_attached_to_run,
     )

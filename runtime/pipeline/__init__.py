@@ -1,4 +1,22 @@
-"""Modular, stage-oriented runtime pipeline architecture."""
+"""Canonical runtime pipeline namespace.
+
+`runtime.pipeline` is owned by this package. Normal production execution is
+delegated to `runtime.pipeline.legacy_pipeline.AdaptiveCognitivePipeline`
+through the `pipeline` compatibility proxy below; the modular runner remains an
+explicit alternate API and does not silently replace production behavior.
+"""
+
+PIPELINE_NAMESPACE_STATE = "PACKAGE_OWNS_NAMESPACE"
+CANONICAL_PRODUCTION_PIPELINE = (
+    "runtime.pipeline.legacy_pipeline.AdaptiveCognitivePipeline"
+)
+CANONICAL_ENTRY_SYMBOL = "pipeline"
+CANONICAL_SOURCE_FILE = "runtime/pipeline/legacy_pipeline.py"
+COMPATIBILITY_SURFACES = ("runtime.pipeline.pipeline",)
+ALTERNATE_PIPELINE_SURFACES = (
+    "runtime.pipeline.pipeline_runner.ModularPipelineRunner",
+    "runtime.pipeline.pipeline_runner.run_modular_pipeline",
+)
 
 class _LegacyPipelineProxy:
     def _target(self):
@@ -52,9 +70,15 @@ def __getattr__(name):
 __all__ = [
     "ADAPTIVE_MODE",
     "AdaptiveCognitivePipeline",
+    "ALTERNATE_PIPELINE_SURFACES",
+    "CANONICAL_ENTRY_SYMBOL",
+    "CANONICAL_PRODUCTION_PIPELINE",
+    "CANONICAL_SOURCE_FILE",
+    "COMPATIBILITY_SURFACES",
     "FAST_MODE",
     "BaseStage",
     "ModularPipelineRunner",
+    "PIPELINE_NAMESPACE_STATE",
     "PipelineContext",
     "StageRegistry",
     "StageResult",

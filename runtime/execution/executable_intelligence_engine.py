@@ -113,6 +113,7 @@ class ExecutableIntelligenceEngine:
         validation_probe_consumed = bool(
             probe_candidate and not selected_candidate and candidate is probe_candidate
         )
+        consumed_candidate_identity = self._candidate_identity(candidate)
         operation_name = str(candidate.get("operation") or operation or semantic_intent)
         semantic_intent_name = str(
             semantic_intent
@@ -190,6 +191,7 @@ class ExecutableIntelligenceEngine:
             memory=memory_report,
             feedback=feedback,
             validation_probe_consumed=validation_probe_consumed,
+            consumed_candidate_identity=consumed_candidate_identity,
             arena_recommendation=arena_recommendation,
             grounding_trace={
                 "validation_probe_grounding_context_received": (
@@ -249,6 +251,7 @@ class ExecutableIntelligenceEngine:
             "EXECUTABLE_INTELLIGENCE_REPORT": report,
             "final_execution_recommendation": {
                 "selected_candidate": adaptation.get("adapted_program") or compiled.get("compiled_program"),
+                "source_candidate_identity": consumed_candidate_identity,
                 "selection_state": final_selection_state,
                 "execution_mode": final_execution_mode,
                 "validation_probe_consumed": validation_probe_consumed,
@@ -329,6 +332,11 @@ class ExecutableIntelligenceEngine:
             else {}
         )
         validation_probe_consumed = bool(parts.get("validation_probe_consumed"))
+        consumed_candidate_identity = (
+            parts.get("consumed_candidate_identity")
+            if isinstance(parts.get("consumed_candidate_identity"), dict)
+            else {}
+        )
         arena_recommendation = (
             parts.get("arena_recommendation")
             if isinstance(parts.get("arena_recommendation"), dict)
@@ -390,6 +398,13 @@ class ExecutableIntelligenceEngine:
             "execution_feedback": feedback.get("execution_feedback"),
             "compiler_participation": compiled.get("compiler_participation", 0),
             "validation_probe_consumed": validation_probe_consumed,
+            "consumed_candidate_identity": consumed_candidate_identity,
+            "selected_candidate_identity": self._candidate_identity(
+                arena_recommendation.get("selected_candidate")
+            ),
+            "validation_probe_candidate_identity": self._candidate_identity(
+                arena_recommendation.get("validation_probe_candidate")
+            ),
             "validation_probe_compiler_participation": (
                 compiled.get("compiler_participation", 0)
                 if validation_probe_consumed
@@ -412,6 +427,53 @@ class ExecutableIntelligenceEngine:
             "localized_execution_success": residual.get("localized_execution_success", 0),
             "residual_repair_success": repairs.get("residual_repair_success", 0),
             "real_execution_performed": False,
+        }
+
+    def _candidate_identity(self, candidate: Any) -> dict[str, Any]:
+        if not isinstance(candidate, dict):
+            return {}
+        metadata = (
+            candidate.get("metadata")
+            if isinstance(candidate.get("metadata"), dict)
+            else {}
+        )
+        learned_object_id = (
+            candidate.get("learned_object_id")
+            or candidate.get("source_learned_object_id")
+            or metadata.get("learned_object_id")
+            or metadata.get("source_learned_object_id")
+        )
+        return {
+            "candidate_id": candidate.get("candidate_id"),
+            "source": candidate.get("source"),
+            "operation": candidate.get("operation"),
+            "learned_object_id": learned_object_id,
+            "source_learned_object_id": (
+                candidate.get("source_learned_object_id")
+                or metadata.get("source_learned_object_id")
+                or learned_object_id
+            ),
+            "learned_object_type": (
+                candidate.get("learned_object_type")
+                or metadata.get("learned_object_type")
+            ),
+            "reuse_proposal_id": (
+                candidate.get("reuse_proposal_id")
+                or metadata.get("reuse_proposal_id")
+            ),
+            "source_run_id": (
+                candidate.get("source_run_id")
+                or metadata.get("source_run_id")
+            ),
+            "target_run_id": (
+                candidate.get("target_run_id")
+                or metadata.get("target_run_id")
+            ),
+            "authority": candidate.get("authority") or metadata.get("authority"),
+            "behavioral_authority": (
+                candidate.get("behavioral_authority")
+                or metadata.get("behavioral_authority")
+            ),
         }
 
     def _object_grounding_trace(

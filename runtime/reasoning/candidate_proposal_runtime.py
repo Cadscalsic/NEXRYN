@@ -146,10 +146,10 @@ class CandidateProposalRuntime:
             return "source_not_available"
         if source.get("adaptive_reuse_candidate_materialization_state"):
             return str(source.get("adaptive_reuse_candidate_materialization_state"))
+        if self._has_cognitive_reuse_evidence(source):
+            return "COGNITIVE_REUSE_ONLY"
         if source.get("reuse_success_rate") or source.get("reuse_rate"):
             composed = source.get("composed_program")
-            if self._has_cognitive_reuse_evidence(source):
-                return "COGNITIVE_REUSE_ONLY"
             if isinstance(composed, Mapping):
                 steps = composed.get("program_steps") or composed.get("steps") or []
                 if not steps:
@@ -176,11 +176,27 @@ class CandidateProposalRuntime:
     ) -> dict[str, Any]:
         operation = self._operation(candidate)
         program = self._program(candidate)
+        learned_object = self._learned_object(candidate)
+        metadata = self._metadata(candidate)
+        metadata.update({
+            "learned_object_id": learned_object["learned_object_id"],
+            "source_learned_object_id": learned_object["learned_object_id"],
+            "learned_object_type": learned_object["learned_object_type"],
+            "reuse_proposal_id": proposal_id,
+            "reuse_observation_authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+        })
         return {
             "source": source,
             "proposal_id": proposal_id,
             "candidate_id": self._candidate_field(candidate, "candidate_id")
             or proposal_id,
+            "learned_object_id": learned_object["learned_object_id"],
+            "source_learned_object_id": learned_object["learned_object_id"],
+            "learned_object_type": learned_object["learned_object_type"],
+            "reuse_proposal_id": proposal_id,
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
             "proposal_status": status,
             "intent": self._candidate_field(candidate, "intent") or operation,
             "operation": operation,
@@ -196,7 +212,7 @@ class CandidateProposalRuntime:
             ),
             "candidate_available": status == "PROPOSED",
             "rejection_reason": rejection_reason,
-            "metadata": self._metadata(candidate),
+            "metadata": metadata,
         }
 
     def _operation(self, candidate: Any) -> Any:
@@ -267,6 +283,41 @@ class CandidateProposalRuntime:
             return {}
         metadata = candidate.get("metadata")
         return dict(metadata) if isinstance(metadata, Mapping) else {}
+
+    def _learned_object(self, candidate: Any) -> dict[str, Any]:
+        if not isinstance(candidate, Mapping):
+            return {
+                "learned_object_id": None,
+                "learned_object_type": None,
+            }
+        learned_object_id = (
+            candidate.get("learned_object_id")
+            or candidate.get("source_learned_object_id")
+            or candidate.get("program_id")
+            or candidate.get("strategy_id")
+            or candidate.get("experience_id")
+            or candidate.get("truth_id")
+            or candidate.get("knowledge_id")
+            or candidate.get("concept_id")
+        )
+        if candidate.get("program_id"):
+            object_type = "PROGRAM"
+        elif candidate.get("strategy_id"):
+            object_type = "STRATEGY"
+        elif candidate.get("experience_id"):
+            object_type = "EXPERIENCE_RECORD"
+        elif candidate.get("truth_id"):
+            object_type = "TRUTH_OBJECT"
+        elif candidate.get("knowledge_id"):
+            object_type = "KNOWLEDGE_OBJECT"
+        elif candidate.get("concept_id"):
+            object_type = "CONCEPT"
+        else:
+            object_type = candidate.get("learned_object_type")
+        return {
+            "learned_object_id": learned_object_id,
+            "learned_object_type": object_type,
+        }
 
     def _source_diagnostic(
         self,

@@ -792,6 +792,35 @@ class CognitiveCandidateArena:
                 "program_signature": candidate.get("program_signature"),
                 "program_representation": metadata.get("program_representation"),
                 "reuse_evidence": metadata.get("reuse_evidence"),
+                "learned_object_id": (
+                    candidate.get("learned_object_id")
+                    or metadata.get("learned_object_id")
+                ),
+                "source_learned_object_id": (
+                    candidate.get("source_learned_object_id")
+                    or metadata.get("source_learned_object_id")
+                ),
+                "learned_object_type": (
+                    candidate.get("learned_object_type")
+                    or metadata.get("learned_object_type")
+                ),
+                "reuse_proposal_id": (
+                    candidate.get("reuse_proposal_id")
+                    or metadata.get("reuse_proposal_id")
+                ),
+                "source_run_id": (
+                    candidate.get("source_run_id")
+                    or metadata.get("source_run_id")
+                ),
+                "target_run_id": (
+                    candidate.get("target_run_id")
+                    or metadata.get("target_run_id")
+                ),
+                "authority": candidate.get("authority") or metadata.get("authority"),
+                "behavioral_authority": (
+                    candidate.get("behavioral_authority")
+                    or metadata.get("behavioral_authority")
+                ),
                 "cross_source_consensus": candidate.get("cross_source_consensus"),
                 "cross_source_consensus_id": candidate.get(
                     "cross_source_consensus_id"

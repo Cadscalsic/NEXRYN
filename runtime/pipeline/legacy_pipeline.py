@@ -49,6 +49,11 @@ from runtime.learning.saturation_controller import (
 )
 from runtime.reporting import CompactReportBuilder
 from runtime.cache import CacheManager, concept_lifecycle_cache
+from runtime.observability import (
+    build_runtime_topology_observation_report,
+    context_delta as build_topology_context_delta,
+    persist_runtime_topology_observation_report,
+)
 from runtime.planning.execution_profile import build_execution_profile
 from runtime.provenance import build_candidate_origin_report
 from runtime.truth import (
@@ -3728,6 +3733,121 @@ class AdaptiveCognitivePipeline:
         runtime_context["incomplete_due_to_budget"] = True
         return report
 
+    def _attach_stage_context_observation(
+        self,
+        stage_report,
+        before_context,
+        after_context,
+        sequence,
+    ):
+
+        try:
+            delta = build_topology_context_delta(
+                before_context,
+                after_context,
+            )
+        except Exception as error:
+            delta = {
+                "context_delta_status": "UNAVAILABLE",
+                "context_delta_error": repr(error),
+                "context_keys_before": [],
+                "context_keys_after": [],
+                "context_keys_added": [],
+                "context_keys_removed": [],
+                "context_keys_changed": [],
+            }
+
+        stage_report.update({
+            "entry_sequence": sequence,
+            "exit_sequence": sequence,
+            **delta,
+            "emitted_artifact_types": self._stage_emitted_artifact_types(
+                after_context,
+            ),
+        })
+        return stage_report
+
+    def _stage_emitted_artifact_types(self, runtime_context):
+
+        if not isinstance(runtime_context, dict):
+            return []
+        emitted = []
+        for key, artifact_type in (
+            ("current_candidate", "candidate"),
+            ("predicted_output", "prediction"),
+            ("evaluation_result", "evaluation"),
+            ("evaluation_report", "evaluation"),
+            ("CURRENT_CANDIDATE_ORIGIN_REPORT", "candidate_origin"),
+            ("RUNTIME_BUDGET_ENFORCEMENT_REPORT", "budget"),
+            ("runtime_budget_enforcement_report", "budget"),
+            ("ACTIVE_RUNTIME_REACHABILITY_AUDIT", "reachability_audit"),
+            ("active_runtime_reachability_audit", "reachability_audit"),
+        ):
+            if key in runtime_context:
+                emitted.append(artifact_type)
+        return sorted(set(emitted))
+
+    def _attach_runtime_topology_observation(
+        self,
+        runtime_context,
+        execution_trace=None,
+        *,
+        write_artifact=True,
+    ):
+
+        runtime_context = runtime_context if isinstance(runtime_context, dict) else {}
+        trace = (
+            execution_trace
+            if isinstance(execution_trace, list)
+            else runtime_context.get("execution_trace", [])
+        )
+        try:
+            report = build_runtime_topology_observation_report(
+                runtime_context=runtime_context,
+                execution_trace=trace,
+                pipeline_stages=self.pipeline_stages,
+                execution_mode=(
+                    self.reasoning_budget.get("mode")
+                    if isinstance(self.reasoning_budget, dict)
+                    else None
+                ),
+                report_level=(
+                    self.reasoning_budget.get("report_level")
+                    if isinstance(self.reasoning_budget, dict)
+                    else None
+                ),
+                expected_run_id=runtime_context.get("run_id"),
+            )
+            runtime_context[
+                "RUNTIME_TOPOLOGY_OBSERVATION_REPORT"
+            ] = report
+            runtime_context[
+                "runtime_topology_observation_report"
+            ] = report
+            if write_artifact:
+                write_report = persist_runtime_topology_observation_report(
+                    report,
+                )
+                runtime_context[
+                    "RUNTIME_TOPOLOGY_OBSERVATION_WRITE_REPORT"
+                ] = write_report
+                runtime_context[
+                    "runtime_topology_observation_write_report"
+                ] = write_report
+            return runtime_context
+        except Exception as error:
+            runtime_context[
+                "RUNTIME_TOPOLOGY_OBSERVATION_REPORT"
+            ] = {
+                "schema_version": "1.0",
+                "report_type": "RUNTIME_TOPOLOGY_OBSERVATION_REPORT",
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+                "observation_failure_preserves_task_execution": True,
+                "observation_error": repr(error),
+            }
+            return runtime_context
+
     def run_stage_cycle(self):
 
         stage_cycle_start = time.perf_counter()
@@ -3736,12 +3856,14 @@ class AdaptiveCognitivePipeline:
         )
 
         execution_trace = []
+        stage_sequence = 0
 
         for stage in self.pipeline_stages:
 
             stage_name = stage.get(
                 "stage_name"
             )
+            stage_sequence += 1
 
             budget_report = self._deep_task_budget_exceeded_report(
                 runtime_context,
@@ -3763,6 +3885,7 @@ class AdaptiveCognitivePipeline:
                 "stage_name": stage_name,
                 "status": "initialized"
             }
+            stage_context_before = dict(runtime_context)
 
             failure_error = None
 
@@ -3800,6 +3923,12 @@ class AdaptiveCognitivePipeline:
                     runtime_context[
                         f"{stage_name}_report"
                     ] = skipped
+                    stage_report = self._attach_stage_context_observation(
+                        stage_report,
+                        stage_context_before,
+                        runtime_context,
+                        stage_sequence,
+                    )
                     execution_trace.append(
                         stage_report
                     )
@@ -3834,6 +3963,12 @@ class AdaptiveCognitivePipeline:
                         if self.meta_supervisor.current_directive is not None
                         else {}
                     )
+                    stage_report = self._attach_stage_context_observation(
+                        stage_report,
+                        stage_context_before,
+                        runtime_context,
+                        stage_sequence,
+                    )
                     execution_trace.append(
                         stage_report
                     )
@@ -3855,6 +3990,12 @@ class AdaptiveCognitivePipeline:
                     stage_report[
                         "reason"
                     ] = "meta_decision_disabled_self_improvement"
+                    stage_report = self._attach_stage_context_observation(
+                        stage_report,
+                        stage_context_before,
+                        runtime_context,
+                        stage_sequence,
+                    )
                     execution_trace.append(
                         stage_report
                     )
@@ -3921,6 +4062,12 @@ class AdaptiveCognitivePipeline:
                 self.runtime.complete_stage(
                     stage_name
                 )
+                stage_report = self._attach_stage_context_observation(
+                    stage_report,
+                    stage_context_before,
+                    runtime_context,
+                    stage_sequence,
+                )
 
                 if stage_name == "task_loading":
 
@@ -3949,6 +4096,12 @@ class AdaptiveCognitivePipeline:
                             "pipeline_cache_hit"
                         ] = True
                         self.cached_pipeline_result = runtime_context
+                        execution_trace.append(
+                            stage_report
+                        )
+                        self.stage_execution_history.append(
+                            stage_report
+                        )
                         break
 
                     self.allocate_cognitive_budget_after_memory_lookup(
@@ -3972,6 +4125,12 @@ class AdaptiveCognitivePipeline:
                         stage_report[
                             "post_evaluation_work_skipped"
                         ] = True
+                        execution_trace.append(
+                            stage_report
+                        )
+                        self.stage_execution_history.append(
+                            stage_report
+                        )
                         break
 
                     if runtime_context.get("episode_completed") is True:
@@ -4065,6 +4224,12 @@ class AdaptiveCognitivePipeline:
                         "reason": termination_reason,
                         "timestamp": str(datetime.utcnow()),
                     }
+                    execution_trace.append(
+                        stage_report
+                    )
+                    self.stage_execution_history.append(
+                        stage_report
+                    )
                     break
 
             except Exception as error:
@@ -4085,6 +4250,12 @@ class AdaptiveCognitivePipeline:
 
                 self.runtime.fail_stage(
                     stage_name
+                )
+                stage_report = self._attach_stage_context_observation(
+                    stage_report,
+                    stage_context_before,
+                    runtime_context,
+                    stage_sequence,
                 )
 
             execution_trace.append(
@@ -4117,6 +4288,10 @@ class AdaptiveCognitivePipeline:
         runtime_context[
             "execution_trace"
         ] = execution_trace
+        runtime_context = self._attach_runtime_topology_observation(
+            runtime_context,
+            execution_trace,
+        )
 
         self.runtime.bulk_update_context(
             runtime_context
@@ -13583,6 +13758,10 @@ class AdaptiveCognitivePipeline:
                 "enabled": True,
                 "reason": "fast_minimal_post_evaluation_return",
             }
+            context = self._attach_runtime_topology_observation(
+                context,
+                context.get("execution_trace", []),
+            )
             return context
 
         if self.cached_pipeline_result is not None:
