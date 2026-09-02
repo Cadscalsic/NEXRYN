@@ -1430,6 +1430,14 @@ def test_truth_candidate_uses_adaptive_contradiction_threshold():
             "knowledge_generalization": {
                 "used_task_count": 31,
             },
+            "source_coverage": {
+                "claim_id": "symmetry_reasoning",
+                "proven_independent_supporting_sources": 8,
+                "proven_independent_contradicting_sources": 0,
+                "dependent_supporting_sources": 0,
+                "unknown_source_relation_count": 0,
+                "accepted_evidence_count": 31,
+            },
             "causal_validation": {
                 "validation_score": 0.8004,
             },
@@ -1488,6 +1496,14 @@ def test_truth_candidate_uses_dependency_promotion_bonus_for_process_concept():
             "knowledge_generalization": {
                 "used_task_count": 8,
             },
+            "source_coverage": {
+                "claim_id": "growth",
+                "proven_independent_supporting_sources": 8,
+                "proven_independent_contradicting_sources": 0,
+                "dependent_supporting_sources": 0,
+                "unknown_source_relation_count": 0,
+                "accepted_evidence_count": 8,
+            },
             "causal_graph_alignment": {
                 "alignment_score": 0.74,
             },
@@ -1500,6 +1516,10 @@ def test_truth_candidate_uses_dependency_promotion_bonus_for_process_concept():
                     "dependency_chain_coverage": 0.8556,
                     "missing_dependencies": [],
                 },
+            },
+            "dependency_chain_alignment": {
+                "alignment_ready": True,
+                "alignment_confidence": 0.91,
             },
         },
     )
@@ -2825,7 +2845,7 @@ def test_cognition_layer_hydrates_persisted_replication_evidence(tmp_path):
     assert evidence[0].metadata["hydrated_from_persistent_ledger"] is True
 
 
-def test_truth_candidate_requires_eight_independent_tasks_when_reported():
+def test_truth_candidate_requires_eight_independent_sources_when_reported():
     belief = Belief(
         concept="shape_preservation",
         claim="shape_preservation",
@@ -2846,6 +2866,14 @@ def test_truth_candidate_requires_eight_independent_tasks_when_reported():
             "knowledge_generalization": {
                 "used_task_count": 7,
             },
+            "source_coverage": {
+                "claim_id": "shape_preservation",
+                "proven_independent_supporting_sources": 7,
+                "proven_independent_contradicting_sources": 0,
+                "dependent_supporting_sources": 0,
+                "unknown_source_relation_count": 0,
+                "accepted_evidence_count": 7,
+            },
         },
     )
     eligible = TruthCandidateEngine().evaluate(
@@ -2855,10 +2883,19 @@ def test_truth_candidate_requires_eight_independent_tasks_when_reported():
             "knowledge_generalization": {
                 "used_task_count": 8,
             },
+            "source_coverage": {
+                "claim_id": "shape_preservation",
+                "proven_independent_supporting_sources": 8,
+                "proven_independent_contradicting_sources": 0,
+                "dependent_supporting_sources": 0,
+                "unknown_source_relation_count": 0,
+                "accepted_evidence_count": 8,
+            },
         },
     )
 
-    assert "independent_task_coverage" in blocked["blocked_metrics"]
+    assert "proven_independent_supporting_source_count" in blocked["blocked_metrics"]
+    assert blocked["legacy_independent_task_metric_policy"] == "DIAGNOSTIC_ONLY"
     assert eligible["eligible_for_truth_candidate"] is True
 
 

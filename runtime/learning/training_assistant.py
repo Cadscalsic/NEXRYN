@@ -7,6 +7,11 @@ from pathlib import Path
 from runtime.evidence_generation.evidence_generation_engine import (
     EvidenceGenerationEngine,
 )
+from runtime.learning.general_task_evidence_profile import (
+    GeneralTaskEvidenceProfileError,
+    GeneralTaskEvidenceProfiler,
+    TaskEvidenceMatcher,
+)
 from runtime.training.curriculum_manager import CurriculumManager
 from runtime.training.elite_curriculum_validator import (
     ELITE_CURRICULUM_NAME,
@@ -68,6 +73,8 @@ class TrainingAssistant:
         self.validation_curriculum_registry = (
             validation_curriculum_registry or ValidationCurriculumRegistry()
         )
+        self.general_task_evidence_profiler = GeneralTaskEvidenceProfiler()
+        self.task_evidence_matcher = TaskEvidenceMatcher()
         if validation_curriculum_registry is None:
             self.validation_curriculum_registry.register_default_academy(
                 self.validation_academy_path
@@ -2571,6 +2578,306 @@ class TrainingAssistant:
             curriculum_report,
         )
 
+    def _active_epistemic_requirement(self, active_epistemic_requirements):
+        if not active_epistemic_requirements:
+            return None, {
+                "requirement_state": "NO_ACTIVE_REQUIREMENT",
+                "reason": "no_active_epistemic_requirement",
+            }
+        if isinstance(active_epistemic_requirements, dict):
+            requirements = [active_epistemic_requirements]
+        else:
+            requirements = [
+                item for item in active_epistemic_requirements
+                if isinstance(item, dict)
+            ]
+        if len(requirements) != 1:
+            return None, {
+                "requirement_state": "MULTI_REQUIREMENT_ARBITRATION_REQUIRED",
+                "reason": "exactly_one_active_requirement_required_for_shadow_probe",
+                "requirement_count": len(requirements),
+            }
+        requirement = dict(requirements[0])
+        evidence_type = (
+            requirement.get("evidence_type")
+            or requirement.get("required_evidence")
+        )
+        if not evidence_type:
+            return None, {
+                "requirement_state": "INVALID_REQUIREMENT",
+                "reason": "required_evidence_type_missing",
+            }
+        if requirement.get("foreign_requirement") is True:
+            return None, {
+                "requirement_state": "FOREIGN_REQUIREMENT_REJECTED",
+                "reason": "foreign_requirement_cannot_influence_selector",
+            }
+        if str(evidence_type) not in (
+            self.general_task_evidence_profiler.EVIDENCE_TYPE_BY_TERM
+        ):
+            return None, {
+                "requirement_state": "UNKNOWN_EVIDENCE_TYPE",
+                "reason": "unknown_evidence_type_cannot_influence_selector",
+                "evidence_type": str(evidence_type),
+            }
+        if str(requirement.get("authority") or "").upper() in {
+            "TRUTH_COMMITMENT",
+            "SELECTION_AUTHORITY",
+        }:
+            return None, {
+                "requirement_state": "INVALID_REQUIREMENT_AUTHORITY",
+                "reason": "requirement_authority_not_advisory",
+            }
+        requirement.setdefault("requirement_id", str(evidence_type))
+        requirement.setdefault("evidence_type", str(evidence_type))
+        return requirement, {
+            "requirement_state": "ACTIVE_REQUIREMENT_AVAILABLE",
+            "reason": "one_active_requirement_selected_explicitly",
+            "requirement_id": requirement.get("requirement_id"),
+            "evidence_type": requirement.get("evidence_type"),
+        }
+
+    def _epistemic_adjustment_for(self, match):
+        strength = match.get("match_strength")
+        return {
+            "EXACT_MATCH": 1.0,
+            "STRONG_MATCH": 0.5,
+            "PARTIAL_MATCH": 0.1,
+            "NO_MATCH": 0.0,
+            "UNKNOWN": 0.0,
+        }.get(strength, 0.0)
+
+    def _base_rank_rows(
+        self,
+        task_files,
+        *,
+        curriculum_report=None,
+        elite_selection_report=None,
+        selected=None,
+    ):
+        selected = set(selected or [])
+        rows_by_file = {}
+        for row in (curriculum_report or {}).get("task_priorities", []) or []:
+            if not isinstance(row, dict):
+                continue
+            task_file = row.get("task_file")
+            if not task_file:
+                continue
+            rows_by_file[str(task_file)] = {
+                "task_file": str(task_file),
+                "base_score": float(row.get("priority") or 0.0),
+                "base_score_components": {
+                    "priority_reasons": row.get("priority_reasons", []),
+                    "concept_priorities": row.get("concept_priorities", []),
+                    "target_coverage_gap": row.get("target_coverage_gap"),
+                    "unobserved_task": row.get("unobserved_task"),
+                },
+                "base_policy_surface": "curriculum_manager",
+                "original_order": int(row.get("original_order", 0) or 0),
+            }
+        for row in (elite_selection_report or {}).get("elite_task_priorities", []) or []:
+            if not isinstance(row, dict):
+                continue
+            task_file = row.get("task_file")
+            if not task_file:
+                continue
+            rows_by_file[str(task_file)] = {
+                "task_file": str(task_file),
+                "base_score": float(row.get("priority") or 0.0),
+                "base_score_components": {
+                    "priority_reasons": row.get("priority_reasons", []),
+                    "survival_reappearance_matches": row.get(
+                        "survival_reappearance_matches",
+                        [],
+                    ),
+                    "domain_citizenship_matches": row.get(
+                        "domain_citizenship_matches",
+                        [],
+                    ),
+                    "training_economy_matches": row.get(
+                        "training_economy_matches",
+                        [],
+                    ),
+                    "validation_academy_matches": row.get(
+                        "validation_academy_matches",
+                        [],
+                    ),
+                },
+                "base_policy_surface": "elite_task_selection",
+                "original_order": int(row.get("original_order", 0) or 0),
+            }
+        for order, task_file in enumerate(task_files):
+            rows_by_file.setdefault(
+                str(task_file),
+                {
+                    "task_file": str(task_file),
+                    "base_score": 0.0,
+                    "base_score_components": {
+                        "priority_reasons": ["not_scored_on_current_base_surface"],
+                    },
+                    "base_policy_surface": "not_scored_current_policy",
+                    "original_order": order,
+                },
+            )
+        rows = sorted(
+            rows_by_file.values(),
+            key=lambda item: (
+                -item["base_score"],
+                item["original_order"],
+                item["task_file"],
+            ),
+        )
+        for rank, row in enumerate(rows, start=1):
+            row["base_rank"] = rank
+            row["selected_in_base"] = row["task_file"] in selected
+        return rows
+
+    def _epistemic_shadow_rank_report(
+        self,
+        task_files,
+        *,
+        task_directory=None,
+        active_epistemic_requirements=None,
+        curriculum_report=None,
+        elite_selection_report=None,
+        selected=None,
+    ):
+        requirement, requirement_state = self._active_epistemic_requirement(
+            active_epistemic_requirements
+        )
+        base_rows = self._base_rank_rows(
+            task_files,
+            curriculum_report=curriculum_report,
+            elite_selection_report=elite_selection_report,
+            selected=selected,
+        )
+        if requirement is None:
+            return {
+                "system": "general_selector_epistemic_shadow_rank",
+                "shadow_mode_active": False,
+                **requirement_state,
+                "active_requirement_id": "Not Available",
+                "evidence_type": "Not Available",
+                "epistemic_signal_available": False,
+                "epistemic_signal_authority": "OBSERVATION_ONLY",
+                "selector_decision_owner": "TrainingAssistant",
+                "behavioral_integration_applied": False,
+                "selection_changed_by_epistemic_signal": False,
+                "rows": [],
+            }
+        shadow_rows = []
+        for row in base_rows:
+            try:
+                profile = self.general_task_evidence_profiler.profile_task(
+                    row["task_file"],
+                    task_directory=task_directory,
+                    selection_memory=self.selection_memory,
+                )
+                match = self.task_evidence_matcher.match(requirement, profile)
+                failure = None
+            except (GeneralTaskEvidenceProfileError, OSError, ValueError) as exc:
+                profile = {"profile_confidence": "UNKNOWN"}
+                match = {
+                    "task_id": row["task_file"],
+                    "requirement_id": requirement.get("requirement_id"),
+                    "required_evidence": requirement.get("evidence_type"),
+                    "eligible": False,
+                    "compatibility_score": 0.0,
+                    "match_strength": "UNKNOWN",
+                    "matched_requirements": [],
+                    "unmet_requirements": [requirement.get("evidence_type")],
+                    "mapping_confidence": "UNKNOWN",
+                    "match_provenance": {
+                        "matcher": "task_evidence_matcher",
+                        "failure": str(exc),
+                        "advisory_only": True,
+                    },
+                    "authority": "OBSERVATION_ONLY",
+                    "behavioral_authority": "NONE",
+                    "selection_authority": "NONE",
+                    "truth_authority": "NONE",
+                    "execution_authority": "NONE",
+                }
+                failure = str(exc)
+            adjustment = self._epistemic_adjustment_for(match)
+            shadow_rows.append({
+                "task_id": profile.get("task_id", row["task_file"]),
+                "task_file": row["task_file"],
+                "base_score": row["base_score"],
+                "base_score_components": row["base_score_components"],
+                "base_rank": row["base_rank"],
+                "evidence_match_class": match.get("match_strength"),
+                "epistemic_score": match.get("compatibility_score", 0.0),
+                "epistemic_adjustment": adjustment,
+                "epistemic_adjustment_bound": 1.0,
+                "shadow_final_score": round(row["base_score"] + adjustment, 4),
+                "selected_in_base": row["selected_in_base"],
+                "would_select_in_shadow": False,
+                "selection_reason": [
+                    row["base_policy_surface"],
+                    "epistemic_shadow_signal_observed"
+                    if adjustment else "base_policy_only_or_unknown_epistemic_match",
+                ],
+                "active_requirement_id": requirement.get("requirement_id"),
+                "evidence_type": requirement.get("evidence_type"),
+                "match_projection": match,
+                "profile_confidence": profile.get("profile_confidence", "UNKNOWN"),
+                "provenance": {
+                    "base_policy_surface": row["base_policy_surface"],
+                    "matcher": "task_evidence_matcher",
+                    "shadow_mode": True,
+                    "profile_failure": failure,
+                },
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+                "selection_authority": "NONE",
+                "truth_authority": "NONE",
+                "execution_authority": "NONE",
+            })
+        shadow_rows.sort(
+            key=lambda item: (
+                -item["shadow_final_score"],
+                item["base_rank"],
+                item["task_file"],
+            )
+        )
+        selected_count = len(selected or [])
+        shadow_selected = {
+            row["task_file"] for row in shadow_rows[:selected_count]
+        }
+        for rank, row in enumerate(shadow_rows, start=1):
+            row["shadow_rank"] = rank
+            row["rank_delta"] = row["base_rank"] - rank
+            row["would_select_in_shadow"] = row["task_file"] in shadow_selected
+        base_selected = set(selected or [])
+        changed = base_selected != shadow_selected
+        rank_effect_count = sum(1 for row in shadow_rows if row["rank_delta"] != 0)
+        return {
+            "system": "general_selector_epistemic_shadow_rank",
+            "shadow_mode_active": True,
+            **requirement_state,
+            "active_requirement_id": requirement.get("requirement_id"),
+            "evidence_type": requirement.get("evidence_type"),
+            "epistemic_signal_available": True,
+            "epistemic_signal_authority": "OBSERVATION_ONLY",
+            "selector_decision_owner": "TrainingAssistant",
+            "behavioral_integration_applied": False,
+            "selection_changed_by_epistemic_signal": False,
+            "shadow_selection_would_change": changed,
+            "counterfactual_rank_effect": (
+                "SELECTION_CHANGED"
+                if changed
+                else "LOCAL_RANK_EFFECT"
+                if rank_effect_count
+                else "NO_RANK_EFFECT"
+            ),
+            "epistemic_adjustment_bound": 1.0,
+            "base_selected_tasks": sorted(base_selected),
+            "shadow_selected_tasks": sorted(shadow_selected),
+            "rank_effect_count": rank_effect_count,
+            "rows": shadow_rows,
+        }
+
     def _rng_for_run(self):
         if self.random_seed is not None:
             seed = int(self.random_seed)
@@ -2836,6 +3143,7 @@ class TrainingAssistant:
         random_seed=None,
         operational_economy_report=None,
         pending_evidence_acquisition_plans=None,
+        active_epistemic_requirements=None,
     ):
         task_files = self._normalized_tasks(task_files)
         if not task_files:
@@ -3456,6 +3764,14 @@ class TrainingAssistant:
                     evidence_generation_report.get("future_execution_ready")
                 ),
             })
+        epistemic_shadow_rank_report = self._epistemic_shadow_rank_report(
+            task_files,
+            task_directory=task_directory,
+            active_epistemic_requirements=active_epistemic_requirements,
+            curriculum_report=curriculum_report,
+            elite_selection_report=elite_selection_report,
+            selected=self.state.get("active_batch", []),
+        )
         elite_curriculum_report = {}
         if elite_task_files:
             try:
@@ -3519,6 +3835,7 @@ class TrainingAssistant:
             "training_diversity_report": training_diversity_report,
             "selection_diversity_report": selection_report,
             "elite_selection_report": elite_selection_report,
+            "epistemic_shadow_rank_report": epistemic_shadow_rank_report,
             "batch_size": self.batch_size,
             "available_task_count": len(task_files),
             "available_elite_task_count": len(elite_task_files),

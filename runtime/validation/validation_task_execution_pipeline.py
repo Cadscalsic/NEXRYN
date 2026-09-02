@@ -657,6 +657,7 @@ class ValidationTaskExecutionPipeline:
             "identity_issued_at": identity_created_at,
             "identity_evaluation_source": "validation_task_execution_pipeline",
             "immutable_identity_fingerprint": identity_fingerprint,
+            "raw_result_identity_fingerprint": identity_fingerprint,
             "raw_result_fingerprint": fingerprint,
             "raw_validation_result_fingerprint": fingerprint,
             "raw_validation_result_envelope": envelope,
@@ -676,6 +677,10 @@ class ValidationTaskExecutionPipeline:
             ),
             "executor_id": self.RUNNER_ID,
             "executor_invocation_id": execution_id,
+            "producer_operation_id": envelope.get("producer_operation_id"),
+            "producer_component_id": envelope.get("producer_component_id"),
+            "producer_source_type": envelope.get("producer_source_type"),
+            "producer_operation_type": envelope.get("producer_source_type"),
             "validation_attempt_id": validation_attempt_id,
             "expected_artifact_id": expected_artifact_id,
             "produced_artifact_id": produced_artifact_id,
@@ -697,6 +702,24 @@ class ValidationTaskExecutionPipeline:
             "selected_curriculum_id": schedule.get("selected_curriculum_id"),
             "target_candidate": schedule.get("target_candidate"),
             "target_operation": schedule.get("target_operation"),
+            "claim_id": schedule.get("claim_id") or plan.get("claim_id"),
+            "claim_subject": schedule.get("claim_subject") or plan.get("claim_subject"),
+            "claim_subject_owner": (
+                schedule.get("claim_subject_owner")
+                or plan.get("claim_subject_owner")
+            ),
+            "claim_evidence_binding_authority": (
+                schedule.get("claim_evidence_binding_authority")
+                or plan.get("claim_evidence_binding_authority")
+            ),
+            "claim_evidence_binding_behavioral_authority": (
+                schedule.get("claim_evidence_binding_behavioral_authority")
+                or plan.get("claim_evidence_binding_behavioral_authority")
+            ),
+            "claim_evidence_binding_state": (
+                schedule.get("claim_evidence_binding_state")
+                or plan.get("claim_evidence_binding_state")
+            ),
             "tie_break_strategy": schedule.get("tie_break_strategy"),
             "required_evidence": schedule.get("required_evidence"),
             "required_evidence_category": schedule.get("required_evidence_category"),
@@ -1147,6 +1170,24 @@ class ValidationTaskExecutionPipeline:
             "producer_component_id": producer_component_id,
             "producer_source_type": producer_source_type,
             "candidate_source_id": plan.get("source_candidate_id"),
+            "claim_id": schedule.get("claim_id") or plan.get("claim_id"),
+            "claim_subject": schedule.get("claim_subject") or plan.get("claim_subject"),
+            "claim_subject_owner": (
+                schedule.get("claim_subject_owner")
+                or plan.get("claim_subject_owner")
+            ),
+            "claim_evidence_binding_authority": (
+                schedule.get("claim_evidence_binding_authority")
+                or plan.get("claim_evidence_binding_authority")
+            ),
+            "claim_evidence_binding_behavioral_authority": (
+                schedule.get("claim_evidence_binding_behavioral_authority")
+                or plan.get("claim_evidence_binding_behavioral_authority")
+            ),
+            "claim_evidence_binding_state": (
+                schedule.get("claim_evidence_binding_state")
+                or plan.get("claim_evidence_binding_state")
+            ),
             "expected_artifact_id": expected_artifact_id,
             "produced_artifact_id": produced_artifact_id,
             "captured_artifact_id": captured_artifact_id,
@@ -1219,6 +1260,11 @@ class ValidationTaskExecutionPipeline:
         raw_result: dict[str, Any],
     ) -> None:
         now = self._now()
+        envelope = raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE") or raw_result.get(
+            "raw_validation_result_envelope",
+            {},
+        )
+        envelope = envelope if isinstance(envelope, dict) else {}
         linked_plan = {
             **plan,
             "updated_at": now,
@@ -1269,6 +1315,22 @@ class ValidationTaskExecutionPipeline:
             ),
             "producer_obligation_boundary_crossed": raw_result.get(
                 "producer_obligation_boundary_crossed",
+            ),
+            "producer_operation_id": raw_result.get(
+                "producer_operation_id",
+                envelope.get("producer_operation_id"),
+            ),
+            "producer_component_id": raw_result.get(
+                "producer_component_id",
+                envelope.get("producer_component_id"),
+            ),
+            "producer_source_type": raw_result.get(
+                "producer_source_type",
+                envelope.get("producer_source_type"),
+            ),
+            "producer_operation_type": raw_result.get(
+                "producer_operation_type",
+                envelope.get("producer_operation_type", envelope.get("producer_source_type")),
             ),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
             "RAW_VALIDATION_RESULT_ENVELOPE": raw_result.get(
@@ -1332,6 +1394,25 @@ class ValidationTaskExecutionPipeline:
             ),
             "producer_obligation_boundary_crossed": raw_result.get(
                 "producer_obligation_boundary_crossed",
+            ),
+            "producer_operation_id": raw_result.get(
+                "producer_operation_id",
+                envelope.get("producer_operation_id"),
+            ),
+            "producer_component_id": raw_result.get(
+                "producer_component_id",
+                envelope.get("producer_component_id"),
+            ),
+            "producer_source_type": raw_result.get(
+                "producer_source_type",
+                envelope.get("producer_source_type"),
+            ),
+            "producer_operation_type": raw_result.get(
+                "producer_operation_type",
+                envelope.get(
+                    "producer_operation_type",
+                    envelope.get("producer_source_type"),
+                ),
             ),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
             "RAW_VALIDATION_RESULT_ENVELOPE": raw_result.get(
@@ -1397,6 +1478,10 @@ class ValidationTaskExecutionPipeline:
             "immutable_identity_fingerprint": raw_result.get(
                 "immutable_identity_fingerprint",
             ),
+            "raw_result_identity_fingerprint": raw_result.get(
+                "raw_result_identity_fingerprint",
+                raw_result.get("immutable_identity_fingerprint"),
+            ),
             "identity_issued_at": raw_result.get("identity_issued_at"),
             "identity_evaluation_source": raw_result.get(
                 "identity_evaluation_source",
@@ -1421,6 +1506,25 @@ class ValidationTaskExecutionPipeline:
             ),
             "producer_obligation_boundary_crossed": raw_result.get(
                 "producer_obligation_boundary_crossed",
+            ),
+            "producer_operation_id": raw_result.get(
+                "producer_operation_id",
+                envelope.get("producer_operation_id"),
+            ),
+            "producer_component_id": raw_result.get(
+                "producer_component_id",
+                envelope.get("producer_component_id"),
+            ),
+            "producer_source_type": raw_result.get(
+                "producer_source_type",
+                envelope.get("producer_source_type"),
+            ),
+            "producer_operation_type": raw_result.get(
+                "producer_operation_type",
+                envelope.get(
+                    "producer_operation_type",
+                    envelope.get("producer_source_type"),
+                ),
             ),
             "raw_result_fingerprint": raw_result.get("raw_result_fingerprint"),
             "raw_validation_result_fingerprint": raw_result.get(
@@ -1654,6 +1758,18 @@ class ValidationTaskExecutionPipeline:
             ),
             "target_candidate": schedule.get("target_candidate", "Not Available"),
             "target_operation": schedule.get("target_operation", "Not Available"),
+            "claim_id": schedule.get("claim_id", "Not Available"),
+            "claim_subject": schedule.get("claim_subject"),
+            "claim_subject_owner": schedule.get("claim_subject_owner"),
+            "claim_evidence_binding_authority": schedule.get(
+                "claim_evidence_binding_authority"
+            ),
+            "claim_evidence_binding_behavioral_authority": schedule.get(
+                "claim_evidence_binding_behavioral_authority"
+            ),
+            "claim_evidence_binding_state": schedule.get(
+                "claim_evidence_binding_state"
+            ),
             "tie_break_strategy": schedule.get("tie_break_strategy", "Not Available"),
         }
 

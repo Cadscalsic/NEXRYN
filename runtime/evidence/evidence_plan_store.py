@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from runtime.claim_identity import ClaimIdentityError, claim_identity_for_evidence_plan
+
 
 class EvidenceAcquisitionPlanStore:
     """Durable orchestration state for evidence acquisition plans."""
@@ -203,6 +205,12 @@ class EvidenceAcquisitionPlanStore:
                 raw_plan.get("governed_reentry_action")
                 or raw_plan.get("evidence_acquisition_governed_reentry_action")
             ),
+            "authority": {
+                "truth": "NONE",
+                "trust": "NONE",
+                "graduation": "NONE",
+                "execution": "NONE",
+            },
             "truth_authority": "NONE",
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
@@ -227,6 +235,12 @@ class EvidenceAcquisitionPlanStore:
         fingerprint = self.fingerprint_for(plan)
         plan["plan_fingerprint"] = fingerprint
         plan["plan_id"] = raw_plan.get("plan_id") or self._plan_id(plan, fingerprint)
+        try:
+            plan.update(claim_identity_for_evidence_plan(plan))
+            plan["claim_evidence_binding_state"] = "CLAIM_IDENTIFIED_NOT_EVIDENCE_BOUND"
+        except ClaimIdentityError as exc:
+            plan["claim_evidence_binding_state"] = "CLAIM_SUBJECT_NOT_DERIVABLE"
+            plan["claim_identity_failure_reason"] = str(exc)
         plan["history"].append({
             "timestamp": now,
             "state": "NORMALIZED",

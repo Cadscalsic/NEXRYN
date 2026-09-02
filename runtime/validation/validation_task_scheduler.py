@@ -362,6 +362,18 @@ class ValidationTaskScheduler:
             "required_evidence_category": plan.get("required_evidence_category"),
             "target_candidate": plan.get("target_candidate"),
             "target_operation": plan.get("target_operation"),
+            "claim_id": plan.get("claim_id"),
+            "claim_subject": plan.get("claim_subject"),
+            "claim_subject_owner": plan.get("claim_subject_owner"),
+            "claim_evidence_binding_authority": plan.get(
+                "claim_evidence_binding_authority"
+            ),
+            "claim_evidence_binding_behavioral_authority": plan.get(
+                "claim_evidence_binding_behavioral_authority"
+            ),
+            "claim_evidence_binding_state": plan.get(
+                "claim_evidence_binding_state"
+            ),
             "tie_break_strategy": plan.get("tie_break_strategy"),
             "scheduling_authority": "VALIDATION_SCHEDULER",
             "scheduling_admission_state": "ADMITTED",
@@ -444,6 +456,18 @@ class ValidationTaskScheduler:
             "task_execution_completed": False,
             "selected_validation_task_id": plan.get("selected_validation_task_id"),
             "selected_curriculum_id": plan.get("selected_curriculum_id"),
+            "claim_id": plan.get("claim_id"),
+            "claim_subject": plan.get("claim_subject"),
+            "claim_subject_owner": plan.get("claim_subject_owner"),
+            "claim_evidence_binding_authority": plan.get(
+                "claim_evidence_binding_authority"
+            ),
+            "claim_evidence_binding_behavioral_authority": plan.get(
+                "claim_evidence_binding_behavioral_authority"
+            ),
+            "claim_evidence_binding_state": plan.get(
+                "claim_evidence_binding_state"
+            ),
             "selection_state": "TASK_SELECTED",
             "scheduling_admission_state": "ADMITTED",
             "scheduling_admission_reason": "admission_contract_satisfied",

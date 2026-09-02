@@ -819,6 +819,17 @@
         "governed_validation_context"
       ],
       "expected_validation_contract": "localized_remap_consensus_contract",
+      "evaluation_contract": {
+        "comparator_id": "manifest_observation_comparison",
+        "comparator_version": "1.0",
+        "minimum_case_coverage": 1.0,
+        "exact_match_required": true
+      },
+      "expected_target_output": {
+        "task_id": "elite_validation_task_31",
+        "execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
+        "reference_visible_to_runner": false
+      },
       "capability_targets": [
         "localized_replace_color",
         "Color Transformation Capability"

@@ -8,6 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from runtime.claim_identity import (
+    ClaimEvidenceBindingError,
+    build_claim_evidence_binding,
+)
 from runtime.training.validation_curriculum_registry import (
     ValidationCurriculumRegistry,
 )
@@ -905,11 +909,12 @@ class ValidationEvidenceEvaluator:
                 ensure_ascii=True,
             ).encode("utf-8")
         ).hexdigest()
-        return {
+        accepted_evidence_id = (
+            f"accepted_evidence_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+        )
+        artifact = {
             "schema_version": "1.0",
-            "accepted_evidence_id": (
-                f"accepted_evidence_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
-            ),
+            "accepted_evidence_id": accepted_evidence_id,
             "accepted_evidence_fingerprint": fingerprint,
             "acceptance_authority": self.AUTHORITY,
             "acceptance_scope": "EVIDENCE_RECORDING_ONLY",
@@ -946,6 +951,31 @@ class ValidationEvidenceEvaluator:
             "constitutional_boundary": self.BOUNDARY,
             "created_at": self._now(),
         }
+        try:
+            binding = build_claim_evidence_binding(
+                claim_subject=artifact.get("claim_subject"),
+                evidence_plan=plan,
+                evidence_decision=decision,
+                accepted_evidence=artifact,
+            )
+            artifact["claim_evidence_binding"] = binding
+            artifact["claim_evidence_binding_id"] = binding.get(
+                "claim_evidence_binding_id"
+            )
+            artifact["claim_evidence_binding_fingerprint"] = binding.get(
+                "claim_evidence_binding_fingerprint"
+            )
+            artifact["claim_evidence_binding_state"] = "BOUND"
+            artifact["claim_evidence_binding_authority"] = binding.get(
+                "claim_evidence_binding_authority"
+            )
+            artifact["claim_evidence_binding_behavioral_authority"] = binding.get(
+                "claim_evidence_binding_behavioral_authority"
+            )
+        except (ClaimEvidenceBindingError, ValueError) as exc:
+            artifact["claim_evidence_binding_state"] = "CLAIM_BINDING_FAILED"
+            artifact["claim_evidence_binding_failure_reason"] = str(exc)
+        return artifact
 
     def _originating_arena_snapshot(self, plan: dict[str, Any]) -> dict[str, Any]:
         target = plan.get("target_candidate")
@@ -1028,6 +1058,37 @@ class ValidationEvidenceEvaluator:
                 "evidence_decision_fingerprint"
             ),
             "accepted_evidence_id": accepted.get("accepted_evidence_id"),
+            "claim_id": decision.get("claim_id", plan.get("claim_id")),
+            "claim_subject": decision.get("claim_subject", plan.get("claim_subject")),
+            "claim_subject_owner": decision.get(
+                "claim_subject_owner",
+                plan.get("claim_subject_owner"),
+            ),
+            "claim_evidence_binding_id": accepted.get("claim_evidence_binding_id"),
+            "claim_evidence_binding_fingerprint": accepted.get(
+                "claim_evidence_binding_fingerprint"
+            ),
+            "claim_evidence_binding_state": accepted.get(
+                "claim_evidence_binding_state",
+                decision.get(
+                    "claim_evidence_binding_state",
+                    plan.get("claim_evidence_binding_state"),
+                ),
+            ),
+            "claim_evidence_binding_authority": accepted.get(
+                "claim_evidence_binding_authority",
+                decision.get(
+                    "claim_evidence_binding_authority",
+                    plan.get("claim_evidence_binding_authority"),
+                ),
+            ),
+            "claim_evidence_binding_behavioral_authority": accepted.get(
+                "claim_evidence_binding_behavioral_authority",
+                decision.get(
+                    "claim_evidence_binding_behavioral_authority",
+                    plan.get("claim_evidence_binding_behavioral_authority"),
+                ),
+            ),
             "evidence_acceptance_state": terminal,
             "evidence_evaluation_outcome": f"EVIDENCE_{terminal}",
             "validation_evidence_evaluation_state": (
@@ -1072,6 +1133,22 @@ class ValidationEvidenceEvaluator:
             "comparable_result_id": comparable.get("comparable_result_id"),
             "evidence_decision_id": decision.get("evidence_decision_id"),
             "accepted_evidence_id": accepted.get("accepted_evidence_id"),
+            "claim_evidence_binding_id": accepted.get("claim_evidence_binding_id"),
+            "claim_evidence_binding_fingerprint": accepted.get(
+                "claim_evidence_binding_fingerprint"
+            ),
+            "claim_evidence_binding_state": accepted.get(
+                "claim_evidence_binding_state",
+                decision.get("claim_evidence_binding_state"),
+            ),
+            "claim_evidence_binding_authority": accepted.get(
+                "claim_evidence_binding_authority",
+                decision.get("claim_evidence_binding_authority"),
+            ),
+            "claim_evidence_binding_behavioral_authority": accepted.get(
+                "claim_evidence_binding_behavioral_authority",
+                decision.get("claim_evidence_binding_behavioral_authority"),
+            ),
             "evaluation_contract_id": decision.get("evaluation_contract_id"),
             "evaluation_contract_fingerprint": decision.get(
                 "evaluation_contract_fingerprint"
@@ -1621,9 +1698,14 @@ class ValidationEvidenceEvaluator:
         schedule: dict[str, Any],
         raw_result: dict[str, Any],
     ) -> dict[str, Any]:
+        source_provenance = self._source_provenance(plan, schedule, raw_result)
         return {
             "plan_id": plan.get("plan_id", "Not Available"),
             "plan_fingerprint": plan.get("plan_fingerprint", "Not Available"),
+            "source_run_id": plan.get(
+                "source_run_id",
+                raw_result.get("run_id", "Not Available"),
+            ),
             "schedule_id": schedule.get("schedule_id", plan.get("schedule_id")),
             "schedule_fingerprint": schedule.get(
                 "schedule_fingerprint",
@@ -1632,6 +1714,26 @@ class ValidationEvidenceEvaluator:
             "execution_id": raw_result.get(
                 "execution_id",
                 plan.get("execution_id"),
+            ),
+            "validation_execution_id": source_provenance.get(
+                "validation_execution_id"
+            ),
+            "validation_attempt_id": source_provenance.get(
+                "validation_attempt_id"
+            ),
+            "producer_operation_id": source_provenance.get(
+                "producer_operation_id"
+            ),
+            "producer_component_id": source_provenance.get(
+                "producer_component_id"
+            ),
+            "producer_source_type": source_provenance.get(
+                "producer_source_type"
+            ),
+            "source_lineage": source_provenance.get("upstream_lineage_refs"),
+            "source_provenance": source_provenance,
+            "source_provenance_fingerprint": source_provenance.get(
+                "source_provenance_fingerprint"
             ),
             "raw_result_id": raw_result.get(
                 "raw_result_id",
@@ -1651,10 +1753,190 @@ class ValidationEvidenceEvaluator:
             ),
             "target_candidate": plan.get("target_candidate"),
             "target_operation": plan.get("target_operation"),
+            "claim_id": (
+                plan.get("claim_id")
+                or schedule.get("claim_id")
+                or raw_result.get("claim_id")
+            ),
+            "claim_subject": (
+                plan.get("claim_subject")
+                or schedule.get("claim_subject")
+                or raw_result.get("claim_subject")
+            ),
+            "claim_subject_owner": (
+                plan.get("claim_subject_owner")
+                or schedule.get("claim_subject_owner")
+                or raw_result.get("claim_subject_owner")
+            ),
+            "claim_evidence_binding_authority": (
+                plan.get("claim_evidence_binding_authority")
+                or schedule.get("claim_evidence_binding_authority")
+                or raw_result.get("claim_evidence_binding_authority")
+            ),
+            "claim_evidence_binding_behavioral_authority": (
+                plan.get("claim_evidence_binding_behavioral_authority")
+                or schedule.get("claim_evidence_binding_behavioral_authority")
+                or raw_result.get("claim_evidence_binding_behavioral_authority")
+            ),
+            "claim_evidence_binding_state": (
+                raw_result.get("claim_evidence_binding_state")
+                or schedule.get("claim_evidence_binding_state")
+                or plan.get("claim_evidence_binding_state")
+            ),
             "required_evidence": plan.get("required_evidence"),
             "required_evidence_category": plan.get("required_evidence_category"),
             "tie_break_strategy": plan.get("tie_break_strategy"),
         }
+
+    def _source_provenance(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        envelope = (
+            raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE")
+            or raw_result.get("raw_validation_result_envelope")
+            or {}
+        )
+        envelope = envelope if isinstance(envelope, dict) else {}
+        provenance = {
+            "schema_version": "1.0",
+            "provenance_authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+            "evidence_acceptance_authority": "NONE",
+            "truth_authority": "NONE",
+            "run_id": (
+                raw_result.get("run_id")
+                or plan.get("source_run_id")
+                or schedule.get("source_run_id")
+            ),
+            "task_id": (
+                raw_result.get("task_id")
+                or plan.get("source_task_id")
+                or schedule.get("source_task_id")
+            ),
+            "producer_component_id": raw_result.get(
+                "producer_component_id",
+                envelope.get("producer_component_id"),
+            ),
+            "producer_source_type": raw_result.get(
+                "producer_source_type",
+                envelope.get("producer_source_type"),
+            ),
+            "producer_operation_id": raw_result.get(
+                "producer_operation_id",
+                envelope.get("producer_operation_id"),
+            ),
+            "producer_operation_type": raw_result.get(
+                "producer_operation_type",
+                envelope.get(
+                    "producer_operation_type",
+                    raw_result.get(
+                        "producer_source_type",
+                        envelope.get("producer_source_type"),
+                    ),
+                ),
+            ),
+            "validation_execution_id": raw_result.get(
+                "execution_id",
+                envelope.get(
+                    "execution_id",
+                    raw_result.get(
+                        "executor_invocation_id",
+                        envelope.get("executor_invocation_id"),
+                    ),
+                ),
+            ),
+            "validation_attempt_id": raw_result.get(
+                "validation_attempt_id",
+                envelope.get("validation_attempt_id"),
+            ),
+            "raw_validation_result_id": raw_result.get(
+                "raw_validation_result_id",
+                envelope.get(
+                    "raw_validation_result_id",
+                    raw_result.get("raw_result_id"),
+                ),
+            ),
+            "canonical_raw_result_id": raw_result.get(
+                "canonical_raw_result_id",
+                envelope.get(
+                    "canonical_raw_result_id",
+                    raw_result.get("raw_result_id"),
+                ),
+            ),
+            "raw_result_identity_fingerprint": raw_result.get(
+                "raw_result_identity_fingerprint",
+                envelope.get("raw_result_identity_fingerprint"),
+            ),
+            "raw_validation_result_envelope_fingerprint": raw_result.get(
+                "raw_validation_result_envelope_fingerprint",
+                envelope.get("raw_validation_result_envelope_fingerprint"),
+            ),
+            "upstream_lineage_refs": self._source_lineage_refs(
+                plan,
+                schedule,
+                raw_result,
+            ),
+        }
+        fingerprint_payload = {
+            key: provenance.get(key)
+            for key in (
+                "producer_component_id",
+                "producer_source_type",
+                "producer_operation_id",
+                "raw_validation_result_id",
+                "canonical_raw_result_id",
+                "raw_result_identity_fingerprint",
+                "upstream_lineage_refs",
+            )
+        }
+        provenance["source_provenance_fingerprint"] = hashlib.sha256(
+            json.dumps(
+                fingerprint_payload,
+                sort_keys=True,
+                ensure_ascii=True,
+            ).encode("utf-8")
+        ).hexdigest()
+        required = [
+            "producer_component_id",
+            "producer_source_type",
+            "producer_operation_id",
+            "raw_validation_result_id",
+            "canonical_raw_result_id",
+        ]
+        missing = [
+            key for key in required
+            if provenance.get(key) in (None, "", "Not Available", "UNKNOWN")
+        ]
+        provenance["source_provenance_state"] = (
+            "SOURCE_PROVENANCE_BOUND" if not missing else "SOURCE_PROVENANCE_PARTIAL"
+        )
+        provenance["source_provenance_missing_fields"] = missing
+        return provenance
+
+    def _source_lineage_refs(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+    ) -> list[str]:
+        candidates = [
+            plan.get("plan_id"),
+            schedule.get("schedule_id"),
+            raw_result.get("execution_plan_id"),
+            raw_result.get("dependency_operation_id"),
+            raw_result.get("dependency_link_id"),
+            raw_result.get("dependency_chain_id"),
+            raw_result.get("candidate_source_id"),
+            plan.get("source_candidate_id"),
+        ]
+        return sorted({
+            str(item)
+            for item in candidates
+            if item not in (None, "", "Not Available", "UNKNOWN")
+        })
 
     def _base_report(self, plan_id: str | None) -> dict[str, Any]:
         return {

@@ -46,6 +46,12 @@ def test_valid_plan_normalization_and_stable_identity(tmp_path):
     assert first["trust_authority"] == "NONE"
     assert first["graduation_authority"] == "NONE"
     assert first["execution_authority"] == "NONE"
+    assert first["authority"] == {
+        "truth": "NONE",
+        "trust": "NONE",
+        "graduation": "NONE",
+        "execution": "NONE",
+    }
     assert first["constitutional_boundary"] == (
         "EVIDENCE_ACQUISITION_PLAN_IS_A_GOVERNED_REQUEST_FOR_VALIDATION_NOT_EVIDENCE"
     )
