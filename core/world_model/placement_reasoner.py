@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Mapping
 
 from core.scene_graph import GraphReasoner
 from core.world_model.counterfactual_simulator import CounterfactualSimulator
 from core.world_model.position_predictor import PositionPredictor
+from runtime.telemetry.localization_progress import (
+    emit as emit_localization_progress,
+    grid_shape as telemetry_grid_shape,
+)
 
 
 class PlacementReasoner:
@@ -33,24 +38,82 @@ class PlacementReasoner:
         operation: str = "duplicate_object",
         position_rule: Mapping[str, Any] | None = None,
         search_radius: int = 1,
+        parent_call_id: str | None = None,
+        parent_started_at: float | None = None,
+        runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        started_at = time.perf_counter()
+        call_id = parent_call_id or "placement_reasoning"
+        graph_call_id = f"{call_id}:graph_reasoning"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="placement_graph_reasoning",
+            call_id=graph_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            operation=operation,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(expected_grid),
+        )
         graph_report = (
             self.graph_reasoner.reason_about_placement(
                 input_grid,
                 expected_grid,
                 operation=operation,
+                parent_call_id=graph_call_id,
+                parent_started_at=started_at,
             )
             if expected_grid is not None
             else {"dependency_evidence": [], "placement_rules": []}
         )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="placement_graph_reasoning",
+            call_id=graph_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            placement_rule_count=len(graph_report.get("placement_rules", [])),
+            dependency_evidence_count=len(graph_report.get("dependency_evidence", [])),
+        )
         rule = dict(position_rule or {})
         if not rule and expected_grid is not None:
+            learn_call_id = f"{call_id}:position_rule_learning"
+            emit_localization_progress(
+                phase="ENTER",
+                subcall_name="position_rule_learning",
+                call_id=learn_call_id,
+                parent_call_id=call_id,
+                started_at=started_at,
+                parent_started_at=parent_started_at,
+                operation=operation,
+            )
             learned = self.position_predictor.learn_position_rule(
                 input_grid,
                 expected_grid,
             )
             rule = self._rule_from_graph_or_predictor(graph_report, learned)
+            emit_localization_progress(
+                phase="EXIT",
+                subcall_name="position_rule_learning",
+                call_id=learn_call_id,
+                parent_call_id=call_id,
+                started_at=started_at,
+                parent_started_at=parent_started_at,
+                rule_state=rule.get("rule_state"),
+            )
 
+        predict_call_id = f"{call_id}:position_prediction"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="position_prediction",
+            call_id=predict_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            operation=operation,
+        )
         prediction = (
             {
                 "system": "position_predictor",
@@ -64,6 +127,16 @@ class PlacementReasoner:
                 rule,
             )
         )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="position_prediction",
+            call_id=predict_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            prediction_state=prediction.get("prediction_state"),
+            predicted_grid_shape=telemetry_grid_shape(prediction.get("predicted_grid")),
+        )
         if expected_grid is None:
             return {
                 "system": "placement_reasoner",
@@ -74,17 +147,53 @@ class PlacementReasoner:
                 "dependency_evidence": graph_report.get("dependency_evidence", []),
             }
 
+        mismatch_call_id = f"{call_id}:position_mismatch_diagnosis"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="position_mismatch_diagnosis",
+            call_id=mismatch_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+        )
         mismatch = self.position_predictor.diagnose_position_mismatch(
             prediction.get("predicted_grid", []),
             expected_grid,
         )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="position_mismatch_diagnosis",
+            call_id=mismatch_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            failure_type=mismatch.get("failure_type"),
+            difference_count=mismatch.get("difference_count"),
+            object_match_count=mismatch.get("object_match_count"),
+        )
+        counterfactual_call_id = f"{call_id}:position_counterfactuals"
         counterfactuals = (
-            self.counterfactual_simulator.simulate_position_counterfactuals(
-                input_grid,
-                expected_grid,
-                operation=operation,
-                position_rule=rule,
-                search_radius=search_radius,
+            (
+                emit_localization_progress(
+                    phase="ENTER",
+                    subcall_name="position_counterfactuals",
+                    call_id=counterfactual_call_id,
+                    parent_call_id=call_id,
+                    started_at=started_at,
+                    parent_started_at=parent_started_at,
+                    search_radius=search_radius,
+                    declared_bound=(max(int(search_radius or 0), 0) * 2 + 1) ** 2,
+                )
+                or self.counterfactual_simulator.simulate_position_counterfactuals(
+                    input_grid,
+                    expected_grid,
+                    operation=operation,
+                    position_rule=rule,
+                    search_radius=search_radius,
+                    telemetry_parent_call_id=counterfactual_call_id,
+                    telemetry_parent_started_at=started_at,
+                    runtime_context=runtime_context,
+                )
             )
             if mismatch.get("failure_type") == "localized_prediction_mismatch"
             else {
@@ -93,6 +202,17 @@ class PlacementReasoner:
                 "recommended_position_rule": rule,
             }
         )
+        if mismatch.get("failure_type") == "localized_prediction_mismatch":
+            emit_localization_progress(
+                phase="EXIT",
+                subcall_name="position_counterfactuals",
+                call_id=counterfactual_call_id,
+                parent_call_id=call_id,
+                started_at=started_at,
+                parent_started_at=parent_started_at,
+                candidate_count=counterfactuals.get("candidate_count"),
+                resolved=counterfactuals.get("localized_prediction_mismatch_resolved"),
+            )
         placement_state = self._placement_state(mismatch, counterfactuals)
         recommended_rule = (
             counterfactuals.get("recommended_position_rule")
@@ -119,6 +239,7 @@ class PlacementReasoner:
         operation: str = "duplicate_object",
         position_rule: Mapping[str, Any] | None = None,
         search_radius: int = 1,
+        runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.reason(
             input_grid,
@@ -126,6 +247,7 @@ class PlacementReasoner:
             operation=operation,
             position_rule=position_rule,
             search_radius=search_radius,
+            runtime_context=runtime_context,
         )
 
     def _rule_from_graph_or_predictor(

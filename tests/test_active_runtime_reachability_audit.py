@@ -6,6 +6,7 @@ from runtime.reporting.active_runtime_reachability_audit import (
     mark_active_runtime_audit_bound_to_canonical_report,
 )
 from runtime.reporting.final_report_renderer import final_report_renderer
+from runtime.planning.production_budget import PRODUCTION_MAX_ACTIVE_ROUTES
 
 
 def test_active_runtime_reachability_audit_detects_reported_gaps():
@@ -77,6 +78,39 @@ def test_active_runtime_reachability_audit_reports_clear_state_for_bound_runtime
     assert audit["canonical_execution_plan_present"] is True
     assert audit["budget_exceeded_detected"] is False
     assert audit["raw_result_identity_state"] == "RAW_RESULT_IDENTITY_CLEAR"
+
+
+def test_active_runtime_reachability_reads_production_route_ceiling_from_budget_receipt():
+    report_state = {
+        "run_id": "run_clear",
+        "task_id": "task_clear",
+        "CANONICAL_EXECUTION_PLAN_REPORT": {
+            "execution_plan_id": "execution_plan_run_clear_task_clear",
+            "run_id": "run_clear",
+            "task_id": "task_clear",
+            "planning_authority": "AUTHORITATIVE",
+            "active_route_count": PRODUCTION_MAX_ACTIVE_ROUTES,
+        },
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT": {
+            "runtime_budget_state": "RUNTIME_BUDGET_FINALIZED",
+            "maximum_active_routes": PRODUCTION_MAX_ACTIVE_ROUTES,
+            "peak_concurrent_active_route_count": PRODUCTION_MAX_ACTIVE_ROUTES,
+            "maximum_reasoning_depth": 2,
+            "maximum_entered_reasoning_depth": 2,
+        },
+        "VALIDATION_TASK_EXECUTION_REPORT": {
+            "execution_state": "RAW_RESULT_CAPTURED",
+            "raw_validation_result_id": "raw_validation_result_123",
+        },
+        "ENGINEERING_CONCLUSION": {"largest_success": "none"},
+    }
+
+    audit = build_active_runtime_reachability_audit(report_state)
+
+    assert audit["declared_max_active_routes"] == PRODUCTION_MAX_ACTIVE_ROUTES
+    assert audit["declared_active_routes"] == PRODUCTION_MAX_ACTIVE_ROUTES
+    assert audit["observed_active_routes"] == PRODUCTION_MAX_ACTIVE_ROUTES
+    assert audit["budget_exceeded_detected"] is False
 
 
 def test_bound_plan_removes_only_canonical_binding_gap():

@@ -27,6 +27,7 @@ class AdaptiveReuseEngine:
     def __init__(
         self,
         cache_manager: CacheManager | None = None,
+        experience_reuse_layer: Any | None = None,
         semantic_drift_threshold: float = 0.10,
         contradiction_threshold: float = 0.10,
         context_compatibility_threshold: float = 0.80,
@@ -34,6 +35,7 @@ class AdaptiveReuseEngine:
         world_model_compatibility_threshold: float = 0.80,
     ):
         self.cache_manager = cache_manager or CacheManager(auto_migrate=False)
+        self.experience_reuse_layer = experience_reuse_layer
         self.thresholds = {
             "semantic_drift": semantic_drift_threshold,
             "effective_contradiction": contradiction_threshold,
@@ -170,9 +172,13 @@ class AdaptiveReuseEngine:
 
     def _evaluate_experience_reuse(self, runtime_context: dict[str, Any]) -> dict[str, Any]:
         try:
-            from runtime.adaptive_reuse import adaptive_reuse_layer
+            if self.experience_reuse_layer is None:
+                from runtime.adaptive_reuse import adaptive_reuse_layer
 
-            report = adaptive_reuse_layer.evaluate(runtime_context)
+                layer = adaptive_reuse_layer
+            else:
+                layer = self.experience_reuse_layer
+            report = layer.evaluate(runtime_context)
         except Exception as error:
             report = {
                 "system": "adaptive_reuse_layer",

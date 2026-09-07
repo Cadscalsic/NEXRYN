@@ -6,6 +6,8 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.telemetry.route_contribution import ROUTE_LINEAGE_FIELDS
+
 
 SUPPORTED_SOURCES = {
     "semantic_compiler",
@@ -216,7 +218,22 @@ class CandidateProposalGateway:
                 data.get("behavioral_authority")
                 or metadata.get("behavioral_authority")
             ),
+            **self._route_lineage_fields(data, metadata),
         }
+
+    def _route_lineage_fields(
+        self,
+        data: Mapping[str, Any],
+        metadata: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        fields = {}
+        for field in ROUTE_LINEAGE_FIELDS:
+            value = data.get(field)
+            if value is None:
+                value = metadata.get(field)
+            if value is not None:
+                fields[field] = deepcopy(value)
+        return fields
 
 
 def _score(value: Any) -> float:

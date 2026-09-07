@@ -28,6 +28,23 @@ def test_residual_reasoning_activates_localized_repair_mode():
     assert report["repair_candidates"][0]["candidate_value"] == 8
 
 
+def test_residual_reasoning_context_support_tolerates_non_numeric_sentinels():
+    predicted = np.zeros((3, 3), dtype=int)
+    target = predicted.copy()
+    target[1, 1] = 4
+
+    report = ResidualReasoningEngine().analyze(
+        predicted,
+        target,
+        runtime_context={"dependency_chain_coverage": "NOT_DEFINED"},
+        evaluation_result={"accuracy": "NaN", "difference_count": 1},
+    )
+
+    support = report["residual_cells"][0]["context_support"]
+    assert support["dependency_chain_coverage"] == 0.0
+    assert report["repair_mode"] == "GLOBAL_REPAIR_REQUIRED"
+
+
 def test_counterfactual_repair_accepts_only_improving_candidate():
     predicted = np.zeros((5, 5), dtype=int)
     target = predicted.copy()

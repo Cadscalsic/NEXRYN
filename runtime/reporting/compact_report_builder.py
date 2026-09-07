@@ -158,6 +158,8 @@ class CompactReportBuilder:
         "execution_dispatch_report",
         "EXECUTION_LAYER_AUDIT_REPORT",
         "execution_layer_audit_report",
+        "NATURAL_PRODUCTION_HANDOFF_TRACE",
+        "natural_production_handoff_trace",
         "evaluation_result",
         "answer",
         "shutdown_mode",
@@ -1270,6 +1272,8 @@ class CompactReportBuilder:
             elif key in {
                 "EXECUTION_LAYER_AUDIT_REPORT",
                 "execution_layer_audit_report",
+                "NATURAL_PRODUCTION_HANDOFF_TRACE",
+                "natural_production_handoff_trace",
             } and isinstance(value, dict):
                 compact[key] = deepcopy(value)
             elif key == "evaluation_result" and isinstance(value, dict):
@@ -1353,6 +1357,8 @@ class CompactReportBuilder:
                 if key in {
                     "EXECUTION_LAYER_AUDIT_REPORT",
                     "execution_layer_audit_report",
+                    "NATURAL_PRODUCTION_HANDOFF_TRACE",
+                    "natural_production_handoff_trace",
                 } and isinstance(item, dict):
                     compact[key] = deepcopy(item)
                     continue

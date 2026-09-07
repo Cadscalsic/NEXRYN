@@ -12,6 +12,10 @@ from core.loader import (
     ARCJSONLoader
 )
 
+from core.arc_task_boundary import (
+    SolverTaskView
+)
+
 # ============================================
 # BUILD TASK METADATA
 # ============================================
@@ -264,8 +268,20 @@ def task_loading_stage(context):
     # LOAD TRAIN EXAMPLE
     # ========================================
 
+    solver_task_id = context.get(
+        "task_id",
+        task_path
+    )
+
+    solver_task_view = (
+        SolverTaskView.from_raw_task(
+            loader.task_data,
+            solver_task_id
+        )
+    )
+
     train_example = (
-        loader.get_train_example(0)
+        solver_task_view.first_train_example()
     )
 
     # ========================================
@@ -291,6 +307,18 @@ def task_loading_stage(context):
     output_grid = train_example.get(
         "output"
     )
+
+    test_example = (
+        solver_task_view.first_test_example()
+    )
+
+    test_input_grid = None
+
+    if test_example is not None:
+
+        test_input_grid = test_example.get(
+            "input"
+        )
 
     if input_grid is None:
 
@@ -399,12 +427,12 @@ def task_loading_stage(context):
     # ========================================
 
     context[
-        "loader"
-    ] = loader
-
-    context[
         "train_example"
     ] = train_example
+
+    context[
+        "solver_task_view"
+    ] = solver_task_view
 
     context[
         "input_grid"
@@ -413,6 +441,65 @@ def task_loading_stage(context):
     context[
         "output_grid"
     ] = output_grid
+
+    context[
+        "test_input_grid"
+    ] = test_input_grid
+
+    context[
+        "raw_loader_excluded_from_solver_context"
+    ] = True
+
+    context[
+        "raw_task_data_excluded_from_solver_context"
+    ] = True
+
+    context[
+        "hidden_test_output_solver_visible"
+    ] = False
+
+    context[
+        "train_output_grid_provenance"
+    ] = {
+
+        "source":
+        "solver_task_view.train[0].output",
+
+        "visibility":
+        "TRAIN_VISIBLE",
+
+        "arc_hidden_test_target":
+        False
+    }
+
+    context[
+        "test_output_visibility"
+    ] = {
+
+        "state":
+        "EVALUATOR_ONLY_AFTER_ATTEMPT_FREEZE",
+
+        "solver_visible":
+        False
+    }
+
+    if context.get(
+        "arc_benchmark_mode"
+    ) is True:
+
+        context[
+            "arc_benchmark_memory_policy"
+        ] = {
+
+            "hidden_label_memory_writes":
+            "DISABLED_FOR_BASELINE",
+
+            "reuse_visibility":
+            "NO_HIDDEN_LABEL_REUSE_DURING_BENCHMARK",
+
+            "authority":
+            "BENCHMARK_ISOLATION_ONLY"
+        }
 
     context[
         "task_metadata"

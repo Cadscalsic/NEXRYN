@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from copy import deepcopy
 import math
+import time
 from typing import Any, Iterable, Mapping
 
 from core.perception import ObjectExtractor
 from core.world_model import PlacementReasoner
+from runtime.telemetry.localization_progress import (
+    emit as emit_localization_progress,
+    grid_shape as telemetry_grid_shape,
+    stable_id as telemetry_stable_id,
+)
 
 
 class TransformationLocalizationEngine:
@@ -22,6 +28,7 @@ class TransformationLocalizationEngine:
     ) -> None:
         self.placement_reasoner = placement_reasoner or PlacementReasoner()
         self.object_extractor = object_extractor or ObjectExtractor()
+        self._localization_call_counter = 0
 
     def localize(
         self,
@@ -97,11 +104,31 @@ class TransformationLocalizationEngine:
         operation: str = "duplicate_object",
         position_rule: Mapping[str, Any] | None = None,
         search_radius: int = 2,
+        parent_call_id: str | None = None,
+        parent_started_at: float | None = None,
+        step_index: int | None = None,
+        runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Localize by comparing the current scene with the target scene."""
 
+        call_id = f"{parent_call_id or 'localization'}:localize_from_grids:{step_index or 0}"
+        started_at = time.perf_counter()
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="localize_from_grids",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            operation=operation,
+            step_index=step_index,
+            search_radius=search_radius,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(target_grid),
+            position_rule_fingerprint=telemetry_stable_id(position_rule or {}),
+        )
         if target_grid is None:
-            return self._localization_report(
+            report = self._localization_report(
                 anchor_object="",
                 placement_strategy="target_scene_missing",
                 relative_offset=[0, 0],
@@ -112,13 +139,54 @@ class TransformationLocalizationEngine:
                 topology_preserved=False,
                 evidence={"operation": operation},
             )
+            emit_localization_progress(
+                phase="EXIT",
+                subcall_name="localize_from_grids",
+                call_id=call_id,
+                parent_call_id=parent_call_id,
+                started_at=started_at,
+                parent_started_at=parent_started_at,
+                exit_reason="target_grid_missing",
+                localization_ready=False,
+            )
+            return report
 
+        placement_call_id = f"{call_id}:placement_reasoning"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="placement_reasoning",
+            call_id=placement_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=started_at,
+            operation=operation,
+            search_radius=search_radius,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(target_grid),
+        )
         placement = self.placement_reasoner.reason(
             input_grid,
             target_grid,
             operation=operation,
             position_rule=position_rule,
             search_radius=search_radius,
+            parent_call_id=placement_call_id,
+            parent_started_at=started_at,
+            runtime_context=runtime_context,
+        )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="placement_reasoning",
+            call_id=placement_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=started_at,
+            placement_state=placement.get("placement_state"),
+            counterfactual_candidate_count=(
+                placement.get("position_counterfactuals", {}).get("candidate_count")
+                if isinstance(placement.get("position_counterfactuals"), Mapping)
+                else None
+            ),
         )
         rule = (
             placement.get("recommended_position_rule")
@@ -135,7 +203,26 @@ class TransformationLocalizationEngine:
             int(round(float(vector.get("delta_row", 0)))),
             int(round(float(vector.get("delta_col", 0)))),
         ]
+        objects_call_id = f"{call_id}:source_object_extraction"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="source_object_extraction",
+            call_id=objects_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=started_at,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+        )
         objects = self._objects(input_grid)
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="source_object_extraction",
+            call_id=objects_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=started_at,
+            source_object_count=len(objects),
+        )
         source = self._source_object(objects, anchor)
         empty_space_compatible = self._duplicate_region_empty(
             input_grid,
@@ -163,7 +250,7 @@ class TransformationLocalizationEngine:
             and empty_space_compatible
             and topology_preserved
         )
-        return self._localization_report(
+        report = self._localization_report(
             anchor_object=anchor,
             placement_strategy=self._placement_strategy(operation, offset, vector),
             relative_offset=offset,
@@ -178,20 +265,49 @@ class TransformationLocalizationEngine:
                 "position_rule": rule,
             },
         )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="localize_from_grids",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            exit_reason="completed",
+            localization_ready=report["localization_ready"],
+            source_object_count=len(objects),
+        )
+        return report
 
     def localize_program(
         self,
         input_grid: Any,
         target_grid: Any | None,
         synthesized_program: Mapping[str, Any] | None,
+        runtime_context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Return a localized copy of a synthesized program."""
 
+        started_at = time.perf_counter()
+        self._localization_call_counter += 1
+        call_id = f"transformation_localization_call_{self._localization_call_counter}"
         program = deepcopy(synthesized_program or {})
         steps = list(program.get("steps", []))
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="localize_program",
+            call_id=call_id,
+            parent_call_id=None,
+            started_at=started_at,
+            parent_started_at=started_at,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(target_grid),
+            program_count=1,
+            step_count=len(steps),
+            program_fingerprint=telemetry_stable_id(program),
+        )
         reports = []
         localized_steps = []
-        for step in steps:
+        for step_index, step in enumerate(steps):
             localized_step = dict(step)
             operation = (
                 localized_step.get("operation")
@@ -205,6 +321,10 @@ class TransformationLocalizationEngine:
                     target_grid,
                     operation=operation,
                     position_rule=parameters,
+                    parent_call_id=call_id,
+                    parent_started_at=started_at,
+                    step_index=step_index,
+                    runtime_context=runtime_context,
                 )
                 reports.append(report)
                 if report["localization_ready"]:
@@ -230,6 +350,9 @@ class TransformationLocalizationEngine:
                     target_grid,
                     operation=operation,
                     parameters=parameters,
+                    parent_call_id=call_id,
+                    parent_started_at=started_at,
+                    step_index=step_index,
                 )
                 reports.append(report)
                 if report["localization_ready"]:
@@ -279,7 +402,7 @@ class TransformationLocalizationEngine:
             for match in report.get("object_matches", [])
             if isinstance(match, dict)
         )
-        return {
+        result = {
             "system": self.system_name,
             "localized_program": program,
             "localization_reports": reports,
@@ -306,6 +429,19 @@ class TransformationLocalizationEngine:
                 else 0.0
             ),
         }
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="localize_program",
+            call_id=call_id,
+            parent_call_id=None,
+            started_at=started_at,
+            parent_started_at=started_at,
+            exit_reason="completed",
+            localization_ready=ready,
+            localized_step_count=result["localized_step_count"],
+            report_count=len(reports),
+        )
+        return result
 
     def localize_attribute_deltas(
         self,
@@ -313,12 +449,50 @@ class TransformationLocalizationEngine:
         target_grid: Any | None,
         operation: str | None = None,
         parameters: Mapping[str, Any] | None = None,
+        parent_call_id: str | None = None,
+        parent_started_at: float | None = None,
+        step_index: int | None = None,
     ) -> dict[str, Any]:
         """Match input objects to output objects and derive executable deltas."""
 
+        started_at = time.perf_counter()
+        call_id = f"{parent_call_id or 'localization'}:attribute_deltas:{step_index or 0}"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="attribute_delta_localization",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            operation=operation or "attribute_mapping",
+            step_index=step_index,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(target_grid),
+        )
         input_objects = self._objects(input_grid)
         output_objects = self._objects(target_grid)
+        match_call_id = f"{call_id}:attribute_object_matching"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="attribute_object_matching",
+            call_id=match_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=started_at,
+            source_object_count=len(input_objects),
+            target_object_count=len(output_objects),
+            pair_count=len(input_objects) * len(output_objects),
+        )
         object_matches = self._match_objects(input_objects, output_objects)
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="attribute_object_matching",
+            call_id=match_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=started_at,
+            matched_object_count=len(object_matches),
+        )
         attribute_deltas = [
             self._attribute_delta(match)
             for match in object_matches
@@ -333,7 +507,7 @@ class TransformationLocalizationEngine:
             localized_rules,
         )
         ready = bool(localized_rules and confidence >= 0.75)
-        return {
+        report = {
             "system": self.system_name,
             "operation": operation or "attribute_mapping",
             "localization_ready": ready,
@@ -355,6 +529,20 @@ class TransformationLocalizationEngine:
                 "matched_object_count": len(object_matches),
             },
         }
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="attribute_delta_localization",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            exit_reason="completed",
+            localization_ready=ready,
+            source_object_count=len(input_objects),
+            target_object_count=len(output_objects),
+            matched_object_count=len(object_matches),
+        )
+        return report
 
     def _is_attribute_mapping_operation(self, operation: str | None) -> bool:
         name = str(operation or "").lower()

@@ -24,6 +24,266 @@ class GeneralTaskEvidenceProfileError(ValueError):
     """Raised when a task profile or evidence requirement is malformed."""
 
 
+class ExpectedSourceDescriptorBuilder:
+    """Build pre-execution source expectations without claiming independence."""
+
+    schema_version = "1.0"
+
+    def build(
+        self,
+        metadata: Mapping[str, Any],
+        *,
+        evidence_types: Iterable[str],
+        transformations: Iterable[str],
+        validation_roles: Iterable[str],
+    ) -> dict[str, Any]:
+        evidence_types = [str(item) for item in evidence_types if item != "UNKNOWN"]
+        transformations = [
+            str(item) for item in transformations if item != "UNKNOWN"
+        ]
+        validation_roles = [
+            str(item) for item in validation_roles if item != "UNKNOWN"
+        ]
+        lineage = self._expected_source_lineage(metadata)
+        descriptor = {
+            "schema_version": self.schema_version,
+            "system": "expected_source_descriptor_builder",
+            "producer_family": "validation",
+            "producer_component": "VALIDATION_TASK_EXECUTION_PIPELINE",
+            "producer_type": "scheduled_validation_task",
+            "operation_family": transformations[0] if transformations else "UNKNOWN",
+            "validation_method": evidence_types[0] if evidence_types else "UNKNOWN",
+            "validation_lane": "scheduled_validation_task",
+            "source_lineage_family": lineage[0] if lineage else "UNKNOWN",
+            "expected_source_lineage": lineage or ["UNKNOWN"],
+            "derivation_basis": {
+                "producer_family": "VALIDATION_LANE_OWNED",
+                "producer_component": "VALIDATION_LANE_OWNED",
+                "producer_type": "VALIDATION_LANE_OWNED",
+                "operation_family": (
+                    "TASK_OWNED" if transformations else "UNKNOWN"
+                ),
+                "validation_method": (
+                    "DERIVED" if evidence_types else "UNKNOWN"
+                ),
+                "validation_lane": "VALIDATION_LANE_OWNED",
+                "source_lineage_family": "TASK_OWNED" if lineage else "UNKNOWN",
+                "expected_source_lineage": "TASK_OWNED" if lineage else "UNKNOWN",
+            },
+            "provenance_confidence": (
+                "MEDIUM" if lineage and evidence_types else "LOW"
+                if evidence_types or validation_roles else "UNKNOWN"
+            ),
+            "task_identity_is_source_identity": False,
+            "expected_source_is_realized_source": False,
+            "grants_selection": False,
+            "grants_evidence": False,
+            "grants_truth": False,
+            "grants_independence": False,
+            **AUTHORITY,
+        }
+        descriptor["descriptor_id"] = self._descriptor_id(descriptor)
+        return descriptor
+
+    def _expected_source_lineage(self, metadata: Mapping[str, Any]) -> list[str]:
+        lineage = []
+        for key in (
+            "expected_source_lineage",
+            "source_lineage_targets",
+            "candidate_source_targets",
+        ):
+            value = metadata.get(key)
+            if isinstance(value, list):
+                lineage.extend(str(item) for item in value if item not in (None, ""))
+            elif value not in (None, ""):
+                lineage.append(str(value))
+        return sorted(set(lineage))
+
+    def _descriptor_id(self, descriptor: Mapping[str, Any]) -> str:
+        payload = {
+            key: descriptor.get(key)
+            for key in (
+                "producer_family",
+                "producer_component",
+                "producer_type",
+                "operation_family",
+                "validation_method",
+                "validation_lane",
+                "expected_source_lineage",
+            )
+        }
+        encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+        return (
+            "expected_source_descriptor_"
+            f"{hashlib.sha1(encoded.encode()).hexdigest()[:12]}"
+        )
+
+
+class PreExecutionSourceDescriptorProviderDiscovery:
+    """Forensic audit of possible pre-execution source descriptor providers."""
+
+    schema_version = "1.0"
+
+    PROVIDERS = [
+        "CurriculumManager",
+        "TrainingAssistant",
+        "ValidationCurriculumRegistry",
+        "ValidationTaskScheduler",
+        "ExecutionPlanner",
+        "CandidateProposalRuntime",
+        "SemanticCompiler",
+        "SynthesisSubsystem",
+        "ToolSelection",
+        "ValidationLane",
+        "ProducerRegistry",
+        "ExperimentProtocol",
+        "ReusableLearnedObjectProvenance",
+    ]
+
+    FIELD_MATRIX = {
+        "CurriculumManager": {
+            "operation_family": "AUTHORITATIVELY_DECLARED",
+            "validation_method": "POSSIBLE_ONLY",
+        },
+        "TrainingAssistant": {
+            "operation_family": "DETERMINISTICALLY_DERIVED",
+            "validation_method": "DETERMINISTICALLY_DERIVED",
+            "expected_evidence_direction": "POSSIBLE_ONLY",
+        },
+        "ValidationCurriculumRegistry": {
+            "validation_method": "AUTHORITATIVELY_DECLARED",
+            "operation_family": "AUTHORITATIVELY_DECLARED",
+            "validation_lane": "DETERMINISTICALLY_DERIVED",
+        },
+        "ValidationTaskScheduler": {
+            "producer_family": "DETERMINISTICALLY_DERIVED",
+            "producer_component": "DETERMINISTICALLY_DERIVED",
+            "producer_type": "DETERMINISTICALLY_DERIVED",
+            "validation_lane": "AUTHORITATIVELY_DECLARED",
+            "expected_evidence_direction": "POSSIBLE_ONLY",
+        },
+        "ValidationLane": {
+            "producer_family": "AUTHORITATIVELY_DECLARED",
+            "producer_component": "AUTHORITATIVELY_DECLARED",
+            "producer_type": "AUTHORITATIVELY_DECLARED",
+            "validation_lane": "AUTHORITATIVELY_DECLARED",
+        },
+        "ExperimentProtocol": {
+            "validation_method": "AUTHORITATIVELY_DECLARED",
+            "expected_evidence_direction": "POSSIBLE_ONLY",
+        },
+        "ReusableLearnedObjectProvenance": {
+            "source_lineage_family": "HISTORICALLY_INFERRED",
+            "expected_upstream_lineage": "HISTORICALLY_INFERRED",
+        },
+    }
+
+    FIELDS = [
+        "producer_family",
+        "producer_component",
+        "producer_type",
+        "operation_family",
+        "validation_method",
+        "validation_lane",
+        "source_lineage_family",
+        "expected_upstream_lineage",
+        "expected_evidence_direction",
+    ]
+
+    def discover(self) -> dict[str, Any]:
+        rows = []
+        for provider in self.PROVIDERS:
+            capabilities = {
+                field: self.FIELD_MATRIX.get(provider, {}).get(field, "UNKNOWN")
+                for field in self.FIELDS
+            }
+            legitimacy = self._legitimacy(provider, capabilities)
+            rows.append({
+                "provider_id": provider,
+                "provider_type": self._provider_type(provider),
+                "descriptor_fields": capabilities,
+                "legitimate_descriptor_provider": legitimacy["legitimate"],
+                "provider_rejection_reason": legitimacy["reason"],
+                "temporal_scope": "PRE_EXECUTION",
+                "authority": "NONE",
+                "grants_selection": False,
+                "grants_execution": False,
+                "grants_evidence": False,
+                "grants_truth": False,
+                "grants_independence": False,
+            })
+        legitimate = [
+            row for row in rows if row["legitimate_descriptor_provider"]
+        ]
+        lineage_capable = [
+            row for row in legitimate
+            if row["descriptor_fields"]["expected_upstream_lineage"]
+            in {"AUTHORITATIVELY_DECLARED", "DETERMINISTICALLY_DERIVED"}
+            or row["descriptor_fields"]["source_lineage_family"]
+            in {"AUTHORITATIVELY_DECLARED", "DETERMINISTICALLY_DERIVED"}
+        ]
+        return {
+            "schema_version": self.schema_version,
+            "system": "pre_execution_source_descriptor_provider_discovery",
+            "providers_inspected": [row["provider_id"] for row in rows],
+            "provider_capability_matrix": rows,
+            "legitimate_provider_found": bool(legitimate),
+            "legitimate_provider_ids": [
+                row["provider_id"] for row in legitimate
+            ],
+            "legitimate_lineage_provider_found": bool(lineage_capable),
+            "legitimate_lineage_provider_ids": [
+                row["provider_id"] for row in lineage_capable
+            ],
+            "decision_gate": (
+                "R2-D_LEGITIMATE_PROVIDER_EXISTS_WITH_USEFUL_DISCRIMINATION"
+                if lineage_capable
+                else "R2-C_LEGITIMATE_PROVIDER_EXISTS_WITH_USEFUL_COVERAGE_BUT_LOW_DISCRIMINATION"
+                if legitimate
+                else "R2-A_NO_LEGITIMATE_PREEXECUTION_PROVIDER"
+            ),
+            "route_is_source_lineage": False,
+            "historical_recurrence_grants_independence": False,
+            "prediction_grants_epistemic_authority": False,
+            **AUTHORITY,
+        }
+
+    def _legitimacy(
+        self,
+        provider: str,
+        capabilities: Mapping[str, str],
+    ) -> dict[str, Any]:
+        known = {
+            value for value in capabilities.values()
+            if value not in {"UNKNOWN", "POSSIBLE_ONLY", "HISTORICALLY_INFERRED"}
+        }
+        if known:
+            return {
+                "legitimate": True,
+                "reason": "pre_execution_descriptor_fields_owned_without_independence_claim",
+            }
+        if provider == "ReusableLearnedObjectProvenance":
+            return {
+                "legitimate": False,
+                "reason": "historical_recurrence_is_prediction_not_pre_execution_authority",
+            }
+        return {
+            "legitimate": False,
+            "reason": "no_authoritative_or_deterministic_pre_execution_descriptor_fields",
+        }
+
+    def _provider_type(self, provider: str) -> str:
+        if provider in {"ValidationLane", "ValidationTaskScheduler"}:
+            return "VALIDATION_LANE_PROVIDER"
+        if provider in {"CurriculumManager", "ValidationCurriculumRegistry"}:
+            return "CURRICULUM_PROVIDER"
+        if provider in {"ExecutionPlanner", "ToolSelection"}:
+            return "ROUTE_PROVIDER"
+        if provider == "ReusableLearnedObjectProvenance":
+            return "HISTORICAL_PREDICTION_PROVIDER"
+        return "RUNTIME_PROVIDER"
+
+
 class GeneralTaskEvidenceProfiler:
     """Build descriptive evidence-capability profiles for general training tasks."""
 
@@ -77,6 +337,9 @@ class GeneralTaskEvidenceProfiler:
             + self._list(metadata, "composite_capabilities")
             + self._list(metadata, "capability_graduation_targets")
         ))
+        validation_roles = sorted(set(
+            self._list(metadata, "independent_validation_opportunities")
+        ))
         concepts = sorted(set(
             self._list(metadata, "target_concepts")
             + self._list(payload, "concept_labels")
@@ -99,8 +362,30 @@ class GeneralTaskEvidenceProfiler:
                 "DERIVED_FROM_DECLARED_TASK_METADATA"
                 if evidence_types else "UNKNOWN"
             ),
+            "expected_producer_component": "DERIVED_FROM_VALIDATION_LANE",
+            "expected_producer_type": "DERIVED_FROM_VALIDATION_LANE",
+            "expected_operation": (
+                "DECLARED_BY_TASK" if transformations else "UNKNOWN"
+            ),
+            "expected_method": (
+                "DERIVED_FROM_DECLARED_TASK_METADATA"
+                if evidence_types else "UNKNOWN"
+            ),
+            "expected_source_lineage": (
+                "DECLARED_BY_TASK"
+                if self._expected_source_lineage(metadata) else "UNKNOWN"
+            ),
+            "historical_source_lineage": "UNKNOWN",
+            "previously_realized_source_identities": "UNKNOWN",
         }
         prior = self._selection_record(path.name, selection_memory)
+        expected_lineage = self._expected_source_lineage(metadata)
+        expected_source_descriptor = ExpectedSourceDescriptorBuilder().build(
+            metadata,
+            evidence_types=evidence_types,
+            transformations=transformations,
+            validation_roles=validation_roles,
+        )
         return {
             "schema_version": self.schema_version,
             "profile_id": self._profile_id(task_id, path),
@@ -118,9 +403,22 @@ class GeneralTaskEvidenceProfiler:
                 payload.get("concept_family") or "UNKNOWN"
             ],
             "evidence_types_potentially_supported": evidence_types or ["UNKNOWN"],
-            "validation_roles": sorted(set(
-                self._list(metadata, "independent_validation_opportunities")
-            )) or ["UNKNOWN"],
+            "validation_roles": validation_roles or ["UNKNOWN"],
+            "expected_source_descriptor": expected_source_descriptor,
+            "source_descriptor_owner": expected_source_descriptor[
+                "derivation_basis"
+            ],
+            "source_descriptor_confidence": expected_source_descriptor[
+                "provenance_confidence"
+            ],
+            "expected_validation_lane": "scheduled_validation_task",
+            "expected_producer_component": "VALIDATION_TASK_EXECUTION_PIPELINE",
+            "expected_producer_type": "scheduled_validation_task",
+            "expected_operation": transformations[0] if transformations else "UNKNOWN",
+            "expected_method": evidence_types[0] if evidence_types else "UNKNOWN",
+            "expected_source_lineage": expected_lineage or ["UNKNOWN"],
+            "historical_source_lineage": ["UNKNOWN"],
+            "previously_realized_source_identities": ["UNKNOWN"],
             "known_baseline_sensitivity": (
                 "NEGATIVE_CONTROLS_DECLARED"
                 if payload.get("negative_controls") else "UNKNOWN"
@@ -137,6 +435,24 @@ class GeneralTaskEvidenceProfiler:
                 "metadata_present": bool(metadata),
                 "declared_metadata_only": True,
                 "historical_execution_does_not_rewrite_static_task": True,
+            },
+            "pre_selection_observability": {
+                "task_identity": "DECLARED",
+                "evidence_requirement_compatibility": (
+                    "DERIVED" if evidence_types else "UNKNOWN"
+                ),
+                "expected_validation_category": (
+                    "DERIVED" if evidence_types else "UNKNOWN"
+                ),
+                "expected_producer_component": "DERIVED",
+                "expected_producer_type": "DERIVED",
+                "expected_operation": "DECLARED" if transformations else "UNKNOWN",
+                "expected_method": "DERIVED" if evidence_types else "UNKNOWN",
+                "expected_source_lineage": (
+                    "DECLARED" if expected_lineage else "UNKNOWN"
+                ),
+                "historical_source_lineage": "UNKNOWN",
+                "previously_realized_source_identities": "UNKNOWN",
             },
             **AUTHORITY,
         }
@@ -254,6 +570,16 @@ class GeneralTaskEvidenceProfiler:
         if metadata:
             return "LOW"
         return "UNKNOWN"
+
+    def _expected_source_lineage(self, metadata: Mapping[str, Any]) -> list[str]:
+        lineage = []
+        for key in (
+            "expected_source_lineage",
+            "source_lineage_targets",
+            "candidate_source_targets",
+        ):
+            lineage.extend(self._list(metadata, key))
+        return sorted(set(lineage))
 
     def _profile_id(self, task_id: str, path: Path) -> str:
         payload = {
@@ -386,6 +712,259 @@ class TaskEvidenceMatcher:
         }
 
 
+class IndependentSourcePotentialEvaluator:
+    """Observation-only estimate of pre-execution independent source potential."""
+
+    schema_version = "1.0"
+
+    SCORE_BY_CLASS = {
+        "HIGH_POTENTIAL": 1.0,
+        "MODERATE_POTENTIAL": 0.65,
+        "LOW_POTENTIAL": 0.2,
+        "ALREADY_REPRESENTED_SOURCE": 0.0,
+        "UNKNOWN": 0.0,
+    }
+
+    def evaluate(
+        self,
+        requirement: Mapping[str, Any],
+        profile: Mapping[str, Any],
+        match: Mapping[str, Any],
+        source_coverage: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        coverage = source_coverage if isinstance(source_coverage, Mapping) else {}
+        descriptor = profile.get("expected_source_descriptor")
+        descriptor = descriptor if isinstance(descriptor, Mapping) else {}
+        expected_lineage = {
+            str(item)
+            for item in (
+                descriptor.get("expected_source_lineage")
+                or profile.get("expected_source_lineage", [])
+                or []
+            )
+            if item and item != "UNKNOWN"
+        }
+        represented_lineage = {
+            str(lineage)
+            for component in coverage.get("source_relation_components", []) or []
+            if isinstance(component, Mapping)
+            for member in component.get("members", []) or []
+            if isinstance(member, Mapping)
+            for lineage in member.get("lineage_roots", []) or []
+            if lineage and lineage != "UNKNOWN"
+        }
+        represented_sources = {
+            str(item)
+            for item in coverage.get("source_identities", []) or []
+            if item and item != "UNKNOWN"
+        }
+        match_strength = str(match.get("match_strength") or "UNKNOWN")
+        if not match.get("eligible"):
+            potential_class = "LOW_POTENTIAL" if match_strength == "NO_MATCH" else "UNKNOWN"
+            reason = (
+                "task_does_not_match_required_evidence"
+                if match_strength == "NO_MATCH"
+                else "evidence_or_source_potential_unknown"
+            )
+        elif not expected_lineage:
+            potential_class = "UNKNOWN"
+            reason = "expected_source_lineage_not_declared_pre_execution"
+        elif expected_lineage & (represented_lineage | represented_sources):
+            potential_class = "ALREADY_REPRESENTED_SOURCE"
+            reason = "expected_source_lineage_already_represented"
+        elif coverage.get("additional_independent_sources_required", 1) <= 0:
+            potential_class = "LOW_POTENTIAL"
+            reason = "independent_source_deficit_already_closed"
+        elif match_strength == "EXACT_MATCH":
+            potential_class = "HIGH_POTENTIAL"
+            reason = "exact_evidence_match_with_unrepresented_declared_lineage"
+        else:
+            potential_class = "MODERATE_POTENTIAL"
+            reason = "compatible_evidence_with_unrepresented_declared_lineage"
+        return {
+            "schema_version": self.schema_version,
+            "system": "independent_source_potential_evaluator",
+            "requirement_id": requirement.get("requirement_id"),
+            "task_id": profile.get("task_id"),
+            "potential_class": potential_class,
+            "potential_score": self.SCORE_BY_CLASS[potential_class],
+            "expected_marginal_contribution": (
+                "POSSIBLE_NEW_INDEPENDENT_SOURCE"
+                if potential_class in {"HIGH_POTENTIAL", "MODERATE_POTENTIAL"}
+                else "NO_EXPECTED_NEW_SOURCE"
+                if potential_class in {"LOW_POTENTIAL", "ALREADY_REPRESENTED_SOURCE"}
+                else "UNKNOWN"
+            ),
+            "expected_source_lineage": sorted(expected_lineage) or ["UNKNOWN"],
+            "expected_source_descriptor": descriptor or "UNKNOWN",
+            "descriptor_confidence": descriptor.get(
+                "provenance_confidence",
+                profile.get("source_descriptor_confidence", "UNKNOWN"),
+            ),
+            "represented_lineage_overlap": sorted(
+                expected_lineage & represented_lineage
+            ),
+            "represented_source_overlap": sorted(
+                expected_lineage & represented_sources
+            ),
+            "potential_is_proven_independence": False,
+            "reason": reason,
+            **AUTHORITY,
+        }
+
+
+class MultiAxisEpistemicSelectionShadow:
+    """Compare task-selection policies without changing production selection."""
+
+    schema_version = "1.0"
+    policy_names = [
+        "production_baseline",
+        "evidence_compatibility_only",
+        "independent_source_potential_only",
+        "lexicographic_evidence_source_operational",
+        "operational_first_bounded_epistemic_tiebreak",
+        "normalized_multi_objective_shadow",
+    ]
+
+    def policy_matrix(
+        self,
+        rows: Iterable[Mapping[str, Any]],
+        *,
+        selected_count: int,
+        base_selected_tasks: Iterable[str],
+    ) -> dict[str, Any]:
+        base_selected = set(base_selected_tasks or [])
+        source_rows = [dict(row) for row in rows]
+        policies = {
+            "production_baseline": self._rank(
+                source_rows,
+                [("base_score", True), ("base_rank", False), ("task_file", False)],
+            ),
+            "evidence_compatibility_only": self._rank(
+                source_rows,
+                [("evidence_compatibility", True), ("base_rank", False), ("task_file", False)],
+            ),
+            "independent_source_potential_only": self._rank(
+                source_rows,
+                [("independent_source_potential_score", True), ("base_rank", False), ("task_file", False)],
+            ),
+            "lexicographic_evidence_source_operational": self._rank(
+                source_rows,
+                [("evidence_compatibility", True), ("independent_source_potential_score", True), ("base_score", True), ("base_rank", False)],
+            ),
+            "operational_first_bounded_epistemic_tiebreak": self._rank(
+                [
+                    {
+                        **row,
+                        "_bounded_score": round(
+                            float(row.get("base_score") or 0.0)
+                            + min(
+                                float(row.get("evidence_compatibility") or 0.0)
+                                + float(row.get("independent_source_potential_score") or 0.0),
+                                0.25,
+                            ),
+                            4,
+                        ),
+                    }
+                    for row in source_rows
+                ],
+                [("_bounded_score", True), ("base_rank", False), ("task_file", False)],
+            ),
+            "normalized_multi_objective_shadow": self._rank(
+                [
+                    {
+                        **row,
+                        "_normalized_score": round(
+                            self._normalized_base(row, source_rows) * 0.5
+                            + float(row.get("evidence_compatibility") or 0.0) * 0.3
+                            + float(row.get("independent_source_potential_score") or 0.0) * 0.2,
+                            4,
+                        ),
+                    }
+                    for row in source_rows
+                ],
+                [("_normalized_score", True), ("base_rank", False), ("task_file", False)],
+            ),
+        }
+        matrix = {}
+        for name, ranked in policies.items():
+            selected = {row["task_file"] for row in ranked[:selected_count]}
+            overlap = len(selected & base_selected)
+            deltas = [
+                abs(int(row.get("base_rank", 0) or 0) - index)
+                for index, row in enumerate(ranked, start=1)
+            ]
+            matrix[name] = {
+                "selected_tasks": sorted(selected),
+                "top_k_overlap_with_production": overlap,
+                "top_k_overlap_ratio": round(overlap / max(selected_count, 1), 4),
+                "would_change_production_selection": selected != base_selected,
+                "maximum_rank_delta": max(deltas) if deltas else 0,
+                "policy_authority": "SHADOW_ONLY",
+            }
+        return {
+            "schema_version": self.schema_version,
+            "system": "multi_axis_epistemic_selection_shadow",
+            "policies": matrix,
+            "policy_count": len(matrix),
+            "behavioral_integration_applied": False,
+            "production_selector_changed": False,
+            **AUTHORITY,
+        }
+
+    def distribution_report(self, rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+        source_rows = [dict(row) for row in rows]
+        return {
+            "total_tasks": len(source_rows),
+            "evidence_compatibility": dict(
+                Counter(row.get("evidence_match_class") for row in source_rows)
+            ),
+            "source_potential": dict(
+                Counter(row.get("independent_source_potential") for row in source_rows)
+            ),
+            "unknown_source_potential": sum(
+                1
+                for row in source_rows
+                if row.get("independent_source_potential") == "UNKNOWN"
+            ),
+            "already_represented_sources": sum(
+                1
+                for row in source_rows
+                if row.get("independent_source_potential")
+                == "ALREADY_REPRESENTED_SOURCE"
+            ),
+            "high_potential": sum(
+                1
+                for row in source_rows
+                if row.get("independent_source_potential") == "HIGH_POTENTIAL"
+            ),
+            "moderate_potential": sum(
+                1
+                for row in source_rows
+                if row.get("independent_source_potential") == "MODERATE_POTENTIAL"
+            ),
+        }
+
+    def _rank(self, rows: list[dict[str, Any]], keys: list[tuple[str, bool]]) -> list[dict[str, Any]]:
+        def key(row):
+            values = []
+            for field, descending in keys:
+                value = row.get(field, 0)
+                if isinstance(value, (int, float)):
+                    values.append(-float(value) if descending else float(value))
+                else:
+                    values.append(str(value))
+            values.append(str(row.get("task_file")))
+            return tuple(values)
+        return sorted(rows, key=key)
+
+    def _normalized_base(self, row: Mapping[str, Any], rows: list[dict[str, Any]]) -> float:
+        maximum = max(float(item.get("base_score") or 0.0) for item in rows) if rows else 0.0
+        if maximum <= 0:
+            return 0.0
+        return float(row.get("base_score") or 0.0) / maximum
+
+
 def _split_token(value: str) -> list[str]:
     return [
         part
@@ -396,7 +975,11 @@ def _split_token(value: str) -> list[str]:
 
 __all__ = [
     "AUTHORITY",
+    "ExpectedSourceDescriptorBuilder",
     "GeneralTaskEvidenceProfileError",
     "GeneralTaskEvidenceProfiler",
+    "IndependentSourcePotentialEvaluator",
+    "MultiAxisEpistemicSelectionShadow",
+    "PreExecutionSourceDescriptorProviderDiscovery",
     "TaskEvidenceMatcher",
 ]

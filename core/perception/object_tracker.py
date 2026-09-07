@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import time
 from typing import Any, Mapping
 
 from core.epistemic_models import clamp
 from core.perception.object_extractor import ObjectExtractor
 from core.perception.spatial_relations import SpatialRelationEngine
+from runtime.telemetry.localization_progress import (
+    emit as emit_localization_progress,
+    grid_shape as telemetry_grid_shape,
+    stable_id as telemetry_stable_id,
+)
 
 
 class IdentityTransitionKind(str, Enum):
@@ -199,10 +205,42 @@ class ObjectTracker:
         self,
         input_grid: Any,
         output_grid: Any,
+        parent_call_id: str | None = None,
+        parent_started_at: float | None = None,
     ) -> dict[str, Any]:
+        started_at = time.perf_counter()
+        call_id = parent_call_id or "object_tracker_track"
+        extract_call_id = f"{call_id}:object_extraction"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="object_extraction",
+            call_id=extract_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(output_grid),
+            declared_bound="grid_cells",
+        )
         input_objects = self.object_extractor.extract_objects(input_grid)
         output_objects = self.object_extractor.extract_objects(output_grid)
-        matches = self._match_objects(input_objects, output_objects)
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="object_extraction",
+            call_id=extract_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            source_object_count=len(input_objects),
+            target_object_count=len(output_objects),
+            pair_count=len(input_objects) * len(output_objects),
+        )
+        matches = self._match_objects(
+            input_objects,
+            output_objects,
+            parent_call_id=call_id,
+            parent_started_at=started_at,
+        )
         matched_input_ids = {match["input_object"] for match in matches}
         matched_output_ids = {match["output_object"] for match in matches}
 
@@ -237,6 +275,18 @@ class ObjectTracker:
             *added_events,
             *removed_events,
         ]
+        event_call_id = f"{call_id}:event_construction"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="object_tracking_event_construction",
+            call_id=event_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            matched_object_count=len(matches),
+            added_object_count=len(added_events),
+            removed_object_count=len(removed_events),
+        )
         identity_runtime = self._identity_runtime_report(
             input_objects,
             output_objects,
@@ -254,8 +304,18 @@ class ObjectTracker:
             added_events,
             removed_events,
         )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="object_tracking_event_construction",
+            call_id=event_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            identity_transition_count=len(identity_transitions),
+            object_identity_count=len(object_identities),
+        )
 
-        return {
+        result = {
             "system": "object_tracker",
             "input_object_count": len(input_objects),
             "output_object_count": len(output_objects),
@@ -288,15 +348,75 @@ class ObjectTracker:
                 output_objects,
             ),
         }
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="object_tracker_track",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            input_object_count=len(input_objects),
+            output_object_count=len(output_objects),
+            matched_object_count=len(matches),
+            localized_change_count=result["localized_change_count"],
+        )
+        return result
 
     def _match_objects(
         self,
         input_objects: list[Mapping[str, Any]],
         output_objects: list[Mapping[str, Any]],
+        parent_call_id: str | None = None,
+        parent_started_at: float | None = None,
     ) -> list[dict[str, Any]]:
+        started_at = time.perf_counter()
+        call_id = f"{parent_call_id or 'object_tracker'}:pair_scoring"
+        pair_count = len(input_objects) * len(output_objects)
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="object_tracker_pair_scoring",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            source_object_count=len(input_objects),
+            target_object_count=len(output_objects),
+            pair_count=pair_count,
+            declared_bound=pair_count,
+        )
         candidates = []
-        for input_obj in input_objects:
-            for output_obj in output_objects:
+        pair_index = 0
+        repeated_state_count = 0
+        seen_pairs: set[str] = set()
+        for input_index, input_obj in enumerate(input_objects):
+            for output_index, output_obj in enumerate(output_objects):
+                pair_index += 1
+                pair_fingerprint = telemetry_stable_id(
+                    {
+                        "input": self._identity_signature(input_obj),
+                        "output": self._identity_signature(output_obj),
+                        "input_size": input_obj.get("size"),
+                        "output_size": output_obj.get("size"),
+                    }
+                )
+                if pair_fingerprint in seen_pairs:
+                    repeated_state_count += 1
+                seen_pairs.add(pair_fingerprint)
+                if pair_index == 1 or pair_index % 100 == 0:
+                    emit_localization_progress(
+                        phase="CHECKPOINT",
+                        subcall_name="object_tracker_pair_scoring",
+                        call_id=call_id,
+                        parent_call_id=parent_call_id,
+                        started_at=started_at,
+                        parent_started_at=parent_started_at,
+                        pair_index=pair_index,
+                        pair_count=pair_count,
+                        input_object_index=input_index,
+                        output_object_index=output_index,
+                        pair_fingerprint=pair_fingerprint,
+                        repeated_state_count=repeated_state_count,
+                    )
                 structural_score = self.spatial_relation_engine.object_match_score(
                     input_obj,
                     output_obj,
@@ -306,6 +426,27 @@ class ObjectTracker:
                 if score >= self.match_threshold:
                     candidates.append((score, identity_score, input_obj, output_obj))
 
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="object_tracker_pair_scoring",
+            call_id=call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            candidate_count=len(candidates),
+            pair_count=pair_count,
+            repeated_state_count=repeated_state_count,
+        )
+        selection_call_id = f"{parent_call_id or 'object_tracker'}:match_selection"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="object_tracker_match_selection",
+            call_id=selection_call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            candidate_count=len(candidates),
+        )
         candidates.sort(key=lambda item: item[0], reverse=True)
         used_inputs: set[str] = set()
         used_outputs: set[str] = set()
@@ -343,6 +484,15 @@ class ObjectTracker:
                 and vector["delta_col"] == 0,
                 "placement_vector": vector,
             })
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="object_tracker_match_selection",
+            call_id=selection_call_id,
+            parent_call_id=parent_call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            match_count=len(matches),
+        )
         return matches
 
     def _identity_runtime_report(

@@ -19,6 +19,10 @@ from runtime.reporting.final_report_renderer import (
     DeterministicFinalReportRenderer,
     final_report_renderer,
 )
+from runtime.reporting.natural_production_handoff import (
+    NaturalProductionHandoffObserver,
+    natural_production_handoff_observer,
+)
 from runtime.reporting.report_budget_manager import (
     ReportBudgetManager,
     report_budget_manager,
@@ -50,6 +54,7 @@ __all__ = [
     "RepresentationLayerValidationEngine",
     "RepresentationValidationReport",
     "RepresentationValidationState",
+    "NaturalProductionHandoffObserver",
     "ReportBudgetManager",
     "ReportLevel",
     "ReportLevelSeparationContract",
@@ -59,6 +64,7 @@ __all__ = [
     "compact_report_builder",
     "compact_report_compression_engine",
     "final_report_renderer",
+    "natural_production_handoff_observer",
     "report_budget_manager",
     "report_level_separation_contract",
     "representation_layer_validation_engine",

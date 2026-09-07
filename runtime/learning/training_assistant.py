@@ -10,6 +10,8 @@ from runtime.evidence_generation.evidence_generation_engine import (
 from runtime.learning.general_task_evidence_profile import (
     GeneralTaskEvidenceProfileError,
     GeneralTaskEvidenceProfiler,
+    IndependentSourcePotentialEvaluator,
+    MultiAxisEpistemicSelectionShadow,
     TaskEvidenceMatcher,
 )
 from runtime.training.curriculum_manager import CurriculumManager
@@ -75,6 +77,12 @@ class TrainingAssistant:
         )
         self.general_task_evidence_profiler = GeneralTaskEvidenceProfiler()
         self.task_evidence_matcher = TaskEvidenceMatcher()
+        self.independent_source_potential_evaluator = (
+            IndependentSourcePotentialEvaluator()
+        )
+        self.multi_axis_epistemic_selection_shadow = (
+            MultiAxisEpistemicSelectionShadow()
+        )
         if validation_curriculum_registry is None:
             self.validation_curriculum_registry.register_default_academy(
                 self.validation_academy_path
@@ -2738,6 +2746,7 @@ class TrainingAssistant:
         *,
         task_directory=None,
         active_epistemic_requirements=None,
+        claim_source_coverage=None,
         curriculum_report=None,
         elite_selection_report=None,
         selected=None,
@@ -2755,6 +2764,7 @@ class TrainingAssistant:
             return {
                 "system": "general_selector_epistemic_shadow_rank",
                 "shadow_mode_active": False,
+                "multi_axis_shadow_active": False,
                 **requirement_state,
                 "active_requirement_id": "Not Available",
                 "evidence_type": "Not Available",
@@ -2763,6 +2773,9 @@ class TrainingAssistant:
                 "selector_decision_owner": "TrainingAssistant",
                 "behavioral_integration_applied": False,
                 "selection_changed_by_epistemic_signal": False,
+                "production_selector_changed": False,
+                "policy_matrix": {},
+                "distributions": {},
                 "rows": [],
             }
         shadow_rows = []
@@ -2800,16 +2813,39 @@ class TrainingAssistant:
                 }
                 failure = str(exc)
             adjustment = self._epistemic_adjustment_for(match)
+            source_potential = (
+                self.independent_source_potential_evaluator.evaluate(
+                    requirement,
+                    profile,
+                    match,
+                    claim_source_coverage,
+                )
+            )
             shadow_rows.append({
                 "task_id": profile.get("task_id", row["task_file"]),
                 "task_file": row["task_file"],
                 "base_score": row["base_score"],
                 "base_score_components": row["base_score_components"],
                 "base_rank": row["base_rank"],
+                "operational_score": row["base_score"],
                 "evidence_match_class": match.get("match_strength"),
+                "evidence_compatibility": match.get("compatibility_score", 0.0),
                 "epistemic_score": match.get("compatibility_score", 0.0),
                 "epistemic_adjustment": adjustment,
                 "epistemic_adjustment_bound": 1.0,
+                "independent_source_potential": source_potential[
+                    "potential_class"
+                ],
+                "independent_source_potential_score": source_potential[
+                    "potential_score"
+                ],
+                "expected_marginal_contribution": source_potential[
+                    "expected_marginal_contribution"
+                ],
+                "provenance_confidence": profile.get(
+                    "profile_confidence",
+                    "UNKNOWN",
+                ),
                 "shadow_final_score": round(row["base_score"] + adjustment, 4),
                 "selected_in_base": row["selected_in_base"],
                 "would_select_in_shadow": False,
@@ -2821,10 +2857,30 @@ class TrainingAssistant:
                 "active_requirement_id": requirement.get("requirement_id"),
                 "evidence_type": requirement.get("evidence_type"),
                 "match_projection": match,
+                "source_potential_projection": source_potential,
                 "profile_confidence": profile.get("profile_confidence", "UNKNOWN"),
+                "expected_source_descriptor": profile.get(
+                    "expected_source_descriptor",
+                    {},
+                ),
+                "source_descriptor_owner": profile.get(
+                    "source_descriptor_owner",
+                    {},
+                ),
+                "source_descriptor_confidence": profile.get(
+                    "source_descriptor_confidence",
+                    "UNKNOWN",
+                ),
+                "pre_selection_observability": profile.get(
+                    "pre_selection_observability",
+                    {},
+                ),
                 "provenance": {
                     "base_policy_surface": row["base_policy_surface"],
                     "matcher": "task_evidence_matcher",
+                    "source_potential_evaluator": (
+                        "independent_source_potential_evaluator"
+                    ),
                     "shadow_mode": True,
                     "profile_failure": failure,
                 },
@@ -2852,9 +2908,20 @@ class TrainingAssistant:
         base_selected = set(selected or [])
         changed = base_selected != shadow_selected
         rank_effect_count = sum(1 for row in shadow_rows if row["rank_delta"] != 0)
+        policy_matrix = self.multi_axis_epistemic_selection_shadow.policy_matrix(
+            shadow_rows,
+            selected_count=selected_count,
+            base_selected_tasks=base_selected,
+        )
+        distributions = (
+            self.multi_axis_epistemic_selection_shadow.distribution_report(
+                shadow_rows
+            )
+        )
         return {
             "system": "general_selector_epistemic_shadow_rank",
             "shadow_mode_active": True,
+            "multi_axis_shadow_active": True,
             **requirement_state,
             "active_requirement_id": requirement.get("requirement_id"),
             "evidence_type": requirement.get("evidence_type"),
@@ -2863,6 +2930,7 @@ class TrainingAssistant:
             "selector_decision_owner": "TrainingAssistant",
             "behavioral_integration_applied": False,
             "selection_changed_by_epistemic_signal": False,
+            "production_selector_changed": False,
             "shadow_selection_would_change": changed,
             "counterfactual_rank_effect": (
                 "SELECTION_CHANGED"
@@ -2874,6 +2942,9 @@ class TrainingAssistant:
             "epistemic_adjustment_bound": 1.0,
             "base_selected_tasks": sorted(base_selected),
             "shadow_selected_tasks": sorted(shadow_selected),
+            "policy_matrix": policy_matrix,
+            "distributions": distributions,
+            "current_claim_source_coverage": claim_source_coverage or {},
             "rank_effect_count": rank_effect_count,
             "rows": shadow_rows,
         }
@@ -3144,6 +3215,7 @@ class TrainingAssistant:
         operational_economy_report=None,
         pending_evidence_acquisition_plans=None,
         active_epistemic_requirements=None,
+        claim_source_coverage=None,
     ):
         task_files = self._normalized_tasks(task_files)
         if not task_files:
@@ -3768,6 +3840,7 @@ class TrainingAssistant:
             task_files,
             task_directory=task_directory,
             active_epistemic_requirements=active_epistemic_requirements,
+            claim_source_coverage=claim_source_coverage,
             curriculum_report=curriculum_report,
             elite_selection_report=elite_selection_report,
             selected=self.state.get("active_batch", []),

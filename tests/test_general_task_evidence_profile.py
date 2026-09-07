@@ -4,7 +4,11 @@ import pytest
 
 from runtime.learning.general_task_evidence_profile import (
     GeneralTaskEvidenceProfileError,
+    ExpectedSourceDescriptorBuilder,
     GeneralTaskEvidenceProfiler,
+    IndependentSourcePotentialEvaluator,
+    MultiAxisEpistemicSelectionShadow,
+    PreExecutionSourceDescriptorProviderDiscovery,
     TaskEvidenceMatcher,
 )
 
@@ -67,6 +71,22 @@ def test_profile_preserves_declared_and_derived_provenance(tmp_path):
     )
     assert profile["known_baseline_sensitivity"] == "NEGATIVE_CONTROLS_DECLARED"
     assert profile["provenance"]["declared_metadata_only"] is True
+    assert profile["pre_selection_observability"]["task_identity"] == "DECLARED"
+    assert profile["pre_selection_observability"]["expected_source_lineage"] == (
+        "UNKNOWN"
+    )
+    assert profile["expected_producer_component"] == (
+        "VALIDATION_TASK_EXECUTION_PIPELINE"
+    )
+    descriptor = profile["expected_source_descriptor"]
+    assert descriptor["producer_component"] == (
+        "VALIDATION_TASK_EXECUTION_PIPELINE"
+    )
+    assert descriptor["derivation_basis"]["producer_component"] == (
+        "VALIDATION_LANE_OWNED"
+    )
+    assert descriptor["derivation_basis"]["expected_source_lineage"] == "UNKNOWN"
+    assert descriptor["grants_independence"] is False
 
 
 def test_unknown_is_preserved_for_unlabeled_task(tmp_path):
@@ -177,3 +197,119 @@ def test_missing_required_evidence_fails_closed(tmp_path):
 
     with pytest.raises(GeneralTaskEvidenceProfileError):
         TaskEvidenceMatcher().match({}, profile)
+
+
+def test_expected_source_descriptor_never_self_declares_independence():
+    descriptor = ExpectedSourceDescriptorBuilder().build(
+        {
+            "source_lineage_targets": ["declared_lineage"],
+        },
+        evidence_types=["cross_source_consensus_evidence"],
+        transformations=["replace_color"],
+        validation_roles=["cross_domain_validation"],
+    )
+
+    assert descriptor["source_lineage_family"] == "declared_lineage"
+    assert descriptor["derivation_basis"]["source_lineage_family"] == "TASK_OWNED"
+    assert descriptor["task_identity_is_source_identity"] is False
+    assert descriptor["expected_source_is_realized_source"] is False
+    assert descriptor["grants_selection"] is False
+    assert descriptor["grants_evidence"] is False
+    assert descriptor["grants_truth"] is False
+    assert descriptor["grants_independence"] is False
+    assert descriptor["selection_authority"] == "NONE"
+
+
+def test_independent_source_potential_distinguishes_unknown_and_represented(tmp_path):
+    path = tmp_path / "elite_cognitive_task_12.json"
+    payload = _elite_payload()
+    payload["nexryn_metadata"]["source_lineage_targets"] = [
+        "represented_lineage"
+    ]
+    _write_task(path, payload)
+    profile = GeneralTaskEvidenceProfiler().profile_task(path)
+    requirement = {
+        "requirement_id": "req_1",
+        "evidence_type": "cross_source_consensus_evidence",
+        "claim_domains": ["Identity"],
+    }
+    match = TaskEvidenceMatcher().match(requirement, profile)
+    potential = IndependentSourcePotentialEvaluator().evaluate(
+        requirement,
+        profile,
+        match,
+        {
+            "source_relation_components": [{
+                "members": [{
+                    "lineage_roots": ["represented_lineage"],
+                }],
+            }],
+        },
+    )
+
+    assert potential["potential_class"] == "ALREADY_REPRESENTED_SOURCE"
+    assert potential["potential_is_proven_independence"] is False
+    assert potential["selection_authority"] == "NONE"
+
+
+def test_multi_axis_shadow_reports_policies_without_production_authority():
+    rows = [
+        {
+            "task_file": "task_a.json",
+            "base_score": 10.0,
+            "base_rank": 1,
+            "evidence_compatibility": 0.0,
+            "independent_source_potential_score": 0.0,
+        },
+        {
+            "task_file": "task_b.json",
+            "base_score": 1.0,
+            "base_rank": 2,
+            "evidence_compatibility": 1.0,
+            "independent_source_potential_score": 1.0,
+        },
+    ]
+
+    matrix = MultiAxisEpistemicSelectionShadow().policy_matrix(
+        rows,
+        selected_count=1,
+        base_selected_tasks=["task_a.json"],
+    )
+
+    assert matrix["production_selector_changed"] is False
+    assert matrix["behavioral_integration_applied"] is False
+    assert matrix["policies"]["production_baseline"]["selected_tasks"] == [
+        "task_a.json"
+    ]
+    assert matrix["policies"]["evidence_compatibility_only"][
+        "would_change_production_selection"
+    ] is True
+
+
+def test_provider_discovery_finds_partial_descriptor_provider_not_lineage_authority():
+    report = PreExecutionSourceDescriptorProviderDiscovery().discover()
+
+    assert report["legitimate_provider_found"] is True
+    assert "ValidationLane" in report["legitimate_provider_ids"]
+    assert report["legitimate_lineage_provider_found"] is False
+    assert report["decision_gate"] == (
+        "R2-C_LEGITIMATE_PROVIDER_EXISTS_WITH_USEFUL_COVERAGE_BUT_LOW_DISCRIMINATION"
+    )
+    assert report["route_is_source_lineage"] is False
+    assert report["prediction_grants_epistemic_authority"] is False
+
+
+def test_provider_discovery_rejects_historical_recurrence_as_independence():
+    report = PreExecutionSourceDescriptorProviderDiscovery().discover()
+    rows = {
+        row["provider_id"]: row
+        for row in report["provider_capability_matrix"]
+    }
+
+    historical = rows["ReusableLearnedObjectProvenance"]
+    assert historical["descriptor_fields"]["expected_upstream_lineage"] == (
+        "HISTORICALLY_INFERRED"
+    )
+    assert historical["legitimate_descriptor_provider"] is False
+    assert historical["grants_independence"] is False
+    assert historical["grants_truth"] is False

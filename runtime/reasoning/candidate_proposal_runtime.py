@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.telemetry.route_contribution import ROUTE_LINEAGE_FIELDS
+
 
 class CandidateProposalRuntime:
     """Build a pre-arena ledger of candidate rights, entries, and rejections."""
@@ -186,6 +188,7 @@ class CandidateProposalRuntime:
             "reuse_observation_authority": "OBSERVATION_ONLY",
             "behavioral_authority": "NONE",
         })
+        route_fields = self._route_lineage_fields(candidate, metadata)
         return {
             "source": source,
             "proposal_id": proposal_id,
@@ -198,6 +201,7 @@ class CandidateProposalRuntime:
             "authority": "OBSERVATION_ONLY",
             "behavioral_authority": "NONE",
             "proposal_status": status,
+            **route_fields,
             "intent": self._candidate_field(candidate, "intent") or operation,
             "operation": operation,
             "program": program,
@@ -283,6 +287,23 @@ class CandidateProposalRuntime:
             return {}
         metadata = candidate.get("metadata")
         return dict(metadata) if isinstance(metadata, Mapping) else {}
+
+    def _route_lineage_fields(
+        self,
+        candidate: Any,
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        fields = {}
+        if not isinstance(candidate, Mapping):
+            return fields
+        for field in ROUTE_LINEAGE_FIELDS:
+            value = candidate.get(field)
+            if value is None:
+                value = metadata.get(field)
+            if value is not None:
+                fields[field] = value
+                metadata[field] = value
+        return fields
 
     def _learned_object(self, candidate: Any) -> dict[str, Any]:
         if not isinstance(candidate, Mapping):

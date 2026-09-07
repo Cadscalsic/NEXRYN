@@ -4,6 +4,8 @@
 
 import numpy as np
 
+from core.arc_task_boundary import EvaluationTaskView
+
 from runtime.evaluation.partial_success_engine import PartialSuccessEngine
 
 
@@ -389,6 +391,121 @@ class UnifiedEvaluationEngine:
         )
 
         return result
+
+    # ============================================
+    # EVALUATE TASK VIEW
+    # ============================================
+
+    def evaluate_task_view(
+
+        self,
+
+        evaluation_task_view
+    ):
+
+        if not isinstance(
+            evaluation_task_view,
+            EvaluationTaskView
+        ):
+
+            raise ValueError(
+                "EVALUATION_TASK_VIEW_REQUIRED"
+            )
+
+        results = []
+        evaluated_attempts = []
+
+        for attempt in evaluation_task_view.attempts:
+
+            if attempt.state not in {
+                "FROZEN",
+                "COMMITTED"
+            }:
+
+                raise ValueError(
+                    "PREDICTION_ATTEMPT_NOT_FROZEN"
+                )
+
+            if attempt.attempt_fingerprint != (
+                attempt.expected_fingerprint()
+            ):
+
+                raise ValueError(
+                    "PREDICTION_ATTEMPT_FINGERPRINT_MISMATCH"
+                )
+
+            if attempt.test_index >= len(
+                evaluation_task_view.hidden_test_outputs
+            ):
+
+                raise ValueError(
+                    "HIDDEN_TEST_OUTPUT_INDEX_MISSING"
+                )
+
+            predicted_output = np.array(
+                attempt.prediction
+            )
+
+            target_output = np.array(
+                evaluation_task_view.hidden_test_outputs[
+                    attempt.test_index
+                ]
+            )
+
+            result = self.evaluate(
+                predicted_output,
+                target_output
+            )
+
+            result = {
+                **result,
+                "attempt_id":
+                attempt.attempt_id,
+                "task_id":
+                attempt.task_id,
+                "test_index":
+                attempt.test_index,
+            }
+
+            attempt_report = attempt.as_report()
+            attempt_report[
+                "state"
+            ] = "EVALUATED"
+
+            results.append(
+                result
+            )
+
+            evaluated_attempts.append(
+                attempt_report
+            )
+
+        return {
+
+            "system":
+            "arc_evaluation_task_view_evaluator",
+
+            "evaluation_view_state":
+            "EVALUATED",
+
+            "task_id":
+            evaluation_task_view.task_id,
+
+            "authority":
+            evaluation_task_view.authority,
+
+            "solver_backflow_authority":
+            "NONE",
+
+            "results":
+            results,
+
+            "evaluated_attempts":
+            evaluated_attempts,
+
+            "evaluation_fingerprint":
+            evaluation_task_view.evaluation_fingerprint,
+        }
 
     # ============================================
     # GET HISTORY

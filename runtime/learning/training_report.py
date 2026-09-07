@@ -6,6 +6,7 @@ from runtime.reporting.active_runtime_reachability_audit import (
     build_active_runtime_telemetry_summary,
     build_active_runtime_reachability_audit,
 )
+from runtime.telemetry.route_contribution import compact_route_contribution_summary
 
 
 def build_training_report(
@@ -1424,9 +1425,128 @@ def build_training_report(
             "per_task_report_count": len(audits),
         }
 
+    def aggregate_route_contribution_summary():
+        manifests = []
+        for item in multi_task_results:
+            result = item.get("result", {})
+            if not isinstance(result, dict):
+                continue
+            manifest = (
+                result.get("ROUTE_CONTRIBUTION_MANIFEST")
+                or result.get("route_contribution_manifest")
+            )
+            if isinstance(manifest, dict):
+                manifests.append(manifest)
+        if not manifests:
+            return {}
+
+        summaries = [
+            compact_route_contribution_summary(manifest)
+            for manifest in manifests
+        ]
+
+        def total(key):
+            value = 0
+            for summary in summaries:
+                try:
+                    value += int(summary.get(key) or 0)
+                except (TypeError, ValueError):
+                    pass
+            return value
+
+        executed = total("executed_routes")
+        marginal_executed = total("marginal_routes_executed")
+        marginal_useful = total("marginal_useful_routes")
+        marginal_duplicate_routes = 0
+        for manifest in manifests:
+            aggregate = manifest.get("aggregate_summary")
+            if isinstance(aggregate, dict):
+                marginal_duplicate_routes += int(
+                    aggregate.get("marginal_duplicate_route_count")
+                    or aggregate.get("marginal_routes_duplicate_count")
+                    or 0
+                )
+        attribution_states = {
+            summary.get("attribution_state")
+            for summary in summaries
+            if summary.get("attribution_state")
+        }
+        lineage_states = {
+            summary.get("lineage_state")
+            for summary in summaries
+            if summary.get("lineage_state")
+        }
+        artifact_paths = [
+            summary.get("artifact_path")
+            for summary in summaries
+            if summary.get("artifact_path")
+        ]
+        collection_time = 0.0
+        manifest_size = 0
+        record_count = 0
+        for manifest in manifests:
+            cost = manifest.get("collection_cost")
+            if not isinstance(cost, dict):
+                continue
+            collection_time += float(cost.get("collection_time_seconds") or 0.0)
+            manifest_size += int(cost.get("manifest_size_bytes") or 0)
+            record_count += int(cost.get("record_count") or 0)
+
+        return {
+            "schema_version": "1.0",
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+            "attribution_state": (
+                "ROUTE_ATTRIBUTION_COMPLETE"
+                if attribution_states == {"ROUTE_ATTRIBUTION_COMPLETE"}
+                else (
+                    "ROUTE_ATTRIBUTION_PARTIAL"
+                    if "ROUTE_ATTRIBUTION_PARTIAL" in attribution_states
+                    else "ROUTE_ATTRIBUTION_INSUFFICIENT"
+                )
+            ),
+            "lineage_state": (
+                "ROUTE_LINEAGE_CONTINUITY_VERIFIED"
+                if lineage_states == {"ROUTE_LINEAGE_CONTINUITY_VERIFIED"}
+                else (
+                    "ROUTE_LINEAGE_PARTIAL"
+                    if "ROUTE_LINEAGE_PARTIAL" in lineage_states
+                    else "ROUTE_LINEAGE_BROKEN"
+                )
+            ),
+            "executed_routes": executed,
+            "unique_useful_routes": total("unique_useful_routes"),
+            "duplicate_routes": total("duplicate_routes"),
+            "low_value_routes": total("low_value_routes"),
+            "no_observable_routes": total("no_observable_routes"),
+            "unmeasurable_routes": total("unmeasurable_routes"),
+            "marginal_routes_executed": marginal_executed,
+            "marginal_useful_routes": marginal_useful,
+            "marginal_unique_contribution_rate": (
+                round(marginal_useful / marginal_executed, 4)
+                if marginal_executed
+                else "NOT_MEASURABLE"
+            ),
+            "marginal_redundancy_rate": (
+                round(marginal_duplicate_routes / marginal_executed, 4)
+                if marginal_executed
+                else "NOT_MEASURABLE"
+            ),
+            "artifact_path": "; ".join(artifact_paths) if artifact_paths else None,
+            "artifact_paths": artifact_paths,
+            "telemetry_consumed_by_cognition": False,
+            "collection_cost": {
+                "collection_time_seconds": round(collection_time, 6),
+                "manifest_size_bytes": manifest_size,
+                "record_count": record_count,
+            },
+            "task_manifest_count": len(manifests),
+        }
+
     def aggregate_execution_plan_report():
         reports = []
         canonical_plans = []
+        route_contribution_summary = aggregate_route_contribution_summary()
         for item in multi_task_results:
             result = item.get("result", {})
             if not isinstance(result, dict):
@@ -1954,6 +2074,8 @@ def build_training_report(
                     "runtime_budget_enforcement_report",
                     selected_plan.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
                 ),
+                "ROUTE_CONTRIBUTION_SUMMARY": route_contribution_summary,
+                "route_contribution_summary": route_contribution_summary,
                 "plan_origin": selected_plan.get("plan_origin"),
                 "planning_authority": selected_plan.get("planning_authority"),
                 "temporal_authority_state": selected_plan.get(
@@ -2190,6 +2312,8 @@ def build_training_report(
                 "blocked_nodes": len(blocked_nodes),
                 "deferred_nodes": len(deferred_nodes),
             },
+            "ROUTE_CONTRIBUTION_SUMMARY": route_contribution_summary,
+            "route_contribution_summary": route_contribution_summary,
         }
 
     def aggregate_execution_dispatch_report():
@@ -4568,6 +4692,14 @@ def build_training_report(
         "runtime_budget_enforcement_report": execution_plan_report.get(
             "runtime_budget_enforcement_report",
             execution_plan_report.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT", {}),
+        ),
+        "ROUTE_CONTRIBUTION_SUMMARY": execution_plan_report.get(
+            "ROUTE_CONTRIBUTION_SUMMARY",
+            execution_plan_report.get("route_contribution_summary", {}),
+        ),
+        "route_contribution_summary": execution_plan_report.get(
+            "route_contribution_summary",
+            execution_plan_report.get("ROUTE_CONTRIBUTION_SUMMARY", {}),
         ),
         "RAW_RESULT_APPLICABILITY_REPORT": raw_result_applicability_report,
         "raw_result_applicability_report": dict(raw_result_applicability_report),

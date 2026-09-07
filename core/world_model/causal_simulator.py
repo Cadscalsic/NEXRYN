@@ -176,6 +176,7 @@ class CausalWorldSimulator:
             if isinstance(position_rule, dict)
             else None,
             search_radius=context.get("position_search_radius", 1),
+            runtime_context=context,
         )
         return {
             "system": "position_predictor",

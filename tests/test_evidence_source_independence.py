@@ -1,4 +1,8 @@
-from runtime.epistemic import EvidenceSourceIndependenceEngine
+from runtime.epistemic import (
+    EpistemicSelectionCalibrationDatasetBuilder,
+    EvidenceSourceIndependenceEngine,
+    RealizedEpistemicContributionEngine,
+)
 
 
 def _evidence(
@@ -22,6 +26,7 @@ def _evidence(
         "producer_source_type": producer_source_type,
         "required_evidence": "cross_source_consensus_evidence",
         "evidence_direction": "SUPPORTING",
+        "evidence_acceptance_state": "ACCEPTED",
         "acceptance_authority": "VALIDATION_EVIDENCE_EVALUATOR",
         "truth_authority": "NONE",
     }
@@ -331,3 +336,449 @@ def test_unknown_task_profile_potential_fails_closed():
 
     assert potential["source_novelty_state"] == "UNKNOWN"
     assert potential["selection_authority"] == "NONE"
+
+
+def test_realized_contribution_contract_is_observation_only():
+    contract = RealizedEpistemicContributionEngine().contract()
+
+    assert "canonical_source_identity" in contract["required_fields"]
+    assert "marginal_independent_delta" in contract["required_fields"]
+    assert contract["authority"] == "NONE"
+    assert contract["grants_selection"] is False
+    assert contract["grants_evidence"] is False
+    assert contract["grants_truth"] is False
+    assert contract["grants_independence"] is False
+
+
+def test_real_r1_r2_shape_realizes_dependent_support_without_count_increase():
+    engine = RealizedEpistemicContributionEngine()
+    existing = _evidence(
+        "accepted_r1",
+        producer_operation_id="validation_execution_72adf97745e0",
+        lineage=["r1_r2_shared_source"],
+    )
+    event = _evidence(
+        "accepted_r2",
+        run_id="run_r2",
+        task_id="elite_cognitive_task_20",
+        producer_operation_id="validation_execution_72adf97745e0",
+        lineage=["r1_r2_shared_source"],
+    )
+
+    contribution = engine.assess_event(
+        [existing],
+        event,
+        selection_context={
+            "operational_rank_at_selection": 1,
+            "evidence_compatibility_at_selection": 1.0,
+            "expected_source_descriptor": {"source_lineage_family": "UNKNOWN"},
+            "predicted_source_potential": "UNKNOWN",
+        },
+    )
+
+    assert contribution["evidence_acceptance_state"] == "ACCEPTED"
+    assert contribution["source_relation_to_existing_coverage"] == (
+        "DEPENDENT_ON_EXISTING_COVERAGE"
+    )
+    assert contribution["independent_count_before"] == 1
+    assert contribution["independent_count_after"] == 1
+    assert contribution["marginal_independent_delta"] == 0
+    assert contribution["contribution_class"] == "DEPENDENT_SUPPORT"
+    assert contribution["selection_context_binding"]["realized_epistemic_delta"] == 0
+
+
+def test_positive_control_distinct_canonical_lineage_increments_source_count():
+    engine = RealizedEpistemicContributionEngine()
+    existing = _evidence(
+        "accepted_existing",
+        producer_operation_id="producer_existing",
+        lineage=["existing_lineage"],
+    )
+    distinct = _evidence(
+        "accepted_distinct",
+        producer_operation_id="producer_distinct",
+        producer_component_id="component_distinct",
+        lineage=["distinct_lineage"],
+    )
+
+    contribution = engine.assess_event([existing], distinct)
+
+    assert contribution["independent_count_before"] == 1
+    assert contribution["independent_count_after"] == 2
+    assert contribution["marginal_independent_delta"] == 1
+    assert contribution["contribution_class"] == "NEW_INDEPENDENT_SUPPORT"
+
+
+def test_contradicting_independent_evidence_is_direction_aware():
+    engine = RealizedEpistemicContributionEngine()
+    supporting = _evidence(
+        "accepted_support",
+        producer_operation_id="producer_support",
+        lineage=["support_lineage"],
+    )
+    contradicting = _evidence(
+        "accepted_contradiction",
+        producer_operation_id="producer_contradiction",
+        producer_component_id="component_contradiction",
+        lineage=["contradiction_lineage"],
+    )
+    contradicting["evidence_direction"] = "CONTRADICTING"
+
+    contribution = engine.assess_event([supporting], contradicting)
+
+    assert contribution["independent_count_before"] == 1
+    assert contribution["independent_count_after"] == 1
+    assert contribution["marginal_independent_delta"] == 0
+    assert contribution["contradiction_delta"] == 1
+    assert contribution["contribution_class"] == (
+        "CONTRADICTORY_INDEPENDENT_EVIDENCE"
+    )
+
+
+def test_duplicate_and_dependent_attacks_produce_zero_marginal_delta():
+    engine = RealizedEpistemicContributionEngine()
+    baseline = _evidence(
+        "accepted_base",
+        producer_operation_id="producer_base",
+        lineage=["shared_lineage"],
+    )
+    attacks = [
+        _evidence(
+            "accepted_base",
+            producer_operation_id="producer_duplicate_id",
+            lineage=["other_lineage"],
+        ),
+        _evidence(
+            "accepted_same_source",
+            run_id="run_other",
+            task_id="task_other",
+            producer_operation_id="producer_other",
+            lineage=["shared_lineage"],
+        ),
+        _evidence(
+            "accepted_same_canonical_source",
+            run_id="run_other",
+            task_id="task_other",
+            producer_operation_id="producer_base",
+            lineage=["other_lineage"],
+        ),
+    ]
+
+    contributions = [
+        engine.assess_event([baseline], attack)
+        for attack in attacks
+    ]
+
+    assert [row["marginal_independent_delta"] for row in contributions] == [0, 0, 0]
+    assert contributions[0]["contribution_class"] == "DUPLICATE_EVIDENCE"
+    assert all(
+        row["contribution_class"] in {"DUPLICATE_EVIDENCE", "DEPENDENT_SUPPORT"}
+        for row in contributions
+    )
+
+
+def test_unknown_and_rejected_evidence_do_not_change_source_coverage():
+    engine = RealizedEpistemicContributionEngine()
+    baseline = _evidence(
+        "accepted_base",
+        producer_operation_id="producer_base",
+        lineage=["base_lineage"],
+    )
+    unknown = {
+        "accepted_evidence_id": "accepted_unknown",
+        "claim_id": "claim_a",
+        "source_run_id": "run_unknown",
+        "selected_validation_task_id": "task_unknown",
+        "evidence_direction": "SUPPORTING",
+        "evidence_acceptance_state": "ACCEPTED",
+    }
+    rejected = _evidence(
+        "accepted_rejected",
+        producer_operation_id="producer_rejected",
+        lineage=["rejected_lineage"],
+    )
+    rejected["evidence_acceptance_state"] = "REJECTED"
+
+    unknown_contribution = engine.assess_event([baseline], unknown)
+    rejected_contribution = engine.assess_event([baseline], rejected)
+
+    assert unknown_contribution["contribution_class"] == "UNKNOWN_PROVENANCE"
+    assert unknown_contribution["marginal_independent_delta"] == 0
+    assert rejected_contribution["contribution_class"] == "REJECTED_EVIDENCE"
+    assert rejected_contribution["independent_count_before"] == 1
+    assert rejected_contribution["independent_count_after"] == 1
+
+
+def test_prediction_vs_realization_and_quality_metrics_are_observational():
+    engine = RealizedEpistemicContributionEngine()
+    existing = _evidence(
+        "accepted_existing",
+        producer_operation_id="producer_existing",
+        lineage=["existing_lineage"],
+    )
+    dependent = _evidence(
+        "accepted_dependent",
+        producer_operation_id="producer_existing",
+        lineage=["other_lineage"],
+    )
+    novel = _evidence(
+        "accepted_novel",
+        producer_operation_id="producer_novel",
+        producer_component_id="component_novel",
+        lineage=["novel_lineage"],
+    )
+
+    report = engine.batch_report(
+        [dependent, novel],
+        initial_accepted_evidence=[existing],
+        selection_context_by_evidence_id={
+            "accepted_dependent": {
+                "predicted_source_potential": "UNKNOWN",
+                "operational_rank_at_selection": 3,
+                "evidence_compatibility_at_selection": 0.82,
+            },
+            "accepted_novel": {
+                "predicted_source_potential": "HIGH_POTENTIAL",
+                "operational_rank_at_selection": 2,
+                "evidence_compatibility_at_selection": 0.91,
+            },
+        },
+    )
+
+    classifications = [
+        row["classification"]
+        for row in report["prediction_vs_realization"]
+    ]
+    assert classifications == [
+        "PREDICTED_UNKNOWN_REALIZED_DEPENDENT",
+        "PREDICTED_NOVEL_REALIZED_NOVEL",
+    ]
+    assert report["quality_metrics"]["accepted_evidence_count"] == 2
+    assert report["quality_metrics"]["independent_contribution_count"] == 1
+    assert report["quality_metrics"]["dependent_support_count"] == 1
+    assert report["quality_metrics"]["independent_yield"] == 0.5
+    assert report["decision_gate"] == (
+        "R4-D_REALIZED_CONTRIBUTION_OBSERVABLE_AND_SELECTION_CONTEXT_BOUND"
+    )
+    assert report["truth_authority"] == "NONE"
+
+
+def test_calibration_observation_contract_has_no_authority():
+    contract = EpistemicSelectionCalibrationDatasetBuilder().contract()
+
+    assert "observation_id" in contract["required_fields"]
+    assert "predicted_source_potential" in contract["pre_execution_fields"]
+    assert "marginal_independent_delta" in contract["post_execution_fields"]
+    assert contract["authority"] == "NONE"
+    assert contract["selection_authority"] == "NONE"
+    assert contract["truth_authority"] == "NONE"
+    assert contract["budget_authority"] == "NONE"
+
+
+def test_calibration_observation_identity_deduplicates_same_execution_event():
+    contribution_engine = RealizedEpistemicContributionEngine()
+    builder = EpistemicSelectionCalibrationDatasetBuilder()
+    existing = _evidence(
+        "accepted_existing",
+        producer_operation_id="producer_existing",
+        lineage=["shared"],
+    )
+    event = _evidence(
+        "accepted_dependent",
+        producer_operation_id="producer_other",
+        lineage=["shared"],
+    )
+    contribution = contribution_engine.assess_event(
+        [existing],
+        event,
+        selection_context={
+            "operational_rank_at_selection": 1,
+            "evidence_compatibility_at_selection": "STRONG_MATCH",
+            "predicted_source_potential": "UNKNOWN",
+        },
+    )
+    first = builder.observation(contribution)
+    second = builder.observation(contribution)
+
+    dataset = builder.dataset([first, second])
+
+    assert first["observation_id"] == second["observation_id"]
+    assert dataset["dataset_size"] == 1
+    assert dataset["duplicate_observation_count"] == 1
+
+
+def test_calibration_ready_observation_preserves_prediction_realization_boundary():
+    contribution_engine = RealizedEpistemicContributionEngine()
+    builder = EpistemicSelectionCalibrationDatasetBuilder()
+    existing = _evidence(
+        "accepted_existing",
+        producer_operation_id="producer_existing",
+        lineage=["shared"],
+    )
+    event = _evidence(
+        "accepted_dependent",
+        producer_operation_id="producer_other",
+        lineage=["shared"],
+    )
+    contribution = contribution_engine.assess_event(
+        [existing],
+        event,
+        selection_context={
+            "operational_rank_at_selection": 3,
+            "operational_score": 1026.7,
+            "evidence_compatibility_at_selection": "STRONG_MATCH",
+            "expected_source_descriptor": {"source_lineage_family": "UNKNOWN"},
+            "predicted_source_potential": "UNKNOWN",
+            "selection_reason": ["epistemic_shadow_signal_observed"],
+            "repetition_count": 2,
+        },
+    )
+    observation = builder.observation(contribution)
+
+    assert observation["quality"]["observation_completeness"] == (
+        "CALIBRATION_READY"
+    )
+    assert observation["quality"]["historical_policy_class"] == (
+        "FULLY_PROVENANCE_NATIVE"
+    )
+    assert observation["pre_execution"]["predicted_source_potential"] == "UNKNOWN"
+    assert observation["post_execution"]["realized_contribution_class"] == (
+        "DEPENDENT_SUPPORT"
+    )
+    assert observation["authority"] == "NONE"
+
+
+def test_partial_historical_observation_is_not_calibration_ready():
+    builder = EpistemicSelectionCalibrationDatasetBuilder()
+    contribution = {
+        "claim_id": "claim_a",
+        "task_id": "task_partial",
+        "source_run_id": "run_partial",
+        "accepted_evidence_id": "accepted_partial",
+        "canonical_source_identity": "UNKNOWN",
+        "source_relation_to_existing_coverage": "UNKNOWN_PROVENANCE",
+        "contribution_class": "UNKNOWN_PROVENANCE",
+        "independent_count_before": 1,
+        "independent_count_after": 1,
+        "marginal_independent_delta": 0,
+        "contradiction_delta": 0,
+        "evidence_acceptance_state": "ACCEPTED",
+        "provenance_completeness": "PARTIAL",
+    }
+
+    observation = builder.observation(contribution)
+
+    assert observation["quality"]["observation_completeness"] == "PARTIAL"
+    assert observation["quality"]["historical_policy_class"] == "PARTIAL_HISTORICAL"
+
+
+def test_pre_e1_unbound_observation_policy_is_preserved():
+    builder = EpistemicSelectionCalibrationDatasetBuilder()
+    contribution = {
+        "claim_id": "claim_a",
+        "task_id": "task_pre_e1",
+        "source_run_id": "run_pre_e1",
+        "accepted_evidence_id": "accepted_pre_e1",
+        "canonical_source_identity": "UNKNOWN",
+        "source_relation_to_existing_coverage": "UNKNOWN_PROVENANCE",
+        "contribution_class": "UNKNOWN_PROVENANCE",
+        "independent_count_before": 0,
+        "independent_count_after": 0,
+        "marginal_independent_delta": 0,
+        "contradiction_delta": 0,
+        "evidence_acceptance_state": "ACCEPTED",
+        "provenance_completeness": "PARTIAL",
+        "claim_evidence_binding_state": "PRE_E1_UNBOUND",
+    }
+
+    observation = builder.observation(contribution)
+
+    assert observation["quality"]["historical_policy_class"] == "PRE_E1_UNBOUND"
+    assert observation["quality"]["observation_completeness"] == "PARTIAL"
+
+
+def test_calibration_dataset_reports_low_diversity_without_predictive_claim():
+    contribution_engine = RealizedEpistemicContributionEngine()
+    builder = EpistemicSelectionCalibrationDatasetBuilder()
+    existing = _evidence(
+        "accepted_existing",
+        producer_operation_id="producer_existing",
+        lineage=["shared"],
+    )
+    event = _evidence(
+        "accepted_dependent",
+        producer_operation_id="producer_other",
+        lineage=["shared"],
+    )
+    contribution = contribution_engine.assess_event(
+        [existing],
+        event,
+        selection_context={
+            "operational_rank_at_selection": 1,
+            "evidence_compatibility_at_selection": "EXACT_MATCH",
+            "predicted_source_potential": "UNKNOWN",
+            "repetition_count": 0,
+        },
+    )
+    observation = builder.observation(contribution)
+
+    dataset = builder.dataset([observation])
+
+    assert dataset["calibration_ready_count"] == 1
+    assert dataset["contribution_class_distribution"]["DEPENDENT_SUPPORT"] == 1
+    assert dataset["prediction_vs_realization_matrix"]["UNKNOWN"][
+        "DEPENDENT_SUPPORT"
+    ] == 1
+    assert dataset["evidence_compatibility_calibration"]["EXACT_MATCH"][
+        "dependent_support_count"
+    ] == 1
+    assert dataset["repetition_value"]["FIRST_SELECTION"][
+        "dependent_support_count"
+    ] == 1
+    assert dataset["data_sufficiency_level"] == "P0"
+    assert dataset["decision_gate"] == (
+        "R5-B_CALIBRATION_DATASET_EXISTS_BUT_LOW_DIVERSITY"
+    )
+    assert dataset["predictive_signal_status"] == (
+        "INSUFFICIENT_FOR_PREDICTIVE_CLAIM"
+    )
+    assert dataset["selection_authority"] == "NONE"
+
+
+def test_calibration_dataset_reaches_p1_only_after_five_ready_observations():
+    contribution_engine = RealizedEpistemicContributionEngine()
+    builder = EpistemicSelectionCalibrationDatasetBuilder()
+    existing = _evidence(
+        "accepted_existing",
+        producer_operation_id="producer_existing",
+        lineage=["shared"],
+    )
+    observations = []
+    for index in range(5):
+        event = _evidence(
+            f"accepted_dependent_{index}",
+            producer_operation_id=f"producer_dependent_{index}",
+            lineage=["shared"],
+        )
+        contribution = contribution_engine.assess_event(
+            [existing],
+            event,
+            selection_context={
+                "operational_rank_at_selection": index + 1,
+                "evidence_compatibility_at_selection": "STRONG_MATCH",
+                "predicted_source_potential": "UNKNOWN",
+            },
+        )
+        observations.append(builder.observation(contribution))
+
+    dataset = builder.dataset(observations)
+
+    assert dataset["dataset_size"] == 5
+    assert dataset["calibration_ready_count"] == 5
+    assert dataset["data_sufficiency_level"] == "P1"
+    assert dataset["decision_gate"] == (
+        "R5-B_CALIBRATION_DATASET_EXISTS_BUT_LOW_DIVERSITY"
+    )
+    assert dataset["calibration_metrics"]["conditional_probabilities"][
+        "P_independent_given_predicted_source_potential"
+    ] == "UNAVAILABLE"

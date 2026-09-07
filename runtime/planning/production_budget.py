@@ -1,0 +1,12 @@
+"""Production runtime budget constants for governed adaptive execution."""
+
+PRODUCTION_MAX_ACTIVE_ROUTES = 6
+PRODUCTION_MAX_REASONING_DEPTH = 2
+PRODUCTION_MAX_DEPENDENCY_DEPTH = 2
+
+
+__all__ = [
+    "PRODUCTION_MAX_ACTIVE_ROUTES",
+    "PRODUCTION_MAX_REASONING_DEPTH",
+    "PRODUCTION_MAX_DEPENDENCY_DEPTH",
+]

@@ -121,6 +121,7 @@ HUMAN_SECTION_ORDER = [
 
 HUMAN_REPORT_CHARACTER_LIMIT = None
 HUMAN_REPORT_TRUNCATION_ENABLED = False
+HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION = "1.0"
 
 HUMAN_REPORT_MEASUREMENT_CONTRACT = {
     "schema_version": "1.0",
@@ -177,10 +178,12 @@ class DeterministicFinalReportRenderer:
         self.console_budget_chars = int(console_budget_chars or 160000)
         self.metrics = self._empty_metrics()
         self._last_render_measurement: dict[str, Any] = {}
+        self._last_render_completeness: dict[str, Any] = {}
         self._last_persistence_measurement: dict[str, Any] = {}
         self._last_emission_measurement: dict[str, Any] = {}
         self._last_detached_receipt: dict[str, Any] = {}
         self._last_human_report_artifact_path: Path | None = None
+        self._persistence_requested_for_current_render = False
 
     def render(
         self,
@@ -202,6 +205,9 @@ class DeterministicFinalReportRenderer:
             self.console_budget_chars
             if console_budget_chars is None
             else int(console_budget_chars)
+        )
+        self._persistence_requested_for_current_render = bool(
+            write_artifact and artifact_directory
         )
         if report_level == "minimal":
             pre_final_report_diagnostics.phase_enter(
@@ -393,12 +399,13 @@ class DeterministicFinalReportRenderer:
             "CANONICAL_RENDER_STATE",
             canonical,
         )
-        full_report = self._render_human_report(canonical)
-        self._last_render_measurement = self._measure_report_payload(full_report)
+        self._last_render_completeness = {}
         self._last_persistence_measurement = self._not_verified_persistence_measurement()
         self._last_emission_measurement = self._not_verified_emission_measurement()
         self._last_detached_receipt = {}
         self._last_human_report_artifact_path = None
+        full_report = self._render_human_report(canonical)
+        self._last_render_measurement = self._measure_report_payload(full_report)
         pre_final_report_diagnostics.mark(
             "REPORT_FULL_STRING_CONSTRUCTED",
             full_report_chars=len(full_report),
@@ -477,8 +484,23 @@ class DeterministicFinalReportRenderer:
             rendered_chars=len(payload_text),
             rendered_bytes=len(payload_bytes),
         )
-        stream.write(payload_text)
-        stream.flush()
+        try:
+            stream.write(payload_text)
+            stream.flush()
+        except Exception:
+            self._last_emission_measurement = self._measure_emitted_payload(
+                payload_text,
+                write_completed=False,
+            )
+            self.metrics.update({
+                **self._measurement_metrics(
+                    self._last_render_measurement,
+                    self._last_persistence_measurement,
+                    self._last_emission_measurement,
+                    self._last_detached_receipt,
+                ),
+            })
+            raise
         self._last_emission_measurement = self._measure_emitted_payload(
             payload_text,
             write_completed=True,
@@ -954,6 +976,7 @@ class DeterministicFinalReportRenderer:
             ("EVIDENCE LIFECYCLE", self._render_human_evidence_lifecycle),
             ("EXECUTION PLAN REPORT", self._render_human_execution_plan_report),
             ("ACTIVE RUNTIME REACHABILITY", self._render_human_active_runtime_reachability),
+            ("NATURAL PRODUCTION AUTHORITY HANDOFF", self._render_natural_production_handoff),
             ("ENGINEERING CONCLUSION", self._render_human_engineering_conclusion),
             ("CONSTITUTIONAL BOUNDARY", self._render_human_constitutional_boundary),
         ]
@@ -1756,11 +1779,25 @@ class DeterministicFinalReportRenderer:
             self._last_persistence_measurement,
             self._last_emission_measurement,
         )
+        completeness = {
+            **self._last_render_completeness,
+            **self._transport_completeness_states(
+                self._last_persistence_measurement,
+                self._last_emission_measurement,
+            ),
+        }
         receipt = {
             "receipt_schema_version": "1.0",
             "measurement_contract_version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "completeness_contract_version": HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
             "receipt_scope": "DETACHED_OUTSIDE_HUMAN_REPORT_ENVELOPE",
             "receipt_created_after_emission": self._last_emission_measurement.get("write_completed") is True,
+            "canonical_completeness_state": completeness["Canonical Completeness State"],
+            "human_projection_completeness_state": completeness["Human Projection Completeness State"],
+            "render_completeness_state": completeness["Render Completeness State"],
+            "persistence_completeness_state": completeness["Persistence Completeness State"],
+            "emission_completeness_state": completeness["Emission Completeness State"],
+            "delivery_completeness_state": completeness["Delivery Completeness State"],
             "canonical_body": self._last_render_measurement.get("canonical_body"),
             "persisted_artifact": self._last_persistence_measurement,
             "emitted_payload": self._last_emission_measurement,
@@ -1829,8 +1866,22 @@ class DeterministicFinalReportRenderer:
             emission_measurement,
         )
         receipt_integrity = receipt.get("receipt_integrity") if receipt else "NOT_AVAILABLE"
+        completeness = {
+            **self._last_render_completeness,
+            **self._transport_completeness_states(
+                persistence_measurement,
+                emission_measurement,
+            ),
+        }
         return {
             "human_report_measurement_contract_version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "human_report_completeness_contract_version": HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
+            "human_report_canonical_completeness_state": completeness["Canonical Completeness State"],
+            "human_report_projection_completeness_state": completeness["Human Projection Completeness State"],
+            "human_report_render_completeness_state": completeness["Render Completeness State"],
+            "human_report_persistence_completeness_state": completeness["Persistence Completeness State"],
+            "human_report_emission_completeness_state": completeness["Emission Completeness State"],
+            "human_report_delivery_completeness_state": completeness["Delivery Completeness State"],
             "human_report_canonical_encoding": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_encoding"],
             "human_report_canonical_line_ending": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_line_ending"],
             "human_report_unicode_normalization": HUMAN_REPORT_MEASUREMENT_CONTRACT["unicode_normalization"],
@@ -2111,6 +2162,21 @@ class DeterministicFinalReportRenderer:
             usable=self._usable_budget_report,
         )
         budget_report = budget_report if isinstance(budget_report, dict) else {}
+        route_contribution_summary = self._first_available_report_dict(
+            state,
+            training_report,
+            source,
+            keys=(
+                "ROUTE_CONTRIBUTION_SUMMARY",
+                "route_contribution_summary",
+            ),
+            usable=lambda value: isinstance(value, dict),
+        )
+        route_contribution_summary = (
+            route_contribution_summary
+            if isinstance(route_contribution_summary, dict)
+            else {}
+        )
         canonical_bound = (
             bool(source.get("execution_plan_id"))
             and bool(source.get("execution_plan_schema_version"))
@@ -2202,6 +2268,21 @@ class DeterministicFinalReportRenderer:
             f"Prevented Overrun State: {self._first_meaningful(budget_report.get('prevented_overrun_state'), default='NOT_PRODUCED')}",
             f"Realized Overrun State: {self._first_meaningful(budget_report.get('realized_overrun_state'), default='NOT_PRODUCED')}",
             f"Violation Reason: {self._first_meaningful(budget_report.get('violation_reason'), default='NONE')}",
+            "ROUTE CONTRIBUTION TELEMETRY",
+            f"Attribution State: {self._first_meaningful(route_contribution_summary.get('attribution_state'), default='ROUTE_ATTRIBUTION_INSUFFICIENT')}",
+            f"Lineage State: {self._first_meaningful(route_contribution_summary.get('lineage_state'), default='ROUTE_LINEAGE_BROKEN')}",
+            f"Executed Routes: {self._first_meaningful(route_contribution_summary.get('executed_routes'), default=0)}",
+            f"Unique Useful Routes: {self._first_meaningful(route_contribution_summary.get('unique_useful_routes'), default=0)}",
+            f"Duplicate Routes: {self._first_meaningful(route_contribution_summary.get('duplicate_routes'), default=0)}",
+            f"Low-Value Routes: {self._first_meaningful(route_contribution_summary.get('low_value_routes'), default=0)}",
+            f"No Observable Routes: {self._first_meaningful(route_contribution_summary.get('no_observable_routes'), default=0)}",
+            f"Unmeasurable Routes: {self._first_meaningful(route_contribution_summary.get('unmeasurable_routes'), default=0)}",
+            f"Marginal Routes Executed: {self._first_meaningful(route_contribution_summary.get('marginal_routes_executed'), default=0)}",
+            f"Marginal Useful Routes: {self._first_meaningful(route_contribution_summary.get('marginal_useful_routes'), default=0)}",
+            f"Marginal Unique Contribution Rate: {self._first_meaningful(route_contribution_summary.get('marginal_unique_contribution_rate'), default='NOT_MEASURABLE')}",
+            f"Marginal Redundancy Rate: {self._first_meaningful(route_contribution_summary.get('marginal_redundancy_rate'), default='NOT_MEASURABLE')}",
+            f"Telemetry Consumed By Cognition: {self._value(route_contribution_summary.get('telemetry_consumed_by_cognition') is True)}",
+            f"Route Manifest Artifact: {self._first_meaningful(route_contribution_summary.get('artifact_path'), default='NOT_PERSISTED')}",
         ])
 
     def _render_human_active_runtime_reachability(self, canonical: dict[str, Any]) -> str:
@@ -2492,6 +2573,142 @@ class DeterministicFinalReportRenderer:
             *attribution_lines,
         ])
 
+    def _completeness_states(
+        self,
+        *,
+        render_complete: bool,
+        binding: dict[str, Any],
+        canonical_body: dict[str, Any],
+        persistence_measurement: dict[str, Any] | None,
+        emission_measurement: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        canonical_state = self._canonical_completeness_state(binding)
+        projection_state = self._projection_completeness_state(binding)
+        render_state = self._render_completeness_state(
+            render_complete=render_complete,
+            projection_state=projection_state,
+            canonical_body=canonical_body,
+        )
+        transport_states = self._transport_completeness_states(
+            persistence_measurement,
+            emission_measurement,
+        )
+        return {
+            "Canonical Completeness State": canonical_state,
+            "Human Projection Completeness State": projection_state,
+            "Render Completeness State": render_state,
+            **transport_states,
+        }
+
+    def _canonical_completeness_state(self, binding: dict[str, Any]) -> str:
+        integrity = self._value(
+            binding.get("Human Report Canonical Binding Integrity"),
+            "INCOMPLETE",
+        )
+        if integrity == "CONFLICTED":
+            return "CANONICAL_CONFLICTED"
+        if integrity != "COMPLETE":
+            return "CANONICAL_INCOMPLETE"
+        if int(binding.get("Human Report Binding Conflict Count", 0) or 0) > 0:
+            return "CANONICAL_CONFLICTED"
+        if (
+            int(binding.get("Human Report Unbound Required Field Count", 0) or 0) > 0
+            or int(binding.get("Human Report Expected Missing Count", 0) or 0) > 0
+        ):
+            return "CANONICAL_INCOMPLETE"
+        return "CANONICAL_COMPLETE"
+
+    def _projection_completeness_state(self, binding: dict[str, Any]) -> str:
+        if self._canonical_completeness_state(binding) == "CANONICAL_CONFLICTED":
+            return "PROJECTION_INCOMPLETE"
+        if (
+            int(binding.get("Human Report Unbound Required Field Count", 0) or 0) > 0
+            or int(binding.get("Human Report Expected Missing Count", 0) or 0) > 0
+            or int(binding.get("Human Report Binding Conflict Count", 0) or 0) > 0
+        ):
+            return "PROJECTION_INCOMPLETE"
+        if self._value(
+            binding.get("Human Report Semantic Completeness"),
+            "INCOMPLETE",
+        ) != "COMPLETE":
+            return "PROJECTION_INCOMPLETE"
+        return "PROJECTION_COMPLETE"
+
+    def _render_completeness_state(
+        self,
+        *,
+        render_complete: bool,
+        projection_state: str,
+        canonical_body: dict[str, Any],
+    ) -> str:
+        if canonical_body.get("measurement_state") not in {None, "VERIFIED"}:
+            return "RENDER_INVALID"
+        if not render_complete:
+            return "RENDER_INVALID"
+        if projection_state != "PROJECTION_COMPLETE":
+            return "RENDER_INCOMPLETE"
+        return "RENDER_COMPLETE"
+
+    def _transport_completeness_states(
+        self,
+        persistence_measurement: dict[str, Any] | None,
+        emission_measurement: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        return {
+            "Persistence Completeness State": (
+                self._persistence_completeness_state(persistence_measurement)
+            ),
+            "Emission Completeness State": (
+                self._emission_completeness_state(emission_measurement)
+            ),
+            "Delivery Completeness State": "DELIVERY_NOT_VERIFIED",
+        }
+
+    def _persistence_completeness_state(
+        self,
+        measurement: dict[str, Any] | None,
+    ) -> str:
+        if not measurement:
+            if self._persistence_requested_for_current_render:
+                return "PERSISTENCE_NOT_VERIFIED"
+            return "PERSISTENCE_NOT_REQUESTED"
+        if measurement.get("measurement_boundary") == "NO_ARTIFACT_WRITTEN":
+            return "PERSISTENCE_NOT_REQUESTED"
+        if measurement.get("integrity_state") == "FAILED":
+            return "PERSISTENCE_FAILED"
+        if (
+            measurement.get("integrity_state") == "VERIFIED"
+            and measurement.get("measurement_state") == "VERIFIED"
+            and measurement.get("readback_performed") is True
+            and measurement.get("byte_count") is not None
+            and measurement.get("fingerprint")
+        ):
+            return "PERSISTENCE_VERIFIED"
+        return "PERSISTENCE_NOT_VERIFIED"
+
+    def _emission_completeness_state(
+        self,
+        measurement: dict[str, Any] | None,
+    ) -> str:
+        if not measurement:
+            return "EMISSION_NOT_ATTEMPTED"
+        if measurement.get("measurement_boundary") == "EMISSION_NOT_ATTEMPTED":
+            return "EMISSION_NOT_ATTEMPTED"
+        if measurement.get("write_attempted") and not measurement.get("write_completed"):
+            return "EMISSION_FAILED"
+        if measurement.get("integrity_state") == "FAILED":
+            return "EMISSION_FAILED"
+        if (
+            measurement.get("integrity_state") == "VERIFIED"
+            and measurement.get("measurement_state") == "VERIFIED"
+            and measurement.get("write_completed") is True
+            and measurement.get("payload_independently_measured") is True
+            and measurement.get("byte_count") is not None
+            and measurement.get("fingerprint")
+        ):
+            return "EMISSION_VERIFIED"
+        return "EMISSION_NOT_VERIFIED"
+
     def _human_report_integrity(
         self,
         persisted_text: str,
@@ -2526,6 +2743,7 @@ class DeterministicFinalReportRenderer:
         if missing_sections:
             failures.append("selected_sections_missing:" + ",".join(missing_sections))
         complete = not failures
+        binding_supplied = binding is not None
         binding = binding or {}
         measurement = self._measure_report_payload(persisted_text)
         canonical_body = measurement["canonical_body"]
@@ -2537,11 +2755,26 @@ class DeterministicFinalReportRenderer:
             binding.get("Human Report Semantic Completeness"),
             "INCOMPLETE",
         )
+        completeness = self._completeness_states(
+            render_complete=complete,
+            binding=binding,
+            canonical_body=canonical_body,
+            persistence_measurement=None,
+            emission_measurement=None,
+        )
+        if binding_supplied:
+            self._last_render_completeness = dict(completeness)
         return {
             "Human Report Generated": True,
             "Human Report Complete": complete,
+            "Human Report Completeness Contract Version": HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
+            **completeness,
+            "Legacy Human Report Integrity State": "COMPLETE" if complete else "INCOMPLETE",
+            "Legacy Integrity Interpretation": "selected_human_report_content_preserved",
+            "Legacy Compatibility Field": "Human Report Integrity State",
             "Human Report Structural Integrity": "COMPLETE" if complete else "INCOMPLETE",
             "Human Report Semantic Completeness": semantic_completeness,
+            "Human Report Semantic Completeness Meaning": "required_human_projection_fields_resolved",
             "Human Report Canonical Body Integrity": canonical_body["measurement_state"],
             "Human Report Persistence Integrity": "NOT_VERIFIED",
             "Human Report Emission Integrity": "NOT_VERIFIED",
@@ -2816,6 +3049,7 @@ class DeterministicFinalReportRenderer:
             self._render_evidence_generation_report(canonical),
             self._render_counterfactual_reasoning(canonical),
             self._render_executable_intelligence(canonical),
+            self._render_natural_production_handoff(canonical),
             self._render_search_quality(canonical),
             self._render_knowledge_pipeline(canonical),
             self._render_system_health(canonical),
@@ -7973,6 +8207,100 @@ class DeterministicFinalReportRenderer:
                     f"evidence={self._value(row.get('evidence'))}"
                 )
         return self._section("COUNTERFACTUAL REASONING REPORT", lines)
+
+    def _render_natural_production_handoff(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        trace = self._first_dict(
+            state,
+            "NATURAL_PRODUCTION_HANDOFF_TRACE",
+            "natural_production_handoff_trace",
+        )
+        if not trace:
+            executable = self._first_dict(
+                state,
+                "EXECUTABLE_INTELLIGENCE_REPORT",
+                "executable_intelligence_report",
+            )
+            if not executable:
+                executable = self._first_dict(
+                    performance,
+                    "EXECUTABLE_INTELLIGENCE_REPORT",
+                    "executable_intelligence_report",
+                )
+            trace = self._first_dict(
+                executable,
+                "NATURAL_PRODUCTION_HANDOFF_TRACE",
+                "natural_production_handoff_trace",
+            )
+        if not trace:
+            production = self._first_dict(
+                state,
+                "PRODUCTION_EXECUTION_RESULT",
+                "production_execution_result",
+            )
+            trace = self._first_dict(
+                production,
+                "NATURAL_PRODUCTION_HANDOFF_TRACE",
+                "natural_production_handoff_trace",
+            )
+        if not trace:
+            return self._section("NATURAL PRODUCTION AUTHORITY HANDOFF", [
+                "Phase-3 State: Not produced in this run",
+                "Delivery Authority: Not produced in this run",
+            ])
+        lines = [
+            f"Phase-3 State: {self._value(trace.get('phase_3_state'))}",
+            f"Run Id: {self._value(trace.get('run_id'))}",
+            f"Task Id: {self._value(trace.get('task_id'))}",
+            f"Candidate Generated: {self._value(trace.get('candidate_generated'))}",
+            f"Candidate Id: {self._value(trace.get('candidate_id'))}",
+            f"Candidate Source: {self._value(trace.get('candidate_source'))}",
+            f"Candidate Materialized: {self._value(trace.get('materialized'))}",
+            f"Sandbox Validation: {self._value(trace.get('sandbox_validation_state'))}",
+            f"Qualification: {self._value(trace.get('qualification_state'))}",
+            f"Arena Reached: {self._value(trace.get('arena_reached'))}",
+            f"Arena Decision: {self._value(trace.get('arena_decision'))}",
+            f"Safe Winner Selected: {self._value(trace.get('safe_winner_selected'))}",
+            f"Execution Grant Expected: {self._value(trace.get('grant_expected'))}",
+            f"Execution Grant Issued: {self._value(trace.get('grant_boundary_reached'))}",
+            f"Grant Id: {self._value(trace.get('grant_id'))}",
+            "Candidate Budget Admission Expected: "
+            f"{self._value(trace.get('candidate_budget_admission_expected'))}",
+            "Candidate Budget Admission State: "
+            f"{self._value(trace.get('budget_admission_state'))}",
+            "Production Executor Expected: "
+            f"{self._value(trace.get('production_executor_expected'))}",
+            "Production Executor Reached: "
+            f"{self._value(trace.get('production_executor_reached'))}",
+            "Underlying Executor Called: "
+            f"{self._value(trace.get('underlying_executor_called'))}",
+            "Real Execution Performed: "
+            f"{self._value(trace.get('real_execution_performed'))}",
+            "Outcome Provenance State: "
+            f"{self._value(trace.get('outcome_provenance_state'))}",
+            "Candidate Lineage State: "
+            f"{self._value(trace.get('candidate_lineage_state'))}",
+            "First Blocking Boundary: "
+            f"{self._value(trace.get('first_blocked_boundary'))}",
+            f"Blocking Reason: {self._value(trace.get('blocking_reason'))}",
+            "Highest Contract-Proven Level: "
+            f"{self._value(trace.get('highest_contract_proven_level'))}",
+            "Highest Natural Runtime Level: "
+            f"{self._value(trace.get('highest_natural_runtime_level'))}",
+            "Synthetic Assistance Used: "
+            f"{self._value(trace.get('synthetic_assistance_used'))}",
+            f"Test Fixture Used: {self._value(trace.get('test_fixture_used'))}",
+            f"Manual Grant Issuance: {self._value(trace.get('manual_grant_issuance'))}",
+            "Manual Executor Invocation: "
+            f"{self._value(trace.get('manual_executor_invocation'))}",
+            "Unauthorized Downstream Activity: "
+            f"{self._value(trace.get('unauthorized_downstream_activity'))}",
+            f"Reachability Gap: {self._value(trace.get('reachability_gap'))}",
+        ]
+        return self._section("NATURAL PRODUCTION AUTHORITY HANDOFF", lines)
 
     def _render_executable_intelligence(self, canonical: dict[str, Any]) -> str:
         if canonical["report_level"] == "minimal":

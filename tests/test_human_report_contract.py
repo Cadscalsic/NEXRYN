@@ -6,6 +6,7 @@ from runtime.reporting.final_report_renderer import (
     REPORT_BEGIN_MARKER,
     REPORT_END_MARKER,
     DeterministicFinalReportRenderer,
+    HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
     HUMAN_REPORT_MEASUREMENT_CONTRACT,
 )
 
@@ -142,6 +143,14 @@ def test_human_report_excludes_machine_bulk_and_trace():
     assert "Not Available" not in report
     assert "Human Report Canonical Binding Integrity: COMPLETE" in report
     assert "Human Report Semantic Completeness: COMPLETE" in report
+    assert "Human Report Completeness Contract Version: 1.0" in report
+    assert "Canonical Completeness State: CANONICAL_COMPLETE" in report
+    assert "Human Projection Completeness State: PROJECTION_COMPLETE" in report
+    assert "Render Completeness State: RENDER_COMPLETE" in report
+    assert "Persistence Completeness State: PERSISTENCE_NOT_REQUESTED" in report
+    assert "Emission Completeness State: EMISSION_NOT_ATTEMPTED" in report
+    assert "Delivery Completeness State: DELIVERY_NOT_VERIFIED" in report
+    assert "Legacy Integrity Interpretation: selected_human_report_content_preserved" in report
     assert "Human Report Generic Unavailable Value Count: 0" in report
 
 
@@ -171,6 +180,9 @@ def test_human_report_detects_canonical_source_conflict():
 
     assert "Run Id: Canonical source conflict" in report
     assert "Human Report Canonical Binding Integrity: CONFLICTED" in report
+    assert "Canonical Completeness State: CANONICAL_CONFLICTED" in report
+    assert "Human Projection Completeness State: PROJECTION_INCOMPLETE" in report
+    assert "Render Completeness State: RENDER_INCOMPLETE" in report
     assert "Human Report Semantic Completeness: INCOMPLETE" in report
     assert "Human Report Binding Conflict Count: 1" in report
 
@@ -293,6 +305,8 @@ def test_validation_applicable_missing_target_operation_stays_expected_missing()
 
     assert "Target Operation: Expected artifact missing" in report
     assert "Human Report Expected Missing Count: 1" in report
+    assert "Canonical Completeness State: CANONICAL_INCOMPLETE" in report
+    assert "Human Projection Completeness State: PROJECTION_INCOMPLETE" in report
 
 
 def test_applicable_arena_report_without_target_operation_stays_expected_missing():
@@ -434,6 +448,13 @@ def test_persistence_and_emission_preserve_complete_human_report(tmp_path):
     assert artifact == report
     assert stream.getvalue().rstrip("\n") == report.rstrip("\n")
     assert renderer.report()["human_report_persistence_matches_emission"] is True
+    assert renderer.report()["human_report_completeness_contract_version"] == "1.0"
+    assert renderer.report()["human_report_canonical_completeness_state"] == "CANONICAL_COMPLETE"
+    assert renderer.report()["human_report_projection_completeness_state"] == "PROJECTION_COMPLETE"
+    assert renderer.report()["human_report_render_completeness_state"] == "RENDER_COMPLETE"
+    assert renderer.report()["human_report_persistence_completeness_state"] == "PERSISTENCE_VERIFIED"
+    assert renderer.report()["human_report_emission_completeness_state"] == "EMISSION_VERIFIED"
+    assert renderer.report()["human_report_delivery_completeness_state"] == "DELIVERY_NOT_VERIFIED"
     assert renderer.report()["human_report_persisted_artifact_byte_count"] == len(report.encode("utf-8"))
     assert renderer.report()["human_report_emitted_payload_byte_count"] == len(stream.getvalue().encode("utf-8"))
 
@@ -517,7 +538,9 @@ def test_measurement_contract_is_explicit_and_rendered_concisely():
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["byte_count_unit"] == "UTF8_OCTETS"
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["trailing_newline_policy"] == "INCLUDED_EXACTLY_ONCE"
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["fingerprint_algorithm"] == "SHA-256"
+    assert HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION == "1.0"
     assert "Human Report Measurement Contract Version: 1.0" in report
+    assert "Human Report Completeness Contract Version: 1.0" in report
     assert "Canonical Line Ending: LF" in report
     assert "Canonical Encoding: UTF-8" in report
     assert "Detached Emission Receipt: PENDING" in report
@@ -567,6 +590,7 @@ def test_persisted_artifact_is_remeasured_from_exact_bytes_and_receipt_is_detach
     payload = artifact_path.read_bytes()
 
     assert renderer.report()["human_report_persistence_integrity"] == "VERIFIED"
+    assert renderer.report()["human_report_persistence_completeness_state"] == "PERSISTENCE_VERIFIED"
     assert renderer.report()["human_report_persisted_artifact_byte_count"] == len(payload)
     assert renderer.report()["human_report_persisted_artifact_fingerprint"] == hashlib.sha256(payload).hexdigest()
     assert renderer.report()["human_report_persisted_artifact_readback_performed"] is True
@@ -589,6 +613,8 @@ def test_emission_receipt_is_created_after_emit_and_measured_independently(tmp_p
     emitted_payload = stream.getvalue().encode("utf-8")
 
     assert metrics["human_report_emission_integrity"] == "VERIFIED"
+    assert metrics["human_report_emission_completeness_state"] == "EMISSION_VERIFIED"
+    assert metrics["human_report_delivery_completeness_state"] == "DELIVERY_NOT_VERIFIED"
     assert metrics["human_report_emitted_payload_byte_count"] == len(emitted_payload)
     assert metrics["human_report_emitted_payload_fingerprint"] == hashlib.sha256(emitted_payload).hexdigest()
     assert metrics["human_report_persistence_emission_equivalence"] == "MATCHED"
@@ -596,6 +622,10 @@ def test_emission_receipt_is_created_after_emit_and_measured_independently(tmp_p
     receipt = metrics["human_report_detached_receipt"]
     assert receipt["receipt_scope"] == "DETACHED_OUTSIDE_HUMAN_REPORT_ENVELOPE"
     assert receipt["receipt_created_after_emission"] is True
+    assert receipt["render_completeness_state"] == "RENDER_COMPLETE"
+    assert receipt["persistence_completeness_state"] == "PERSISTENCE_VERIFIED"
+    assert receipt["emission_completeness_state"] == "EMISSION_VERIFIED"
+    assert receipt["delivery_completeness_state"] == "DELIVERY_NOT_VERIFIED"
     assert receipt["emitted_payload"]["fingerprint"] != ""
     receipt_path = tmp_path / "runtime_report.txt.receipt.json"
     assert receipt_path.exists()
@@ -630,8 +660,94 @@ def test_emission_not_attempted_is_not_verified():
     metrics = renderer.report()
 
     assert metrics["human_report_emission_integrity"] == "NOT_VERIFIED"
+    assert metrics["human_report_emission_completeness_state"] == "EMISSION_NOT_ATTEMPTED"
+    assert metrics["human_report_delivery_completeness_state"] == "DELIVERY_NOT_VERIFIED"
     assert metrics["human_report_receipt_integrity"] == "NOT_AVAILABLE"
     assert metrics["human_report_persistence_emission_equivalence"] == "NOT_VERIFIED"
+
+
+def test_legacy_complete_is_render_scope_not_boundary_wide():
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state(), runtime_metadata=_metadata())
+    metrics = renderer.report()
+
+    assert "Human Report Integrity State: COMPLETE" in report
+    assert "Legacy Human Report Integrity State: COMPLETE" in report
+    assert metrics["human_report_render_completeness_state"] == "RENDER_COMPLETE"
+    assert metrics["human_report_persistence_completeness_state"] == "PERSISTENCE_NOT_REQUESTED"
+    assert metrics["human_report_emission_completeness_state"] == "EMISSION_NOT_ATTEMPTED"
+    assert metrics["human_report_delivery_completeness_state"] == "DELIVERY_NOT_VERIFIED"
+
+
+def test_malformed_render_is_render_invalid_without_delivery_upgrade():
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state(), runtime_metadata=_metadata())
+    malformed = report.replace(REPORT_END_MARKER, "", 1)
+    errors = renderer.validate(malformed)
+    integrity = renderer._human_report_integrity(
+        malformed,
+        selected_sections=[
+            section
+            for section in (
+                "NEXRYN HUMAN RUN SUMMARY",
+                "RUN OVERVIEW",
+                "TIMING AND PERFORMANCE",
+                "COGNITIVE QUALITY",
+                "COGNITIVE OUTCOME",
+                "EVIDENCE LIFECYCLE",
+                "EXECUTION PLAN REPORT",
+                "ACTIVE RUNTIME REACHABILITY",
+                "NATURAL PRODUCTION AUTHORITY HANDOFF",
+                "ENGINEERING CONCLUSION",
+                "CONSTITUTIONAL BOUNDARY",
+                "REPORT INTEGRITY",
+            )
+        ],
+        emitted_text=malformed,
+        binding={"Human Report Semantic Completeness": "COMPLETE"},
+    )
+
+    assert "missing_report_end_marker" in errors
+    assert integrity["Render Completeness State"] == "RENDER_INVALID"
+    assert integrity["Delivery Completeness State"] == "DELIVERY_NOT_VERIFIED"
+
+
+def test_emission_failure_records_failed_boundary_and_reraises():
+    class FailingStream:
+        def write(self, _text):
+            raise OSError("write failed")
+
+        def flush(self):
+            pass
+
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state(), runtime_metadata=_metadata())
+
+    try:
+        renderer.emit(report, stream=FailingStream())
+    except OSError:
+        pass
+    else:
+        raise AssertionError("emission failure was not raised")
+
+    assert renderer.report()["human_report_render_completeness_state"] == "RENDER_COMPLETE"
+    assert renderer.report()["human_report_emission_completeness_state"] == "EMISSION_FAILED"
+    assert renderer.report()["human_report_delivery_completeness_state"] == "DELIVERY_NOT_VERIFIED"
+
+
+def test_no_phase_b_output_budget_or_segmentation_fields_are_introduced():
+    report = DeterministicFinalReportRenderer().render(
+        _state(),
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Human Report Character Limit: NONE" in report
+    assert "Human Report Truncation Enabled: FALSE" in report
+    assert "Human Report Truncated: FALSE" in report
+    assert "Soft Target" not in report
+    assert "Hard Max" not in report
+    assert "Output Budget State" not in report
+    assert "Segment Count" not in report
 
 
 def test_legacy_attestation_fixture_is_not_reinterpreted_as_verified():

@@ -2,6 +2,12 @@ from copy import deepcopy
 
 from runtime.budget.runtime_budget_enforcer import RuntimeBudgetEnforcer
 from runtime.execution.execution_planner import ExecutionPlanner
+from runtime.meta.meta_controller import MetaControllerEngine
+from runtime.planning.production_budget import (
+    PRODUCTION_MAX_ACTIVE_ROUTES,
+    PRODUCTION_MAX_DEPENDENCY_DEPTH,
+    PRODUCTION_MAX_REASONING_DEPTH,
+)
 from runtime.reporting.final_report_renderer import DeterministicFinalReportRenderer
 
 
@@ -70,6 +76,30 @@ def test_runtime_budget_receipt_has_schema_version_and_uses_authority():
     assert receipt["maximum_active_routes"] == 2
     assert receipt["maximum_reasoning_depth"] == 2
     assert RuntimeBudgetEnforcer().verify_receipt(receipt) is True
+
+
+def test_authoritative_production_budget_configuration_source_is_six():
+    plan = ExecutionPlanner().build_authoritative_run_plan(
+        run_id="run_production_budget",
+        task_files=["task_a", "task_b", "task_c"],
+        selected_mode="adaptive",
+        execution_profile={"execution_profile": "adaptive"},
+        cognitive_pipeline="adaptive",
+        declared_budget={
+            "budget_source": "main_adaptive_pre_execution_governed_defaults",
+            "max_active_routes": PRODUCTION_MAX_ACTIVE_ROUTES,
+            "max_reasoning_depth": PRODUCTION_MAX_REASONING_DEPTH,
+            "max_dependency_depth": PRODUCTION_MAX_DEPENDENCY_DEPTH,
+            "max_hypotheses": 4,
+        },
+    )
+
+    assert PRODUCTION_MAX_ACTIVE_ROUTES == 6
+    assert plan["declared_budget"]["max_active_routes"] == 6
+    assert plan["maximum_active_routes"] == 6
+    assert plan["maximum_reasoning_depth"] == 2
+    assert plan["maximum_dependency_depth"] == 2
+    assert plan["maximum_hypotheses"] == 4
 
 
 def test_execution_planner_treats_none_active_routes_as_missing():
@@ -245,6 +275,128 @@ def test_reporting_consumes_budget_receipt_read_only():
     assert "Admitted Routes: 2" in rendered_once
     assert "Peak Concurrent Active Routes: 0" in rendered_once
     assert state["RUNTIME_BUDGET_ENFORCEMENT_REPORT"] == before
+
+
+def test_human_report_displays_authoritative_budget_receipt_not_constant():
+    result = ExecutionPlanner().plan(
+        runtime_context=_context(
+            current_reasoning_budget=_budget(max_active_routes=5),
+        )
+    )
+    state = {
+        "runtime_status": "completed",
+        "operation": "budget_check",
+        "EXECUTION_PLAN_REPORT": result["EXECUTION_PLAN_REPORT"],
+        "RUNTIME_BUDGET_ENFORCEMENT_REPORT": result["EXECUTION_PLAN_REPORT"][
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT"
+        ],
+        "ENGINEERING_CONCLUSION": {"current_open_decision": "none"},
+    }
+
+    rendered = DeterministicFinalReportRenderer().render(state)
+
+    assert "Maximum Active Routes: 5" in rendered
+    assert f"Maximum Active Routes: {PRODUCTION_MAX_ACTIVE_ROUTES}" not in rendered
+
+
+def test_production_runtime_budget_ceiling_is_six_without_depth_changes():
+    routes = [
+        {"route_id": f"route_{index:02d}", "rank": index, "score": 1.0 - index / 100}
+        for index in range(1, 8)
+    ]
+    route_lifecycle = [
+        {
+            "event_id": f"route_{index:02d}_{'active' if index <= 6 else 'deferred'}",
+            "route_id": route["route_id"],
+            "state": "ACTIVE_ROUTE" if index <= 6 else "DEFERRED_BY_BUDGET",
+        }
+        for index, route in enumerate(routes, start=1)
+    ]
+    depth_lifecycle = [
+        {"event_id": "depth_1_attempted", "depth": 1, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_1_entered", "depth": 1, "state": "REASONING_DEPTH_ENTRY_AUTHORIZED"},
+        {"event_id": "depth_2_attempted", "depth": 2, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_2_entered", "depth": 2, "state": "REASONING_DEPTH_ENTRY_AUTHORIZED"},
+        {"event_id": "depth_3_attempted", "depth": 3, "state": "ATTEMPTED_REASONING_DEPTH"},
+        {"event_id": "depth_3_blocked", "depth": 3, "state": "DEPTH_ENTRY_BLOCKED_BY_BUDGET"},
+    ]
+    receipt = RuntimeBudgetEnforcer().build_receipt(
+        budget=_budget(
+            budget_snapshot_id="budget_gate_6_7_3",
+            max_active_routes=PRODUCTION_MAX_ACTIVE_ROUTES,
+            max_reasoning_depth=2,
+            max_dependency_depth=3,
+        ),
+        context=_context(
+            route_selection_report={
+                "available_routes": routes,
+                "candidate_routes": routes,
+                "active_routes": routes,
+            },
+            route_lifecycle_records=route_lifecycle,
+            reasoning_depth_lifecycle_records=depth_lifecycle,
+            planned_reasoning_depth=3,
+        ),
+        execution_plan_id="plan_budget_gate_6_7_3",
+        route_records=[
+            {
+                "route_id": route["route_id"],
+                "route_rank": route["rank"],
+                "route_score": route["score"],
+            }
+            for route in routes
+        ],
+        nodes=[
+            {
+                "execution_node_id": f"node_{index:02d}",
+                "materialization_state": "MATERIALIZED",
+            }
+            for index in range(1, 8)
+        ],
+    )
+
+    assert receipt["runtime_budget_state"] == "RUNTIME_BUDGET_FINALIZED"
+    assert receipt["maximum_active_routes"] == PRODUCTION_MAX_ACTIVE_ROUTES
+    assert receipt["admitted_route_count"] == 6
+    assert receipt["deferred_by_budget_route_count"] == 1
+    assert receipt["peak_concurrent_active_route_count"] == 6
+    assert receipt["peak_concurrent_active_route_count"] <= PRODUCTION_MAX_ACTIVE_ROUTES
+    assert receipt["route_budget_enforcement_state"] == "ROUTE_BUDGET_LIMIT_REACHED"
+    assert receipt["attempted_overrun_state"] == "ATTEMPTED_OVERRUN_DETECTED"
+    assert receipt["prevented_overrun_state"] == "OVERRUN_PREVENTED"
+    assert receipt["realized_overrun_state"] == "NO_REALIZED_OVERRUN"
+    assert receipt["maximum_reasoning_depth"] == 2
+    assert receipt["depth_enforcement_state"] == "REASONING_DEPTH_LIMIT_REACHED"
+
+
+def test_production_ceiling_does_not_expand_fewer_eligible_routes():
+    result = ExecutionPlanner().plan(
+        runtime_context=_context(
+            current_reasoning_budget=_budget(
+                max_active_routes=PRODUCTION_MAX_ACTIVE_ROUTES,
+            ),
+        )
+    )
+    receipt = result["canonical_execution_plan"]["RUNTIME_BUDGET_ENFORCEMENT_REPORT"]
+
+    assert receipt["selected_route_count"] == 3
+    assert receipt["admitted_route_count"] == 3
+    assert receipt["admitted_route_count"] < PRODUCTION_MAX_ACTIVE_ROUTES
+    assert receipt["route_budget_enforcement_state"] == "ROUTE_BUDGET_ADMITTED"
+
+
+def test_meta_default_production_route_ceiling_is_six_but_depth_stays_two():
+    decision = MetaControllerEngine().decide(
+        runtime_context={"mode": "adaptive"},
+        reasoning_budget={
+            "mode": "adaptive",
+            "max_active_routes": PRODUCTION_MAX_ACTIVE_ROUTES,
+            "max_reasoning_depth": 4,
+        },
+    )
+
+    assert decision.max_active_routes == PRODUCTION_MAX_ACTIVE_ROUTES
+    assert decision.max_reasoning_depth == 2
 
 
 def test_regression_fixture_distinguishes_selected_twelve_from_active_routes():

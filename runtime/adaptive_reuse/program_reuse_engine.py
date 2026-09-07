@@ -33,6 +33,10 @@ PRIMITIVE_OPERATIONS = {
     "expand_pattern",
 }
 
+PARAMETER_REQUIRED_OPERATIONS = {
+    "replace_color",
+}
+
 
 CONCEPT_OPERATION_ALIASES = {
     "bridge_creation": "connect_components",
@@ -92,6 +96,8 @@ class ProgramReuseEngine:
             if strategy_programs:
                 selected = strategy_programs
                 composed = self._compose(selected)
+        if not composed.get("program_steps"):
+            selected = []
         return {
             "program_reuse_attempted": True,
             "program_reuse_success": bool(composed.get("program_steps")),
@@ -102,7 +108,12 @@ class ProgramReuseEngine:
         }
 
     def _program_from_strategy(self, strategy: Mapping[str, Any]) -> dict[str, Any]:
-        operation = (
+        executable_payload = (
+            strategy.get("executable_payload")
+            if isinstance(strategy.get("executable_payload"), Mapping)
+            else {}
+        )
+        strategy_operation = _canonical_operation(
             strategy.get("operation")
             or strategy.get("primitive")
             or strategy.get("operator")
@@ -110,16 +121,84 @@ class ProgramReuseEngine:
             or strategy.get("adapted_strategy_type")
             or strategy.get("concept")
         )
+        payload_operation = _canonical_operation(executable_payload.get("operation"))
+        if payload_operation and strategy_operation and payload_operation != strategy_operation:
+            executable_payload = {}
+        payload_steps = executable_payload.get("steps")
+        if isinstance(payload_steps, list) and payload_steps:
+            steps = [
+                {
+                    "operation": _canonical_operation(
+                        step.get("operation")
+                        or strategy.get("operation")
+                        or strategy.get("type")
+                    ),
+                    "parameters": dict(step.get("parameters"))
+                    if isinstance(step.get("parameters"), Mapping)
+                    else {},
+                    "parameter_provenance": dict(step.get("parameter_provenance"))
+                    if isinstance(step.get("parameter_provenance"), Mapping)
+                    else {},
+                }
+                for step in payload_steps
+                if isinstance(step, Mapping)
+            ]
+            steps = [
+                step
+                for step in steps
+                if step["operation"] in PRIMITIVE_OPERATIONS
+                and (
+                    step["operation"] not in PARAMETER_REQUIRED_OPERATIONS
+                    or step["parameters"]
+                )
+            ]
+            if steps:
+                return {
+                    "program_id": (
+                        executable_payload.get("executable_payload_fingerprint")
+                        or f"strategy_program:{steps[0]['operation']}"
+                    ),
+                    "program": {"program_steps": steps},
+                    "operation_sequence": [
+                        {"operation": step["operation"]} for step in steps
+                    ],
+                    "confidence": float(strategy.get("confidence", 0.7) or 0.7),
+                    "parameter_provenance": {
+                        index: step.get("parameter_provenance", {})
+                        for index, step in enumerate(steps)
+                    },
+                    "execution_authority": "NONE",
+                }
+        operation = strategy_operation
         if not operation:
             return {}
-        operation = _canonical_operation(operation)
         if operation not in PRIMITIVE_OPERATIONS:
+            return {}
+        parameters = (
+            dict(strategy.get("parameters"))
+            if isinstance(strategy.get("parameters"), Mapping)
+            else {}
+        )
+        if operation in PARAMETER_REQUIRED_OPERATIONS and not parameters:
             return {}
         return {
             "program_id": f"strategy_program:{operation}",
-            "program": {"program_steps": [{"operation": operation, "parameters": {}}]},
+            "program": {
+                "program_steps": [
+                    {
+                        "operation": operation,
+                        "parameters": parameters,
+                        "parameter_provenance": dict(
+                            strategy.get("parameter_provenance")
+                        )
+                        if isinstance(strategy.get("parameter_provenance"), Mapping)
+                        else {},
+                    }
+                ]
+            },
             "operation_sequence": [{"operation": operation}],
             "confidence": float(strategy.get("confidence", 0.7) or 0.7),
+            "execution_authority": "NONE",
         }
 
     def _compose(self, fragments: list[Mapping[str, Any]]) -> dict[str, Any]:
@@ -151,12 +230,20 @@ class ProgramReuseEngine:
                 if key in seen:
                     continue
                 seen.add(key)
-                steps.append({
+                composed_step = {
                     "operation": normalized,
                     "parameters": dict(step.get("parameters", {}))
                     if isinstance(step.get("parameters"), Mapping)
                     else {},
-                })
+                }
+                parameter_provenance = (
+                    dict(step.get("parameter_provenance", {}))
+                    if isinstance(step.get("parameter_provenance"), Mapping)
+                    else {}
+                )
+                if parameter_provenance:
+                    composed_step["parameter_provenance"] = parameter_provenance
+                steps.append(composed_step)
         return {
             "program_steps": steps,
             "step_count": len(steps),

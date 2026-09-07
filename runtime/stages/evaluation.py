@@ -60,6 +60,10 @@ from runtime.reasoning.counterfactual_repair_engine import (
 from runtime.budget.runtime_budget_enforcer import (
     runtime_budget_enforcer,
 )
+from runtime.telemetry.route_contribution import (
+    build_route_contribution_manifest,
+    compact_route_contribution_summary,
+)
 
 from runtime.arena.cognitive_candidate_arena import (
     cognitive_candidate_arena,
@@ -204,6 +208,48 @@ def _ensure_runtime_budget_evidence(context, introspection_report):
     if context.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT") or context.get(
         "runtime_budget_enforcement_report"
     ):
+        if not (
+            context.get("ROUTE_CONTRIBUTION_MANIFEST")
+            or context.get("route_contribution_manifest")
+        ):
+            receipt = (
+                context.get("RUNTIME_BUDGET_ENFORCEMENT_REPORT")
+                or context.get("runtime_budget_enforcement_report")
+                or {}
+            )
+            route_records = []
+            if isinstance(receipt, dict):
+                route_records = [
+                    {
+                        "route_id": row.get("route_id"),
+                        "route_rank": row.get("route_rank"),
+                        "route_score": row.get("route_score"),
+                        "route_source": "runtime_budget_enforcement_receipt",
+                    }
+                    for row in receipt.get("route_dispositions", []) or []
+                    if isinstance(row, dict)
+                ]
+            route_contribution_manifest = build_route_contribution_manifest(
+                context=context,
+                route_records=route_records,
+                route_lifecycle_records=context.get("route_lifecycle_records"),
+                budget_report=receipt,
+                persist=True,
+            )
+            context["ROUTE_CONTRIBUTION_MANIFEST"] = (
+                route_contribution_manifest
+            )
+            context["route_contribution_manifest"] = (
+                route_contribution_manifest
+            )
+            context["ROUTE_CONTRIBUTION_SUMMARY"] = (
+                compact_route_contribution_summary(
+                    route_contribution_manifest
+                )
+            )
+            context["route_contribution_summary"] = context[
+                "ROUTE_CONTRIBUTION_SUMMARY"
+            ]
         return context
 
     budget_report = context.get("cognitive_budget_report", {})
@@ -379,6 +425,21 @@ def _ensure_runtime_budget_evidence(context, introspection_report):
     context["reasoning_depth_lifecycle_records"] = depth_records
     context["RUNTIME_BUDGET_ENFORCEMENT_REPORT"] = receipt
     context["runtime_budget_enforcement_report"] = receipt
+    route_contribution_manifest = build_route_contribution_manifest(
+        context=context,
+        route_records=route_records,
+        route_lifecycle_records=route_lifecycle_records,
+        budget_report=receipt,
+        persist=True,
+    )
+    context["ROUTE_CONTRIBUTION_MANIFEST"] = route_contribution_manifest
+    context["route_contribution_manifest"] = route_contribution_manifest
+    context["ROUTE_CONTRIBUTION_SUMMARY"] = (
+        compact_route_contribution_summary(route_contribution_manifest)
+    )
+    context["route_contribution_summary"] = context[
+        "ROUTE_CONTRIBUTION_SUMMARY"
+    ]
     return context
 
 
@@ -1949,21 +2010,42 @@ def evaluation_stage(context):
     # VALIDATED PROGRAM MEMORY
     # ========================================
 
-    program_memory_report = (
-        remember_validated_program(
-            {
-                **context,
-                "evaluation_result":
-                evaluation_result,
-                "success_semantics_report":
-                success_semantics_report,
-                "episode_completed":
-                episode_completed,
-                "residual_analysis":
-                residual_analysis,
-            }
+    if context.get(
+        "arc_benchmark_mode"
+    ) is True:
+
+        program_memory_report = {
+
+            "program_memory_updated":
+            False,
+
+            "reason":
+            "arc_benchmark_hidden_label_memory_writes_disabled",
+
+            "hidden_label_reuse_authority":
+            "NONE",
+
+            "authority":
+            "BENCHMARK_ISOLATION_ONLY"
+        }
+
+    else:
+
+        program_memory_report = (
+            remember_validated_program(
+                {
+                    **context,
+                    "evaluation_result":
+                    evaluation_result,
+                    "success_semantics_report":
+                    success_semantics_report,
+                    "episode_completed":
+                    episode_completed,
+                    "residual_analysis":
+                    residual_analysis,
+                }
+            )
         )
-    )
 
     # ========================================
     # EVALUATION METRICS
@@ -2223,6 +2305,22 @@ def evaluation_stage(context):
             "route_lifecycle_records": context.get(
                 "route_lifecycle_records",
                 [],
+            ),
+            "ROUTE_CONTRIBUTION_MANIFEST": context.get(
+                "ROUTE_CONTRIBUTION_MANIFEST",
+                context.get("route_contribution_manifest", {}),
+            ),
+            "route_contribution_manifest": context.get(
+                "route_contribution_manifest",
+                context.get("ROUTE_CONTRIBUTION_MANIFEST", {}),
+            ),
+            "ROUTE_CONTRIBUTION_SUMMARY": context.get(
+                "ROUTE_CONTRIBUTION_SUMMARY",
+                context.get("route_contribution_summary", {}),
+            ),
+            "route_contribution_summary": context.get(
+                "route_contribution_summary",
+                context.get("ROUTE_CONTRIBUTION_SUMMARY", {}),
             ),
             "reasoning_depth_lifecycle_records": context.get(
                 "reasoning_depth_lifecycle_records",

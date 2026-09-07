@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from typing import Any, Mapping
 
@@ -306,11 +307,34 @@ def _safe_int(value):
         return value
 
 
+NON_NUMERIC_SENTINELS = {
+    "",
+    "NA",
+    "N/A",
+    "NONE",
+    "NULL",
+    "UNKNOWN",
+    "UNDEFINED",
+    "NOT_DEFINED",
+    "NOT_AVAILABLE",
+    "NOT_APPLICABLE",
+    "NOT_EVALUATED",
+    "UNAVAILABLE",
+}
+
+
 def _number(value, default=0.0):
+    if value is None:
+        return default
+    if isinstance(value, str):
+        normalized = value.strip().upper()
+        if normalized in NON_NUMERIC_SENTINELS:
+            return default
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return default
+    return number if math.isfinite(number) else default
 
 
 residual_reasoning_engine = ResidualReasoningEngine()

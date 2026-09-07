@@ -14,6 +14,7 @@ from runtime.arena.candidate_proposal_gateway import CandidateProposalGateway
 from runtime.arena.candidate_scorer import CandidateScorer
 from runtime.arena.candidate_simulator import CandidateSimulator
 from runtime.arena.source_dominance_guard import SourceDominanceGuard
+from runtime.telemetry.route_contribution import ROUTE_LINEAGE_FIELDS
 from runtime.arena.winner_selection_policy import WinnerSelectionPolicy
 
 
@@ -764,6 +765,13 @@ class CognitiveCandidateArena:
                 status = "REJECTED_BY_SCORE"
             else:
                 status = "EVALUATED"
+            route_fields = {}
+            for field in ROUTE_LINEAGE_FIELDS:
+                value = candidate.get(field)
+                if value is None:
+                    value = metadata.get(field)
+                if value is not None:
+                    route_fields[field] = value
             rows.append({
                 "candidate_id": candidate_id,
                 "source": candidate.get("source"),
@@ -826,6 +834,7 @@ class CognitiveCandidateArena:
                     "cross_source_consensus_id"
                 ),
                 "consensus_sources": candidate.get("consensus_sources", []),
+                **route_fields,
             })
         return rows
 

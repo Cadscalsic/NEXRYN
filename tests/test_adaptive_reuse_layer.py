@@ -265,7 +265,7 @@ def test_adaptive_reuse_strategy_program_enters_candidate_proposal_runtime():
     assert proposal_report["candidate_proposals"][0]["operation"] == "translate"
 
 
-def test_program_reuse_falls_back_to_strategies_when_memory_fragments_do_not_compose():
+def test_program_reuse_fails_closed_for_parameter_required_strategy_without_parameters():
     report = ProgramReuseEngine(_UnusableProgramMemory()).retrieve(
         {"concept": "color_replacement"},
         strategies=[
@@ -276,11 +276,10 @@ def test_program_reuse_falls_back_to_strategies_when_memory_fragments_do_not_com
         ],
     )
 
-    assert report["program_reuse_success"] is True
-    assert report["reused_programs"][0]["program_id"] == "strategy_program:replace_color"
-    assert report["composed_program"]["program_steps"] == [
-        {"operation": "replace_color", "parameters": {}},
-    ]
+    assert report["program_reuse_success"] is False
+    assert report["program_hits"] == 0
+    assert report["reused_programs"] == []
+    assert report["composed_program"]["program_steps"] == []
 
 
 def test_program_reuse_accepts_primitive_field_in_memory_fragment_steps():

@@ -88,9 +88,19 @@ class PositionPredictor:
         input_grid: Any,
         operation: str,
         position_rule: Mapping[str, Any] | None = None,
+        normalized_input_grid: list[list[int]] | None = None,
+        input_objects: list[Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        normalized = self.object_extractor.normalize_grid(input_grid)
-        objects = self.object_extractor.extract_objects(normalized)
+        normalized = (
+            [list(row) for row in normalized_input_grid]
+            if normalized_input_grid is not None
+            else self.object_extractor.normalize_grid(input_grid)
+        )
+        objects = (
+            list(input_objects)
+            if input_objects is not None
+            else self.object_extractor.extract_objects(normalized)
+        )
         if operation != "duplicate_object":
             return {
                 "system": "position_predictor",
@@ -141,24 +151,55 @@ class PositionPredictor:
         self,
         predicted_grid: Any,
         expected_grid: Any,
+        expected_normalized_grid: list[list[int]] | None = None,
+        expected_scene: Mapping[str, Any] | None = None,
+        candidate_cost_profiler: Any | None = None,
     ) -> dict[str, Any]:
         predicted = self.object_extractor.normalize_grid(predicted_grid)
-        expected = self.object_extractor.normalize_grid(expected_grid)
-        predicted_scene = self.scene_graph_engine.build_scene_graph(predicted)
-        expected_scene = self.scene_graph_engine.build_scene_graph(expected)
+        expected = (
+            [list(row) for row in expected_normalized_grid]
+            if expected_normalized_grid is not None
+            else self.object_extractor.normalize_grid(expected_grid)
+        )
+        if candidate_cost_profiler is not None:
+            with candidate_cost_profiler.owner_timer("scene_graph"):
+                predicted_scene = self.scene_graph_engine.build_scene_graph(predicted)
+        else:
+            predicted_scene = self.scene_graph_engine.build_scene_graph(predicted)
+        expected_scene = (
+            dict(expected_scene)
+            if isinstance(expected_scene, Mapping)
+            else self.scene_graph_engine.build_scene_graph(expected)
+        )
         predicted_objects = predicted_scene.get("nodes", {})
         expected_objects = expected_scene.get("nodes", {})
-        matches = self.scene_graph_engine._match_nodes(  # intentional local reuse
-            predicted_objects,
-            expected_objects,
-        )
+        if candidate_cost_profiler is not None:
+            with candidate_cost_profiler.owner_timer("matching"):
+                matches = self.scene_graph_engine._match_nodes(  # intentional local reuse
+                    predicted_objects,
+                    expected_objects,
+                )
+            candidate_cost_profiler.record_matching_shape(
+                predicted_objects,
+                expected_objects,
+                matches,
+            )
+        else:
+            matches = self.scene_graph_engine._match_nodes(  # intentional local reuse
+                predicted_objects,
+                expected_objects,
+            )
         misplaced = [
             match
             for match in matches
             if match.get("shape_preserved")
             and not match.get("position_preserved")
         ]
-        difference_count = self._difference_count(predicted, expected)
+        if candidate_cost_profiler is not None:
+            with candidate_cost_profiler.owner_timer("difference_count"):
+                difference_count = self._difference_count(predicted, expected)
+        else:
+            difference_count = self._difference_count(predicted, expected)
         return {
             "system": "position_predictor",
             "failure_type": (

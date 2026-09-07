@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Mapping
 
 from core.epistemic_models import clamp
 from core.perception import ObjectTracker
 from core.scene_graph.scene_graph_builder import SceneGraphBuilder
+from runtime.telemetry.localization_progress import (
+    emit as emit_localization_progress,
+    grid_shape as telemetry_grid_shape,
+)
 
 
 class GraphReasoner:
@@ -36,8 +41,42 @@ class GraphReasoner:
         input_grid: Any,
         output_grid: Any,
         operation: str = "duplicate_object",
+        parent_call_id: str | None = None,
+        parent_started_at: float | None = None,
     ) -> dict[str, Any]:
-        tracking = self.object_tracker.track(input_grid, output_grid)
+        started_at = time.perf_counter()
+        call_id = parent_call_id or "placement_graph_reasoning"
+        track_call_id = f"{call_id}:object_tracker_track"
+        emit_localization_progress(
+            phase="ENTER",
+            subcall_name="object_tracker_track",
+            call_id=track_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            operation=operation,
+            input_grid_shape=telemetry_grid_shape(input_grid),
+            target_grid_shape=telemetry_grid_shape(output_grid),
+        )
+        tracking = self.object_tracker.track(
+            input_grid,
+            output_grid,
+            parent_call_id=track_call_id,
+            parent_started_at=started_at,
+        )
+        emit_localization_progress(
+            phase="EXIT",
+            subcall_name="object_tracker_track",
+            call_id=track_call_id,
+            parent_call_id=call_id,
+            started_at=started_at,
+            parent_started_at=parent_started_at,
+            input_object_count=tracking.get("input_object_count"),
+            output_object_count=tracking.get("output_object_count"),
+            matched_object_count=len(tracking.get("matches", [])),
+            added_object_count=len(tracking.get("added_objects", [])),
+            removed_object_count=len(tracking.get("removed_objects", [])),
+        )
         placement_rules = [
             self._placement_rule(event, operation)
             for event in tracking.get("added_objects", [])

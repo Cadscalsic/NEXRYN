@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 import uuid
 import random
 
+from runtime.planning.production_budget import PRODUCTION_MAX_ACTIVE_ROUTES
+
 MIN_EXPLORATION_RATE = 0.02
 
 MIN_REASONING_DEPTH_LIMIT = 4
@@ -36,7 +38,7 @@ class MetaDecision:
 
     max_reasoning_depth: int = 2
 
-    max_active_routes: int = 2
+    max_active_routes: int = PRODUCTION_MAX_ACTIVE_ROUTES
 
     enable_memory_reuse: bool = True
 
@@ -529,7 +531,7 @@ class MetaControllerEngine:
                 "localized_prediction_mismatch_requires_localization_first",
                 0.90,
                 max_reasoning_depth=2,
-                max_active_routes=2,
+                max_active_routes=PRODUCTION_MAX_ACTIVE_ROUTES,
                 enable_memory_reuse=True,
                 enable_localization=True,
                 enable_governance=False,
@@ -604,7 +606,7 @@ class MetaControllerEngine:
                 "low_complexity_fast_budget_without_process_semantics",
                 0.88,
                 max_reasoning_depth=2,
-                max_active_routes=2,
+                max_active_routes=PRODUCTION_MAX_ACTIVE_ROUTES,
                 enable_memory_reuse=True,
                 enable_localization=True,
                 enable_governance=True,
@@ -659,7 +661,7 @@ class MetaControllerEngine:
                         4,
                     )
                 ),
-                2,
+                PRODUCTION_MAX_ACTIVE_ROUTES,
             ),
             enable_memory_reuse=True,
             enable_localization=True,

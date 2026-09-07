@@ -6,6 +6,8 @@ from copy import deepcopy
 import json
 from typing import Any, Mapping
 
+from runtime.telemetry.route_contribution import ROUTE_LINEAGE_FIELDS
+
 
 class CandidateNormalizer:
     """Convert proposals into canonical candidates and merge equivalents."""
@@ -89,6 +91,16 @@ class CandidateNormalizer:
                 source: _score(proposal.get("source_confidence", 0.0))
             } if source else {},
         })
+        metadata = candidate.get("metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        for field in ROUTE_LINEAGE_FIELDS:
+            value = proposal.get(field)
+            if value is None:
+                value = metadata.get(field)
+            if value is not None:
+                candidate[field] = deepcopy(value)
+                metadata[field] = deepcopy(value)
+        candidate["metadata"] = metadata
         return candidate
 
     def _collapse_key(self, candidate: Mapping[str, Any]) -> str:
@@ -148,6 +160,59 @@ class CandidateNormalizer:
             for item in group
             if item.get("source")
         }
+        route_execution_ids = sorted({
+            route_id
+            for item in group
+            for route_id in item.get("origin_route_execution_ids", [])
+            if route_id
+        })
+        route_ids = sorted({
+            route_id
+            for item in group
+            for route_id in item.get("origin_route_ids", [])
+            if route_id
+        })
+        if route_execution_ids:
+            base["origin_route_execution_ids"] = route_execution_ids
+            base["origin_route_execution_id"] = route_execution_ids[0]
+            base["origin_route_ids"] = route_ids
+            base["origin_route_id"] = route_ids[0] if route_ids else None
+            base["route_lineage_origin_type"] = (
+                "MULTI_ORIGIN_DIRECT_LINEAGE"
+                if len(route_execution_ids) > 1
+                else base.get("route_lineage_origin_type")
+            )
+            base["route_lineage_scope_state"] = (
+                "ROUTE_ORIGIN_CURRENT"
+                if all(
+                    item.get("route_lineage_scope_state") == "ROUTE_ORIGIN_CURRENT"
+                    for item in group
+                    if item.get("origin_route_execution_ids")
+                )
+                else "ROUTE_ORIGIN_PARTIAL"
+            )
+            base["route_origin_lineage"] = {
+                "schema_version": "route_origin_lineage.v1",
+                "run_id": base.get("route_origin_lineage", {}).get("run_id")
+                if isinstance(base.get("route_origin_lineage"), dict)
+                else None,
+                "task_id": base.get("route_origin_lineage", {}).get("task_id")
+                if isinstance(base.get("route_origin_lineage"), dict)
+                else None,
+                "route_execution_id": route_execution_ids[0],
+                "route_execution_ids": route_execution_ids,
+                "route_id": route_ids[0] if route_ids else None,
+                "route_ids": route_ids,
+                "route_lineage_origin_type": base["route_lineage_origin_type"],
+                "route_lineage_scope_state": base["route_lineage_scope_state"],
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+            }
+            metadata = base.get("metadata") if isinstance(base.get("metadata"), dict) else {}
+            for field in ROUTE_LINEAGE_FIELDS:
+                if base.get(field) is not None:
+                    metadata[field] = deepcopy(base.get(field))
+            base["metadata"] = metadata
         base["equivalent_candidate_ids"] = [item["candidate_id"] for item in group]
         return base
 

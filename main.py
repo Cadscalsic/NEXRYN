@@ -15,6 +15,18 @@ from datetime import datetime
 
 from runtime.diagnostics import RuntimeWatchdog
 from runtime.planning.execution_profile import build_execution_profile
+from runtime.planning.production_budget import (
+    PRODUCTION_MAX_ACTIVE_ROUTES,
+    PRODUCTION_MAX_DEPENDENCY_DEPTH,
+    PRODUCTION_MAX_REASONING_DEPTH,
+)
+from runtime.telemetry.route_contribution import (
+    attach_route_origin_lineage,
+    build_route_contribution_manifest,
+    compact_route_contribution_summary,
+    route_lineage_record_from_artifact,
+    route_origin_lineage_from_record,
+)
 from runtime.state.shared_cognitive_state import (
     CognitiveKnowledgeBus,
     SharedCognitiveState,
@@ -1055,8 +1067,189 @@ def build_semantic_compiler_execution_intents(candidate_proposals):
             "operational_value_score": proposal.get("operational_value_score"),
             "investment_tier": proposal.get("investment_tier"),
             "investment_reason": proposal.get("investment_reason"),
+            "route_origin_lineage": proposal.get("route_origin_lineage"),
+            "origin_route_execution_id": proposal.get("origin_route_execution_id"),
+            "origin_route_execution_ids": proposal.get("origin_route_execution_ids"),
+            "origin_route_id": proposal.get("origin_route_id"),
+            "origin_route_ids": proposal.get("origin_route_ids"),
+            "route_lineage_origin_type": proposal.get("route_lineage_origin_type"),
+            "route_lineage_scope_state": proposal.get("route_lineage_scope_state"),
         })
     return intents
+
+
+def latest_task_result(all_results, task_id):
+    task_token = str(task_id or "")
+    for item in reversed(all_results or []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("task") or "") == task_token:
+            return item.get("result") if isinstance(item.get("result"), dict) else {}
+    return {}
+
+
+def latest_task_route_manifest(all_results, task_id):
+    result = latest_task_result(all_results, task_id)
+    manifest = (
+        result.get("ROUTE_CONTRIBUTION_MANIFEST")
+        or result.get("route_contribution_manifest")
+    )
+    return manifest if isinstance(manifest, dict) else {}
+
+
+def _attach_current_route_lineage(record, route_manifest, *, source_name, stage):
+    if not isinstance(record, dict):
+        return record
+    lineage = route_origin_lineage_from_record(
+        route_manifest,
+        source_name=source_name,
+        record=record,
+        produced_at_stage=stage,
+        producer_component=source_name,
+    )
+    return attach_route_origin_lineage(record, lineage)
+
+
+def attach_current_route_lineage_to_records(records, route_manifest, *, source_name, stage):
+    rows = records if isinstance(records, list) else []
+    return [
+        _attach_current_route_lineage(
+            row,
+            route_manifest,
+            source_name=source_name,
+            stage=stage,
+        )
+        for row in rows
+        if isinstance(row, dict)
+    ]
+
+
+def _route_records_from_manifest(route_manifest):
+    routes = route_manifest.get("routes") if isinstance(route_manifest, dict) else []
+    records = []
+    for route in routes if isinstance(routes, list) else []:
+        if not isinstance(route, dict):
+            continue
+        records.append({
+            "run_id": route.get("run_id"),
+            "task_id": route.get("task_id"),
+            "route_id": route.get("route_id"),
+            "route_rank": route.get("route_position"),
+            "route_score": route.get("route_score"),
+            "route_source": route.get("route_source"),
+            "route_family": route.get("route_family"),
+            "route_execution_id": route.get("route_execution_id"),
+        })
+    return records
+
+
+def build_downstream_route_lineage_records(
+    *,
+    candidate_proposals=None,
+    candidate_proposal_report=None,
+    candidate_arena_report=None,
+):
+    records = {
+        "candidate_lineage_records": [],
+        "program_lineage_records": [],
+        "evidence_lineage_records": [],
+        "route_arena_lineage_records": [],
+        "route_repair_lineage_records": [],
+    }
+    for proposal in candidate_proposals if isinstance(candidate_proposals, list) else []:
+        if not isinstance(proposal, dict):
+            continue
+        candidate_record = route_lineage_record_from_artifact(
+            proposal,
+            output_type="candidate",
+            produced_at_stage="program_generation_activation",
+            producer_component="program_generation",
+        )
+        if candidate_record:
+            records["candidate_lineage_records"].append(candidate_record)
+        program_record = route_lineage_record_from_artifact(
+            proposal,
+            output_type="program",
+            produced_at_stage="program_generation_activation",
+            producer_component="program_generation",
+        )
+        if program_record:
+            records["program_lineage_records"].append(program_record)
+    report = candidate_proposal_report if isinstance(candidate_proposal_report, dict) else {}
+    for proposal in report.get("candidate_proposals", []) or []:
+        if not isinstance(proposal, dict):
+            continue
+        candidate_record = route_lineage_record_from_artifact(
+            proposal,
+            output_type="candidate",
+            produced_at_stage="candidate_proposal_runtime",
+            producer_component="candidate_proposal_runtime",
+        )
+        if candidate_record:
+            records["candidate_lineage_records"].append(candidate_record)
+    arena = candidate_arena_report if isinstance(candidate_arena_report, dict) else {}
+    for row in arena.get("candidate_summary", []) or []:
+        if not isinstance(row, dict):
+            continue
+        arena_record = route_lineage_record_from_artifact(
+            row,
+            output_type="candidate",
+            produced_at_stage="cognitive_candidate_arena",
+            producer_component="cognitive_candidate_arena",
+            validation_state=row.get("validation_status"),
+            qualification_state=(
+                "QUALIFIED"
+                if row.get("entered_arena") is True
+                else "BLOCKED"
+                if row.get("entered_arena") is False
+                else None
+            ),
+            arena_state=row.get("status"),
+        )
+        if arena_record:
+            records["candidate_lineage_records"].append(arena_record)
+            records["route_arena_lineage_records"].append(dict(arena_record))
+    return records
+
+
+def refresh_downstream_route_contribution_manifest(
+    *,
+    all_results,
+    task_id,
+    route_manifest,
+    candidate_proposals,
+    candidate_proposal_report,
+    candidate_arena_report,
+):
+    if not isinstance(route_manifest, dict) or not route_manifest.get("routes"):
+        return {}
+    task_result = latest_task_result(all_results, task_id)
+    budget_report = {
+        "run_id": route_manifest.get("run_id"),
+        "task_id": route_manifest.get("task_id"),
+        "maximum_active_routes": route_manifest.get("route_cap"),
+    }
+    lineage_records = build_downstream_route_lineage_records(
+        candidate_proposals=candidate_proposals,
+        candidate_proposal_report=candidate_proposal_report,
+        candidate_arena_report=candidate_arena_report,
+    )
+    context = {
+        "run_id": route_manifest.get("run_id"),
+        "task_id": route_manifest.get("task_id"),
+        **lineage_records,
+    }
+    refreshed = build_route_contribution_manifest(
+        context=context,
+        route_records=_route_records_from_manifest(route_manifest),
+        route_lifecycle_records=task_result.get("route_lifecycle_records", []),
+        budget_report=budget_report,
+        persist=True,
+    )
+    refreshed["downstream_route_lineage_record_counts"] = {
+        key: len(value) for key, value in lineage_records.items()
+    }
+    return refreshed
 
 
 def build_candidate_arena_proposals(
@@ -4254,9 +4447,9 @@ try:
         "budget_source": "main_adaptive_pre_execution_governed_defaults",
         "active_route_limit_scope": "RUN_WITH_TASK_ENTRIES",
         "reasoning_depth_limit_scope": "RUN_WITH_TASK_ENTRIES",
-        "max_active_routes": 2,
-        "max_reasoning_depth": 2,
-        "max_dependency_depth": 2,
+        "max_active_routes": PRODUCTION_MAX_ACTIVE_ROUTES,
+        "max_reasoning_depth": PRODUCTION_MAX_REASONING_DEPTH,
+        "max_dependency_depth": PRODUCTION_MAX_DEPENDENCY_DEPTH,
         "max_hypotheses": execution_profile.max_hypotheses,
     }
     authoritative_execution_plan = (
@@ -6830,6 +7023,12 @@ try:
         program_synthesis_report.get("program_candidates", 0)
     )
     executable_task_io = latest_completed_task_io(all_results, args.tasks_dir)
+    downstream_route_manifest = latest_task_route_manifest(
+        all_results,
+        executable_task_io.get("task"),
+    )
+    downstream_route_contribution_manifest = {}
+    downstream_route_contribution_summary = {}
     executable_shared_inputs = consume_shared_state(
         "executable_intelligence_runtime",
         ("concept_store", "program_store", "evidence_store", "context_store"),
@@ -6884,6 +7083,12 @@ try:
             input_grid=executable_task_io.get("input_grid"),
             target_grid=executable_task_io.get("target_grid"),
         )
+        executable_candidate_proposals = attach_current_route_lineage_to_records(
+            executable_candidate_proposals,
+            downstream_route_manifest,
+            source_name="program_generation",
+            stage="program_generation_activation",
+        )
         program_generation_report["knowledge_investment_summary"] = (
             _knowledge_investment_summary(executable_candidate_proposals)
         )
@@ -6910,6 +7115,13 @@ try:
             if semantic_compiler_execution_intents
             else {}
         )
+        if isinstance(semantic_compiler_runtime_report, dict):
+            semantic_compiler_runtime_report = _attach_current_route_lineage(
+                semantic_compiler_runtime_report,
+                downstream_route_manifest,
+                source_name="semantic_to_transformation_compiler",
+                stage="semantic_to_transformation_compiler",
+            )
         operational_capability_materialization_report = {}
         blueprint_generation_success_count = int(
             program_generation_report.get(
@@ -7015,6 +7227,19 @@ try:
             analysis_only=True,
             task_signature=str(executable_task_io.get("task") or "unknown"),
         )
+        downstream_route_contribution_manifest = (
+            refresh_downstream_route_contribution_manifest(
+                all_results=all_results,
+                task_id=executable_task_io.get("task"),
+                route_manifest=downstream_route_manifest,
+                candidate_proposals=executable_candidate_proposals,
+                candidate_proposal_report=candidate_proposal_report,
+                candidate_arena_report=cognitive_candidate_arena_report,
+            )
+        )
+        downstream_route_contribution_summary = compact_route_contribution_summary(
+            downstream_route_contribution_manifest,
+        )
         operational_capability_materialization_report = (
             build_operational_capability_materialization_report(
                 semantic_compiler_runtime_report,
@@ -7048,6 +7273,80 @@ try:
             else {}
         )
         executable_candidate = selected_arena_candidate or validation_probe_candidate
+        natural_production_handoff_trace = {}
+        if cognitive_candidate_arena_report:
+            from runtime.reporting.natural_production_handoff import (
+                natural_production_handoff_observer,
+            )
+
+            candidate_rows = [
+                row
+                for row in (
+                    cognitive_candidate_arena_report.get("candidate_summary")
+                    or []
+                )
+                if isinstance(row, dict)
+            ]
+            executable_candidate_id = executable_candidate.get("candidate_id")
+            observed_candidate_row = next(
+                (
+                    row
+                    for row in candidate_rows
+                    if row.get("candidate_id") == executable_candidate_id
+                ),
+                {},
+            )
+            observed_candidate = dict(executable_candidate or observed_candidate_row)
+            if observed_candidate_row:
+                observed_candidate.update(
+                    {
+                        key: value
+                        for key, value in observed_candidate_row.items()
+                        if value is not None
+                    },
+                )
+            if not observed_candidate and candidate_rows:
+                observed_candidate = dict(candidate_rows[0])
+            materialization_report = {
+                "materialized": bool(observed_candidate.get("candidate_id")),
+                "materialization_id": (
+                    observed_candidate.get("materialization_id")
+                    or observed_candidate.get("program_signature")
+                    or observed_candidate.get("candidate_id")
+                ),
+            }
+            sandbox_validation_report = {
+                "validation_state": (
+                    "PASSED"
+                    if observed_candidate.get("simulation_success") is True
+                    else "BLOCKED"
+                ),
+                "validation_reached": bool(observed_candidate),
+            }
+            qualification_report = {
+                "qualification_state": (
+                    "QUALIFIED"
+                    if observed_candidate.get("entered_arena") is True
+                    else "BLOCKED"
+                ),
+                "qualification_id": observed_candidate.get("candidate_id"),
+            }
+            natural_production_handoff_trace = (
+                natural_production_handoff_observer.build_trace(
+                    run_id=runtime_metrics.get("run_id"),
+                    task_id=str(executable_task_io.get("task") or "unknown"),
+                    candidate=observed_candidate,
+                    materialization=materialization_report,
+                    sandbox_validation=sandbox_validation_report,
+                    qualification=qualification_report,
+                    arena_selection=cognitive_candidate_arena_report,
+                    execution_grant=None,
+                    budget_admission=None,
+                    production_execution=None,
+                    production_outcome=None,
+                    run_budget_state="RUNTIME_BUDGET_FINALIZED",
+                )
+            )
         executable_intelligence_result = {}
         if executable_candidate:
             executable_intelligence_result = executable_intelligence_engine.run(
@@ -7081,6 +7380,19 @@ try:
             if isinstance(executable_intelligence_result, dict)
             else {}
         )
+        if natural_production_handoff_trace:
+            executable_intelligence_result[
+                "NATURAL_PRODUCTION_HANDOFF_TRACE"
+            ] = natural_production_handoff_trace
+            executable_intelligence_result[
+                "natural_production_handoff_trace"
+            ] = natural_production_handoff_trace
+            executable_intelligence_report[
+                "NATURAL_PRODUCTION_HANDOFF_TRACE"
+            ] = natural_production_handoff_trace
+            executable_intelligence_report[
+                "natural_production_handoff_trace"
+            ] = natural_production_handoff_trace
         executable_activation_report = {
             "system": "executable_intelligence_activation_bridge",
             "activation_phase_entered": True,
@@ -7187,6 +7499,12 @@ try:
                 )
             ),
             "prediction_authority_preserved": "adaptive_search",
+            "NATURAL_PRODUCTION_HANDOFF_TRACE": (
+                natural_production_handoff_trace
+            ),
+            "natural_production_handoff_trace": (
+                natural_production_handoff_trace
+            ),
         }
         executable_execution.capture(executable_activation_report)
         publish_shared_state(
@@ -7216,6 +7534,9 @@ try:
                 "EXECUTABLE_ACTIVATION_REPORT": (
                     executable_activation_report
                 ),
+                "NATURAL_PRODUCTION_HANDOFF_TRACE": (
+                    natural_production_handoff_trace
+                ),
                 "OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT": (
                     operational_capability_materialization_report
                 ),
@@ -7241,6 +7562,19 @@ try:
     performance_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
         cognitive_candidate_arena_report
     )
+    if downstream_route_contribution_manifest:
+        performance_report["ROUTE_CONTRIBUTION_MANIFEST"] = (
+            downstream_route_contribution_manifest
+        )
+        performance_report["route_contribution_manifest"] = (
+            downstream_route_contribution_manifest
+        )
+        performance_report["ROUTE_CONTRIBUTION_SUMMARY"] = (
+            downstream_route_contribution_summary
+        )
+        performance_report["route_contribution_summary"] = (
+            downstream_route_contribution_summary
+        )
     if semantic_compiler_runtime_report:
         program_synthesis_report[
             "semantic_to_transformation_compilation_report"
@@ -7269,6 +7603,13 @@ try:
     performance_report["EXECUTABLE_ACTIVATION_REPORT"] = (
         executable_activation_report
     )
+    if natural_production_handoff_trace:
+        performance_report["NATURAL_PRODUCTION_HANDOFF_TRACE"] = (
+            natural_production_handoff_trace
+        )
+        performance_report["natural_production_handoff_trace"] = (
+            natural_production_handoff_trace
+        )
     performance_report["OPERATIONAL_CAPABILITY_MATERIALIZATION_REPORT"] = (
         operational_capability_materialization_report
     )
@@ -7318,6 +7659,19 @@ try:
     training_report["COGNITIVE_CANDIDATE_ARENA_REPORT"] = (
         cognitive_candidate_arena_report
     )
+    if downstream_route_contribution_manifest:
+        training_report["ROUTE_CONTRIBUTION_MANIFEST"] = (
+            downstream_route_contribution_manifest
+        )
+        training_report["route_contribution_manifest"] = (
+            downstream_route_contribution_manifest
+        )
+        training_report["ROUTE_CONTRIBUTION_SUMMARY"] = (
+            downstream_route_contribution_summary
+        )
+        training_report["route_contribution_summary"] = (
+            downstream_route_contribution_summary
+        )
     training_report["EXECUTABLE_INTELLIGENCE_REPORT"] = (
         performance_report["EXECUTABLE_INTELLIGENCE_REPORT"]
     )
@@ -7327,6 +7681,13 @@ try:
     training_report["EXECUTABLE_ACTIVATION_REPORT"] = (
         executable_activation_report
     )
+    if natural_production_handoff_trace:
+        training_report["NATURAL_PRODUCTION_HANDOFF_TRACE"] = (
+            natural_production_handoff_trace
+        )
+        training_report["natural_production_handoff_trace"] = (
+            natural_production_handoff_trace
+        )
     adaptive_search_shared_inputs = consume_shared_state(
         "adaptive_search_intelligence_runtime",
         ("concept_store", "program_store", "evidence_store", "context_store"),

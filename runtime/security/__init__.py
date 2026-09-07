@@ -36,6 +36,11 @@ from runtime.security.execution_authority_guard import (
     execution_authority_guard,
 )
 
+from runtime.security.learned_object_execution_authority import (
+    LearnedObjectExecutionGrantAuthority,
+    learned_object_execution_grant_authority,
+)
+
 from runtime.security.self_repair_safety_guard import (
     SelfRepairSafetyGuard,
     self_repair_safety_guard,
@@ -70,6 +75,8 @@ __all__ = [
     "program_safety_guard",
     "ExecutionAuthorityGuard",
     "execution_authority_guard",
+    "LearnedObjectExecutionGrantAuthority",
+    "learned_object_execution_grant_authority",
     "SelfRepairSafetyGuard",
     "self_repair_safety_guard",
     "MetaSupervisorGuard",
