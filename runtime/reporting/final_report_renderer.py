@@ -122,9 +122,91 @@ HUMAN_SECTION_ORDER = [
 HUMAN_REPORT_CHARACTER_LIMIT = None
 HUMAN_REPORT_TRUNCATION_ENABLED = False
 HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION = "1.0"
+HUMAN_PROJECTION_UNIVERSE_CONTRACT_VERSION = "1.0"
+
+HUMAN_PROJECTION_UNIVERSE = (
+    {
+        "section_id": "nexryn_human_run_summary",
+        "section_title": "NEXRYN HUMAN RUN SUMMARY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "run_overview",
+        "section_title": "RUN OVERVIEW",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "timing_and_performance",
+        "section_title": "TIMING AND PERFORMANCE",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "cognitive_quality",
+        "section_title": "COGNITIVE QUALITY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "cognitive_outcome",
+        "section_title": "COGNITIVE OUTCOME",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "evidence_lifecycle",
+        "section_title": "EVIDENCE LIFECYCLE",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "execution_plan_report",
+        "section_title": "EXECUTION PLAN REPORT",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "active_runtime_reachability",
+        "section_title": "ACTIVE RUNTIME REACHABILITY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "natural_production_authority_handoff",
+        "section_title": "NATURAL PRODUCTION AUTHORITY HANDOFF",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "LEVEL_VISIBILITY_CONDITIONAL",
+    },
+    {
+        "section_id": "engineering_conclusion",
+        "section_title": "ENGINEERING CONCLUSION",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "constitutional_boundary",
+        "section_title": "CONSTITUTIONAL BOUNDARY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "critical_observability_notes",
+        "section_title": "CRITICAL OBSERVABILITY NOTES",
+        "membership_semantics": "CONDITIONAL",
+        "visibility_semantics": "SELECTED_WHEN_CRITICAL_NOTES_EXIST",
+    },
+    {
+        "section_id": "report_integrity",
+        "section_title": "REPORT INTEGRITY",
+        "membership_semantics": "APPENDED",
+        "visibility_semantics": "APPENDED_AFTER_PROVISIONAL_INTEGRITY",
+    },
+)
 
 HUMAN_REPORT_MEASUREMENT_CONTRACT = {
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "canonical_encoding": "UTF-8",
     "canonical_bom_policy": "UTF-8_WITHOUT_BOM",
     "canonical_line_ending": "LF",
@@ -184,6 +266,10 @@ class DeterministicFinalReportRenderer:
         self._last_detached_receipt: dict[str, Any] = {}
         self._last_human_report_artifact_path: Path | None = None
         self._persistence_requested_for_current_render = False
+        self._current_local_reductions: list[dict[str, Any]] = []
+        self._last_local_reduction_summary: dict[str, Any] = {}
+        self._last_human_selected_sections: list[str] = []
+        self._last_human_report_level = "normal"
 
     def render(
         self,
@@ -916,6 +1002,10 @@ class DeterministicFinalReportRenderer:
         binding = self._build_human_report_binding(canonical)
         canonical = {**canonical, "human_report_binding": binding}
         sections = self._select_human_sections(canonical)
+        self._last_human_report_level = canonical["report_level"]
+        self._last_human_selected_sections = [
+            name for name, _ in sections
+        ] + ["REPORT INTEGRITY"]
         critical_note_count = len(self._human_observability_notes(canonical))
         provisional_sections = [
             self._render_lifecycle_start("COMPLETE"),
@@ -930,11 +1020,23 @@ class DeterministicFinalReportRenderer:
             emitted_text=provisional_text,
             critical_note_count=critical_note_count,
             binding=binding,
+            report_level=canonical["report_level"],
         )
         final_sections = [
             self._render_lifecycle_start(integrity["Human Report Integrity State"]),
             *[renderer(canonical) for _, renderer in sections],
-            self._render_human_report_integrity(integrity),
+            self._render_lifecycle_end(),
+        ]
+        self._current_local_reductions = []
+        self._normalize_text("\n".join(final_sections))
+        self._current_local_reductions = []
+        final_sections = [
+            self._render_lifecycle_start(integrity["Human Report Integrity State"]),
+            *[renderer(canonical) for _, renderer in sections],
+            self._render_human_report_integrity({
+                **integrity,
+                **self._human_report_local_reduction_integrity(),
+            }),
             self._render_lifecycle_end(),
         ]
         final_text = self._normalize_text("\n".join(final_sections))
@@ -944,12 +1046,23 @@ class DeterministicFinalReportRenderer:
             emitted_text=final_text,
             critical_note_count=critical_note_count,
             binding=binding,
+            report_level=canonical["report_level"],
         )
         for _ in range(4):
             final_sections[0] = self._render_lifecycle_start(
                 integrity["Human Report Integrity State"]
             )
-            final_sections[-2] = self._render_human_report_integrity(integrity)
+            self._current_local_reductions = []
+            _ = self._normalize_text("\n".join([
+                final_sections[0],
+                *[renderer(canonical) for _, renderer in sections],
+                final_sections[-1],
+            ]))
+            local_reduction_integrity = self._human_report_local_reduction_integrity()
+            final_sections[-2] = self._render_human_report_integrity({
+                **integrity,
+                **local_reduction_integrity,
+            })
             stabilized_text = self._normalize_text("\n".join(final_sections))
             next_integrity = self._human_report_integrity(
                 stabilized_text,
@@ -957,6 +1070,7 @@ class DeterministicFinalReportRenderer:
                 emitted_text=stabilized_text,
                 critical_note_count=critical_note_count,
                 binding=binding,
+                report_level=canonical["report_level"],
             )
             if next_integrity == integrity:
                 return stabilized_text
@@ -986,6 +1100,151 @@ class DeterministicFinalReportRenderer:
                 ("CRITICAL OBSERVABILITY NOTES", self._render_human_observability_notes)
             )
         return sections
+
+    def _human_section_accounting(
+        self,
+        selected_sections: list[str],
+        *,
+        rendered_report: str = "",
+        report_level: str = "normal",
+    ) -> dict[str, Any]:
+        universe_records = list(HUMAN_PROJECTION_UNIVERSE)
+        universe_titles = [str(row["section_title"]) for row in universe_records]
+        universe_title_set = set(universe_titles)
+        universe_ids = [str(row["section_id"]) for row in universe_records]
+        selected_titles = list(dict.fromkeys(selected_sections))
+        selected = set(selected_titles)
+        visible = {
+            title
+            for title in universe_titles
+            if self._section_title(title) in rendered_report
+        }
+        selected_outside_universe = sorted(selected - universe_title_set)
+        visible_outside_selected = sorted(visible - selected)
+        duplicate_universe_identity_count = len(universe_ids) - len(set(universe_ids))
+        unknown_human_section_identity_count = len(selected_outside_universe)
+        contradictory_membership_count = 0
+        selected_but_empty = [
+            title
+            for title in universe_titles
+            if title in selected and title not in visible
+        ]
+        records = []
+        for index, row in enumerate(universe_records, start=1):
+            section = str(row["section_title"])
+            is_selected = section in selected
+            is_visible = section in visible
+            if is_visible:
+                render_state = "SELECTED_VISIBLE"
+            elif (
+                is_selected
+                and section == "NATURAL PRODUCTION AUTHORITY HANDOFF"
+                and report_level == "minimal"
+            ):
+                render_state = "SELECTED_RENDERED_EMPTY_BY_REPORT_LEVEL"
+            elif is_selected:
+                render_state = "SELECTED_RENDERED_EMPTY"
+            else:
+                render_state = "UNSELECTED_NOT_RENDER_ATTEMPTED"
+            records.append({
+                "section_id": row["section_id"],
+                "section_title": section,
+                "human_projection_universe_index": index,
+                "membership_semantics": row["membership_semantics"],
+                "visibility_semantics": row["visibility_semantics"],
+                "selected": is_selected,
+                "render_attempted": is_selected,
+                "visible_rendering": is_visible,
+                "selection_state": (
+                    "SELECTED"
+                    if is_selected
+                    else "UNSELECTED_BY_HUMAN_PROJECTION_POLICY"
+                ),
+                "render_state": render_state,
+                "selection_reason_if_known": (
+                    "section title present in selected human projection"
+                    if is_selected
+                    else "not selected by the current human projection selector"
+                ),
+            })
+        selected_count = len([title for title in universe_titles if title in selected])
+        unselected_count = len(universe_records) - selected_count
+        visible_count = len([title for title in universe_titles if title in visible])
+        selected_but_empty_count = len(selected_but_empty)
+        selection_subset_integrity = (
+            "VERIFIED" if not selected_outside_universe else "FAILED"
+        )
+        visible_subset_integrity = (
+            "VERIFIED" if not visible_outside_selected else "FAILED"
+        )
+        count_arithmetic_integrity = (
+            "VERIFIED"
+            if selected_count + unselected_count == len(universe_records)
+            else "FAILED"
+        )
+        membership_validation_state = (
+            "VERIFIED"
+            if (
+                duplicate_universe_identity_count == 0
+                and not selected_outside_universe
+                and not visible_outside_selected
+                and unknown_human_section_identity_count == 0
+                and contradictory_membership_count == 0
+            )
+            else "FAILED_CLOSED"
+        )
+        membership_validation_failure = (
+            "SELECTED_SECTION_OUTSIDE_HUMAN_PROJECTION_UNIVERSE"
+            if selected_outside_universe
+            else "NONE"
+        )
+        legacy_denominator_overcount = len(SECTION_ORDER) - len(universe_records)
+        return {
+            "Human Projection Universe Contract Version": (
+                HUMAN_PROJECTION_UNIVERSE_CONTRACT_VERSION
+            ),
+            "Human Projection Universe Count": len(universe_records),
+            "Human Projection Selected Section Count": selected_count,
+            "Human Projection Unselected Section Count": unselected_count,
+            "Human Projection Visible Section Count": visible_count,
+            "Human Projection Selected But Empty Count": selected_but_empty_count,
+            "Human Projection Selected Outside Universe Count": (
+                len(selected_outside_universe)
+            ),
+            "Human Projection Visible Outside Selected Count": (
+                len(visible_outside_selected)
+            ),
+            "Human Projection Duplicate Universe Identity Count": (
+                duplicate_universe_identity_count
+            ),
+            "Human Projection Unknown Human Section Identity Count": (
+                unknown_human_section_identity_count
+            ),
+            "Human Projection Contradictory Membership Count": (
+                contradictory_membership_count
+            ),
+            "Human Projection Selection Subset Integrity": selection_subset_integrity,
+            "Human Projection Visible Subset Integrity": visible_subset_integrity,
+            "Human Projection Count Arithmetic Integrity": count_arithmetic_integrity,
+            "Human Projection Membership Validation State": (
+                membership_validation_state
+            ),
+            "Human Projection Membership Validation Failure": (
+                membership_validation_failure
+            ),
+            "Human Projection Accounting State": (
+                "OBSERVATIONAL_HUMAN_PROJECTION_UNIVERSE"
+            ),
+            "Human Projection Selected Outside Universe": selected_outside_universe,
+            "Human Projection Visible Outside Selected": visible_outside_selected,
+            "Human Projection Selected But Empty": selected_but_empty,
+            "Human Projection Section Accounting": records,
+            "Human Report Legacy Section Order Count": len(SECTION_ORDER),
+            "Human Report Legacy Section Order Role": (
+                "LEGACY_FULL_REPORT_DENOMINATOR"
+            ),
+            "Human Report Legacy Denominator Overcount": legacy_denominator_overcount,
+        }
 
     def _build_human_report_binding(self, canonical: dict[str, Any]) -> dict[str, Any]:
         fields: dict[str, dict[str, Any]] = {}
@@ -2269,16 +2528,36 @@ class DeterministicFinalReportRenderer:
             f"Realized Overrun State: {self._first_meaningful(budget_report.get('realized_overrun_state'), default='NOT_PRODUCED')}",
             f"Violation Reason: {self._first_meaningful(budget_report.get('violation_reason'), default='NONE')}",
             "ROUTE CONTRIBUTION TELEMETRY",
-            f"Attribution State: {self._first_meaningful(route_contribution_summary.get('attribution_state'), default='ROUTE_ATTRIBUTION_INSUFFICIENT')}",
+            f"Executed Route Attribution State: {self._first_meaningful(route_contribution_summary.get('executed_route_attribution_state'), route_contribution_summary.get('attribution_state'), default='ROUTE_ATTRIBUTION_INSUFFICIENT')}",
+            f"Executed Route Attribution Scope: {self._first_meaningful(route_contribution_summary.get('executed_route_attribution_scope'), default='EXECUTED_ROUTES')}",
             f"Lineage State: {self._first_meaningful(route_contribution_summary.get('lineage_state'), default='ROUTE_LINEAGE_BROKEN')}",
+            f"Selected Routes: {self._first_meaningful(route_contribution_summary.get('selected_routes'), default=0)}",
             f"Executed Routes: {self._first_meaningful(route_contribution_summary.get('executed_routes'), default=0)}",
             f"Unique Useful Routes: {self._first_meaningful(route_contribution_summary.get('unique_useful_routes'), default=0)}",
             f"Duplicate Routes: {self._first_meaningful(route_contribution_summary.get('duplicate_routes'), default=0)}",
             f"Low-Value Routes: {self._first_meaningful(route_contribution_summary.get('low_value_routes'), default=0)}",
             f"No Observable Routes: {self._first_meaningful(route_contribution_summary.get('no_observable_routes'), default=0)}",
-            f"Unmeasurable Routes: {self._first_meaningful(route_contribution_summary.get('unmeasurable_routes'), default=0)}",
+            f"Legacy Unmeasurable Routes Scope: {self._first_meaningful(route_contribution_summary.get('unmeasurable_routes_scope'), default='SELECTED_ROUTES')}",
+            f"Legacy Unmeasurable Routes: {self._first_meaningful(route_contribution_summary.get('unmeasurable_routes'), default=0)}",
+            f"Selected Routes With Measurable Contribution: {self._first_meaningful(route_contribution_summary.get('selected_routes_with_measurable_contribution'), default=0)}",
+            f"Selected Routes With Unmeasurable Contribution: {self._first_meaningful(route_contribution_summary.get('selected_routes_with_unmeasurable_contribution'), route_contribution_summary.get('unmeasurable_routes'), default=0)}",
+            f"Executed Routes With Measurable Contribution: {self._first_meaningful(route_contribution_summary.get('executed_routes_with_measurable_contribution'), default=0)}",
+            f"Executed Routes With Unmeasurable Contribution: {self._first_meaningful(route_contribution_summary.get('executed_routes_with_unmeasurable_contribution'), default=0)}",
+            f"Unmeasurable Because Not Executed: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_not_executed'), default=0)}",
+            f"Unmeasurable Because Lineage Error: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_lineage_error'), default=0)}",
+            f"Unmeasurable Because Insufficient Downstream Lineage: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_insufficient_downstream_lineage'), default=0)}",
+            f"Unmeasurable Because Other: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_other'), default=0)}",
+            f"Selected Route Partition Integrity: {self._first_meaningful(route_contribution_summary.get('selected_route_partition_integrity'), default='PARTITION_INTEGRITY_FAILED')}",
+            f"Selected Route Partition Delta: {self._first_meaningful(route_contribution_summary.get('selected_route_partition_delta'), default=0)}",
+            f"Executed Route Partition Integrity: {self._first_meaningful(route_contribution_summary.get('executed_route_partition_integrity'), default='PARTITION_INTEGRITY_FAILED')}",
+            f"Executed Route Partition Delta: {self._first_meaningful(route_contribution_summary.get('executed_route_partition_delta'), default=0)}",
             f"Marginal Routes Executed: {self._first_meaningful(route_contribution_summary.get('marginal_routes_executed'), default=0)}",
+            f"Marginal Routes Measurable: {self._first_meaningful(route_contribution_summary.get('marginal_routes_measurable'), default=0)}",
+            f"Marginal Routes Unmeasurable: {self._first_meaningful(route_contribution_summary.get('marginal_routes_unmeasurable'), default=0)}",
             f"Marginal Useful Routes: {self._first_meaningful(route_contribution_summary.get('marginal_useful_routes'), default=0)}",
+            f"Marginal Duplicate Routes: {self._first_meaningful(route_contribution_summary.get('marginal_duplicate_routes'), default=0)}",
+            f"Marginal Low-Value Routes: {self._first_meaningful(route_contribution_summary.get('marginal_low_value_routes'), default=0)}",
+            f"Marginal No Observable Routes: {self._first_meaningful(route_contribution_summary.get('marginal_no_observable_routes'), default=0)}",
             f"Marginal Unique Contribution Rate: {self._first_meaningful(route_contribution_summary.get('marginal_unique_contribution_rate'), default='NOT_MEASURABLE')}",
             f"Marginal Redundancy Rate: {self._first_meaningful(route_contribution_summary.get('marginal_redundancy_rate'), default='NOT_MEASURABLE')}",
             f"Telemetry Consumed By Cognition: {self._value(route_contribution_summary.get('telemetry_consumed_by_cognition') is True)}",
@@ -2545,10 +2824,23 @@ class DeterministicFinalReportRenderer:
     def _render_human_report_integrity(self, integrity: dict[str, Any]) -> str:
         attribution = integrity.get("Human Report Conflict Attribution")
         attribution = attribution if isinstance(attribution, list) else []
+        section_accounting = integrity.get("Human Projection Section Accounting")
+        section_accounting = (
+            section_accounting if isinstance(section_accounting, list) else []
+        )
+        local_reductions = integrity.get("Human Report Local Reductions")
+        local_reductions = local_reductions if isinstance(local_reductions, list) else []
         scalar_lines = [
             f"{key}: {self._value(value)}"
             for key, value in integrity.items()
-            if key != "Human Report Conflict Attribution"
+            if key not in {
+                "Human Report Conflict Attribution",
+                "Human Projection Section Accounting",
+                "Human Projection Selected Outside Universe",
+                "Human Projection Visible Outside Selected",
+                "Human Projection Selected But Empty",
+                "Human Report Local Reductions",
+            }
         ]
         attribution_lines = [
             (
@@ -2568,8 +2860,43 @@ class DeterministicFinalReportRenderer:
             for index, row in enumerate(attribution)
             if isinstance(row, dict)
         ]
+        section_lines = [
+            (
+                "Human Projection Section Accounting "
+                f"{index + 1}: "
+                f"section_id={self._value(row.get('section_id'))}; "
+                f"selected={self._value(row.get('selected'))}; "
+                "membership_semantics="
+                f"{self._value(row.get('membership_semantics'))}; "
+                f"render_attempted={self._value(row.get('render_attempted'))}; "
+                f"visible_rendering={self._value(row.get('visible_rendering'))}; "
+                f"selection_state={self._value(row.get('selection_state'))}; "
+                f"render_state={self._value(row.get('render_state'))}; "
+                "selection_reason_if_known="
+                f"{self._value(row.get('selection_reason_if_known'))}"
+            )
+            for index, row in enumerate(section_accounting)
+            if isinstance(row, dict)
+        ]
+        reduction_lines = [
+            (
+                "Human Report Local Reduction "
+                f"{index + 1}: "
+                f"collection={self._value(row.get('collection'))}; "
+                f"original_count={self._value(row.get('original_count'))}; "
+                f"rendered_count={self._value(row.get('rendered_count'))}; "
+                f"omitted_count={self._value(row.get('omitted_count'))}; "
+                f"limit={self._value(row.get('limit'))}; "
+                f"reduction_type={self._value(row.get('reduction_type'))}; "
+                f"visibility_state={self._value(row.get('visibility_state'))}"
+            )
+            for index, row in enumerate(local_reductions)
+            if isinstance(row, dict)
+        ]
         return self._section("REPORT INTEGRITY", [
             *scalar_lines,
+            *section_lines,
+            *reduction_lines,
             *attribution_lines,
         ])
 
@@ -2717,6 +3044,7 @@ class DeterministicFinalReportRenderer:
         emitted_text: str,
         critical_note_count: int = 0,
         binding: dict[str, Any] | None = None,
+        report_level: str = "normal",
     ) -> dict[str, Any]:
         start_count = persisted_text.count(REPORT_BEGIN_MARKER)
         end_count = persisted_text.count(REPORT_END_MARKER)
@@ -2726,6 +3054,10 @@ class DeterministicFinalReportRenderer:
             section
             for section in selected_sections
             if section != "NEXRYN HUMAN RUN SUMMARY"
+            and not (
+                section == "NATURAL PRODUCTION AUTHORITY HANDOFF"
+                and report_level == "minimal"
+            )
             and persisted_text.count(self._section_title(section)) != 1
         ]
         if "NEXRYN HUMAN RUN SUMMARY" in selected_sections:
@@ -2800,10 +3132,10 @@ class DeterministicFinalReportRenderer:
             "Human Report End Marker Count": end_count,
             "Human Report Legacy Attestation Interpretation": "LEGACY_UNDECLARED",
             "Human Report Persistence Matches Emission": False,
-            "Human Report Selected Section Count": len(selected_sections),
-            "Human Report Omitted Nonessential Section Count": max(
-                0,
-                len(SECTION_ORDER) - len(selected_sections),
+            **self._human_section_accounting(
+                selected_sections,
+                rendered_report=persisted_text,
+                report_level=report_level,
             ),
             "Human Report Critical Observability Note Count": int(
                 critical_note_count or 0
@@ -2829,11 +3161,66 @@ class DeterministicFinalReportRenderer:
             "Character Count/Fingerprint Attestation": "OUT_OF_SCOPE_UNCHANGED",
             "Human Report Transport Limit Encountered": False,
             "Human Report Transport Segmented": False,
+            "Human Report Authority": "NONE",
             "Human Report Integrity State": "COMPLETE" if complete else "INCOMPLETE",
             "Human Report Integrity Reason": "all selected human-report content preserved"
             if complete
             else ";".join(failures),
         }
+
+    def _record_local_reduction(
+        self,
+        *,
+        collection: str,
+        original_count: int,
+        rendered_count: int,
+        limit: int,
+        reduction_type: str,
+        visibility_state: str,
+    ) -> None:
+        omitted_count = max(int(original_count) - int(rendered_count), 0)
+        if original_count != rendered_count + omitted_count:
+            visibility_state = "UNMEASURABLE"
+        self._current_local_reductions.append({
+            "collection": collection,
+            "original_count": int(original_count),
+            "rendered_count": int(rendered_count),
+            "omitted_count": omitted_count,
+            "limit": int(limit),
+            "reduction_applied": omitted_count > 0,
+            "reduction_type": reduction_type,
+            "visibility_state": visibility_state,
+        })
+
+    def _human_report_local_reduction_integrity(self) -> dict[str, Any]:
+        reductions = [
+            dict(row)
+            for row in self._current_local_reductions
+            if isinstance(row, dict)
+        ]
+        applied = [row for row in reductions if row.get("reduction_applied")]
+        silent = [
+            row for row in applied
+            if row.get("visibility_state") != "VISIBLE"
+        ]
+        summary = {
+            "Human Report Local Reduction Site Count": len(reductions),
+            "Human Report Local Reduction Applied Count": len(applied),
+            "Human Report Local Reduction Omitted Item Count": sum(
+                int(row.get("omitted_count", 0) or 0)
+                for row in applied
+            ),
+            "Human Report Silent Local Reduction Count": len(silent),
+            "Human Report Local Reduction Contract": (
+                "original_count=rendered_count+omitted_count"
+            ),
+            "Human Report Local Reduction Semantics": (
+                "PREVIEW_IS_LOCAL_REDUCTION_NOT_GLOBAL_TRUNCATION"
+            ),
+            "Human Report Local Reductions": reductions,
+        }
+        self._last_local_reduction_summary = dict(summary)
+        return summary
 
     def _human_observability_notes(self, canonical: dict[str, Any]) -> list[str]:
         state = canonical["report_state"]
@@ -10587,15 +10974,41 @@ class DeterministicFinalReportRenderer:
             if all(not isinstance(item, (dict, list, tuple, set)) for item in value):
                 preview = ", ".join(str(item) for item in value[:8])
                 suffix = f" (+{len(value) - 8} more)" if len(value) > 8 else ""
+                if len(value) > 8:
+                    self._record_local_reduction(
+                        collection="scalar_list_preview",
+                        original_count=len(value),
+                        rendered_count=8,
+                        limit=8,
+                        reduction_type="PREVIEW",
+                        visibility_state="VISIBLE",
+                    )
                 return preview + suffix
             return f"{len(value)} entries"
         if isinstance(value, dict):
             if not value:
                 return "0"
-            return ", ".join(
+            rendered_count = min(len(value), 8)
+            rendered = ", ".join(
                 f"{self._label(str(key))}={self._value(item)}"
                 for key, item in list(value.items())[:8]
             )
+            if len(value) > 8:
+                omitted_count = len(value) - rendered_count
+                self._record_local_reduction(
+                    collection="dict_preview",
+                    original_count=len(value),
+                    rendered_count=rendered_count,
+                    limit=8,
+                    reduction_type="PREVIEW",
+                    visibility_state="VISIBLE",
+                )
+                rendered = (
+                    f"{rendered} "
+                    f"(showing {rendered_count} of {len(value)} entries; "
+                    f"omitted {omitted_count} entries)"
+                )
+            return rendered
         return str(value)
 
     def _first_meaningful(self, *values: Any, default: str = "Not Available") -> str:
@@ -10700,15 +11113,31 @@ class DeterministicFinalReportRenderer:
             if rendered_report.count(self._section_title(section)) > 1
         )
         raw_count = len(RAW_STRUCTURE_PATTERN.findall(rendered_report))
-        selected_sections = [
-            section
-            for section in HUMAN_SECTION_ORDER
-            if self._section_title(section) in rendered_report
-        ]
+        selected_sections = list(self._last_human_selected_sections)
+        if not selected_sections:
+            visible_titles = [
+                section
+                for section in HUMAN_SECTION_ORDER
+                if self._section_title(section) in rendered_report
+            ]
+            selected_sections = list(visible_titles)
+            if "REPORT INTEGRITY" not in selected_sections:
+                selected_sections.append("REPORT INTEGRITY")
+            if self._section_title(
+                "NATURAL PRODUCTION AUTHORITY HANDOFF"
+            ) in rendered_report:
+                selected_sections.insert(
+                    max(len(selected_sections) - 2, 0),
+                    "NATURAL PRODUCTION AUTHORITY HANDOFF",
+                )
+        report_level = self._last_human_report_level
+        if not report_level:
+            report_level = "minimal" if "Report Level: minimal" in rendered_report else "normal"
         integrity = self._human_report_integrity(
             rendered_report,
             selected_sections=selected_sections,
             emitted_text=rendered_report,
+            report_level=report_level,
         )
         render_measurement = render_measurement or self._measure_report_payload(rendered_report)
         persistence_measurement = persistence_measurement or self._not_verified_persistence_measurement()
@@ -10758,9 +11187,22 @@ class DeterministicFinalReportRenderer:
             "human_report_end_marker_present": integrity["Human Report End Marker Present"],
             "human_report_start_marker_count": integrity["Human Report Start Marker Count"],
             "human_report_end_marker_count": integrity["Human Report End Marker Count"],
-            "human_report_selected_section_count": integrity["Human Report Selected Section Count"],
-            "human_report_omitted_nonessential_section_count": integrity["Human Report Omitted Nonessential Section Count"],
+            "human_projection_universe_count": integrity["Human Projection Universe Count"],
+            "human_projection_selected_section_count": integrity["Human Projection Selected Section Count"],
+            "human_projection_unselected_section_count": integrity["Human Projection Unselected Section Count"],
+            "human_projection_visible_section_count": integrity["Human Projection Visible Section Count"],
+            "human_projection_selected_but_empty_count": integrity["Human Projection Selected But Empty Count"],
+            "human_projection_selected_outside_universe_count": integrity["Human Projection Selected Outside Universe Count"],
+            "human_projection_visible_outside_selected_count": integrity["Human Projection Visible Outside Selected Count"],
+            "human_projection_duplicate_universe_identity_count": integrity["Human Projection Duplicate Universe Identity Count"],
+            "human_projection_unknown_human_section_identity_count": integrity["Human Projection Unknown Human Section Identity Count"],
+            "human_report_legacy_section_order_count": integrity["Human Report Legacy Section Order Count"],
             "human_report_critical_observability_note_count": critical_note_count,
+            "human_report_local_reduction_site_count": self._last_local_reduction_summary.get("Human Report Local Reduction Site Count", 0),
+            "human_report_local_reduction_applied_count": self._last_local_reduction_summary.get("Human Report Local Reduction Applied Count", 0),
+            "human_report_local_reduction_omitted_item_count": self._last_local_reduction_summary.get("Human Report Local Reduction Omitted Item Count", 0),
+            "human_report_silent_local_reduction_count": self._last_local_reduction_summary.get("Human Report Silent Local Reduction Count", 0),
+            "human_report_authority": integrity["Human Report Authority"],
             "human_report_transport_limit_encountered": False,
             "human_report_transport_segmented": False,
             "human_report_integrity_state": integrity["Human Report Integrity State"],

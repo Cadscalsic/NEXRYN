@@ -7,6 +7,11 @@ import json
 from copy import deepcopy
 from typing import Any, Mapping
 
+from runtime.telemetry.pre_route_admission import (
+    TEMPORAL_INTEGRITY_VERIFIED,
+    pre_route_admission_snapshot_observer,
+)
+
 
 class RuntimeBudgetEnforcer:
     """Build immutable budget receipts from canonical runtime lifecycle records."""
@@ -122,7 +127,18 @@ class RuntimeBudgetEnforcer:
             )
 
         admitted_routes = self._admitted_route_ids(route_records, nodes, route_limit)
-        route_dispositions = self._route_dispositions(route_records, admitted_routes)
+        snapshots, snapshot_linkages, snapshot_overhead = self._pre_route_snapshots(
+            context=context,
+            budget=snapshot,
+            execution_plan_id=execution_plan_id,
+            route_records=route_records,
+            admitted_route_ids=admitted_routes,
+        )
+        route_dispositions = self._route_dispositions(
+            route_records,
+            admitted_routes,
+            snapshot_linkages,
+        )
         route_counts = self._route_counts(
             context,
             route_records,
@@ -195,6 +211,40 @@ class RuntimeBudgetEnforcer:
             "route_budget_enforcement_state": route_state,
             "route_budget_violation_count": route_violations,
             "route_dispositions": route_dispositions,
+            "pre_route_admission_snapshot_schema_version": (
+                "pre_route_admission_snapshot.v1"
+            ),
+            "pre_route_admission_snapshot_authority": "OBSERVATION_ONLY",
+            "pre_route_admission_snapshot_behavioral_authority": "NONE",
+            "pre_route_admission_snapshots": snapshots,
+            "pre_route_admission_snapshot_count": len(snapshots),
+            "pre_route_admission_snapshot_linkages": snapshot_linkages,
+            "pre_route_admission_temporal_integrity_state": (
+                TEMPORAL_INTEGRITY_VERIFIED
+                if len(snapshots) == len(route_records)
+                else "PRE_ADMISSION_TEMPORAL_INTEGRITY_INSUFFICIENT"
+            ),
+            "pre_route_admission_temporal_violation_count": 0,
+            "pre_route_admission_leakage_count": sum(
+                len(row.get("leakage_fields") or []) for row in snapshots
+            ),
+            "pre_route_admission_snapshot_mutation_count": sum(
+                0
+                if link.get("snapshot_fingerprint_before")
+                == link.get("snapshot_fingerprint_after_route_execution")
+                else 1
+                for link in snapshot_linkages
+            ),
+            "pre_route_admission_linkage_failure_count": sum(
+                0
+                if link.get("snapshot_id")
+                and link.get("route_id")
+                and link.get("feature_state") == "PRE_ADMISSION_FEATURES"
+                else 1
+                for link in snapshot_linkages
+            ),
+            "pre_route_admission_overhead": snapshot_overhead,
+            "pre_route_admission_consumed_by_cognition": False,
             "maximum_reasoning_depth": depth_limit,
             "reasoning_depth_limit_scope": depth_scope,
             "configured_reasoning_depth": depth_counts["configured_reasoning_depth"],
@@ -353,12 +403,85 @@ class RuntimeBudgetEnforcer:
         )
         return [str(row.get("route_id")) for row in ordered[:limit]]
 
+    def _pre_route_snapshots(
+        self,
+        *,
+        context: Mapping[str, Any],
+        budget: Mapping[str, Any],
+        execution_plan_id: str | None,
+        route_records: list[dict[str, Any]],
+        admitted_route_ids: list[str],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+        admitted = set(admitted_route_ids)
+        ordered = sorted(
+            route_records,
+            key=lambda row: (
+                self._int_or_none(row.get("route_rank")) or 10**9,
+                str(row.get("route_id") or ""),
+            ),
+        )
+        snapshots = []
+        linkages = []
+        total_time = 0.0
+        total_bytes = 0
+        admitted_so_far = 0
+        executed_so_far = 0
+        prior_route_states: list[dict[str, Any]] = []
+        for index, route in enumerate(ordered, start=1):
+            observed = pre_route_admission_snapshot_observer.create_snapshot(
+                context=context,
+                budget=budget,
+                execution_plan_id=execution_plan_id,
+                route_record=route,
+                route_position=self._int_or_none(route.get("route_rank")) or index,
+                selected_route_count=len(route_records),
+                admitted_so_far=admitted_so_far,
+                executed_so_far=executed_so_far,
+                admission_sequence_index=index,
+                prior_route_states=prior_route_states,
+            )
+            snapshot = observed["snapshot"]
+            linkage = observed["linkage"]
+            overhead = observed["overhead"]
+            route_id = str(route.get("route_id"))
+            decision = (
+                "ADMITTED"
+                if route_id in admitted
+                else "DEFERRED"
+            )
+            linkage["admission_state"] = decision
+            snapshots.append(snapshot)
+            linkages.append(linkage)
+            total_time += float(overhead.get("snapshot_serialization_time") or 0.0)
+            total_bytes += int(overhead.get("snapshot_bytes") or 0)
+            if decision == "ADMITTED":
+                admitted_so_far += 1
+            prior_route_states.append({
+                "route_id": route_id,
+                "admission_state": decision,
+            })
+        per_task_count = len(snapshots) or 1
+        return snapshots, linkages, {
+            "snapshot_serialization_time": round(total_time, 6),
+            "snapshot_bytes": total_bytes,
+            "total_snapshot_time_per_task": round(total_time, 6),
+            "total_snapshot_bytes_per_task": total_bytes,
+            "mean_snapshot_time": round(total_time / per_task_count, 6),
+            "mean_snapshot_bytes": round(total_bytes / per_task_count, 2),
+        }
+
     def _route_dispositions(
         self,
         route_records: list[dict[str, Any]],
         admitted_route_ids: list[str],
+        snapshot_linkages: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         admitted = set(admitted_route_ids)
+        by_route = {
+            str(row.get("route_id")): row
+            for row in (snapshot_linkages or [])
+            if isinstance(row, Mapping)
+        }
         rows = []
         for row in sorted(
             route_records,
@@ -369,11 +492,22 @@ class RuntimeBudgetEnforcer:
         ):
             route_id = str(row.get("route_id"))
             state = "ROUTE_BUDGET_ADMITTED" if route_id in admitted else "DEFERRED_BY_BUDGET"
+            linkage = by_route.get(route_id, {})
             rows.append({
                 "route_id": route_id,
                 "route_rank": row.get("route_rank"),
                 "route_score": row.get("route_score"),
+                "pre_admission_snapshot_id": linkage.get("snapshot_id"),
+                "pre_admission_snapshot_fingerprint": linkage.get(
+                    "snapshot_fingerprint_before"
+                ),
                 "budget_disposition": state,
+                "admission_state": (
+                    "ADMITTED"
+                    if state == "ROUTE_BUDGET_ADMITTED"
+                    else "DEFERRED"
+                ),
+                "feature_state": "DECISION_OUTCOME",
             })
         return rows
 

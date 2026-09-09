@@ -6,6 +6,7 @@ from runtime.telemetry.route_contribution import (
     compact_route_contribution_summary,
     route_origin_lineage_from_record,
 )
+from runtime.reporting.final_report_renderer import DeterministicFinalReportRenderer
 
 
 def _routes(count=6):
@@ -70,6 +71,56 @@ def _manifest(context=None, **kwargs):
     )
 
 
+def _scoped_partition_manifest():
+    routes = _routes(12)
+    lifecycle = []
+    for index in range(1, 7):
+        lifecycle.extend([
+            {"run_id": "run_a", "task_id": "task_a", "route_id": f"route_{index}", "state": "ACTIVE_ROUTE"},
+            {"run_id": "run_a", "task_id": "task_a", "route_id": f"route_{index}", "state": "RELEASED_ROUTE"},
+        ])
+    for index in range(7, 13):
+        lifecycle.append({
+            "run_id": "run_a",
+            "task_id": "task_a",
+            "route_id": f"route_{index}",
+            "state": "DEFERRED_BY_BUDGET",
+        })
+    context = _context(
+        route_output_lineage_records=[
+            {
+                "origin_route_id": "route_2",
+                "output_type": "candidate",
+                "candidate_id": "candidate_base",
+                "output_fingerprint": "candidate:base",
+                "qualification_state": "QUALIFIED",
+                "arena_state": "EVALUATED",
+            },
+            {
+                "origin_route_id": "route_5",
+                "output_type": "candidate",
+                "candidate_id": "candidate_marginal_a",
+                "output_fingerprint": "candidate:marginal:a",
+                "qualification_state": "QUALIFIED",
+                "arena_state": "EVALUATED",
+            },
+            {
+                "origin_route_id": "route_6",
+                "output_type": "candidate",
+                "candidate_id": "candidate_marginal_b",
+                "output_fingerprint": "candidate:marginal:b",
+                "qualification_state": "QUALIFIED",
+                "arena_state": "EVALUATED",
+            },
+        ],
+    )
+    return _manifest(
+        context,
+        route_records=routes,
+        route_lifecycle_records=lifecycle,
+    )
+
+
 def test_positive_control_classifies_marginal_routes_without_authority():
     context = _context(
         route_output_lineage_records=[
@@ -128,6 +179,137 @@ def test_positive_control_classifies_marginal_routes_without_authority():
     assert manifest["telemetry_consumed_by_cognition"] is False
     assert manifest["authority"] == "OBSERVATION_ONLY"
     assert manifest["behavioral_authority"] == "NONE"
+
+
+def test_scoped_route_accounting_partitions_selected_and_executed_routes():
+    manifest = _scoped_partition_manifest()
+    aggregate = manifest["aggregate_summary"]
+
+    assert manifest["attribution_completeness_state"] == "ROUTE_ATTRIBUTION_COMPLETE"
+    assert aggregate["selected_routes"] == 12
+    assert aggregate["executed_routes"] == 6
+    assert aggregate["routes_with_unique_useful_contribution"] == 3
+    assert aggregate["routes_with_duplicate_contribution"] == 0
+    assert aggregate["routes_with_low_value_contribution"] == 0
+    assert aggregate["routes_with_no_observable_contribution"] == 3
+    assert aggregate["selected_routes_with_unmeasurable_contribution"] == 6
+    assert aggregate["executed_routes_with_unmeasurable_contribution"] == 0
+    assert aggregate["selected_route_partition_delta"] == 0
+    assert aggregate["selected_route_partition_integrity"] == "VERIFIED"
+    assert aggregate["executed_route_partition_delta"] == 0
+    assert aggregate["executed_route_partition_integrity"] == "VERIFIED"
+
+
+def test_deferred_routes_are_selected_unmeasurable_not_executed_unmeasurable():
+    manifest = _scoped_partition_manifest()
+    aggregate = manifest["aggregate_summary"]
+
+    deferred = [route for route in manifest["routes"] if route["route_position"] >= 7]
+    assert {route["execution_state"] for route in deferred} == {"NOT_EXECUTED"}
+    assert {route["contribution_measurability_state"] for route in deferred} == {
+        "CONTRIBUTION_NOT_MEASURABLE"
+    }
+    assert aggregate["selected_routes_with_unmeasurable_contribution"] == 6
+    assert aggregate["executed_routes_with_unmeasurable_contribution"] == 0
+    assert aggregate["unmeasurable_because_not_executed"] == 6
+
+
+def test_unmeasurable_reason_counts_expose_lineage_and_downstream_causes():
+    lineage_manifest = _manifest(
+        _context(
+            route_output_lineage_records=[
+                {
+                    "origin_route_id": "route_1",
+                    "run_id": "old_run",
+                    "output_type": "candidate",
+                    "candidate_id": "candidate_stale",
+                    "qualification_state": "QUALIFIED",
+                }
+            ]
+        )
+    )
+    downstream_manifest = _manifest(
+        _context(
+            route_output_lineage_records=[
+                {
+                    "origin_route_id": "route_1",
+                    "output_type": "candidate",
+                    "candidate_id": "candidate_unknown",
+                    "output_fingerprint": "candidate:unknown",
+                }
+            ]
+        )
+    )
+
+    assert lineage_manifest["routes"][0]["contribution_state"] == "CONTRIBUTION_NOT_MEASURABLE"
+    assert lineage_manifest["routes"][0]["unmeasurable_reasons"] == ["lineage_error"]
+    assert lineage_manifest["aggregate_summary"]["unmeasurable_because_lineage_error"] == 1
+    assert downstream_manifest["routes"][0]["contribution_state"] == "CONTRIBUTION_NOT_MEASURABLE"
+    assert downstream_manifest["routes"][0]["unmeasurable_reasons"] == [
+        "insufficient_downstream_lineage"
+    ]
+    assert (
+        downstream_manifest["aggregate_summary"][
+            "unmeasurable_because_insufficient_downstream_lineage"
+        ]
+        == 1
+    )
+
+
+def test_compact_summary_preserves_legacy_unmeasurable_scope_and_adds_scoped_fields():
+    summary = compact_route_contribution_summary(_scoped_partition_manifest())
+
+    assert summary["schema_version"] == "1.0"
+    assert summary["unmeasurable_routes"] == 6
+    assert summary["unmeasurable_routes_scope"] == "SELECTED_ROUTES"
+    assert summary["selected_routes"] == 12
+    assert summary["executed_routes"] == 6
+    assert summary["selected_routes_with_unmeasurable_contribution"] == 6
+    assert summary["executed_routes_with_unmeasurable_contribution"] == 0
+    assert summary["executed_route_attribution_state"] == "ROUTE_ATTRIBUTION_COMPLETE"
+    assert summary["executed_route_attribution_scope"] == "EXECUTED_ROUTES"
+    assert summary["telemetry_consumed_by_cognition"] is False
+
+
+def test_marginal_accounting_remains_executed_position_scoped():
+    aggregate = _scoped_partition_manifest()["aggregate_summary"]
+
+    assert aggregate["marginal_routes_executed"] == 4
+    assert aggregate["marginal_routes_measurable"] == 4
+    assert aggregate["marginal_routes_unmeasurable"] == 0
+    assert aggregate["marginal_unique_useful_routes"] == 2
+    assert aggregate["marginal_duplicate_routes"] == 0
+    assert aggregate["marginal_low_value_routes"] == 0
+    assert aggregate["marginal_no_observable_routes"] == 2
+    assert aggregate["marginal_unique_contribution_rate"] == 0.5
+    assert aggregate["marginal_redundancy_rate"] == 0.0
+
+
+def test_human_route_report_wording_exposes_scope():
+    summary = compact_route_contribution_summary(_scoped_partition_manifest())
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(
+        {
+            "runtime_status": "completed",
+            "training_batch_size": 3,
+            "EXECUTION_PLAN_REPORT": {
+                "execution_plan_id": "plan_a",
+                "execution_plan_schema_version": "1.0",
+                "finalized": True,
+                "route_contribution_summary": summary,
+            },
+        },
+        runtime_metadata={"execution_id": "run_a", "mode": "adaptive"},
+    )
+
+    assert "Executed Route Attribution State: ROUTE_ATTRIBUTION_COMPLETE" in report
+    assert "Selected Routes: 12" in report
+    assert "Executed Routes: 6" in report
+    assert "Legacy Unmeasurable Routes Scope: SELECTED_ROUTES" in report
+    assert "Legacy Unmeasurable Routes: 6" in report
+    assert "Selected Routes With Unmeasurable Contribution: 6" in report
+    assert "Executed Routes With Unmeasurable Contribution: 0" in report
+    assert "\nUnmeasurable Routes: 6\n" not in report
 
 
 def test_stable_route_identity_is_current_run_and_task_bound():

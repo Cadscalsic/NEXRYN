@@ -315,6 +315,13 @@ def build_route_contribution_manifest(
         routes_out.append({
             **identity,
             "lifecycle_state": contribution["lifecycle_state"],
+            "execution_state": contribution["execution_state"],
+            "lineage_state": contribution["lineage_state"],
+            "contribution_measurability_state": contribution[
+                "contribution_measurability_state"
+            ],
+            "downstream_lineage_state": contribution["downstream_lineage_state"],
+            "unmeasurable_reasons": contribution["unmeasurable_reasons"],
             "selected": True,
             "admitted": contribution["admitted"],
             "executed": contribution["executed"],
@@ -392,15 +399,36 @@ def compact_route_contribution_summary(manifest: Mapping[str, Any] | None) -> di
         "authority": manifest.get("authority", AUTHORITY),
         "behavioral_authority": manifest.get("behavioral_authority", BEHAVIORAL_AUTHORITY),
         "attribution_state": manifest.get("attribution_completeness_state", "ROUTE_ATTRIBUTION_INSUFFICIENT"),
+        "executed_route_attribution_state": manifest.get("attribution_completeness_state", "ROUTE_ATTRIBUTION_INSUFFICIENT"),
+        "executed_route_attribution_scope": aggregate.get("executed_route_attribution_scope", "EXECUTED_ROUTES"),
         "lineage_state": manifest.get("lineage_continuity_state", "ROUTE_LINEAGE_BROKEN"),
+        "selected_routes": aggregate.get("selected_routes", 0),
         "executed_routes": aggregate.get("executed_routes", 0),
         "unique_useful_routes": aggregate.get("routes_with_unique_useful_contribution", 0),
         "duplicate_routes": aggregate.get("routes_with_duplicate_contribution", 0),
         "low_value_routes": aggregate.get("routes_with_low_value_contribution", 0),
         "no_observable_routes": aggregate.get("routes_with_no_observable_contribution", 0),
         "unmeasurable_routes": aggregate.get("routes_with_unmeasurable_contribution", 0),
+        "unmeasurable_routes_scope": aggregate.get("routes_with_unmeasurable_contribution_scope", "SELECTED_ROUTES"),
+        "selected_routes_with_measurable_contribution": aggregate.get("selected_routes_with_measurable_contribution", 0),
+        "selected_routes_with_unmeasurable_contribution": aggregate.get("selected_routes_with_unmeasurable_contribution", 0),
+        "executed_routes_with_measurable_contribution": aggregate.get("executed_routes_with_measurable_contribution", 0),
+        "executed_routes_with_unmeasurable_contribution": aggregate.get("executed_routes_with_unmeasurable_contribution", 0),
+        "unmeasurable_because_not_executed": aggregate.get("unmeasurable_because_not_executed", 0),
+        "unmeasurable_because_lineage_error": aggregate.get("unmeasurable_because_lineage_error", 0),
+        "unmeasurable_because_insufficient_downstream_lineage": aggregate.get("unmeasurable_because_insufficient_downstream_lineage", 0),
+        "unmeasurable_because_other": aggregate.get("unmeasurable_because_other", 0),
+        "selected_route_partition_delta": aggregate.get("selected_route_partition_delta", 0),
+        "selected_route_partition_integrity": aggregate.get("selected_route_partition_integrity", "PARTITION_INTEGRITY_FAILED"),
+        "executed_route_partition_delta": aggregate.get("executed_route_partition_delta", 0),
+        "executed_route_partition_integrity": aggregate.get("executed_route_partition_integrity", "PARTITION_INTEGRITY_FAILED"),
         "marginal_routes_executed": aggregate.get("marginal_routes_executed", 0),
+        "marginal_routes_measurable": aggregate.get("marginal_routes_measurable", 0),
+        "marginal_routes_unmeasurable": aggregate.get("marginal_routes_unmeasurable", 0),
         "marginal_useful_routes": aggregate.get("marginal_routes_useful_count", 0),
+        "marginal_duplicate_routes": aggregate.get("marginal_duplicate_routes", 0),
+        "marginal_low_value_routes": aggregate.get("marginal_low_value_routes", 0),
+        "marginal_no_observable_routes": aggregate.get("marginal_no_observable_routes", 0),
         "marginal_unique_contribution_rate": aggregate.get("marginal_unique_contribution_rate", "NOT_MEASURABLE"),
         "marginal_redundancy_rate": aggregate.get("marginal_redundancy_rate", "NOT_MEASURABLE"),
         "artifact_path": manifest.get("artifact_path"),
@@ -664,13 +692,16 @@ def _classify_route(
 
     limitations = []
     evidence = []
+    unmeasurable_reasons = []
     if lineage_errors:
         limitations.extend(str(item) for item in lineage_errors)
     if not executed and (deferred or rejected):
         contribution_state = "CONTRIBUTION_NOT_MEASURABLE"
         limitations.append("route_not_executed")
+        unmeasurable_reasons.append("route_not_executed")
     elif lineage_errors:
         contribution_state = "CONTRIBUTION_NOT_MEASURABLE"
+        unmeasurable_reasons.append("lineage_error")
     elif useful or repair_contrib:
         contribution_state = "UNIQUE_USEFUL_CONTRIBUTION"
         evidence.append("distinct_output_used_downstream")
@@ -686,9 +717,28 @@ def _classify_route(
     else:
         contribution_state = "CONTRIBUTION_NOT_MEASURABLE"
         limitations.append("insufficient_downstream_lineage")
+        unmeasurable_reasons.append("insufficient_downstream_lineage")
+
+    contribution_measurable = contribution_state != "CONTRIBUTION_NOT_MEASURABLE"
+    downstream_lineage_sufficient = (
+        contribution_measurable or contribution_state == "NO_OBSERVABLE_CONTRIBUTION"
+    )
 
     return {
         "lifecycle_state": lifecycle_state,
+        "execution_state": "EXECUTED" if executed else "NOT_EXECUTED",
+        "lineage_state": "LINEAGE_ERROR" if lineage_errors else "LINEAGE_VERIFIED",
+        "contribution_measurability_state": (
+            "CONTRIBUTION_MEASURABLE"
+            if contribution_measurable
+            else "CONTRIBUTION_NOT_MEASURABLE"
+        ),
+        "downstream_lineage_state": (
+            "DOWNSTREAM_LINEAGE_SUFFICIENT"
+            if downstream_lineage_sufficient
+            else "DOWNSTREAM_LINEAGE_INSUFFICIENT"
+        ),
+        "unmeasurable_reasons": sorted(set(unmeasurable_reasons)),
         "admitted": admitted,
         "executed": executed,
         "completed": completed,
@@ -726,8 +776,25 @@ def _aggregate(routes: list[dict[str, Any]], route_cap: int | None) -> dict[str,
     low_value = [row for row in routes if row.get("contribution_state") == "LOW_VALUE_CONTRIBUTION"]
     no_observable = [row for row in routes if row.get("contribution_state") == "NO_OBSERVABLE_CONTRIBUTION"]
     unmeasurable = [row for row in routes if row.get("contribution_state") == "CONTRIBUTION_NOT_MEASURABLE"]
+    executed_useful = [row for row in executed if row.get("contribution_state") == "UNIQUE_USEFUL_CONTRIBUTION"]
+    executed_duplicate = [row for row in executed if row.get("contribution_state") == "DUPLICATE_CONTRIBUTION"]
+    executed_low_value = [row for row in executed if row.get("contribution_state") == "LOW_VALUE_CONTRIBUTION"]
+    executed_no_observable = [row for row in executed if row.get("contribution_state") == "NO_OBSERVABLE_CONTRIBUTION"]
+    executed_unmeasurable = [row for row in executed if row.get("contribution_state") == "CONTRIBUTION_NOT_MEASURABLE"]
     marginal_useful = [row for row in marginal if row.get("contribution_state") == "UNIQUE_USEFUL_CONTRIBUTION"]
     marginal_duplicate = [row for row in marginal if row.get("contribution_state") == "DUPLICATE_CONTRIBUTION"]
+    marginal_low_value = [row for row in marginal if row.get("contribution_state") == "LOW_VALUE_CONTRIBUTION"]
+    marginal_no_observable = [row for row in marginal if row.get("contribution_state") == "NO_OBSERVABLE_CONTRIBUTION"]
+    marginal_unmeasurable = [row for row in marginal if row.get("contribution_state") == "CONTRIBUTION_NOT_MEASURABLE"]
+    selected_partition_total = (
+        len(useful) + len(duplicate) + len(low_value) + len(no_observable)
+        + len(unmeasurable)
+    )
+    executed_partition_total = (
+        len(executed_useful) + len(executed_duplicate) + len(executed_low_value)
+        + len(executed_no_observable) + len(executed_unmeasurable)
+    )
+    reason_counts = _unmeasurable_reason_counts(unmeasurable)
     return {
         "selected_routes": len(routes),
         "admitted_routes": len([row for row in routes if row.get("admitted")]),
@@ -738,6 +805,28 @@ def _aggregate(routes: list[dict[str, Any]], route_cap: int | None) -> dict[str,
         "routes_with_low_value_contribution": len(low_value),
         "routes_with_no_observable_contribution": len(no_observable),
         "routes_with_unmeasurable_contribution": len(unmeasurable),
+        "routes_with_unmeasurable_contribution_scope": "SELECTED_ROUTES",
+        "selected_routes_with_measurable_contribution": len(routes) - len(unmeasurable),
+        "selected_routes_with_unmeasurable_contribution": len(unmeasurable),
+        "executed_routes_with_measurable_contribution": len(executed) - len(executed_unmeasurable),
+        "executed_routes_with_unmeasurable_contribution": len(executed_unmeasurable),
+        "unmeasurable_because_not_executed": reason_counts["route_not_executed"],
+        "unmeasurable_because_lineage_error": reason_counts["lineage_error"],
+        "unmeasurable_because_insufficient_downstream_lineage": reason_counts["insufficient_downstream_lineage"],
+        "unmeasurable_because_other": reason_counts["other"],
+        "selected_route_partition_delta": len(routes) - selected_partition_total,
+        "selected_route_partition_integrity": (
+            "VERIFIED"
+            if len(routes) == selected_partition_total
+            else "PARTITION_INTEGRITY_FAILED"
+        ),
+        "executed_route_partition_delta": len(executed) - executed_partition_total,
+        "executed_route_partition_integrity": (
+            "VERIFIED"
+            if len(executed) == executed_partition_total
+            else "PARTITION_INTEGRITY_FAILED"
+        ),
+        "executed_route_attribution_scope": "EXECUTED_ROUTES",
         "base_routes_useful_count": len([
             row for row in useful if int(row.get("route_position") or 0) <= 2
         ]),
@@ -749,14 +838,16 @@ def _aggregate(routes: list[dict[str, Any]], route_cap: int | None) -> dict[str,
         "marginal_routes_executed": len(marginal),
         "marginal_unique_outputs": sum(int(row.get("unique_output_count") or 0) for row in marginal),
         "marginal_duplicate_outputs": sum(int(row.get("duplicate_output_count") or 0) for row in marginal),
+        "marginal_routes_measurable": len(marginal) - len(marginal_unmeasurable),
+        "marginal_routes_unmeasurable": len(marginal_unmeasurable),
+        "marginal_unique_useful_routes": len(marginal_useful),
+        "marginal_duplicate_routes": len(marginal_duplicate),
+        "marginal_low_value_routes": len(marginal_low_value),
+        "marginal_no_observable_routes": len(marginal_no_observable),
         "marginal_useful_contributions": len(marginal_useful),
         "marginal_duplicate_route_count": len(marginal_duplicate),
-        "marginal_low_value_contributions": len([
-            row for row in marginal if row.get("contribution_state") == "LOW_VALUE_CONTRIBUTION"
-        ]),
-        "marginal_unmeasurable_contributions": len([
-            row for row in marginal if row.get("contribution_state") == "CONTRIBUTION_NOT_MEASURABLE"
-        ]),
+        "marginal_low_value_contributions": len(marginal_low_value),
+        "marginal_unmeasurable_contributions": len(marginal_unmeasurable),
         "unique_contribution_rate": _rate(len(useful), len(executed)),
         "marginal_unique_contribution_rate": _rate(len(marginal_useful), len(marginal)),
         "route_redundancy_rate": _rate(len(duplicate), len(executed)),
@@ -781,6 +872,29 @@ def _aggregate(routes: list[dict[str, Any]], route_cap: int | None) -> dict[str,
         ),
         "route_cap": route_cap,
     }
+
+
+def _unmeasurable_reason_counts(routes: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {
+        "route_not_executed": 0,
+        "lineage_error": 0,
+        "insufficient_downstream_lineage": 0,
+        "other": 0,
+    }
+    for route in routes:
+        reasons = [
+            str(reason)
+            for reason in route.get("unmeasurable_reasons", [])
+            if reason
+        ]
+        matched = False
+        for reason in reasons:
+            if reason in counts and reason != "other":
+                counts[reason] += 1
+                matched = True
+        if not matched:
+            counts["other"] += 1
+    return counts
 
 
 def _lineage_continuity(

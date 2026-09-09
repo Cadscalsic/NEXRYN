@@ -1,13 +1,20 @@
 import io
 import hashlib
+import importlib
 import json
 
+final_report_renderer_module = importlib.import_module(
+    "runtime.reporting.final_report_renderer"
+)
 from runtime.reporting.final_report_renderer import (
     REPORT_BEGIN_MARKER,
     REPORT_END_MARKER,
     DeterministicFinalReportRenderer,
+    HUMAN_PROJECTION_UNIVERSE,
+    HUMAN_SECTION_ORDER,
     HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
     HUMAN_REPORT_MEASUREMENT_CONTRACT,
+    SECTION_ORDER,
 )
 
 
@@ -110,6 +117,14 @@ def _metadata():
         "warning_count": 0,
         "error_count": 0,
     }
+
+
+def _state_without_critical_notes():
+    state = _state()
+    state["report_timing_semantics_valid"] = True
+    state["execution_invoked"] = True
+    state["runner_invoked"] = True
+    return state
 
 
 def test_human_report_ignores_old_character_budget_and_preserves_prefix():
@@ -530,7 +545,7 @@ def test_measurement_contract_is_explicit_and_rendered_concisely():
         runtime_metadata=_metadata(),
     )
 
-    assert HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"] == "1.0"
+    assert HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"] == "1.1"
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_encoding"] == "UTF-8"
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_line_ending"] == "LF"
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["unicode_normalization"] == "NFC"
@@ -539,7 +554,7 @@ def test_measurement_contract_is_explicit_and_rendered_concisely():
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["trailing_newline_policy"] == "INCLUDED_EXACTLY_ONCE"
     assert HUMAN_REPORT_MEASUREMENT_CONTRACT["fingerprint_algorithm"] == "SHA-256"
     assert HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION == "1.0"
-    assert "Human Report Measurement Contract Version: 1.0" in report
+    assert "Human Report Measurement Contract Version: 1.1" in report
     assert "Human Report Completeness Contract Version: 1.0" in report
     assert "Canonical Line Ending: LF" in report
     assert "Canonical Encoding: UTF-8" in report
@@ -768,3 +783,307 @@ def test_legacy_attestation_fixture_is_not_reinterpreted_as_verified():
     assert hashlib.sha256(crlf_bytes).hexdigest() != hashlib.sha256(lf_bytes).hexdigest()
     assert not hashlib.sha256(lf_bytes).hexdigest().startswith("6d68")
     assert renderer._measure_text_scope(legacy, scope="legacy")["fingerprint"] == hashlib.sha256(lf_bytes).hexdigest()
+
+
+def _selected_human_sections(report):
+    return [
+        section
+        for section in HUMAN_SECTION_ORDER
+        if f"\n{section}\n" in report
+    ]
+
+
+def _human_projection_titles():
+    return [row["section_title"] for row in HUMAN_PROJECTION_UNIVERSE]
+
+
+def test_human_projection_universe_is_explicit_and_not_section_order():
+    titles = _human_projection_titles()
+
+    assert len(SECTION_ORDER) == 36
+    assert len(HUMAN_PROJECTION_UNIVERSE) == 13
+    assert titles == [
+        "NEXRYN HUMAN RUN SUMMARY",
+        "RUN OVERVIEW",
+        "TIMING AND PERFORMANCE",
+        "COGNITIVE QUALITY",
+        "COGNITIVE OUTCOME",
+        "EVIDENCE LIFECYCLE",
+        "EXECUTION PLAN REPORT",
+        "ACTIVE RUNTIME REACHABILITY",
+        "NATURAL PRODUCTION AUTHORITY HANDOFF",
+        "ENGINEERING CONCLUSION",
+        "CONSTITUTIONAL BOUNDARY",
+        "CRITICAL OBSERVABILITY NOTES",
+        "REPORT INTEGRITY",
+    ]
+    assert set(titles) != set(SECTION_ORDER)
+    assert len({row["section_id"] for row in HUMAN_PROJECTION_UNIVERSE}) == 13
+
+
+def test_human_section_accounting_uses_unselected_not_nonessential():
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state_without_critical_notes(), runtime_metadata=_metadata())
+    metrics = renderer.report()
+
+    assert "Human Projection Universe Count: 13" in report
+    assert "Human Projection Selected Section Count: 12" in report
+    assert "Human Projection Unselected Section Count: 1" in report
+    assert "Human Report Legacy Section Order Count: 36" in report
+    assert "Human Report Section Universe Count" not in report
+    assert "Human Report Unselected Section Count" not in report
+    assert "Human Report Omitted Nonessential Section Count" not in report
+    assert "NONESSENTIAL" not in report
+    assert metrics["human_projection_universe_count"] == 13
+    assert metrics["human_projection_selected_section_count"] == 12
+    assert metrics["human_projection_unselected_section_count"] == 1
+    assert metrics["human_report_legacy_section_order_count"] == len(SECTION_ORDER)
+
+
+def test_selected_human_sections_must_belong_to_projection_universe():
+    renderer = DeterministicFinalReportRenderer()
+    canonical = renderer._canonical_state(
+        _state_without_critical_notes(),
+        runtime_metadata=_metadata(),
+        report_level="normal",
+        binding_result={},
+    )
+    selected = [name for name, _ in renderer._select_human_sections(canonical)]
+    selected.append("REPORT INTEGRITY")
+
+    assert set(selected).issubset(set(_human_projection_titles()))
+
+
+def test_section_order_drift_does_not_change_human_projection_accounting(monkeypatch):
+    mutated_order = [*SECTION_ORDER, "NEW LEGACY ONLY DIAGNOSTIC"]
+    monkeypatch.setattr(final_report_renderer_module, "SECTION_ORDER", mutated_order)
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state_without_critical_notes(), runtime_metadata=_metadata())
+    metrics = renderer.report()
+
+    assert "NEW LEGACY ONLY DIAGNOSTIC" not in report
+    assert "Human Report Legacy Section Order Count: 37" in report
+    assert "Human Projection Universe Count: 13" in report
+    assert "Human Projection Unselected Section Count: 1" in report
+    assert metrics["human_projection_universe_count"] == 13
+    assert metrics["human_projection_unselected_section_count"] == 1
+    assert metrics["human_report_legacy_section_order_count"] == 37
+
+
+def test_unregistered_human_selected_section_fails_closed(monkeypatch):
+    original_selector = DeterministicFinalReportRenderer._select_human_sections
+
+    def _select_with_unknown(self, canonical):
+        return [
+            *original_selector(self, canonical),
+            ("UNREGISTERED HUMAN SECTION", lambda _: ""),
+        ]
+
+    monkeypatch.setattr(
+        DeterministicFinalReportRenderer,
+        "_select_human_sections",
+        _select_with_unknown,
+    )
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state_without_critical_notes(), runtime_metadata=_metadata())
+    metrics = renderer.report()
+
+    assert "SELECTED_SECTION_OUTSIDE_HUMAN_PROJECTION_UNIVERSE" in report
+    assert "Human Projection Membership Validation State: FAILED_CLOSED" in report
+    assert metrics["human_projection_selected_outside_universe_count"] == 1
+
+
+def test_minimal_selected_empty_section_is_visibility_not_selection():
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(
+        _state_without_critical_notes(),
+        runtime_metadata=_metadata(),
+        report_level="minimal",
+    )
+    metrics = renderer.report()
+
+    assert "\nNATURAL PRODUCTION AUTHORITY HANDOFF\n" not in report
+    assert "Human Projection Universe Count: 13" in report
+    assert "Human Projection Selected Section Count: 12" in report
+    assert "Human Projection Visible Section Count: 11" in report
+    assert "Human Projection Selected But Empty Count: 1" in report
+    assert "section_id=natural_production_authority_handoff" in report
+    assert "render_state=SELECTED_RENDERED_EMPTY_BY_REPORT_LEVEL" in report
+    assert metrics["human_projection_selected_section_count"] == 12
+    assert metrics["human_projection_visible_section_count"] == 11
+    assert metrics["human_projection_selected_but_empty_count"] == 1
+
+
+def test_critical_notes_conditionality_and_report_integrity_membership():
+    no_notes = DeterministicFinalReportRenderer()
+    no_notes_report = no_notes.render(
+        _state_without_critical_notes(),
+        runtime_metadata=_metadata(),
+    )
+    notes = DeterministicFinalReportRenderer()
+    notes_report = notes.render(_state(), runtime_metadata=_metadata())
+
+    assert "section_id=critical_observability_notes" in no_notes_report
+    assert "section_id=critical_observability_notes; selected=FALSE" in no_notes_report
+    assert no_notes.report()["human_projection_unselected_section_count"] == 1
+    assert "section_id=critical_observability_notes; selected=TRUE" in notes_report
+    assert notes.report()["human_projection_unselected_section_count"] == 0
+    assert "section_id=report_integrity; selected=TRUE" in no_notes_report
+    assert "membership_semantics=APPENDED" in no_notes_report
+
+
+def test_human_projection_invariants_hold_across_report_levels():
+    state = _state_without_critical_notes()
+    for level in ("minimal", "normal", "full", "debug", "audit"):
+        renderer = DeterministicFinalReportRenderer()
+        report = renderer.render(state, runtime_metadata=_metadata(), report_level=level)
+        metrics = renderer.report()
+
+        assert "Human Projection Selection Subset Integrity: VERIFIED" in report
+        assert "Human Projection Visible Subset Integrity: VERIFIED" in report
+        assert "Human Projection Count Arithmetic Integrity: VERIFIED" in report
+        assert metrics["human_projection_universe_count"] == 13
+        assert (
+            metrics["human_projection_selected_section_count"]
+            + metrics["human_projection_unselected_section_count"]
+            == metrics["human_projection_universe_count"]
+        )
+        assert (
+            metrics["human_projection_selected_section_count"]
+            - metrics["human_projection_visible_section_count"]
+            == metrics["human_projection_selected_but_empty_count"]
+        )
+
+
+def test_human_section_selection_policy_is_unchanged_by_accounting():
+    renderer = DeterministicFinalReportRenderer()
+    first = renderer.render(_state(), runtime_metadata=_metadata())
+    first_selected = _selected_human_sections(first)
+
+    second = DeterministicFinalReportRenderer().render(
+        _state(),
+        runtime_metadata=_metadata(),
+    )
+
+    assert first_selected == _selected_human_sections(second)
+    assert "COGNITIVE OUTPUTS" not in second
+    assert "OPTIONAL TECHNICAL APPENDIX" not in second
+
+
+def test_dict_preview_exactly_eight_entries_has_no_reduction_notice():
+    renderer = DeterministicFinalReportRenderer()
+    text = renderer._value({f"key_{index}": index for index in range(8)})
+
+    assert "showing 8 of" not in text
+    assert "omitted" not in text
+
+
+def test_dict_preview_nine_entries_exposes_one_omitted_item():
+    renderer = DeterministicFinalReportRenderer()
+    text = renderer._value({f"key_{index}": index for index in range(9)})
+
+    assert "showing 8 of 9 entries" in text
+    assert "omitted 1 entries" in text
+    assert "Key 0=0" in text
+    assert "Key 7=7" in text
+    assert "Key 8=8" not in text
+
+
+def test_dict_preview_twenty_entries_exposes_twelve_omitted_items():
+    renderer = DeterministicFinalReportRenderer()
+    text = renderer._value({f"key_{index}": index for index in range(20)})
+
+    assert "showing 8 of 20 entries" in text
+    assert "omitted 12 entries" in text
+
+
+def test_local_preview_does_not_set_global_truncation_true():
+    state = _state()
+    state["ENGINEERING_CONCLUSION"]["root_cause"] = {
+        f"detail_{index}": index for index in range(20)
+    }
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(state, runtime_metadata=_metadata())
+    metrics = renderer.report()
+
+    assert "showing 8 of 20 entries" in report
+    assert "Human Report Character Limit: NONE" in report
+    assert "Human Report Truncation Enabled: FALSE" in report
+    assert "Human Report Truncated: FALSE" in report
+    assert metrics["human_report_truncation_enabled"] is False
+    assert metrics["human_report_truncated"] is False
+
+
+def test_local_reduction_metrics_eliminate_silent_renderer_reduction():
+    state = _state()
+    state["ENGINEERING_CONCLUSION"]["root_cause"] = {
+        f"detail_{index}": index for index in range(20)
+    }
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(state, runtime_metadata=_metadata())
+    metrics = renderer.report()
+
+    assert "Human Report Local Reduction Site Count:" in report
+    assert "Human Report Silent Local Reduction Count: 0" in report
+    assert metrics["human_report_local_reduction_applied_count"] >= 1
+    assert metrics["human_report_local_reduction_omitted_item_count"] >= 12
+    assert metrics["human_report_silent_local_reduction_count"] == 0
+
+
+def test_required_bindings_and_conflict_counts_remain_unchanged():
+    renderer = DeterministicFinalReportRenderer()
+    report = renderer.render(_state(), runtime_metadata=_metadata())
+
+    binding = renderer._build_human_report_binding(
+        renderer._canonical_state(
+            _state(),
+            runtime_metadata=_metadata(),
+            report_level="normal",
+            binding_result={},
+        )
+    )
+    assert (
+        f"Human Report Resolved Required Field Count: "
+        f"{binding['Human Report Resolved Required Field Count']}"
+    ) in report
+    assert "Human Report Unbound Required Field Count: 0" in report
+    assert "Human Report Binding Conflict Count: 0" in report
+    assert "Human Report Canonical Binding Integrity: COMPLETE" in report
+
+
+def test_report_level_and_execution_mode_do_not_change_section_selection():
+    selections = {}
+    state = _state_without_critical_notes()
+    for level in ("minimal", "normal", "full", "debug", "audit"):
+        renderer = DeterministicFinalReportRenderer()
+        report = renderer.render(state, runtime_metadata=_metadata(), report_level=level)
+        selections[level] = _selected_human_sections(report)
+        assert "Human Projection Universe Count: 13" in report
+        assert "Human Projection Unselected Section Count:" in report
+        assert "Human Report Legacy Section Order Count: 36" in report
+
+    assert selections["normal"] == selections["full"]
+    assert selections["full"] == selections["debug"]
+    assert selections["normal"] == selections["audit"]
+    assert selections["minimal"] == selections["normal"]
+
+    adaptive = DeterministicFinalReportRenderer().render(
+        _state(),
+        runtime_metadata={**_metadata(), "mode": "adaptive"},
+    )
+    fast = DeterministicFinalReportRenderer().render(
+        _state(),
+        runtime_metadata={**_metadata(), "mode": "fast"},
+    )
+    assert _selected_human_sections(adaptive) == _selected_human_sections(fast)
+
+
+def test_human_report_accounting_has_no_runtime_authority():
+    report = DeterministicFinalReportRenderer().render(
+        _state(),
+        runtime_metadata=_metadata(),
+    )
+
+    assert "Human Report Authority: NONE" in report
+    assert "truth authority" not in report.lower()
+    assert "deployment authority was granted" in report.lower()
