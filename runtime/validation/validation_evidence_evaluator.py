@@ -289,7 +289,6 @@ class ValidationEvidenceEvaluator:
         terminal = decision["evidence_acceptance_state"]
         accepted_artifact: dict[str, Any] = {}
         try:
-            self._atomic_write(decision_path, decision)
             if terminal == "ACCEPTED":
                 accepted_artifact = self._accepted_evidence_artifact(
                     compared_plan,
@@ -298,6 +297,14 @@ class ValidationEvidenceEvaluator:
                     comparable,
                     decision,
                 )
+                decision["accepted_evidence_id"] = accepted_artifact[
+                    "accepted_evidence_id"
+                ]
+                decision["accepted_evidence_fingerprint"] = accepted_artifact[
+                    "accepted_evidence_fingerprint"
+                ]
+            self._atomic_write(decision_path, decision)
+            if terminal == "ACCEPTED":
                 self._atomic_write(
                     self.accepted_evidence_path
                     / f"{accepted_artifact['accepted_evidence_id']}.json",
@@ -759,8 +766,19 @@ class ValidationEvidenceEvaluator:
             self._term(plan.get("target_candidate")) != "Not Available"
             and self._term(plan.get("target_operation")) != "Not Available"
         )
+        acceptance_contract_failures = self._acceptance_contract_failures(
+            plan,
+            schedule,
+            raw_result,
+            comparable,
+            contract,
+        )
         contamination_ok = not leakage
-        admissible = attribution_ok and contamination_ok
+        admissible = (
+            attribution_ok
+            and contamination_ok
+            and not acceptance_contract_failures
+        )
         minimum_case_coverage = float(contract.get("minimum_case_coverage", 1.0))
         exact_required = bool(contract.get("exact_match_required", False))
         sufficient = (
@@ -804,6 +822,8 @@ class ValidationEvidenceEvaluator:
             if acceptance == "INSUFFICIENT"
             else "target_leakage_or_reference_integrity_failure"
             if leakage
+            else "governed_acceptance_contract_failure"
+            if acceptance_contract_failures
             else "evidence_admissibility_failed"
         )
         return {
@@ -833,8 +853,25 @@ class ValidationEvidenceEvaluator:
                 if admissible
                 else "target_leakage_or_reference_integrity_failure"
                 if leakage
+                else "governed_acceptance_contract_failure"
+                if acceptance_contract_failures
                 else "candidate_or_operation_attribution_missing"
             ),
+            "governed_acceptance_contract_version": "1.0",
+            "governed_acceptance_contract_state": (
+                "SATISFIED" if not acceptance_contract_failures else "FAILED_CLOSED"
+            ),
+            "governed_acceptance_contract_failures": acceptance_contract_failures,
+            "accepted_evidence_requires_authoritative_decision": True,
+            "persistence_implies_acceptance": False,
+            "raw_result_direct_acceptance_allowed": False,
+            "evaluation_direct_acceptance_allowed": False,
+            "current_run_acceptance_state": (
+                "CURRENT_RUN_ACCEPTANCE_DECISION_RECORDED"
+                if admissible
+                else "CURRENT_RUN_ACCEPTANCE_BLOCKED"
+            ),
+            "historical_acceptance_state": "NOT_HISTORICAL_ACCEPTANCE_EVENT",
             "evidence_sufficiency_evaluated": True,
             "evidence_sufficiency_state": sufficiency_state,
             "evidence_sufficiency_reason": (
@@ -912,12 +949,29 @@ class ValidationEvidenceEvaluator:
         accepted_evidence_id = (
             f"accepted_evidence_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
         )
+        if decision.get("evidence_acceptance_state") != "ACCEPTED":
+            raise ValueError("accepted_evidence_requires_accepting_decision")
+        if self._term(decision.get("evidence_decision_id")) == "Not Available":
+            raise ValueError("accepted_evidence_requires_evidence_decision_id")
+        source_provenance = self._source_provenance(plan, schedule, raw_result)
+        if source_provenance.get("source_provenance_state") != (
+            "SOURCE_PROVENANCE_BOUND"
+        ):
+            raise ValueError("accepted_evidence_requires_bound_source_provenance")
         artifact = {
             "schema_version": "1.0",
             "accepted_evidence_id": accepted_evidence_id,
             "accepted_evidence_fingerprint": fingerprint,
             "acceptance_authority": self.AUTHORITY,
             "acceptance_scope": "EVIDENCE_RECORDING_ONLY",
+            "governed_acceptance_contract_version": "1.0",
+            "governed_acceptance_contract_state": "SATISFIED",
+            "accepted_evidence_requires_authoritative_decision": True,
+            "current_run_acceptance_state": "CURRENT_RUN_ACCEPTED_EVIDENCE",
+            "historical_acceptance_state": "NOT_HISTORICAL_ACCEPTANCE_EVENT",
+            "persistence_implies_acceptance": False,
+            "raw_result_direct_acceptance_allowed": False,
+            "evaluation_direct_acceptance_allowed": False,
             **self._identity(plan, schedule, raw_result),
             "comparable_result_id": comparable.get("comparable_result_id"),
             "evidence_decision_id": decision.get("evidence_decision_id"),
@@ -951,31 +1005,93 @@ class ValidationEvidenceEvaluator:
             "constitutional_boundary": self.BOUNDARY,
             "created_at": self._now(),
         }
-        try:
-            binding = build_claim_evidence_binding(
-                claim_subject=artifact.get("claim_subject"),
-                evidence_plan=plan,
-                evidence_decision=decision,
-                accepted_evidence=artifact,
-            )
-            artifact["claim_evidence_binding"] = binding
-            artifact["claim_evidence_binding_id"] = binding.get(
-                "claim_evidence_binding_id"
-            )
-            artifact["claim_evidence_binding_fingerprint"] = binding.get(
-                "claim_evidence_binding_fingerprint"
-            )
-            artifact["claim_evidence_binding_state"] = "BOUND"
-            artifact["claim_evidence_binding_authority"] = binding.get(
-                "claim_evidence_binding_authority"
-            )
-            artifact["claim_evidence_binding_behavioral_authority"] = binding.get(
-                "claim_evidence_binding_behavioral_authority"
-            )
-        except (ClaimEvidenceBindingError, ValueError) as exc:
-            artifact["claim_evidence_binding_state"] = "CLAIM_BINDING_FAILED"
-            artifact["claim_evidence_binding_failure_reason"] = str(exc)
+        binding = build_claim_evidence_binding(
+            claim_subject=artifact.get("claim_subject"),
+            evidence_plan=plan,
+            evidence_decision=decision,
+            accepted_evidence=artifact,
+        )
+        artifact["claim_evidence_binding"] = binding
+        artifact["claim_evidence_binding_id"] = binding.get(
+            "claim_evidence_binding_id"
+        )
+        artifact["claim_evidence_binding_fingerprint"] = binding.get(
+            "claim_evidence_binding_fingerprint"
+        )
+        artifact["claim_evidence_binding_state"] = "BOUND"
+        artifact["claim_evidence_binding_authority"] = binding.get(
+            "claim_evidence_binding_authority"
+        )
+        artifact["claim_evidence_binding_behavioral_authority"] = binding.get(
+            "claim_evidence_binding_behavioral_authority"
+        )
         return artifact
+
+    def _acceptance_contract_failures(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+        comparable: dict[str, Any],
+        contract: dict[str, Any],
+    ) -> list[str]:
+        identity = self._identity(plan, schedule, raw_result)
+        failures = []
+        required = {
+            "claim_id": identity.get("claim_id"),
+            "claim_subject": identity.get("claim_subject"),
+            "plan_id": identity.get("plan_id"),
+            "schedule_id": identity.get("schedule_id"),
+            "raw_result_id": identity.get("raw_result_id"),
+            "raw_result_fingerprint": identity.get("raw_result_fingerprint"),
+            "comparable_result_id": comparable.get("comparable_result_id"),
+            "evaluation_contract_id": contract.get("evaluation_contract_id"),
+        }
+        for key, value in required.items():
+            if value in (None, "", "Not Available", "UNKNOWN"):
+                failures.append(f"missing_{key}")
+        claim_ids = {
+            value
+            for value in (
+                plan.get("claim_id"),
+                schedule.get("claim_id"),
+                raw_result.get("claim_id"),
+            )
+            if value not in (None, "", "Not Available", "UNKNOWN")
+        }
+        if len(claim_ids) > 1:
+            failures.append("claim_id_mismatch")
+        claim_subjects = {
+            json.dumps(value, sort_keys=True, default=str)
+            for value in (
+                plan.get("claim_subject"),
+                schedule.get("claim_subject"),
+                raw_result.get("claim_subject"),
+            )
+            if value not in (None, "", "Not Available", "UNKNOWN")
+        }
+        if len(claim_subjects) > 1:
+            failures.append("claim_subject_mismatch")
+        source_provenance = identity.get("source_provenance")
+        if (
+            not isinstance(source_provenance, dict)
+            or source_provenance.get("source_provenance_state")
+            != "SOURCE_PROVENANCE_BOUND"
+        ):
+            failures.append("source_provenance_not_bound")
+        envelope = (
+            raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE")
+            or raw_result.get("raw_validation_result_envelope")
+            or {}
+        )
+        if (
+            not isinstance(envelope, dict)
+            or envelope.get("binding_integrity_state") != "BOUND"
+        ):
+            failures.append("raw_validation_result_envelope_not_bound")
+        if comparable.get("comparison_state") != "COMPARISON_COMPLETED":
+            failures.append("comparison_not_completed")
+        return sorted(set(failures))
 
     def _originating_arena_snapshot(self, plan: dict[str, Any]) -> dict[str, Any]:
         target = plan.get("target_candidate")
@@ -1245,6 +1361,34 @@ class ValidationEvidenceEvaluator:
                 f"EVIDENCE_{terminal}",
             ),
             "evidence_acceptance_reason": decision.get("evidence_acceptance_reason"),
+            "governed_acceptance_contract_version": decision.get(
+                "governed_acceptance_contract_version"
+            ),
+            "governed_acceptance_contract_state": decision.get(
+                "governed_acceptance_contract_state"
+            ),
+            "governed_acceptance_contract_failures": decision.get(
+                "governed_acceptance_contract_failures",
+                [],
+            ),
+            "accepted_evidence_requires_authoritative_decision": decision.get(
+                "accepted_evidence_requires_authoritative_decision"
+            ),
+            "persistence_implies_acceptance": decision.get(
+                "persistence_implies_acceptance"
+            ),
+            "raw_result_direct_acceptance_allowed": decision.get(
+                "raw_result_direct_acceptance_allowed"
+            ),
+            "evaluation_direct_acceptance_allowed": decision.get(
+                "evaluation_direct_acceptance_allowed"
+            ),
+            "current_run_acceptance_state": decision.get(
+                "current_run_acceptance_state"
+            ),
+            "historical_acceptance_state": decision.get(
+                "historical_acceptance_state"
+            ),
             "outcome_reason": decision.get("outcome_reason"),
             "evidence_decision_recorded": True,
             "evidence_decision_creation_result": evidence_decision_creation_result,

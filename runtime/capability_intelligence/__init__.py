@@ -20,6 +20,15 @@ from runtime.capability_intelligence.capability_graduation_infrastructure import
     CapabilityGraduationInfrastructure,
     capability_graduation_infrastructure,
 )
+from runtime.capability_intelligence.integrated_capability_qualification import (
+    CapabilityQualificationLevel,
+    CapabilityQualificationStatus,
+    CapabilitySubject,
+    IntegratedCapabilityQualificationEngine,
+    REVIEW_TRIGGERS,
+    capability_id_for_subject,
+    capability_qualification_engine,
+)
 from runtime.capability_intelligence.capability_effectiveness_tracker import (
     CapabilityEffectivenessRecord,
     CapabilityEffectivenessTracker,
@@ -78,6 +87,9 @@ __all__ = [
     "CapabilityEffectivenessRecord",
     "CapabilityEffectivenessTracker",
     "CapabilityGraduationInfrastructure",
+    "CapabilityQualificationLevel",
+    "CapabilityQualificationStatus",
+    "CapabilitySubject",
     "CapabilityIntelligenceEngine",
     "OperationalDomainInfrastructure",
     "OperationalEconomyAnalysis",
@@ -101,4 +113,8 @@ __all__ = [
     "TaskFamilyRecord",
     "TaskSignature",
     "TaskSignatureMapper",
+    "IntegratedCapabilityQualificationEngine",
+    "REVIEW_TRIGGERS",
+    "capability_id_for_subject",
+    "capability_qualification_engine",
 ]

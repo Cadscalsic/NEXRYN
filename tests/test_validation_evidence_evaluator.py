@@ -10,6 +10,9 @@ from runtime.claim_identity import (
     derive_claim_id,
 )
 from runtime.epistemic import EvidenceSourceIndependenceEngine
+from runtime.epistemic.accepted_evidence_assessment import (
+    AcceptedEvidenceEpistemicAssessmentEngine,
+)
 from runtime.evidence.evidence_plan_store import EvidenceAcquisitionPlanStore
 from runtime.training.elite_curriculum_validator import (
     ELITE_VALIDATION_ACADEMY_PATH,
@@ -626,3 +629,320 @@ def test_boot_recovery_routes_terminal_evidence_to_future_consumer(tmp_path):
         "EVIDENCE_ACCEPTED_TO_ARENA_EVIDENCE_ADMISSION_GATE"
     )
     assert loaded["evidence_plan_lifecycle_state"] == "EVIDENCE_ACCEPTED"
+
+
+def test_governed_acceptance_records_contract_and_decision_binding(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+
+    result = _accepted_result(tmp_path, registry)
+
+    assert result["decision"]["governed_acceptance_contract_state"] == "SATISFIED"
+    assert result["decision"]["accepted_evidence_id"] == (
+        result["accepted"]["accepted_evidence_id"]
+    )
+    assert result["accepted"]["accepted_evidence_requires_authoritative_decision"] is True
+    assert result["accepted"]["claim_evidence_binding_state"] == "BOUND"
+
+
+def test_missing_claim_id_fails_closed_before_acceptance(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    persisted, schedule, raw = _captured_result(tmp_path, registry)
+    for directory, identity in (
+        ("pending", persisted["evidence_plan_id"]),
+        ("schedules", schedule["schedule_id"]),
+        ("raw_results", raw["raw_result_id"]),
+    ):
+        path = tmp_path / directory / f"{identity}.json"
+        record = _read_json(path)
+        record.pop("claim_id", None)
+        record.pop("claim_subject", None)
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path, registry).evaluate_plan(
+        persisted["evidence_plan_id"]
+    )
+
+    assert report["evidence_acceptance_state"] == "REJECTED"
+    assert report["governed_acceptance_contract_state"] == "FAILED_CLOSED"
+    assert "missing_claim_id" in report["governed_acceptance_contract_failures"]
+    assert report["accepted_evidence_artifact_created"] is False
+
+
+def test_claim_mismatch_fails_closed_before_acceptance(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    persisted, _, raw = _captured_result(tmp_path, registry)
+    raw_path = tmp_path / "raw_results" / f"{raw['raw_result_id']}.json"
+    raw_record = _read_json(raw_path)
+    raw_record["claim_id"] = "claim_mismatch"
+    raw_path.write_text(json.dumps(raw_record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path, registry).evaluate_plan(
+        persisted["evidence_plan_id"]
+    )
+
+    assert report["evidence_acceptance_state"] == "REJECTED"
+    assert "claim_id_mismatch" in report["governed_acceptance_contract_failures"]
+    assert list((tmp_path / "accepted_evidence").glob("*.json")) == []
+
+
+def test_missing_evidence_decision_id_cannot_create_accepted_evidence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+    decision = dict(result["decision"])
+    decision["evidence_decision_id"] = None
+
+    with pytest.raises(ValueError):
+        ValidationEvidenceEvaluator(tmp_path, registry)._accepted_evidence_artifact(
+            result["plan"],
+            result["schedule"],
+            result["raw"],
+            _read_json(
+                tmp_path
+                / "comparable_results"
+                / f"{result['report']['comparable_result_id']}.json"
+            ),
+            decision,
+        )
+
+
+def test_rejected_decision_cannot_create_accepted_evidence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+    decision = dict(result["decision"], evidence_acceptance_state="REJECTED")
+
+    with pytest.raises(ValueError):
+        ValidationEvidenceEvaluator(tmp_path, registry)._accepted_evidence_artifact(
+            result["plan"], result["schedule"], result["raw"], {}, decision
+        )
+
+
+def test_insufficient_decision_does_not_create_accepted_evidence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(
+        curriculum,
+        expected=[{"output": _expected_output()}, {"output": {"missing": True}}],
+    )
+    registry = _registry(curriculum)
+    persisted, _, _ = _captured_result(tmp_path, registry)
+
+    report = ValidationEvidenceEvaluator(tmp_path, registry).evaluate_plan(
+        persisted["evidence_plan_id"]
+    )
+
+    assert report["evidence_acceptance_state"] == "INSUFFICIENT"
+    assert report["accepted_evidence_artifact_created"] is False
+
+
+def test_raw_result_without_decision_is_not_accepted(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    _captured_result(tmp_path, registry)
+
+    assert not (tmp_path / "accepted_evidence").exists()
+
+
+def test_high_score_without_decision_is_not_acceptance(tmp_path):
+    raw_artifact = {
+        "raw_result_id": "raw_high_score",
+        "score": 1.0,
+        "evidence_acceptance_state": "NOT_EVALUATED",
+    }
+
+    assessment = AcceptedEvidenceEpistemicAssessmentEngine().assess([raw_artifact])
+
+    assert assessment["bound_accepted_evidence_count"] == 0
+    assert assessment["epistemic_assessment_state"] == "NO_BOUND_ACCEPTED_EVIDENCE"
+
+
+def test_persisted_artifact_without_acceptance_authority_fails_closed():
+    persisted = {
+        "accepted_evidence_id": "accepted_without_authority",
+        "claim_id": "claim_a",
+        "evidence_acceptance_state": "ACCEPTED",
+    }
+
+    assessment = AcceptedEvidenceEpistemicAssessmentEngine().assess([persisted])
+
+    assert assessment["bound_accepted_evidence_count"] == 0
+    assert assessment["historical_unbound_evidence"][0]["classification"] == (
+        "HISTORICAL_PRE_E1_UNBOUND"
+    )
+
+
+def test_historical_artifact_presented_as_current_run_is_distinguished():
+    historical = {
+        "accepted_evidence_id": "accepted_historical",
+        "claim_id": "claim_a",
+        "evidence_acceptance_state": "ACCEPTED",
+        "historical_acceptance_state": "LEGACY_PRE_CONTRACT_ACCEPTED_EVIDENCE",
+    }
+
+    assessment = AcceptedEvidenceEpistemicAssessmentEngine().assess(
+        [historical],
+        assessment_run_id="current_run",
+    )
+
+    assert assessment["bound_accepted_evidence_count"] == 0
+    assert assessment["historical_unbound_evidence"]
+
+
+def test_duplicate_accepted_artifact_does_not_increase_source_independence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+    duplicate = dict(result["accepted"], accepted_evidence_id="accepted_copy")
+
+    coverage = EvidenceSourceIndependenceEngine().source_coverage(
+        [result["accepted"], duplicate],
+        claim_id=result["accepted"]["claim_id"],
+    )
+
+    assert coverage["current_proven_independent_source_count"] == 1
+    assert coverage["duplicate_supporting_evidence_count"] == 1
+
+
+def test_same_source_across_multiple_runs_does_not_inflate_independence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    first = _accepted_result(tmp_path / "first", registry, source_run_id="run_a")
+    second = _accepted_result(tmp_path / "second", registry, source_run_id="run_b")
+    second["accepted"]["source_provenance"]["producer_operation_id"] = (
+        first["accepted"]["source_provenance"]["producer_operation_id"]
+    )
+
+    coverage = EvidenceSourceIndependenceEngine().source_coverage(
+        [first["accepted"], second["accepted"]],
+        claim_id=first["accepted"]["claim_id"],
+    )
+
+    assert coverage["current_proven_independent_source_count"] == 1
+
+
+def test_same_source_across_multiple_tasks_does_not_inflate_independence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+    same_source_new_task = dict(result["accepted"], accepted_evidence_id="accepted_task_b")
+    same_source_new_task["source_provenance"] = dict(result["accepted"]["source_provenance"])
+    same_source_new_task["source_provenance"]["task_id"] = "different_task"
+
+    coverage = EvidenceSourceIndependenceEngine().source_coverage(
+        [result["accepted"], same_source_new_task],
+        claim_id=result["accepted"]["claim_id"],
+    )
+
+    assert coverage["current_proven_independent_source_count"] == 1
+
+
+def test_different_artifact_ids_from_same_source_do_not_inflate_independence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+    alternate = dict(result["accepted"], accepted_evidence_id="accepted_alternate")
+
+    coverage = EvidenceSourceIndependenceEngine().source_coverage(
+        [result["accepted"], alternate],
+        claim_id=result["accepted"]["claim_id"],
+    )
+
+    assert coverage["current_proven_independent_source_count"] == 1
+
+
+def test_broken_provenance_lineage_fails_closed_before_acceptance(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    persisted, _, raw = _captured_result(tmp_path, registry)
+    raw_path = tmp_path / "raw_results" / f"{raw['raw_result_id']}.json"
+    raw_record = _read_json(raw_path)
+    raw_record.pop("producer_operation_id", None)
+    raw_record["RAW_VALIDATION_RESULT_ENVELOPE"].pop("producer_operation_id", None)
+    raw_path.write_text(json.dumps(raw_record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path, registry).evaluate_plan(
+        persisted["evidence_plan_id"]
+    )
+
+    assert report["evidence_acceptance_state"] == "REJECTED"
+    assert "source_provenance_not_bound" in report["governed_acceptance_contract_failures"]
+
+
+def test_missing_source_identity_fails_closed_before_acceptance(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    persisted, _, raw = _captured_result(tmp_path, registry)
+    raw_path = tmp_path / "raw_results" / f"{raw['raw_result_id']}.json"
+    raw_record = _read_json(raw_path)
+    raw_record.pop("producer_component_id", None)
+    raw_record["RAW_VALIDATION_RESULT_ENVELOPE"].pop("producer_component_id", None)
+    raw_path.write_text(json.dumps(raw_record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path, registry).evaluate_plan(
+        persisted["evidence_plan_id"]
+    )
+
+    assert report["evidence_acceptance_state"] == "REJECTED"
+    assert "source_provenance_not_bound" in report["governed_acceptance_contract_failures"]
+
+
+def test_invalid_current_run_binding_fails_closed(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    persisted, _, raw = _captured_result(tmp_path, registry)
+    raw_path = tmp_path / "raw_results" / f"{raw['raw_result_id']}.json"
+    raw_record = _read_json(raw_path)
+    raw_record["RAW_VALIDATION_RESULT_ENVELOPE"]["binding_integrity_state"] = (
+        "CONFLICTED"
+    )
+    raw_path.write_text(json.dumps(raw_record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path, registry).evaluate_plan(
+        persisted["evidence_plan_id"]
+    )
+
+    assert report["evaluation_admission_state"] == (
+        "BLOCKED_RAW_VALIDATION_BINDING_CONFLICTED"
+    )
+    assert report["evidence_accepted"] is False
+
+
+def test_downstream_consumer_rejects_raw_result_bypass(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    _, _, raw = _captured_result(tmp_path, registry)
+
+    assessment = AcceptedEvidenceEpistemicAssessmentEngine().assess([raw])
+
+    assert assessment["bound_accepted_evidence_count"] == 0
+    assert assessment["epistemic_assessment_state"] == "NO_BOUND_ACCEPTED_EVIDENCE"
+
+
+def test_accepted_evidence_attempting_direct_truth_commitment_is_not_truth(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+    forged = dict(result["accepted"], truth_authority="FORGED")
+
+    assessment = AcceptedEvidenceEpistemicAssessmentEngine().assess([forged])
+
+    assert assessment["accepted_evidence_is_not_truth"] is True
+    assert assessment["authority"]["truth_commitment"] == "NONE"

@@ -1505,6 +1505,17 @@
       "source_run_id": "run_20260908_190417",
       "state": "RAW_RESULT_CAPTURED",
       "timestamp": "2026-09-08T19:11:03.375255+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-09T23:45:02.048275+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260909_234501",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-09T23:49:59.283615+00:00"
     }
   ],
   "identity_schema_version": null,
@@ -1512,7 +1523,7 @@
   "lifecycle_state": "RAW_RESULT_CAPTURED",
   "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
   "matching_score": 88.0,
-  "observation_count": 110,
+  "observation_count": 111,
   "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "priority": 65,
@@ -1560,7 +1571,7 @@
   "tie_break_strategy": "cross_source_consensus",
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-09-08T19:11:03.375255+00:00",
+  "updated_at": "2026-09-09T23:49:59.283615+00:00",
   "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
   "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY"
 }
