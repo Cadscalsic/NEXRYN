@@ -5,14 +5,21 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping
 
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
+
 
 class TruthReuseEngine:
     system_name = "truth_reuse_engine"
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        admission_gate: CurrentTruthAdmissionGate | None = None,
+    ) -> None:
         self.truth_hits = 0
         self.truth_misses = 0
         self.reused_truths: list[dict[str, Any]] = []
+        self.admission_gate = admission_gate or CurrentTruthAdmissionGate()
+        self.excluded_noncurrent_truths: list[dict[str, Any]] = []
 
     def search_truth(
         self,
@@ -23,11 +30,23 @@ class TruthReuseEngine:
         candidates = list(truths or [])
         if truth_registry is not None and hasattr(truth_registry, "all_truths"):
             candidates.extend(truth_registry.all_truths())
-        ranked = [
-            {**dict(candidate), "truth_relevance": self.rank_truth_relevance(query, candidate)}
-            for candidate in candidates
-            if isinstance(candidate, Mapping)
-        ]
+        ranked = []
+        for candidate in candidates:
+            if not isinstance(candidate, Mapping):
+                continue
+            admission = self.admission_gate.admit_current_truth(
+                candidate,
+                consumer_scope="truth_reuse",
+            )
+            item = {
+                **dict(candidate),
+                "truth_relevance": self.rank_truth_relevance(query, candidate),
+                "current_truth_admission": admission.to_dict(),
+            }
+            if admission.admitted:
+                ranked.append(item)
+            else:
+                self.excluded_noncurrent_truths.append(item)
         ranked = [item for item in ranked if item["truth_relevance"] > 0.0]
         ranked.sort(key=lambda item: item["truth_relevance"], reverse=True)
         return ranked
@@ -94,6 +113,10 @@ class TruthReuseEngine:
             "truth_hits": self.truth_hits,
             "truth_misses": self.truth_misses,
             "truth_reuse_rate": round(self.truth_hits / max(total, 1), 4),
+            "current_truth_input_count": len(self.reused_truths),
+            "excluded_noncurrent_truth_count": len(
+                self.excluded_noncurrent_truths
+            ),
         }
 
     def report(self) -> dict[str, Any]:
@@ -101,6 +124,7 @@ class TruthReuseEngine:
             "system": self.system_name,
             "TRUTH REUSE REPORT": True,
             "reused_truths": list(self.reused_truths),
+            "EXCLUDED_NONCURRENT_TRUTHS": list(self.excluded_noncurrent_truths),
             **self.metrics(),
         }
 

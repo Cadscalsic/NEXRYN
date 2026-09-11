@@ -19,6 +19,18 @@ from runtime.planning.autonomous_cognitive_planner import (
     autonomous_cognitive_planner
 )
 
+from runtime.planning.current_plan_authority import (
+    PlanAssessment,
+    PlanCandidate,
+    PlanLifecycleStatus,
+    PlanningCurrentAuthorityEngine,
+    PlanningSubject,
+    get_current_plan_state,
+    get_plan_history,
+    is_plan_current,
+    planning_current_authority_engine,
+)
+
 from runtime.planning.task_complexity_analyzer import (
     TaskComplexityAnalyzer,
     TaskComplexityThresholds,
@@ -107,6 +119,24 @@ __all__ = [
     "AutonomousCognitivePlanner",
 
     "autonomous_cognitive_planner",
+
+    "PlanAssessment",
+
+    "PlanCandidate",
+
+    "PlanLifecycleStatus",
+
+    "PlanningCurrentAuthorityEngine",
+
+    "PlanningSubject",
+
+    "get_current_plan_state",
+
+    "get_plan_history",
+
+    "is_plan_current",
+
+    "planning_current_authority_engine",
 
     "TaskComplexityAnalyzer",
 

@@ -179,12 +179,20 @@ def load_core_knowledge_from_truth_registry(
         return []
 
     from runtime.truth.core_knowledge_registry import CoreKnowledgeRegistry
+    from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
     from runtime.truth.truth_graduation_engine import TruthGraduationEngine
 
     truths = payload.get("truths", [])
+    admission_gate = CurrentTruthAdmissionGate()
     normalized_truths = []
     for truth in truths if isinstance(truths, list) else []:
         if not isinstance(truth, dict):
+            continue
+        admission = admission_gate.admit_current_truth(
+            truth,
+            consumer_scope="core_knowledge_truth_registry_loader",
+        )
+        if not admission.admitted:
             continue
         evidence = [
             item for item in truth.get("evidence", [])

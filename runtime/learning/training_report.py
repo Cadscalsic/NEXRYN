@@ -1,12 +1,145 @@
 import hashlib
 import json
+import math
 from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any
 
 from runtime.reporting.active_runtime_reachability_audit import (
     build_active_runtime_telemetry_summary,
     build_active_runtime_reachability_audit,
 )
 from runtime.telemetry.route_contribution import compact_route_contribution_summary
+
+
+@dataclass(frozen=True)
+class NumericNormalization:
+    value: float | int | None
+    available: bool
+    valid: bool
+    finite: bool
+    status: str
+
+    def to_dict(self):
+        return {
+            "value": self.value,
+            "available": self.available,
+            "valid": self.valid,
+            "finite": self.finite,
+            "status": self.status,
+        }
+
+
+def safe_optional_float(
+    value: Any,
+    *,
+    allow_numeric_string: bool = True,
+) -> NumericNormalization:
+    if value is None:
+        return NumericNormalization(None, False, False, False, "UNAVAILABLE")
+    if isinstance(value, bool):
+        return NumericNormalization(None, True, False, False, "INVALID_BOOL")
+    if isinstance(value, str):
+        if not allow_numeric_string:
+            return NumericNormalization(None, True, False, False, "INVALID_STRING")
+        value = value.strip()
+        if not value:
+            return NumericNormalization(None, True, False, False, "INVALID")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return NumericNormalization(None, True, False, False, "INVALID")
+    if not math.isfinite(numeric):
+        return NumericNormalization(None, True, False, False, "NONFINITE")
+    return NumericNormalization(numeric, True, True, True, "AVAILABLE")
+
+
+def safe_required_count(
+    value: Any,
+    *,
+    allow_numeric_string: bool = True,
+) -> NumericNormalization:
+    if value is None:
+        return NumericNormalization(None, False, False, False, "UNAVAILABLE")
+    if isinstance(value, bool):
+        return NumericNormalization(None, True, False, False, "INVALID_BOOL")
+    if isinstance(value, str):
+        if not allow_numeric_string:
+            return NumericNormalization(None, True, False, False, "INVALID_STRING")
+        value = value.strip()
+        if not value:
+            return NumericNormalization(None, True, False, False, "INVALID")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return NumericNormalization(None, True, False, False, "INVALID")
+    if not math.isfinite(numeric):
+        return NumericNormalization(None, True, False, False, "NONFINITE")
+    if not numeric.is_integer():
+        return NumericNormalization(None, True, False, True, "INVALID")
+    return NumericNormalization(max(0, int(numeric)), True, True, True, "AVAILABLE")
+
+
+def first_valid_numeric(*values: Any) -> NumericNormalization:
+    for value in values:
+        normalized = safe_optional_float(value)
+        if normalized.valid and normalized.finite:
+            return normalized
+    return NumericNormalization(None, False, False, False, "UNAVAILABLE")
+
+
+def first_positive_numeric(*values: Any) -> NumericNormalization:
+    zero_observed = False
+    for value in values:
+        normalized = safe_optional_float(value)
+        if not normalized.valid or not normalized.finite:
+            continue
+        if normalized.value == 0.0:
+            zero_observed = True
+            continue
+        if normalized.value > 0.0:
+            return normalized
+    return NumericNormalization(
+        None,
+        zero_observed,
+        False,
+        False,
+        "NO_POSITIVE_VALUE",
+    )
+
+
+def optional_numeric_average(values: Any) -> NumericNormalization:
+    numbers = [
+        normalized.value
+        for normalized in (safe_optional_float(value) for value in values)
+        if normalized.valid and normalized.finite
+    ]
+    if not numbers:
+        return NumericNormalization(None, False, False, False, "UNAVAILABLE")
+    return NumericNormalization(
+        round(sum(numbers) / len(numbers), 4),
+        True,
+        True,
+        True,
+        "AVAILABLE",
+    )
+
+
+AMBIGUOUS_REPORT_NUMERIC_FIELDS = (
+    "context_strength",
+    "promotion_score",
+    "dependency_confidence",
+    "dependency_chain_coverage",
+    "promotion_dependency_score",
+)
+
+
+def numeric_availability_report(source: Any) -> dict[str, dict[str, Any]]:
+    source = source if isinstance(source, dict) else {}
+    return {
+        field: safe_optional_float(source.get(field)).to_dict()
+        for field in AMBIGUOUS_REPORT_NUMERIC_FIELDS
+    }
 
 
 def build_training_report(
@@ -67,15 +200,8 @@ def build_training_report(
         )
 
     def average(values):
-        numbers = []
-        for value in values:
-            try:
-                numbers.append(float(value))
-            except Exception:
-                continue
-        if not numbers:
-            return None
-        return round(sum(numbers) / len(numbers), 4)
+        normalized = optional_numeric_average(values)
+        return normalized.value if normalized.valid else None
 
     def build_architecture_bottleneck_report(
         causal_reports,
@@ -3271,10 +3397,12 @@ def build_training_report(
                 ),
             ),
         )
-        try:
-            confidence = float(confidence)
-        except (TypeError, ValueError):
-            confidence = 0.0
+        normalized_confidence = safe_optional_float(confidence)
+        confidence = (
+            normalized_confidence.value
+            if normalized_confidence.valid
+            else 0.0
+        )
 
         transition_count = len(report.get("transition_family", []) or [])
         if transition_count == 0:
@@ -3299,6 +3427,10 @@ def build_training_report(
             if discovery_only_mode
             else candidate_evaluations
         )
+
+        def safe_numeric_score(value, default=0.0):
+            normalized = safe_optional_float(value)
+            return normalized.value if normalized.valid else default
 
         def fill_missing(target, source):
             if not isinstance(target, dict):
@@ -3336,14 +3468,20 @@ def build_training_report(
                 or concept
             )
             evaluation = target_evaluations.get(concept, {})
+            if isinstance(evaluation, dict):
+                evaluation.setdefault(
+                    "numeric_availability",
+                    numeric_availability_report(evaluation),
+                )
+                context_report.setdefault(
+                    "numeric_availability",
+                    numeric_availability_report(evaluation),
+                )
             promotion_score = evaluation.get(
                 "promotion_score",
                 context_report.get("promotion_score"),
             )
-            try:
-                promotion_score_value = float(promotion_score)
-            except (TypeError, ValueError):
-                promotion_score_value = 0.0
+            promotion_score_value = safe_numeric_score(promotion_score)
             score = max(
                 context_score_from_discovery(context_report),
                 nested_score(
@@ -3552,11 +3690,9 @@ def build_training_report(
                 )
             else:
                 evaluation["contextual_truth"] = contextual_truth_report
-            existing_strength = evaluation.get("context_strength")
-            try:
-                existing_strength = float(existing_strength)
-            except (TypeError, ValueError):
-                existing_strength = 0.0
+            existing_strength = safe_numeric_score(
+                evaluation.get("context_strength")
+            )
             if score > existing_strength:
                 evaluation["context_strength"] = score
                 evaluation[
@@ -3886,10 +4022,10 @@ def build_training_report(
         )
 
         def score(value, default=0.0):
-            try:
-                return round(max(0.0, min(1.0, float(value))), 4)
-            except (TypeError, ValueError):
+            normalized = safe_optional_float(value)
+            if not normalized.valid:
                 return default
+            return round(max(0.0, min(1.0, normalized.value)), 4)
 
         def first(*values, default=0.0):
             for value in values:
@@ -3898,14 +4034,12 @@ def build_training_report(
             return default
 
         def first_positive(*values, default=0.0):
-            for value in values:
-                try:
-                    numeric = float(value)
-                except (TypeError, ValueError):
-                    continue
-                if numeric > 0.0:
-                    return numeric
-            return default
+            normalized = first_positive_numeric(*values)
+            return normalized.value if normalized.valid else default
+
+        def count(value, default=0):
+            normalized = safe_required_count(value)
+            return normalized.value if normalized.valid else default
 
         candidates = []
         for concept, commit_evaluation in truth_commit_evaluations.items():
@@ -3921,6 +4055,10 @@ def build_training_report(
 
             evaluation = target_evaluations.get(concept, {})
             evaluation = evaluation if isinstance(evaluation, dict) else {}
+            evaluation.setdefault(
+                "numeric_availability",
+                numeric_availability_report(evaluation),
+            )
             authority = commit_evaluation.get("contextual_truth_authority", {})
             authority = authority if isinstance(authority, dict) else {}
             contextual_truth = commit_evaluation.get("contextual_truth", {})
@@ -3999,6 +4137,8 @@ def build_training_report(
                     "TRUTH_CANDIDATE",
                     "CONTEXTUAL_TRUTH_SUPPORTED",
                 ],
+                "numeric_availability":
+                numeric_availability_report(evaluation),
             })
 
         commit_report = TruthCommitEngine().commit(
@@ -4045,28 +4185,28 @@ def build_training_report(
             )
         knowledge_reuse_metrics = knowledge_reuse_engine.metrics()
         context_hits = max(
-            concept_lifecycle_report.get("context_hits", 0),
-            knowledge_reuse_metrics.get("context_hits", 0),
+            count(concept_lifecycle_report.get("context_hits")),
+            count(knowledge_reuse_metrics.get("context_hits")),
         )
         truth_hits = max(
-            reuse_report.get("truth_hits", 0),
-            knowledge_reuse_metrics.get("truth_hits", 0),
+            count(reuse_report.get("truth_hits")),
+            count(knowledge_reuse_metrics.get("truth_hits")),
         )
         strategy_hits = max(
-            strategy_reuse_report.get("strategy_hits", 0),
-            knowledge_reuse_metrics.get("strategy_hits", 0),
+            count(strategy_reuse_report.get("strategy_hits")),
+            count(knowledge_reuse_metrics.get("strategy_hits")),
         )
-        program_hits = knowledge_reuse_metrics.get("program_hits", 0)
-        context_misses = knowledge_reuse_metrics.get("context_misses", 0)
+        program_hits = count(knowledge_reuse_metrics.get("program_hits"))
+        context_misses = count(knowledge_reuse_metrics.get("context_misses"))
         truth_misses = max(
-            reuse_report.get("truth_misses", 0),
-            knowledge_reuse_metrics.get("truth_misses", 0),
+            count(reuse_report.get("truth_misses")),
+            count(knowledge_reuse_metrics.get("truth_misses")),
         )
         strategy_misses = max(
-            strategy_reuse_report.get("strategy_misses", 0),
-            knowledge_reuse_metrics.get("strategy_misses", 0),
+            count(strategy_reuse_report.get("strategy_misses")),
+            count(knowledge_reuse_metrics.get("strategy_misses")),
         )
-        program_misses = knowledge_reuse_metrics.get("program_misses", 0)
+        program_misses = count(knowledge_reuse_metrics.get("program_misses"))
         knowledge_hits = (
             context_hits
             + truth_hits

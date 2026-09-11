@@ -1,4 +1,8 @@
 from runtime.governance.locked_truth_fastpath import LockedTruthFastPath
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
+from runtime.truth.truth_current_authority_lifecycle import (
+    TruthCurrentAuthorityLifecycleEngine,
+)
 
 
 def _locked_context(**overrides):
@@ -20,11 +24,21 @@ def _locked_context(**overrides):
     return {"truth_commit_report": report}
 
 
-def test_locked_stable_truth_activates_fastpath():
+def test_locked_stable_truth_activates_fastpath(tmp_path):
+    engine = TruthCurrentAuthorityLifecycleEngine(tmp_path)
+    state = engine.create_active_truth(
+        truth_id="truth:color_preservation",
+        claim_id="claim:color_preservation",
+    )
+    engine.persist_current_state(state)
     report = LockedTruthFastPath().evaluate(
         "color_preservation",
-        _locked_context(),
+        _locked_context(**state),
     )
+
+    report = LockedTruthFastPath(
+        admission_gate=CurrentTruthAdmissionGate(engine)
+    ).evaluate("color_preservation", _locked_context(**state))
 
     assert report["fastpath_active"] is True
     assert report["truth_reused"] is True
@@ -33,19 +47,32 @@ def test_locked_stable_truth_activates_fastpath():
 
 
 def test_contradiction_review_disables_fastpath():
+    report = {
+        "truth_id": "truth:legacy",
+        "current_truth_decision_id": "old",
+        "claim_id": "claim:legacy",
+    }
     report = LockedTruthFastPath().evaluate(
         "color_preservation",
-        _locked_context(contradiction_review_required=True),
+        _locked_context(**report, contradiction_review_required=True),
     )
 
     assert report["fastpath_active"] is False
-    assert report["reason"] == "contradiction_review_required"
+    assert report["reason"] == "DENIED_TRUTH_CURRENT_AUTHORITY_UNVERIFIED"
 
 
 def test_unstable_identity_disables_fastpath():
-    report = LockedTruthFastPath().evaluate(
+    engine = TruthCurrentAuthorityLifecycleEngine()
+    state = engine.create_active_truth(
+        truth_id="truth:color_preservation",
+        claim_id="claim:color_preservation",
+    )
+    report = LockedTruthFastPath(
+        admission_gate=CurrentTruthAdmissionGate(_MemoryCurrentStateEngine(state))
+    ).evaluate(
         "color_preservation",
         _locked_context(
+            **state,
             identity_runtime_state="IDENTITY_RUNTIME_PROVISIONAL",
         ),
     )
@@ -64,10 +91,29 @@ def test_missing_truth_report_disables_fastpath():
 
 
 def test_failed_gates_disable_fastpath():
-    report = LockedTruthFastPath().evaluate(
+    engine = TruthCurrentAuthorityLifecycleEngine()
+    state = engine.create_active_truth(
+        truth_id="truth:color_preservation",
+        claim_id="claim:color_preservation",
+    )
+    report = LockedTruthFastPath(
+        admission_gate=CurrentTruthAdmissionGate(_MemoryCurrentStateEngine(state))
+    ).evaluate(
         "color_preservation",
-        _locked_context(failed_gates=["contextual_truth_gap"]),
+        _locked_context(**state, failed_gates=["contextual_truth_gap"]),
     )
 
     assert report["fastpath_active"] is False
     assert report["reason"] == "failed_gates"
+
+
+class _MemoryCurrentStateEngine:
+    authority = "TRUTH_CURRENT_AUTHORITY"
+
+    def __init__(self, state):
+        self.state = state
+
+    def get_current_truth_state(self, truth_id):
+        if truth_id == self.state["truth_id"]:
+            return dict(self.state)
+        return None

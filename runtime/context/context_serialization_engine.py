@@ -108,9 +108,8 @@ def _normalize(value: Any, seen: set[int], depth: int) -> dict[str, Any]:
     if isinstance(value, SerializedContext):
         return _normalize(value.payload, seen, depth + 1)
     if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except (TypeError, ValueError):
+        decoded = _decode_json_string(value)
+        if decoded is _JSON_DECODE_FAILED:
             return {
                 "context_id": value,
                 "context_text": value,
@@ -138,9 +137,8 @@ def _normalize_value(value: Any, seen: set[int], depth: int) -> Any:
         return {"serialization_depth_limited": True}
     if isinstance(value, (str, int, float, bool)) or value is None:
         if isinstance(value, str):
-            try:
-                decoded = json.loads(value)
-            except (TypeError, ValueError):
+            decoded = _decode_json_string(value)
+            if decoded is _JSON_DECODE_FAILED:
                 return value
             return _normalize_value(decoded, seen, depth + 1)
         return value
@@ -153,6 +151,23 @@ def _normalize_value(value: Any, seen: set[int], depth: int) -> Any:
     if hasattr(value, "__dict__"):
         return _normalize_value(vars(value), seen, depth + 1)
     return str(value)
+
+
+_JSON_DECODE_FAILED = object()
+
+
+def _decode_json_string(value: str) -> Any:
+    if not _looks_like_serialized_context(value):
+        return _JSON_DECODE_FAILED
+    try:
+        return json.loads(value)
+    except Exception:
+        return _JSON_DECODE_FAILED
+
+
+def _looks_like_serialized_context(value: str) -> bool:
+    stripped = value.lstrip()
+    return stripped.startswith("{") or stripped.startswith("[")
 
 
 context_serialization_engine = ContextSerializationEngine()

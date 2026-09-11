@@ -39,6 +39,19 @@ from runtime.truth.truth_reuse_engine import (
     TruthReuseEngine,
     truth_reuse_engine,
 )
+from runtime.truth.truth_current_authority_lifecycle import (
+    REVIEW_TRIGGERS,
+    TruthCurrentAuthorityLifecycleEngine,
+    TruthLifecycleStatus,
+    truth_current_authority_lifecycle_engine,
+)
+from runtime.truth.current_truth_admission import (
+    CurrentTruthAdmission,
+    CurrentTruthAdmissionGate,
+    admit_current_truth,
+    current_truth_admission_gate,
+    filter_current_truths,
+)
 
 
 __all__ = [
@@ -63,4 +76,13 @@ __all__ = [
     "contextual_truth_engine",
     "TruthReuseEngine",
     "truth_reuse_engine",
+    "REVIEW_TRIGGERS",
+    "TruthCurrentAuthorityLifecycleEngine",
+    "TruthLifecycleStatus",
+    "truth_current_authority_lifecycle_engine",
+    "CurrentTruthAdmission",
+    "CurrentTruthAdmissionGate",
+    "admit_current_truth",
+    "current_truth_admission_gate",
+    "filter_current_truths",
 ]

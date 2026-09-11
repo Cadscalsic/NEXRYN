@@ -91,6 +91,13 @@ class TruthCandidateEngine:
 
     def __init__(self):
         self.truth_state_authority = TruthStateAuthority()
+        from runtime.epistemic.accepted_evidence_assessment import (
+            AcceptedEvidenceEpistemicAssessmentEngine,
+        )
+
+        self.accepted_evidence_assessment_engine = (
+            AcceptedEvidenceEpistemicAssessmentEngine()
+        )
         self.runtime_causal_alignment_engine = (
             RuntimeCausalAlignmentEngine()
         )
@@ -614,12 +621,44 @@ class TruthCandidateEngine:
         }
 
     def _source_coverage(self, context):
+        persisted_assessment = (
+            context.get("accepted_evidence_epistemic_assessment")
+            or context.get("accepted_evidence_assessment")
+        )
+        if isinstance(persisted_assessment, dict):
+            admission = self.admit_current_epistemic_assessment_for_truth(
+                persisted_assessment,
+                expected_claim_id=context.get("claim_id"),
+            )
+            if admission["truth_facing_assessment_admission_state"] != (
+                "ASSESSMENT_CURRENT_AND_ADMISSIBLE"
+            ):
+                return {
+                    "schema_version": "1.0",
+                    "system": "truth_facing_epistemic_assessment_gate",
+                    "source_coverage_id": (
+                        persisted_assessment.get("epistemic_assessment_id")
+                        or "SOURCE_COVERAGE_DENIED"
+                    ),
+                    "claim_id": context.get("claim_id")
+                    or persisted_assessment.get("claim_id")
+                    or "NOT_AVAILABLE",
+                    "proven_independent_supporting_sources": 0,
+                    "current_proven_independent_source_count": 0,
+                    "independent_supporting_source_count": 0,
+                    "accepted_evidence_count": 0,
+                    "supporting_evidence_count": 0,
+                    "unknown_source_relation_count": 0,
+                    "dependent_supporting_sources": 0,
+                    "truth_facing_assessment_admission": admission,
+                    "truth_authority": "NONE",
+                }
+            return dict(persisted_assessment["source_coverage"])
+
         candidates = [
             context.get("truth_independence_evidence"),
             context.get("claim_source_coverage"),
             context.get("source_coverage"),
-            context.get("accepted_evidence_epistemic_assessment"),
-            context.get("accepted_evidence_assessment"),
         ]
         for candidate in candidates:
             if not isinstance(candidate, dict):
@@ -639,6 +678,48 @@ class TruthCandidateEngine:
             ):
                 return dict(candidate)
         return {}
+
+    def admit_current_epistemic_assessment_for_truth(
+        self,
+        assessment,
+        *,
+        expected_claim_id=None,
+    ):
+        report = assessment if isinstance(assessment, dict) else {}
+        failures = []
+        if expected_claim_id and report.get("claim_id") != expected_claim_id:
+            failures.append("ASSESSMENT_CLAIM_IDENTITY_MISMATCH")
+        if report.get("capability_id") and expected_claim_id and (
+            report.get("claim_id") != expected_claim_id
+        ):
+            failures.append("ASSESSMENT_CAPABILITY_SCOPE_MISMATCH")
+        if not isinstance(report.get("source_coverage"), dict):
+            failures.append("ASSESSMENT_SOURCE_COVERAGE_MISSING")
+        currentness = (
+            self.accepted_evidence_assessment_engine
+            .is_epistemic_assessment_current(report)
+        )
+        if currentness["assessment_current_state"] != "CURRENT_EPISTEMIC_ASSESSMENT":
+            failures.append("STALE_EPISTEMIC_ASSESSMENT")
+        state = (
+            "ASSESSMENT_CURRENT_AND_ADMISSIBLE"
+            if not failures
+            else "TRUTH_FACING_ASSESSMENT_ADMISSION_DENIED"
+        )
+        return {
+            "schema_version": "1.0",
+            "system": "truth_facing_epistemic_assessment_ingestion_gate",
+            "epistemic_assessment_id": report.get("epistemic_assessment_id"),
+            "truth_facing_assessment_admission_state": state,
+            "current_support_available": not failures,
+            "currentness_validation": currentness,
+            "admission_failures": sorted(set(failures)),
+            "truth_authority": "NONE",
+            "knowledge_authority": "NONE",
+            "runtime_authority": "NONE",
+            "budget_authority": "NONE",
+            "execution_authority": "NONE",
+        }
 
     def _semantic_spine_recovery(self, context):
         semantic_spine = context.get(

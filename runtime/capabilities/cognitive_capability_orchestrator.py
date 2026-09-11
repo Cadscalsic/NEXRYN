@@ -5,11 +5,21 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Mapping
 
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
+
 
 class CognitiveCapabilityOrchestrator:
     """Inventory, compose, and explain cognitive capabilities already in flight."""
 
     system_name = "cognitive_capability_orchestrator"
+
+    def __init__(
+        self,
+        truth_admission_gate: CurrentTruthAdmissionGate | None = None,
+    ) -> None:
+        self.truth_admission_gate = (
+            truth_admission_gate or CurrentTruthAdmissionGate()
+        )
 
     CAPABILITIES = {
         "object_reasoning": {
@@ -586,7 +596,18 @@ class CognitiveCapabilityOrchestrator:
             value = runtime_context.get(key, [])
             if isinstance(value, Mapping):
                 value = value.values()
-            truths.extend(dict(item) for item in value or [] if isinstance(item, Mapping))
+            for item in value or []:
+                if not isinstance(item, Mapping):
+                    continue
+                admission = self.truth_admission_gate.admit_current_truth(
+                    item,
+                    consumer_scope="capability_shared_truths",
+                )
+                if admission.admitted:
+                    truths.append({
+                        **dict(item),
+                        "current_truth_admission": admission.to_dict(),
+                    })
         return truths[:10]
 
     def _shared_dependencies(self, reports):

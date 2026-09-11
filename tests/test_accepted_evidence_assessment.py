@@ -6,6 +6,8 @@ from runtime.claim_identity import (
     derive_claim_id,
 )
 from runtime.epistemic import AcceptedEvidenceEpistemicAssessmentEngine
+from runtime.epistemic.truth_candidate_engine import TruthCandidateEngine
+from runtime.validation.accepted_evidence_lifecycle import AcceptedEvidenceLifecycleEngine
 
 
 def _accepted_evidence(
@@ -77,6 +79,15 @@ def _accepted_evidence(
     accepted["claim_evidence_binding"] = binding
     accepted["claim_evidence_binding_id"] = binding["claim_evidence_binding_id"]
     accepted["claim_evidence_binding_state"] = "BOUND"
+    current_state = AcceptedEvidenceLifecycleEngine().initialize_current_state(
+        accepted
+    )
+    accepted["accepted_evidence_current_state"] = current_state
+    accepted["current_status"] = current_state["current_status"]
+    accepted["is_currently_accepted"] = current_state["is_currently_accepted"]
+    accepted["current_lifecycle_decision_id"] = current_state[
+        "current_lifecycle_decision_id"
+    ]
     return accepted
 
 
@@ -212,3 +223,390 @@ def test_contradicting_accepted_evidence_blocks_promotion_readiness():
 
     assert report["contradicting_accepted_evidence_ids"] == ["accepted_evidence_b"]
     assert report["epistemic_assessment_state"] == "CONTRADICTORY_EVIDENCE_PRESENT"
+
+
+def _with_current_state(evidence, *, status, currently_accepted=False):
+    current_state = deepcopy(evidence["accepted_evidence_current_state"])
+    current_state["current_status"] = status
+    current_state["is_currently_accepted"] = currently_accepted
+    current_state["superseded_by"] = (
+        "replacement_evidence" if status == "SUPERSEDED" else None
+    )
+    current_state["fingerprint"] = AcceptedEvidenceLifecycleEngine()._fingerprint(
+        current_state
+    )
+    updated = deepcopy(evidence)
+    updated["accepted_evidence_current_state"] = current_state
+    updated["current_status"] = status
+    updated["is_currently_accepted"] = currently_accepted
+    updated["current_lifecycle_decision_id"] = current_state[
+        "current_lifecycle_decision_id"
+    ]
+    return updated
+
+
+def test_noncurrent_lifecycle_states_are_excluded_from_epistemic_support():
+    expected_reasons = {
+        "UNDER_REVIEW": "DENIED_EVIDENCE_UNDER_REVIEW",
+        "REVOKED": "DENIED_EVIDENCE_REVOKED",
+        "INVALIDATED": "DENIED_EVIDENCE_INVALIDATED",
+        "SUPERSEDED": "DENIED_EVIDENCE_SUPERSEDED",
+        "REVALIDATION_REQUIRED": "DENIED_REVALIDATION_REQUIRED",
+    }
+
+    for status, reason in expected_reasons.items():
+        evidence = _with_current_state(
+            _accepted_evidence(
+                accepted_evidence_id=f"accepted_evidence_{status.lower()}",
+                source_run_id="run_a",
+            ),
+            status=status,
+        )
+
+        report = AcceptedEvidenceEpistemicAssessmentEngine().assess(
+            [evidence],
+            claim_id=evidence["claim_id"],
+        )
+
+        assert report["epistemic_assessment_state"] == "NO_CURRENT_ADMISSIBLE_EVIDENCE"
+        assert report["admitted_current_evidence_count"] == 0
+        assert report["excluded_noncurrent_evidence_count"] == 1
+        assert report["excluded_noncurrent_evidence"][0]["rejection_reason"] == reason
+        assert report["source_coverage"]["supporting_evidence_count"] == 0
+
+
+def test_claim_bound_historical_accepted_evidence_cannot_bypass_current_gate():
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_historical",
+        source_run_id="run_a",
+    )
+    historical = deepcopy(evidence)
+    historical.pop("accepted_evidence_current_state")
+    historical.pop("current_status")
+    historical.pop("is_currently_accepted")
+    historical.pop("current_lifecycle_decision_id")
+
+    report = AcceptedEvidenceEpistemicAssessmentEngine().assess(
+        [historical],
+        claim_id=evidence["claim_id"],
+    )
+
+    assert report["epistemic_assessment_state"] == "NO_CURRENT_ADMISSIBLE_EVIDENCE"
+    assert report["excluded_noncurrent_evidence"][0]["rejection_reason"] == (
+        "DENIED_STALE_ACCEPTANCE_STATE"
+    )
+
+
+def test_assessment_binds_current_lifecycle_state_and_detects_stale_replay(tmp_path):
+    lifecycle = AcceptedEvidenceLifecycleEngine(tmp_path)
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_stale",
+        source_run_id="run_a",
+    )
+    current = lifecycle.initialize_current_state(evidence)
+    evidence["accepted_evidence_current_state"] = current
+    lifecycle.persist_current_state(current)
+    engine = AcceptedEvidenceEpistemicAssessmentEngine(lifecycle)
+    assessment = engine.assess([evidence], claim_id=evidence["claim_id"])
+
+    assert assessment["current_lifecycle_bindings"] == [{
+        "accepted_evidence_id": evidence["accepted_evidence_id"],
+        "current_lifecycle_decision_id": current["current_lifecycle_decision_id"],
+        "current_acceptance_decision_id": current["current_acceptance_decision_id"],
+        "current_status": "ACTIVE",
+        "is_currently_accepted": True,
+        "current_state_fingerprint": current["fingerprint"],
+    }]
+    assert engine.is_epistemic_assessment_current(assessment)[
+        "assessment_current_state"
+    ] == "CURRENT_EPISTEMIC_ASSESSMENT"
+
+    review = lifecycle.review_evidence(
+        current,
+        review_trigger="VALIDATION_RESULT_RETRACTED",
+        trigger_evidence={
+            "accepted_evidence_id": evidence["accepted_evidence_id"],
+            "evidence_acceptance_state": "ACCEPTED",
+            "source_provenance": {
+                "source_provenance_state": "SOURCE_PROVENANCE_BOUND"
+            },
+        },
+    )
+    reviewed = lifecycle.current_state_from_lifecycle_decision(current, review)
+    revocation = lifecycle.revoke_evidence(
+        reviewed,
+        review,
+        revocation_reason="withdrawn",
+    )
+    revoked = lifecycle.current_state_from_lifecycle_decision(reviewed, revocation)
+    lifecycle.persist_current_state(revoked, lifecycle_decision=revocation)
+
+    stale = engine.is_epistemic_assessment_current(assessment)
+
+    assert stale["assessment_current_state"] == "STALE_EPISTEMIC_ASSESSMENT"
+    assert stale["current_support_available"] is False
+    assert stale["truth_authority"] == "NONE"
+
+
+def test_mixed_multi_evidence_excludes_revoked_item_from_current_support():
+    active_a = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_active_a",
+        source_run_id="run_a",
+        producer_operation_id="producer_a",
+        producer_component_id="component_a",
+        producer_source_type="scheduled_validation_task",
+    )
+    revoked = _with_current_state(
+        _accepted_evidence(
+            accepted_evidence_id="accepted_evidence_revoked_b",
+            source_run_id="run_b",
+            producer_operation_id="producer_b",
+            producer_component_id="component_b",
+            producer_source_type="scheduled_validation_task",
+        ),
+        status="REVOKED",
+    )
+    active_c = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_active_c",
+        source_run_id="run_c",
+        producer_operation_id="producer_c",
+        producer_component_id="component_c",
+        producer_source_type="scheduled_validation_task",
+    )
+
+    report = AcceptedEvidenceEpistemicAssessmentEngine().assess(
+        [active_a, revoked, active_c],
+        claim_id=active_a["claim_id"],
+    )
+
+    assert report["supporting_accepted_evidence_ids"] == [
+        "accepted_evidence_active_a",
+        "accepted_evidence_active_c",
+    ]
+    assert report["excluded_evidence_ids"] == ["accepted_evidence_revoked_b"]
+    assert report["supporting_evidence_count"] == 2
+    assert report["source_coverage"]["supporting_evidence_count"] == 2
+    assert report["independent_supporting_source_count"] == 2
+
+
+def test_current_gate_rejects_identity_and_fingerprint_attacks():
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_attacked",
+        source_run_id="run_a",
+    )
+    cross = deepcopy(evidence)
+    cross["accepted_evidence_current_state"] = deepcopy(
+        evidence["accepted_evidence_current_state"]
+    )
+    cross["accepted_evidence_current_state"]["accepted_evidence_id"] = "other"
+    cross["accepted_evidence_current_state"]["evidence_id"] = "other"
+    cross["accepted_evidence_current_state"]["fingerprint"] = (
+        AcceptedEvidenceLifecycleEngine()._fingerprint(
+            cross["accepted_evidence_current_state"]
+        )
+    )
+    corrupted = deepcopy(evidence)
+    corrupted["accepted_evidence_current_state"] = deepcopy(
+        evidence["accepted_evidence_current_state"]
+    )
+    corrupted["accepted_evidence_current_state"]["fingerprint"] = "corrupted"
+
+    report = AcceptedEvidenceEpistemicAssessmentEngine().assess(
+        [cross, corrupted],
+        claim_id=evidence["claim_id"],
+    )
+
+    reasons = [
+        row["rejection_reason"] for row in report["excluded_noncurrent_evidence"]
+    ]
+    assert "DENIED_EVIDENCE_IDENTITY_MISMATCH" in reasons
+    assert "DENIED_CURRENT_LIFECYCLE_UNVERIFIED" in reasons
+
+
+def test_persisted_assessment_reloads_as_current_for_truth_ingestion(tmp_path):
+    lifecycle = AcceptedEvidenceLifecycleEngine(tmp_path / "state")
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_persisted",
+        source_run_id="run_a",
+        producer_operation_id="producer_a",
+        producer_component_id="component_a",
+        producer_source_type="scheduled_validation_task",
+    )
+    current = lifecycle.initialize_current_state(evidence)
+    evidence["accepted_evidence_current_state"] = current
+    lifecycle.persist_current_state(current)
+    assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine(lifecycle)
+    assessment = assessment_engine.assess([evidence], claim_id=evidence["claim_id"])
+    path = tmp_path / "assessment.json"
+    path.write_text(__import__("json").dumps(assessment), encoding="utf-8")
+    reloaded = __import__("json").loads(path.read_text(encoding="utf-8"))
+    truth_engine = TruthCandidateEngine()
+    truth_engine.accepted_evidence_assessment_engine = assessment_engine
+
+    admission = truth_engine.admit_current_epistemic_assessment_for_truth(
+        reloaded,
+        expected_claim_id=evidence["claim_id"],
+    )
+    coverage = truth_engine._source_coverage({
+        "claim_id": evidence["claim_id"],
+        "accepted_evidence_epistemic_assessment": reloaded,
+    })
+
+    assert admission["truth_facing_assessment_admission_state"] == (
+        "ASSESSMENT_CURRENT_AND_ADMISSIBLE"
+    )
+    assert admission["truth_authority"] == "NONE"
+    assert coverage["accepted_evidence_count"] == 1
+
+
+def test_truth_ingestion_denies_persisted_assessment_after_revocation(tmp_path):
+    lifecycle = AcceptedEvidenceLifecycleEngine(tmp_path / "state")
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_truth_stale",
+        source_run_id="run_a",
+    )
+    current = lifecycle.initialize_current_state(evidence)
+    evidence["accepted_evidence_current_state"] = current
+    lifecycle.persist_current_state(current)
+    assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine(lifecycle)
+    assessment = assessment_engine.assess([evidence], claim_id=evidence["claim_id"])
+    review = lifecycle.review_evidence(
+        current,
+        review_trigger="VALIDATION_RESULT_RETRACTED",
+        trigger_evidence={
+            "accepted_evidence_id": evidence["accepted_evidence_id"],
+            "evidence_acceptance_state": "ACCEPTED",
+            "source_provenance": {
+                "source_provenance_state": "SOURCE_PROVENANCE_BOUND"
+            },
+        },
+    )
+    reviewed = lifecycle.current_state_from_lifecycle_decision(current, review)
+    revocation = lifecycle.revoke_evidence(
+        reviewed,
+        review,
+        revocation_reason="withdrawn",
+    )
+    lifecycle.persist_current_state(
+        lifecycle.current_state_from_lifecycle_decision(reviewed, revocation),
+        lifecycle_decision=revocation,
+    )
+    truth_engine = TruthCandidateEngine()
+    truth_engine.accepted_evidence_assessment_engine = assessment_engine
+
+    admission = truth_engine.admit_current_epistemic_assessment_for_truth(
+        assessment,
+        expected_claim_id=evidence["claim_id"],
+    )
+    coverage = truth_engine._source_coverage({
+        "claim_id": evidence["claim_id"],
+        "accepted_evidence_epistemic_assessment": assessment,
+    })
+
+    assert admission["truth_facing_assessment_admission_state"] == (
+        "TRUTH_FACING_ASSESSMENT_ADMISSION_DENIED"
+    )
+    assert "STALE_EPISTEMIC_ASSESSMENT" in admission["admission_failures"]
+    assert coverage["current_proven_independent_source_count"] == 0
+
+
+def test_truth_ingestion_denies_corrupted_persisted_assessment_fingerprint(tmp_path):
+    lifecycle = AcceptedEvidenceLifecycleEngine(tmp_path / "state")
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_corrupted_assessment",
+        source_run_id="run_a",
+    )
+    current = lifecycle.initialize_current_state(evidence)
+    evidence["accepted_evidence_current_state"] = current
+    lifecycle.persist_current_state(current)
+    assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine(lifecycle)
+    assessment = assessment_engine.assess([evidence], claim_id=evidence["claim_id"])
+    assessment["supporting_evidence_count"] = 99
+    truth_engine = TruthCandidateEngine()
+    truth_engine.accepted_evidence_assessment_engine = assessment_engine
+
+    admission = truth_engine.admit_current_epistemic_assessment_for_truth(
+        assessment,
+        expected_claim_id=evidence["claim_id"],
+    )
+
+    assert admission["truth_facing_assessment_admission_state"] == (
+        "TRUTH_FACING_ASSESSMENT_ADMISSION_DENIED"
+    )
+    assert "assessment_fingerprint_invalid" in admission[
+        "currentness_validation"
+    ]["integrity_failures"]
+
+
+def test_truth_ingestion_denies_cross_claim_persisted_assessment(tmp_path):
+    lifecycle = AcceptedEvidenceLifecycleEngine(tmp_path / "state")
+    evidence = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_cross_claim",
+        source_run_id="run_a",
+    )
+    current = lifecycle.initialize_current_state(evidence)
+    evidence["accepted_evidence_current_state"] = current
+    lifecycle.persist_current_state(current)
+    assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine(lifecycle)
+    assessment = assessment_engine.assess([evidence], claim_id=evidence["claim_id"])
+    truth_engine = TruthCandidateEngine()
+    truth_engine.accepted_evidence_assessment_engine = assessment_engine
+
+    admission = truth_engine.admit_current_epistemic_assessment_for_truth(
+        assessment,
+        expected_claim_id="claim_sha256_other",
+    )
+
+    assert admission["truth_facing_assessment_admission_state"] == (
+        "TRUTH_FACING_ASSESSMENT_ADMISSION_DENIED"
+    )
+    assert "ASSESSMENT_CLAIM_IDENTITY_MISMATCH" in admission["admission_failures"]
+
+
+def test_truth_ingestion_denies_cross_evidence_binding_substitution(tmp_path):
+    lifecycle = AcceptedEvidenceLifecycleEngine(tmp_path / "state")
+    first = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_binding_a",
+        source_run_id="run_a",
+    )
+    second = _accepted_evidence(
+        accepted_evidence_id="accepted_evidence_binding_b",
+        source_run_id="run_b",
+    )
+    first_current = lifecycle.initialize_current_state(first)
+    second_current = lifecycle.initialize_current_state(second)
+    first["accepted_evidence_current_state"] = first_current
+    second["accepted_evidence_current_state"] = second_current
+    lifecycle.persist_current_state(first_current)
+    lifecycle.persist_current_state(second_current)
+    assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine(lifecycle)
+    assessment = assessment_engine.assess([first], claim_id=first["claim_id"])
+    assessment["current_lifecycle_bindings"][0] = {
+        "accepted_evidence_id": second["accepted_evidence_id"],
+        "current_lifecycle_decision_id": second_current[
+            "current_lifecycle_decision_id"
+        ],
+        "current_acceptance_decision_id": second_current[
+            "current_acceptance_decision_id"
+        ],
+        "current_status": second_current["current_status"],
+        "is_currently_accepted": second_current["is_currently_accepted"],
+        "current_state_fingerprint": second_current["fingerprint"],
+    }
+    assessment["assessment_fingerprint"] = (
+        assessment_engine._assessment_fingerprint(assessment)
+    )
+    truth_engine = TruthCandidateEngine()
+    truth_engine.accepted_evidence_assessment_engine = assessment_engine
+
+    admission = truth_engine.admit_current_epistemic_assessment_for_truth(
+        assessment,
+        expected_claim_id=first["claim_id"],
+    )
+
+    assert admission["truth_facing_assessment_admission_state"] == (
+        "TRUTH_FACING_ASSESSMENT_ADMISSION_DENIED"
+    )
+    assert admission["currentness_validation"]["stale_lifecycle_bindings"][0][
+        "stale_reason"
+    ] == "assessment_evidence_identity_mismatch"

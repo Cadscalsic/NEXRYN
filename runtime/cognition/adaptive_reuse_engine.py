@@ -7,6 +7,8 @@ from typing import Any
 
 from runtime.cache.cache_keys import stable_hash
 from runtime.cache.cache_manager import CacheManager
+from runtime.knowledge.current_knowledge_admission import CurrentKnowledgeAdmissionGate
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
 
 
 REUSE_TYPES = (
@@ -33,6 +35,8 @@ class AdaptiveReuseEngine:
         context_compatibility_threshold: float = 0.80,
         dependency_compatibility_threshold: float = 0.80,
         world_model_compatibility_threshold: float = 0.80,
+        truth_admission_gate: CurrentTruthAdmissionGate | None = None,
+        knowledge_admission_gate: CurrentKnowledgeAdmissionGate | None = None,
     ):
         self.cache_manager = cache_manager or CacheManager(auto_migrate=False)
         self.experience_reuse_layer = experience_reuse_layer
@@ -56,6 +60,12 @@ class AdaptiveReuseEngine:
         self.reused_assets: list[dict[str, Any]] = []
         self.missed_opportunities: list[dict[str, Any]] = []
         self.last_experience_reuse_report: dict[str, Any] = {}
+        self.truth_admission_gate = truth_admission_gate or CurrentTruthAdmissionGate()
+        self.knowledge_admission_gate = (
+            knowledge_admission_gate or CurrentKnowledgeAdmissionGate()
+        )
+        self.current_knowledge_inputs: list[dict[str, Any]] = []
+        self.excluded_noncurrent_knowledge: list[dict[str, Any]] = []
 
     def evaluate_reuse(self, runtime_context: dict[str, Any] | None = None) -> dict[str, Any]:
         started_at = time.perf_counter()
@@ -111,8 +121,15 @@ class AdaptiveReuseEngine:
             "reusable_truth_commitments"
         )
         for truth in self._iter_candidates(candidates):
+            admission = self.truth_admission_gate.admit_current_truth(
+                truth,
+                consumer_scope="adaptive_reuse_engine_truth",
+            )
+            if not admission.admitted:
+                continue
             if not self._truth_preserved(truth):
                 continue
+            truth = {**truth, "current_truth_admission": admission.to_dict()}
             concept = self._concept(truth, runtime_context, "truth")
             key = self.cache_manager.key(
                 "truth",
@@ -163,6 +180,14 @@ class AdaptiveReuseEngine:
         total = hits + misses
         return {
             **self.counters,
+            "current_knowledge_input_count": len(self.current_knowledge_inputs),
+            "excluded_noncurrent_knowledge_count": len(
+                self.excluded_noncurrent_knowledge
+            ),
+            "CURRENT_KNOWLEDGE_INPUTS": self.current_knowledge_inputs[-10:],
+            "EXCLUDED_NONCURRENT_KNOWLEDGE": (
+                self.excluded_noncurrent_knowledge[-10:]
+            ),
             "reuse_rate": round(hits / total, 4) if total else 0.0,
             "top_reused_assets": self.reused_assets[-10:],
             "reuse_opportunities_missed": self.missed_opportunities[-10:],
@@ -295,6 +320,40 @@ class AdaptiveReuseEngine:
         for key in candidate_keys:
             value = self.cache_manager.get(cache_type, key=key, context=runtime_context)
             if value is not None:
+                if cache_type == "truth":
+                    admission = self.truth_admission_gate.admit_current_truth(
+                        value,
+                        consumer_scope="adaptive_reuse_engine_truth_cache",
+                    )
+                    if not admission.admitted:
+                        continue
+                    if isinstance(value, dict):
+                        value = {
+                            **value,
+                            "current_truth_admission": admission.to_dict(),
+                        }
+                knowledge_admission = self._admit_current_knowledge_if_required(
+                    value,
+                    cache_type=cache_type,
+                    consumer_scope=f"adaptive_reuse_engine_{counter_type}",
+                )
+                if knowledge_admission is False:
+                    continue
+                if knowledge_admission and isinstance(value, dict):
+                    value = {
+                        **value,
+                        "current_knowledge_admission": knowledge_admission,
+                        "source_knowledge_id": knowledge_admission["knowledge_id"],
+                        "source_knowledge_decision_id": knowledge_admission[
+                            "current_knowledge_decision_id"
+                        ],
+                        "source_knowledge_status": knowledge_admission[
+                            "current_status"
+                        ],
+                        "source_knowledge_fingerprint": knowledge_admission[
+                            "current_state_fingerprint"
+                        ],
+                    }
                 return self._record_hit(
                     counter_type,
                     self._concept(value, runtime_context, cache_type),
@@ -303,6 +362,49 @@ class AdaptiveReuseEngine:
                     runtime_saved,
                 )
         return self._record_miss(counter_type, "no_compatible_validated_asset")
+
+    def _admit_current_knowledge_if_required(
+        self,
+        value: Any,
+        *,
+        cache_type: str,
+        consumer_scope: str,
+    ) -> dict[str, Any] | bool | None:
+        if not isinstance(value, dict):
+            return None
+        candidate = self._knowledge_candidate(value, cache_type)
+        if candidate is None:
+            return None
+        admission = self.knowledge_admission_gate.admit_current_knowledge(
+            candidate,
+            consumer_scope=consumer_scope,
+        )
+        record = {**value, "current_knowledge_admission": admission.to_dict()}
+        if admission.admitted:
+            self.current_knowledge_inputs.append(record)
+            return admission.to_dict()
+        self.excluded_noncurrent_knowledge.append(record)
+        return False
+
+    def _knowledge_candidate(
+        self,
+        value: dict[str, Any],
+        cache_type: str,
+    ) -> dict[str, Any] | None:
+        if cache_type == "knowledge" or value.get("knowledge_id"):
+            return value
+        source_knowledge_id = value.get("source_knowledge_id")
+        if not source_knowledge_id:
+            return None
+        return {
+            "knowledge_id": source_knowledge_id,
+            "subject_id": value.get("source_knowledge_subject_id"),
+            "current_knowledge_decision_id": value.get(
+                "source_knowledge_decision_id"
+            ),
+            "current_state_fingerprint": value.get("source_knowledge_fingerprint"),
+            "support_fingerprint": value.get("source_knowledge_support_fingerprint"),
+        }
 
     def _eligible(self, context: dict[str, Any]) -> tuple[bool, str]:
         identity_state = context.get("identity_runtime_state")

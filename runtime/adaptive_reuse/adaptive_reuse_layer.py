@@ -14,6 +14,9 @@ from runtime.adaptive_reuse.memory_consolidation import AdaptiveMemoryConsolidat
 from runtime.adaptive_reuse.program_reuse_engine import ProgramReuseEngine
 from runtime.adaptive_reuse.reuse_statistics import ReuseStatistics
 from runtime.adaptive_reuse.strategy_retriever import StrategyRetriever
+from runtime.truth.current_truth_admission import (
+    CurrentTruthAdmissionGate,
+)
 
 
 class AdaptiveReuseLayer:
@@ -24,12 +27,16 @@ class AdaptiveReuseLayer:
         program_reuse_engine: ProgramReuseEngine | None = None,
         episode_memory: EpisodeMemory | None = None,
         consolidation: AdaptiveMemoryConsolidation | None = None,
+        truth_admission_gate: CurrentTruthAdmissionGate | None = None,
     ) -> None:
         self.experience_index = experience_index or ExperienceIndex()
         self.strategy_retriever = strategy_retriever or StrategyRetriever(self.experience_index)
         self.program_reuse_engine = program_reuse_engine or ProgramReuseEngine()
         self.episode_memory = episode_memory or EpisodeMemory()
         self.consolidation = consolidation or AdaptiveMemoryConsolidation()
+        self.truth_admission_gate = (
+            truth_admission_gate or CurrentTruthAdmissionGate()
+        )
         self.last_report: dict[str, Any] = {}
 
     def evaluate(
@@ -66,7 +73,9 @@ class AdaptiveReuseLayer:
         stats.program_hits = int(program_report.get("program_hits", 0) or 0)
 
         context_hits, contexts = self._reuse_contexts(context, retrieval)
-        truth_hits, truths = self._reuse_truths(context, retrieval)
+        truth_hits, truths, historical_truths, excluded_truths = (
+            self._reuse_truths(context, retrieval)
+        )
         dependency_hits, dependencies = self._reuse_dependencies(context, retrieval)
         stats.context_hits = context_hits
         stats.truth_hits = truth_hits
@@ -111,6 +120,11 @@ class AdaptiveReuseLayer:
             "composed_program": program_report.get("composed_program", {}),
             "reused_contexts": contexts,
             "reused_truths": truths,
+            "CURRENT_TRUTH_INPUTS": truths,
+            "HISTORICAL_TRUTH_INPUTS": historical_truths,
+            "EXCLUDED_NONCURRENT_TRUTHS": excluded_truths,
+            "current_truth_input_count": len(truths),
+            "excluded_noncurrent_truth_count": len(excluded_truths),
             "reused_dependencies": dependencies,
             "memory_consolidation_report": consolidation_report,
             "reused_assets": {
@@ -248,11 +262,23 @@ class AdaptiveReuseLayer:
         self,
         context: Mapping[str, Any],
         retrieval: Mapping[str, Any],
-    ) -> tuple[int, list[dict[str, Any]]]:
+    ) -> tuple[
+        int,
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
         truths = []
+        historical_truths = []
+        excluded_truths = []
         for item in context.get("truth_commitments", []) or context.get("reusable_truth_commitments", []) or []:
             if isinstance(item, Mapping):
-                truths.append(dict(item))
+                self._admit_truth_candidate(
+                    item,
+                    truths,
+                    historical_truths,
+                    excluded_truths,
+                )
         if not truths:
             payload = self._read_json(Path("runtime/memory/storage/truth_registry.json"))
             stored = payload.get("truths", []) if isinstance(payload, Mapping) else []
@@ -260,7 +286,12 @@ class AdaptiveReuseLayer:
             for truth in stored:
                 if not isinstance(truth, Mapping):
                     continue
-                status = str(truth.get("status") or truth.get("truth_state") or "").upper()
+                status = str(
+                    truth.get("status")
+                    or truth.get("truth_state")
+                    or truth.get("lifecycle_status")
+                    or ""
+                ).upper()
                 confidence = _float(
                     truth.get("calibrated_confidence"),
                     truth.get("truth_confidence"),
@@ -271,10 +302,34 @@ class AdaptiveReuseLayer:
                     or "LOCKED" in status
                     or _overlap(query_text, str(truth).lower()) > 0
                 ):
-                    truths.append(dict(truth))
+                    self._admit_truth_candidate(
+                        truth,
+                        truths,
+                        historical_truths,
+                        excluded_truths,
+                    )
                     if len(truths) >= 5:
                         break
-        return len(truths), truths[:5]
+        return len(truths[:5]), truths[:5], historical_truths[:20], excluded_truths[:20]
+
+    def _admit_truth_candidate(
+        self,
+        truth: Mapping[str, Any],
+        current_truths: list[dict[str, Any]],
+        historical_truths: list[dict[str, Any]],
+        excluded_truths: list[dict[str, Any]],
+    ) -> None:
+        admission = self.truth_admission_gate.admit_current_truth(
+            truth,
+            consumer_scope="adaptive_reuse_truth",
+        )
+        record = dict(truth)
+        record["current_truth_admission"] = admission.to_dict()
+        historical_truths.append(record)
+        if admission.admitted:
+            current_truths.append(record)
+        else:
+            excluded_truths.append(record)
 
     def _reuse_dependencies(
         self,

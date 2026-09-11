@@ -1,6 +1,10 @@
 from runtime.cache import CacheManager
 from runtime.cognition import AdaptiveReuseEngine
 from runtime.profiling.metric_bridge import runtime_metric_bridge
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
+from runtime.truth.truth_current_authority_lifecycle import (
+    TruthCurrentAuthorityLifecycleEngine,
+)
 
 
 def _stable_context(**overrides):
@@ -23,6 +27,12 @@ def _stable_context(**overrides):
 
 def test_adaptive_reuse_engine_reuses_locked_truth_and_snapshot(tmp_path):
     manager = CacheManager(cache_dir=tmp_path, auto_migrate=False)
+    truth_engine = TruthCurrentAuthorityLifecycleEngine(tmp_path / "truth_state")
+    truth_state = truth_engine.create_active_truth(
+        truth_id="truth:color",
+        claim_id="claim:color",
+    )
+    truth_engine.persist_current_state(truth_state)
     snapshot_key = manager.key("dependency_snapshot", concept="color")
     manager.put(
         "dependency_snapshot",
@@ -40,12 +50,16 @@ def test_adaptive_reuse_engine_reuses_locked_truth_and_snapshot(tmp_path):
             "contextual_truth_supported": True,
         },
     )
-    engine = AdaptiveReuseEngine(cache_manager=manager)
+    engine = AdaptiveReuseEngine(
+        cache_manager=manager,
+        truth_admission_gate=CurrentTruthAdmissionGate(truth_engine),
+    )
 
     report = engine.evaluate_reuse({
         **_stable_context(concept="color"),
         "truth_commitments": [
             {
+                **truth_state,
                 "concept": "color",
                 "decision": "TRUTH_COMMITTED",
                 "final_commit_state": "LOCKED_TRUTH_PRESERVED",

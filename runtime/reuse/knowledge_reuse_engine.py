@@ -6,11 +6,16 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from runtime.knowledge.current_knowledge_admission import CurrentKnowledgeAdmissionGate
+
 
 class KnowledgeReuseEngine:
     system_name = "knowledge_reuse_engine"
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        knowledge_admission_gate: CurrentKnowledgeAdmissionGate | None = None,
+    ) -> None:
         self.context_hits = 0
         self.truth_hits = 0
         self.strategy_hits = 0
@@ -23,6 +28,11 @@ class KnowledgeReuseEngine:
         self._context_cache: list[dict[str, Any]] | None = None
         self._strategy_cache: list[dict[str, Any]] | None = None
         self._program_cache: list[dict[str, Any]] | None = None
+        self.knowledge_admission_gate = (
+            knowledge_admission_gate or CurrentKnowledgeAdmissionGate()
+        )
+        self.current_knowledge_inputs: list[dict[str, Any]] = []
+        self.excluded_noncurrent_knowledge: list[dict[str, Any]] = []
 
     def reuse_before_regenerate(
         self,
@@ -77,6 +87,14 @@ class KnowledgeReuseEngine:
             "truth_misses": self.truth_misses,
             "strategy_misses": self.strategy_misses,
             "program_misses": self.program_misses,
+            "current_knowledge_input_count": len(self.current_knowledge_inputs),
+            "excluded_noncurrent_knowledge_count": len(
+                self.excluded_noncurrent_knowledge
+            ),
+            "CURRENT_KNOWLEDGE_INPUTS": self.current_knowledge_inputs[-10:],
+            "EXCLUDED_NONCURRENT_KNOWLEDGE": (
+                self.excluded_noncurrent_knowledge[-10:]
+            ),
             "knowledge_reuse_rate": round(hits / max(hits + misses, 1), 4),
             "knowledge_reuse_events": hits,
         }
@@ -99,11 +117,62 @@ class KnowledgeReuseEngine:
         for candidate in candidates:
             if not isinstance(candidate, Mapping):
                 continue
+            admitted = self._admit_current_knowledge_if_required(
+                candidate,
+                consumer_scope=f"knowledge_reuse_engine_{kind}",
+            )
+            if admitted is False:
+                continue
+            candidate = admitted or candidate
             score = _similarity(query, candidate)
             if score >= 0.5:
                 ranked.append({**dict(candidate), "reuse_kind": kind, "reuse_score": score})
         ranked.sort(key=lambda item: item["reuse_score"], reverse=True)
         return ranked[0] if ranked else {}
+
+    def _admit_current_knowledge_if_required(
+        self,
+        candidate: Mapping[str, Any],
+        *,
+        consumer_scope: str,
+    ) -> dict[str, Any] | bool | None:
+        item = dict(candidate)
+        if not (item.get("knowledge_id") or item.get("source_knowledge_id")):
+            return None
+        admission_candidate = item
+        if item.get("source_knowledge_id") and not item.get("knowledge_id"):
+            admission_candidate = {
+                "knowledge_id": item.get("source_knowledge_id"),
+                "subject_id": item.get("source_knowledge_subject_id"),
+                "current_knowledge_decision_id": item.get(
+                    "source_knowledge_decision_id"
+                ),
+                "current_state_fingerprint": item.get(
+                    "source_knowledge_fingerprint"
+                ),
+                "support_fingerprint": item.get(
+                    "source_knowledge_support_fingerprint"
+                ),
+            }
+        admission = self.knowledge_admission_gate.admit_current_knowledge(
+            admission_candidate,
+            consumer_scope=consumer_scope,
+        )
+        record = {**item, "current_knowledge_admission": admission.to_dict()}
+        if admission.admitted:
+            enriched = {
+                **item,
+                "current_knowledge_admission": admission.to_dict(),
+                "source_knowledge_id": admission.knowledge_id,
+                "source_knowledge_subject_id": admission.subject_id,
+                "source_knowledge_decision_id": admission.current_knowledge_decision_id,
+                "source_knowledge_status": admission.current_status,
+                "source_knowledge_fingerprint": admission.current_state_fingerprint,
+            }
+            self.current_knowledge_inputs.append(enriched)
+            return enriched
+        self.excluded_noncurrent_knowledge.append(record)
+        return False
 
     def _count(self, kind: str, item: Mapping[str, Any]) -> None:
         attr = f"{kind}_hits" if item else f"{kind}_misses"

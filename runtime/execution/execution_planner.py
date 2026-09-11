@@ -11,9 +11,16 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Mapping
 
 from runtime.budget.runtime_budget_enforcer import runtime_budget_enforcer
+from runtime.goals.current_goal_authority import GoalCurrentAuthorityEngine
+from runtime.intent.current_intent_authority import IntentCurrentAuthorityEngine
+from runtime.intent.intent_manager import IntentManager, build_runtime_objective_ref
+from runtime.planning.current_plan_authority import (
+    PlanningCurrentAuthorityEngine,
+)
 
 
 @dataclass
@@ -275,6 +282,7 @@ class ExecutionPlanner:
         cognitive_pipeline: str | None = None,
         declared_budget: Mapping[str, Any] | None = None,
         source_stage: str = "main_adaptive_pre_execution_planner",
+        intent_state_dir: str | Path | None = None,
     ) -> dict[str, Any]:
         """Build one finalized run-scoped plan before governed execution starts."""
 
@@ -350,6 +358,57 @@ class ExecutionPlanner:
             }
             for task_file in task_files
         ]
+        intent_authority = IntentCurrentAuthorityEngine(
+            intent_state_dir
+            if intent_state_dir is not None
+            else Path("runtime") / "artifacts" / "runtime_data" / "intent"
+        )
+        intent_manager = IntentManager(authority_engine=intent_authority)
+        intent_orchestration_results = [
+            intent_manager.orchestrate_runtime_objective(
+                build_runtime_objective_ref(task_file),
+                run_id=str(run_id),
+                task_id=str(task_file),
+                source_component="ExecutionPlanner.build_authoritative_run_plan",
+                source_type="TASK_DERIVED",
+                task_local=True,
+                objective_ref=build_runtime_objective_ref(task_file),
+            ).to_dict()
+            for task_file in task_files
+        ]
+        natural_intent_ids = [
+            row.get("intent_id")
+            for row in intent_orchestration_results
+            if row.get("intent_status") == "ACTIVE" and row.get("intent_id")
+        ]
+        proposal_count = sum(
+            1 for row in intent_orchestration_results if row.get("intent_proposal_id")
+        )
+        assessment_count = sum(
+            1 for row in intent_orchestration_results if row.get("assessment_id")
+        )
+        authority_invocation_count = sum(
+            1 for row in intent_orchestration_results if row.get("intent_decision_id")
+        )
+        intent_runtime_telemetry = {
+            "runtime_intent_entry_reached": bool(intent_orchestration_results),
+            "intent_proposal_created": proposal_count > 0,
+            "intent_assessment_reached": assessment_count > 0,
+            "intent_authority_reached": authority_invocation_count > 0,
+            "intent_activation_result": (
+                "ACTIVE"
+                if natural_intent_ids
+                else "NO_ACTIVE_INTENT_CREATED"
+            ),
+            "intent_cognitive_consumption": False,
+            "goal_activation": False,
+            "plan_activation": False,
+            "budget_authority": "NONE",
+            "execution_authority": "NONE",
+            "truth_authority": "NONE",
+            "knowledge_authority": "NONE",
+            "capability_authority": "NONE",
+        }
         plan = {
             "execution_plan_schema_version": schema_version,
             "execution_plan_id": execution_plan_id,
@@ -373,6 +432,24 @@ class ExecutionPlanner:
             "selected_layers": [],
             "planned_routes": planned_routes,
             "planned_execution_nodes": planned_execution_nodes,
+            "intent_manager_owner": intent_manager.system_name,
+            "intent_manager_authority": intent_manager.authority,
+            "intent_manager_behavioral_authority": (
+                intent_manager.behavioral_authority
+            ),
+            "runtime_objective_source": "task_entries",
+            "runtime_objective_type": "TASK_DERIVED",
+            "natural_intent_entry_point": (
+                "ExecutionPlanner.build_authoritative_run_plan"
+            ),
+            "intent_orchestration_results": intent_orchestration_results,
+            "intent_runtime_telemetry": intent_runtime_telemetry,
+            "intent_operation_state": (
+                "INTENT_OPERATIONAL_ENTRY_ESTABLISHED"
+                if intent_orchestration_results
+                else "NO_RUNTIME_OBJECTIVES"
+            ),
+            "intent_cognitive_consumption": False,
             "planned_reasoning_depth": budget.get("max_reasoning_depth"),
             "task_entries": task_entries,
             "lifecycle_transitions": lifecycle,
@@ -409,6 +486,142 @@ class ExecutionPlanner:
             "retrospective_reconstruction_authority": "DIAGNOSTIC_ONLY_WHEN_PRESENT",
             "constitutional_boundary": "TEMPORAL_PLANNING_AUTHORITY_ONLY_NO_RUNTIME_BUDGET_ENFORCEMENT",
         }
+        planning_authority = PlanningCurrentAuthorityEngine()
+        planning_subject = planning_authority.create_subject(
+            objective_refs=[str(task_file) for task_file in task_files],
+            planning_scope=plan_scope,
+            domain=cognitive_pipeline
+            or profile.get("cognitive_pipeline")
+            or profile.get("pipeline_name")
+            or "GENERAL",
+            context_class=str(selected_mode or "adaptive"),
+            constraint_domain="runtime_budget",
+        )
+        plan_candidate = planning_authority.create_candidate(
+            planning_subject,
+            goal_refs=[],
+            supporting_knowledge_refs=[],
+            strategy_refs=[],
+            dependency_refs=[],
+            constraint_refs=[
+                {
+                    "constraint_type": "runtime_budget",
+                    "max_active_routes": budget.get("max_active_routes"),
+                    "max_reasoning_depth": budget.get("max_reasoning_depth"),
+                    "max_dependency_depth": budget.get("max_dependency_depth"),
+                    "authority": "BUDGET_INPUT_ONLY",
+                }
+            ],
+            proposed_operations=[
+                {
+                    "operation": "governed_task_execution",
+                    "task_id": str(task_file),
+                    "execution_plan_id": execution_plan_id,
+                }
+                for task_file in task_files
+            ],
+            source_planner=source_stage,
+            provenance={
+                "execution_plan_id": execution_plan_id,
+                "run_id": str(run_id),
+                "run_scoped_realization": True,
+                "executionplanner_role": (
+                    "RUN_SCOPED_EXECUTION_PLAN_CANDIDATE_MATERIALIZER"
+                ),
+            },
+            plan_instance_context={
+                "run_id": str(run_id),
+                "execution_plan_id": execution_plan_id,
+                "plan_scope": plan_scope,
+            },
+        )
+        plan_assessment = planning_authority.assess_candidate(
+            plan_candidate,
+            planning_subject,
+        )
+        planning_decision = planning_authority.commit_plan(
+            planning_subject,
+            plan_candidate,
+            plan_assessment,
+        )
+        current_plan_state = planning_authority.current_state_from_decision(
+            {},
+            planning_decision,
+        )
+        goal_authority = GoalCurrentAuthorityEngine()
+        plan.update({
+            "canonical_intent_authority_owner": intent_authority.system_name,
+            "intent_authority_count": 1,
+            "intent_authority_role": "CURRENT_INTENT_AUTHORITY",
+            "current_intent_authority_state": (
+                "RUNTIME_OBJECTIVES_ROUTED_TO_INTENT_AUTHORITY"
+                if intent_orchestration_results
+                else "NO_RUNTIME_OBJECTIVES"
+            ),
+            "natural_intent_authority_applicability": (
+                "APPLICABLE"
+                if intent_orchestration_results
+                else "NOT_APPLICABLE"
+            ),
+            "intent_proposal_authority": "NONE",
+            "intent_active_authority": intent_authority.authority,
+            "current_intent_ids": natural_intent_ids,
+            "natural_intent_proposal_count": proposal_count,
+            "natural_intent_assessment_count": assessment_count,
+            "natural_intent_authority_invocation_count": authority_invocation_count,
+            "natural_active_intent_count": len(natural_intent_ids),
+            "intent_goal_boundary": "ACTIVE_INTENT_PRODUCES_GOAL_PROPOSAL_ONLY",
+            "goal_intent_proposal_boundary": "GOAL_OUTPUT_IS_INTENT_PROPOSAL_ONLY",
+            "intent_planning_boundary": "ACTIVE_INTENT_IS_PLANNING_CONTEXT_ONLY",
+            "canonical_goal_authority_owner": goal_authority.system_name,
+            "goal_authority_count": 1,
+            "goal_authority_role": "CURRENT_GOAL_AUTHORITY",
+            "current_goal_authority_state": "NOT_APPLICABLE_TO_RUN_PLAN",
+            "natural_goal_authority_applicability": "NOT_APPLICABLE",
+            "goal_proposal_authority": "NONE",
+            "goal_active_authority": "NONE",
+            "current_goal_ids": [],
+            "goal_planning_boundary": "CURRENT_GOAL_ELIGIBLE_PLANNING_INPUT_ONLY",
+            "planning_goal_proposal_boundary": "PLANNER_OUTPUT_IS_GOAL_PROPOSAL_ONLY",
+            "canonical_planning_authority_owner": planning_authority.system_name,
+            "planning_authority_count": 1,
+            "planning_authority_role": "CURRENT_PLAN_AUTHORITY",
+            "current_plan_authority_state": (
+                current_plan_state.get("current_plan_authority_status")
+            ),
+            "plan_id": current_plan_state.get("plan_id"),
+            "plan_instance_id": current_plan_state.get("plan_instance_id"),
+            "plan_candidate_id": plan_candidate.plan_candidate_id,
+            "plan_assessment_id": plan_assessment.plan_assessment_id,
+            "planning_decision_id": planning_decision.get("planning_decision_id"),
+            "current_planning_decision_id": current_plan_state.get(
+                "current_planning_decision_id"
+            ),
+            "plan_lifecycle_status": current_plan_state.get("lifecycle_status"),
+            "current_vs_historical_plan_state": "CURRENT_PLAN",
+            "planning_subject": planning_subject.to_dict(),
+            "plan_candidate": plan_candidate.to_dict(),
+            "plan_assessment": plan_assessment.to_dict(),
+            "planning_decision": planning_decision,
+            "plan_support_dependency_graph": current_plan_state.get(
+                "support_dependency_graph"
+            ),
+            "planning_decision_fingerprint": current_plan_state.get(
+                "planning_decision_fingerprint"
+            ),
+            "current_plan_fingerprint": current_plan_state.get("fingerprint"),
+            "action_authority": "NONE",
+            "budget_authority": "NONE",
+            "execution_authority": "NONE",
+            "knowledge_authority_changed": False,
+            "truth_authority_changed": False,
+            "goal_priority_authority_status": (
+                "GOAL_PRIORITY_AUTHORITY_UNRESOLVED"
+            ),
+            "goal_conflict_authority_status": (
+                "GOAL_CONFLICT_AUTHORITY_ADVISORY"
+            ),
+        })
         fingerprint = self._fingerprint_authoritative_run_plan(plan)
         plan["immutable_fingerprint"] = fingerprint
         plan["execution_plan_fingerprint"] = fingerprint
@@ -1306,8 +1519,45 @@ class ExecutionPlanner:
         return "NOT_REQUESTED"
 
     def _fingerprint_plan(self, plan: Mapping[str, Any]) -> str:
-        payload = dict(plan)
-        payload.pop("execution_plan_fingerprint", None)
+        payload = {
+            key: plan.get(key)
+            for key in (
+                "execution_plan_schema_version",
+                "execution_plan_id",
+                "run_id",
+                "task_id",
+                "task_profile_id",
+                "planning_state",
+                "execution_plan_state",
+                "source_selection_record_ids",
+                "selected_tool_count",
+                "selected_layer_count",
+                "active_route_count",
+                "execution_node_count",
+                "nodes",
+                "route_reconciliation",
+                "route_balance",
+                "tool_reconciliation",
+                "layer_reconciliation",
+                "dependency_activation_requests",
+                "process_stage_requests",
+                "admission_summary",
+                "materialization_failures",
+                "immutability_state",
+                "execution_plan_finalized",
+                "execution_plan_reconciliation_state",
+                "execution_plan_validation_state",
+                "execution_plan_failure_cause",
+                "dependency_activation_state",
+                "process_stage_state",
+                "orchestrator_consumption_state",
+                "constitutional_boundary",
+                "maximum_active_routes",
+                "maximum_reasoning_depth",
+                "maximum_dependency_depth",
+                "maximum_hypotheses",
+            )
+        }
         return self._stable_id("execution_plan_fingerprint", payload)
 
     def _plan_fingerprint_valid(self, plan: Mapping[str, Any]) -> bool:

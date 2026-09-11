@@ -16,7 +16,9 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Mapping
 
+from runtime.knowledge.current_knowledge_admission import CurrentKnowledgeAdmissionGate
 from runtime.knowledge.unified_cognitive_bus import UnifiedCognitiveBus
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
 
 
 @dataclass
@@ -221,9 +223,20 @@ class CognitiveKnowledgeIntegrationLayer:
 
     system_name = "cognitive_knowledge_integration_layer"
 
-    def __init__(self, memory: CognitiveKnowledgeMemory | None = None) -> None:
+    def __init__(
+        self,
+        memory: CognitiveKnowledgeMemory | None = None,
+        truth_admission_gate: CurrentTruthAdmissionGate | None = None,
+        knowledge_admission_gate: CurrentKnowledgeAdmissionGate | None = None,
+    ) -> None:
         self.memory = memory or CognitiveKnowledgeMemory()
         self.cognitive_bus = UnifiedCognitiveBus()
+        self.truth_admission_gate = (
+            truth_admission_gate or CurrentTruthAdmissionGate()
+        )
+        self.knowledge_admission_gate = (
+            knowledge_admission_gate or CurrentKnowledgeAdmissionGate()
+        )
 
     def build_unified_cognitive_bus_report(
         self,
@@ -342,6 +355,8 @@ class CognitiveKnowledgeIntegrationLayer:
         objects.extend(self._truth_objects(truth))
         objects.extend(self._route_objects(route_report))
         objects.extend(self._memory_objects(memory))
+        knowledge_admission_report = self._current_knowledge_objects(memory)
+        objects.extend(knowledge_admission_report["current_knowledge_objects"])
         objects.extend(self._task_objects(all_results or []))
         semantic_report = self._semantic_integration_report(objects)
         objects.extend(self._semantic_objects(semantic_report))
@@ -373,6 +388,21 @@ class CognitiveKnowledgeIntegrationLayer:
             "report_level": report_level,
             "knowledge_objects": payload,
             "knowledge_object_count": len(payload),
+            "CURRENT_KNOWLEDGE_INPUTS": knowledge_admission_report[
+                "current_knowledge_inputs"
+            ],
+            "HISTORICAL_KNOWLEDGE_INPUTS": knowledge_admission_report[
+                "historical_knowledge_inputs"
+            ],
+            "EXCLUDED_NONCURRENT_KNOWLEDGE": knowledge_admission_report[
+                "excluded_noncurrent_knowledge"
+            ],
+            "current_knowledge_input_count": knowledge_admission_report[
+                "current_knowledge_input_count"
+            ],
+            "excluded_noncurrent_knowledge_count": knowledge_admission_report[
+                "excluded_noncurrent_knowledge_count"
+            ],
             "knowledge_flow": self._knowledge_flow(events),
             "knowledge_bus": events,
             "knowledge_graph": graph,
@@ -534,6 +564,12 @@ class CognitiveKnowledgeIntegrationLayer:
         if not truths and report:
             truths = [{"truth_id": "truth_runtime:summary", "confidence": 0.5, "utility": 0.5}]
         for truth in truths:
+            admission = self.truth_admission_gate.admit_current_truth(
+                truth,
+                consumer_scope="ckil_truth_ingestion",
+            )
+            if not admission.admitted:
+                continue
             truth_id = str(truth.get("truth_id") or truth.get("id") or _id("truth", truth))
             objects.append(KnowledgeObject(
                 knowledge_id=truth_id,
@@ -554,6 +590,7 @@ class CognitiveKnowledgeIntegrationLayer:
                     "which_decision_it_influenced": "concept_strengthening",
                     "how_it_evolved": "Validated truths strengthen concepts; rejected truths weaken them.",
                     "why_it_survived": "Truth evidence remains available to CKIL.",
+                    "current_truth_admission": admission.to_dict(),
                 },
             ))
         return objects
@@ -618,6 +655,58 @@ class CognitiveKnowledgeIntegrationLayer:
                 "why_it_survived": "Memory is the long-term substrate for reusable knowledge.",
             },
         )]
+
+    def _current_knowledge_objects(self, report):
+        current_objects = []
+        current_inputs = []
+        historical_inputs = []
+        excluded = []
+        for item in _items(
+            report,
+            "current_knowledge_inputs",
+            "knowledge_inputs",
+            "knowledge_objects",
+        ):
+            admission = self.knowledge_admission_gate.admit_current_knowledge(
+                item,
+                consumer_scope="ckil_current_knowledge_ingestion",
+            )
+            record = {**item, "current_knowledge_admission": admission.to_dict()}
+            historical_inputs.append(record)
+            if not admission.admitted:
+                excluded.append(record)
+                continue
+            current_inputs.append(record)
+            current_objects.append(KnowledgeObject(
+                knowledge_id=str(admission.knowledge_id),
+                knowledge_type="current_knowledge",
+                origin_runtime=str(item.get("origin_runtime") or "knowledge_authority"),
+                supporting_truths=_list(item.get("supporting_truth_ids")),
+                supporting_evidence_ids=_list(item.get("supporting_evidence_ids")),
+                confidence=_clamp(item.get("confidence", 0.5)),
+                utility=_clamp(item.get("utility", 0.5)),
+                generalization=_clamp(item.get("generalization", 0.5)),
+                novelty=0.2,
+                compression=0.7,
+                lifecycle="CURRENT",
+                explainability={
+                    "where_originated": "Knowledge Current Authority",
+                    "runtime_produced_it": "knowledge_current_authority_engine",
+                    "who_consumed_it": ["knowledge_integration_runtime"],
+                    "which_decision_it_influenced": "current_knowledge_context_input",
+                    "how_it_evolved": "Admitted through CurrentKnowledgeAdmissionGate.",
+                    "why_it_survived": "Current Knowledge authority verified active state.",
+                    "current_knowledge_admission": admission.to_dict(),
+                },
+            ))
+        return {
+            "current_knowledge_objects": current_objects,
+            "current_knowledge_inputs": current_inputs,
+            "historical_knowledge_inputs": historical_inputs,
+            "excluded_noncurrent_knowledge": excluded,
+            "current_knowledge_input_count": len(current_inputs),
+            "excluded_noncurrent_knowledge_count": len(excluded),
+        }
 
     def _task_objects(self, results):
         objects = []

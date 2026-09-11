@@ -1,3 +1,6 @@
+from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
+
+
 class LockedTruthFastPath:
     SKIPPED_MODULES = [
         "dependency_reasoning",
@@ -10,11 +13,23 @@ class LockedTruthFastPath:
         "truth_commit_review",
     ]
 
+    def __init__(self, admission_gate=None):
+        self.admission_gate = admission_gate or CurrentTruthAdmissionGate()
+
     def evaluate(self, concept: str, context: dict) -> dict:
         context = context if isinstance(context, dict) else {}
         truth_report = context.get("truth_commit_report")
         if not isinstance(truth_report, dict) or not truth_report:
             return self._inactive(concept, "missing_truth_commit_report")
+
+        admission = self.admission_gate.admit_current_truth(
+            truth_report,
+            consumer_scope="locked_truth_fastpath",
+        )
+        if not admission.admitted:
+            report = self._inactive(concept, admission.admission_reason)
+            report["current_truth_admission"] = admission.to_dict()
+            return report
 
         required = {
             "final_commit_state": "LOCKED_TRUTH_PRESERVED",
@@ -87,6 +102,7 @@ class LockedTruthFastPath:
             "governance_revalidation_skipped": True,
             "skipped_modules": list(self.SKIPPED_MODULES),
             "reason": "locked_truth_preserved_and_identity_stable",
+            "current_truth_admission": admission.to_dict(),
         }
 
     def _inactive(self, concept, reason):

@@ -1516,6 +1516,301 @@
       "source_run_id": "run_20260909_234501",
       "state": "RAW_RESULT_CAPTURED",
       "timestamp": "2026-09-09T23:49:59.283615+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T14:40:01.714134+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_144000",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T14:41:00.826864+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T14:49:01.302789+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_144900",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T14:50:19.977626+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T14:59:23.961113+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_145923",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:00:24.658715+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:07:59.677002+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_150759",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:09:08.463015+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:14:28.443856+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_151427",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:15:30.333331+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:30:55.715364+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_153055",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T15:32:05.065445+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:36:51.971672+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_233651",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:37:31.442169+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:42:23.252549+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:46:20.164134+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_234619",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:46:54.835552+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:49:27.604809+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:51:43.300165+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_235143",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:52:16.106488+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:54:13.068614+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:58:39.838281+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260910_235839",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-10T23:59:12.627231+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:01:31.976100+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:06:52.627276+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_000652",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:08:07.600535+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:20:08.762857+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_002008",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:21:28.676635+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:27:35.043437+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_002734",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:29:01.254368+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:42:52.708053+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_004252",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:43:56.219714+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:56:08.459678+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_005608",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T00:57:22.351459+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T01:00:34.106026+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_010033",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T01:01:48.321935+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T01:17:35.293306+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_011734",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T01:19:12.074298+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T01:28:13.375908+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_012812",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T01:29:24.086220+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T11:42:09.132972+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_114208",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T11:44:04.309110+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T12:02:33.027937+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_120232",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T12:03:50.425344+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T12:22:17.482540+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_122216",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T12:23:55.894091+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:00:37.216083+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_140036",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:02:21.640719+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:17:42.528299+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_141742",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:18:54.247774+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:26:44.811273+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_142644",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:28:20.524918+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:45:06.920026+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260911_144506",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-11T14:46:25.283193+00:00"
     }
   ],
   "identity_schema_version": null,
@@ -1523,7 +1818,7 @@
   "lifecycle_state": "RAW_RESULT_CAPTURED",
   "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
   "matching_score": 88.0,
-  "observation_count": 111,
+  "observation_count": 136,
   "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
   "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
   "priority": 65,
@@ -1571,7 +1866,7 @@
   "tie_break_strategy": "cross_source_consensus",
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-09-09T23:49:59.283615+00:00",
+  "updated_at": "2026-09-11T14:46:25.283193+00:00",
   "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
   "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY"
 }
