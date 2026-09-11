@@ -958,10 +958,30 @@ class ValidationEvidenceEvaluator:
             "SOURCE_PROVENANCE_BOUND"
         ):
             raise ValueError("accepted_evidence_requires_bound_source_provenance")
+        accepted_origin = self._accepted_evidence_origin(
+            raw_result=raw_result,
+            source_provenance=source_provenance,
+            evidence_decision_id=decision.get("evidence_decision_id"),
+        )
         artifact = {
             "schema_version": "1.0",
             "accepted_evidence_id": accepted_evidence_id,
             "accepted_evidence_fingerprint": fingerprint,
+            "accepted_evidence_origin": accepted_origin,
+            "accepted_evidence_origin_state": accepted_origin.get(
+                "accepted_evidence_origin_state"
+            ),
+            "accepted_evidence_origin_authority": "NONE",
+            "origin_task_execution_id": accepted_origin.get(
+                "origin_task_execution_id"
+            ),
+            "origin_run_id": accepted_origin.get("origin_run_id"),
+            "origin_task_id": accepted_origin.get("origin_task_id"),
+            "origin_attempt_id": accepted_origin.get("origin_attempt_id"),
+            "origin_operation_id": accepted_origin.get("origin_operation_id"),
+            "origin_lineage_fingerprint": accepted_origin.get(
+                "origin_lineage_fingerprint"
+            ),
             "acceptance_authority": self.AUTHORITY,
             "acceptance_scope": "EVIDENCE_RECORDING_ONLY",
             "governed_acceptance_contract_version": "1.0",
@@ -1026,6 +1046,65 @@ class ValidationEvidenceEvaluator:
             "claim_evidence_binding_behavioral_authority"
         )
         return artifact
+
+    def _accepted_evidence_origin(
+        self,
+        *,
+        raw_result: dict[str, Any],
+        source_provenance: dict[str, Any],
+        evidence_decision_id: Any,
+    ) -> dict[str, Any]:
+        raw_evidence_id = (
+            raw_result.get("raw_result_id")
+            or raw_result.get("raw_validation_result_id")
+            or source_provenance.get("raw_validation_result_id")
+        )
+        origin = {
+            "schema_version": "1.0",
+            "origin_source": "RAW_EVIDENCE_SOURCE_PROVENANCE",
+            "raw_evidence_id": raw_evidence_id,
+            "raw_result_id": raw_evidence_id,
+            "acceptance_decision_id": evidence_decision_id,
+            "evidence_decision_id": evidence_decision_id,
+            "origin_task_execution_id": source_provenance.get(
+                "origin_task_execution_id"
+            ),
+            "origin_run_id": source_provenance.get("origin_run_id"),
+            "origin_task_id": source_provenance.get("origin_task_id"),
+            "origin_attempt_id": source_provenance.get("origin_attempt_id"),
+            "origin_operation_id": source_provenance.get("origin_operation_id"),
+            "origin_lineage_fingerprint": source_provenance.get(
+                "origin_lineage_fingerprint"
+            ),
+            "source_provenance_fingerprint": source_provenance.get(
+                "source_provenance_fingerprint"
+            ),
+            "authority": "NONE",
+            "behavioral_authority": "NONE",
+        }
+        required = (
+            "raw_evidence_id",
+            "acceptance_decision_id",
+            "origin_task_execution_id",
+            "origin_run_id",
+            "origin_task_id",
+            "origin_lineage_fingerprint",
+        )
+        missing = [
+            key for key in required
+            if self._term(origin.get(key)) == "Not Available"
+        ]
+        if missing:
+            origin["accepted_evidence_origin_state"] = (
+                "LEGACY_ORIGIN_UNVERIFIED"
+                if self._term(raw_evidence_id) != "Not Available"
+                else "ACCEPTED_EVIDENCE_ORIGIN_INCOMPLETE"
+            )
+            origin["missing_origin_fields"] = missing
+        else:
+            origin["accepted_evidence_origin_state"] = "TASK_ORIGIN_PRESERVED"
+            origin["missing_origin_fields"] = []
+        return origin
 
     def _acceptance_contract_failures(
         self,
@@ -1960,6 +2039,38 @@ class ValidationEvidenceEvaluator:
                 or plan.get("source_task_id")
                 or schedule.get("source_task_id")
             ),
+            "task_execution_origin": raw_result.get(
+                "task_execution_origin",
+                envelope.get("task_execution_origin"),
+            ),
+            "task_execution_origin_classification": raw_result.get(
+                "task_execution_origin_classification",
+                envelope.get("task_execution_origin_classification"),
+            ),
+            "origin_task_execution_id": raw_result.get(
+                "origin_task_execution_id",
+                envelope.get("origin_task_execution_id"),
+            ),
+            "origin_run_id": raw_result.get(
+                "origin_run_id",
+                envelope.get("origin_run_id"),
+            ),
+            "origin_task_id": raw_result.get(
+                "origin_task_id",
+                envelope.get("origin_task_id"),
+            ),
+            "origin_attempt_id": raw_result.get(
+                "origin_attempt_id",
+                envelope.get("origin_attempt_id"),
+            ),
+            "origin_operation_id": raw_result.get(
+                "origin_operation_id",
+                envelope.get("origin_operation_id"),
+            ),
+            "origin_lineage_fingerprint": raw_result.get(
+                "origin_lineage_fingerprint",
+                envelope.get("origin_lineage_fingerprint"),
+            ),
             "producer_component_id": raw_result.get(
                 "producer_component_id",
                 envelope.get("producer_component_id"),
@@ -2030,6 +2141,10 @@ class ValidationEvidenceEvaluator:
                 "producer_component_id",
                 "producer_source_type",
                 "producer_operation_id",
+                "origin_task_execution_id",
+                "origin_run_id",
+                "origin_task_id",
+                "origin_lineage_fingerprint",
                 "raw_validation_result_id",
                 "canonical_raw_result_id",
                 "raw_result_identity_fingerprint",
@@ -2047,6 +2162,10 @@ class ValidationEvidenceEvaluator:
             "producer_component_id",
             "producer_source_type",
             "producer_operation_id",
+            "origin_task_execution_id",
+            "origin_run_id",
+            "origin_task_id",
+            "origin_lineage_fingerprint",
             "raw_validation_result_id",
             "canonical_raw_result_id",
         ]

@@ -62,6 +62,41 @@ def _accepted_evidence(
         "graduation_authority": "NONE",
         "candidate_execution_authority": "NONE",
     }
+    origin = {
+        "accepted_evidence_origin_state": "TASK_ORIGIN_PRESERVED",
+        "raw_evidence_id": f"raw_{accepted_evidence_id}",
+        "raw_result_id": f"raw_{accepted_evidence_id}",
+        "acceptance_decision_id": decision["evidence_decision_id"],
+        "origin_task_execution_id": (
+            f"task_execution_{source_run_id}_{selected_validation_task_id}"
+        ),
+        "origin_run_id": source_run_id,
+        "origin_task_id": selected_validation_task_id,
+        "origin_attempt_id": f"attempt_{accepted_evidence_id}",
+        "origin_operation_id": producer_operation_id or accepted_evidence_id,
+        "origin_lineage_fingerprint": f"origin_fp_{accepted_evidence_id}",
+        "authority": "NONE",
+        "behavioral_authority": "NONE",
+    }
+    accepted["accepted_evidence_origin"] = origin
+    accepted["accepted_evidence_origin_state"] = "TASK_ORIGIN_PRESERVED"
+    accepted["origin_task_execution_id"] = origin["origin_task_execution_id"]
+    accepted["origin_run_id"] = origin["origin_run_id"]
+    accepted["origin_task_id"] = origin["origin_task_id"]
+    accepted["origin_lineage_fingerprint"] = origin["origin_lineage_fingerprint"]
+    accepted["source_provenance"] = {
+        "source_provenance_state": "SOURCE_PROVENANCE_BOUND",
+        "producer_operation_id": producer_operation_id or accepted_evidence_id,
+        "producer_component_id": producer_component_id or "component_a",
+        "producer_source_type": producer_source_type or "scheduled_validation_task",
+        "raw_validation_result_id": origin["raw_evidence_id"],
+        "origin_task_execution_id": origin["origin_task_execution_id"],
+        "origin_run_id": origin["origin_run_id"],
+        "origin_task_id": origin["origin_task_id"],
+        "origin_attempt_id": origin["origin_attempt_id"],
+        "origin_operation_id": origin["origin_operation_id"],
+        "origin_lineage_fingerprint": origin["origin_lineage_fingerprint"],
+    }
     if producer_operation_id:
         accepted["producer_operation_id"] = producer_operation_id
     if producer_component_id:
@@ -114,6 +149,14 @@ def test_bound_accepted_evidence_reaches_epistemic_assessment_not_truth():
     assert report["authority"]["truth_commitment"] == "NONE"
     assert report["authority"]["knowledge_projection"] == "NONE"
     assert report["authority"]["budget"] == "NONE"
+    assert report["epistemic_lineage_state"] == "EPISTEMIC_LINEAGE_COMPLETE"
+    assert report["origin_task_execution_ids"] == [
+        "task_execution_run_a_elite_validation_task_31"
+    ]
+    assert report["supporting_evidence_lineage"][0]["raw_evidence_id"] == (
+        "raw_accepted_evidence_a"
+    )
+    assert report["task_provenance_authority"] == "NONE"
 
 
 def test_wrong_claim_evidence_is_rejected_from_assessment():

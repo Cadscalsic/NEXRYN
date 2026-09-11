@@ -662,6 +662,19 @@ class ValidationTaskExecutionPipeline:
             "raw_validation_result_fingerprint": fingerprint,
             "raw_validation_result_envelope": envelope,
             "RAW_VALIDATION_RESULT_ENVELOPE": envelope,
+            "task_execution_origin": envelope.get("task_execution_origin"),
+            "task_execution_origin_classification": envelope.get(
+                "task_execution_origin_classification"
+            ),
+            "origin_task_execution_id": envelope.get("origin_task_execution_id"),
+            "origin_run_id": envelope.get("origin_run_id"),
+            "origin_task_id": envelope.get("origin_task_id"),
+            "origin_attempt_id": envelope.get("origin_attempt_id"),
+            "origin_operation_id": envelope.get("origin_operation_id"),
+            "origin_source_type": envelope.get("origin_source_type"),
+            "origin_lineage_fingerprint": envelope.get(
+                "origin_lineage_fingerprint"
+            ),
             "run_id": plan.get("source_run_id"),
             "batch_id": plan.get("batch_id") or schedule.get("batch_id"),
             "task_id": plan.get("source_task_id"),
@@ -888,6 +901,16 @@ class ValidationTaskExecutionPipeline:
                 "run_id": envelope.get("run_id"),
                 "execution_plan_id": envelope.get("execution_plan_id"),
                 "task_id": envelope.get("task_id"),
+                "origin_task_execution_id": envelope.get(
+                    "origin_task_execution_id"
+                ),
+                "origin_run_id": envelope.get("origin_run_id"),
+                "origin_task_id": envelope.get("origin_task_id"),
+                "origin_attempt_id": envelope.get("origin_attempt_id"),
+                "origin_operation_id": envelope.get("origin_operation_id"),
+                "origin_lineage_fingerprint": envelope.get(
+                    "origin_lineage_fingerprint"
+                ),
                 "producer_operation_id": envelope.get("executor_invocation_id"),
                 "validation_attempt_id": envelope.get("validation_attempt_id"),
                 "producer_type": envelope.get("producer_source_type"),
@@ -939,6 +962,35 @@ class ValidationTaskExecutionPipeline:
             conflicts.append("previous_or_foreign_run_identity")
         if raw_result.get("execution_plan_id") != execution_plan_id:
             conflicts.append("execution_plan_identity_mismatch")
+        origin = raw_result.get("task_execution_origin")
+        if envelope:
+            if not isinstance(origin, dict):
+                origin = envelope.get("task_execution_origin")
+            origin = origin if isinstance(origin, dict) else {}
+            origin_task_execution_id = (
+                raw_result.get("origin_task_execution_id")
+                or envelope.get("origin_task_execution_id")
+            )
+            if origin_task_execution_id != origin.get("task_execution_id"):
+                conflicts.append("task_execution_origin_id_mismatch")
+            if raw_result.get("run_id") != origin.get("run_id"):
+                conflicts.append("task_execution_origin_run_mismatch")
+            if raw_result.get("task_id") != origin.get("task_id"):
+                conflicts.append("task_execution_origin_task_mismatch")
+            expected_origin_fingerprint = (
+                self._task_execution_origin_fingerprint(origin)
+                if origin else None
+            )
+            observed_origin_fingerprint = (
+                raw_result.get("origin_lineage_fingerprint")
+                or envelope.get("origin_lineage_fingerprint")
+                or origin.get("origin_fingerprint")
+            )
+            if (
+                expected_origin_fingerprint
+                and observed_origin_fingerprint != expected_origin_fingerprint
+            ):
+                conflicts.append("task_execution_origin_fingerprint_mismatch")
         expected_fingerprint = (
             self._raw_result_identity_fingerprint(envelope)
             if envelope and canonical_id
@@ -1118,15 +1170,33 @@ class ValidationTaskExecutionPipeline:
         task_id = plan.get("source_task_id")
         producer_component_id = "VALIDATION_TASK_EXECUTION_PIPELINE"
         producer_source_type = "scheduled_validation_task"
+        task_execution_origin = self._task_execution_origin(
+            schedule=schedule,
+            plan=plan,
+            execution_id=execution_id,
+            validation_attempt_id=validation_attempt_id,
+        )
+        origin_lineage_fingerprint = task_execution_origin.get(
+            "origin_fingerprint"
+        )
         type_conflicts = []
         if task_id in {
             producer_component_id,
             "semantic_to_transformation_compiler_0",
         }:
             type_conflicts.append("task_id_contains_producer_identity")
+        origin_missing = [
+            key for key in (
+                "task_execution_id",
+                "run_id",
+                "task_id",
+                "origin_fingerprint",
+            )
+            if self._term(task_execution_origin.get(key)) == "Not Available"
+        ]
         provenance_state = (
             "RAW_RESULT_PROVENANCE_BOUND"
-            if not missing_inputs and not type_conflicts
+            if not missing_inputs and not type_conflicts and not origin_missing
             else "RAW_RESULT_PROVENANCE_UNBOUND"
         )
         binding_state = "BOUND" if provenance_state == "RAW_RESULT_PROVENANCE_BOUND" else "CONFLICTED"
@@ -1149,6 +1219,22 @@ class ValidationTaskExecutionPipeline:
             "run_id": run_id,
             "batch_id": plan.get("batch_id") or schedule.get("batch_id"),
             "task_id": task_id,
+            "task_execution_origin_schema_version": "1.0",
+            "task_execution_origin": task_execution_origin,
+            "task_execution_origin_classification": (
+                "DIRECT_TASK_EXECUTION_ORIGIN"
+                if not origin_missing and not type_conflicts
+                else "UNKNOWN_ORIGIN"
+            ),
+            "origin_task_execution_id": task_execution_origin.get(
+                "task_execution_id"
+            ),
+            "origin_run_id": task_execution_origin.get("run_id"),
+            "origin_task_id": task_execution_origin.get("task_id"),
+            "origin_attempt_id": task_execution_origin.get("attempt_id"),
+            "origin_operation_id": task_execution_origin.get("operation_id"),
+            "origin_source_type": task_execution_origin.get("source_type"),
+            "origin_lineage_fingerprint": origin_lineage_fingerprint,
             "execution_plan_id": (
                 plan.get("execution_plan_id")
                 or schedule.get("execution_plan_id")
@@ -1228,8 +1314,12 @@ class ValidationTaskExecutionPipeline:
             "raw_result_identity_conflict_count": 0 if raw_result_id else len(missing_inputs),
             "provenance_state": provenance_state,
             "binding_integrity_state": binding_state,
-            "binding_conflict_count": len(missing_inputs) + len(type_conflicts),
-            "binding_conflicts": missing_inputs + type_conflicts,
+            "binding_conflict_count": (
+                len(missing_inputs) + len(type_conflicts) + len(origin_missing)
+            ),
+            "binding_conflicts": missing_inputs + type_conflicts + [
+                f"missing_origin_{key}" for key in origin_missing
+            ],
             "finalized_state": "RAW_RESULT_FINALIZED",
             "immutable_state": "RAW_RESULT_IMMUTABLE",
             "downstream_structural_eligibility": structural_eligibility,
@@ -1245,6 +1335,72 @@ class ValidationTaskExecutionPipeline:
             envelope,
         )
         return envelope
+
+    def _task_execution_origin(
+        self,
+        *,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        execution_id: str,
+        validation_attempt_id: str,
+    ) -> dict[str, Any]:
+        execution_plan_id = (
+            plan.get("execution_plan_id")
+            or schedule.get("execution_plan_id")
+            or plan.get("plan_id")
+        )
+        task_execution_id = self._scoped_id(
+            "task_execution",
+            {
+                "run_id": plan.get("source_run_id"),
+                "task_id": plan.get("source_task_id"),
+                "attempt_id": validation_attempt_id,
+                "operation_id": execution_id,
+                "execution_plan_id": execution_plan_id,
+                "schedule_id": schedule.get("schedule_id"),
+                "source_type": "TASK_EXECUTION",
+            },
+        )
+        origin = {
+            "schema_version": "1.0",
+            "source_type": "TASK_EXECUTION",
+            "task_execution_id": task_execution_id,
+            "run_id": plan.get("source_run_id"),
+            "task_id": plan.get("source_task_id"),
+            "attempt_id": validation_attempt_id,
+            "operation_id": execution_id,
+            "producer_operation_id": execution_id,
+            "execution_plan_id": execution_plan_id,
+            "schedule_id": schedule.get("schedule_id"),
+            "selected_validation_task_id": schedule.get(
+                "selected_validation_task_id"
+            ),
+            "authority": "NONE",
+            "behavioral_authority": "NONE",
+        }
+        origin["origin_fingerprint"] = self._task_execution_origin_fingerprint(
+            origin
+        )
+        return origin
+
+    def _task_execution_origin_fingerprint(
+        self,
+        origin: dict[str, Any],
+    ) -> str:
+        return self._scoped_id(
+            "task_execution_origin",
+            {
+                "schema_version": origin.get("schema_version"),
+                "source_type": origin.get("source_type"),
+                "task_execution_id": origin.get("task_execution_id"),
+                "run_id": origin.get("run_id"),
+                "task_id": origin.get("task_id"),
+                "attempt_id": origin.get("attempt_id"),
+                "operation_id": origin.get("operation_id"),
+                "execution_plan_id": origin.get("execution_plan_id"),
+                "schedule_id": origin.get("schedule_id"),
+            },
+        )
 
     def _scoped_id(self, prefix: str, payload: Any) -> str:
         encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True, default=str)

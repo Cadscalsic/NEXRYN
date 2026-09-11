@@ -334,6 +334,17 @@ def test_fresh_accepted_evidence_preserves_native_source_provenance(tmp_path):
     assert accepted["source_provenance_fingerprint"] == (
         provenance["source_provenance_fingerprint"]
     )
+    assert accepted["accepted_evidence_origin_state"] == "TASK_ORIGIN_PRESERVED"
+    assert accepted["accepted_evidence_origin"]["raw_evidence_id"] == (
+        raw["raw_result_id"]
+    )
+    assert accepted["origin_task_execution_id"] == raw["origin_task_execution_id"]
+    assert accepted["origin_run_id"] == raw["origin_run_id"]
+    assert accepted["origin_task_id"] == raw["origin_task_id"]
+    assert accepted["origin_lineage_fingerprint"] == (
+        raw["origin_lineage_fingerprint"]
+    )
+    assert accepted["accepted_evidence_origin"]["authority"] == "NONE"
     assert accepted["truth_authority"] == "NONE"
     assert provenance["truth_authority"] == "NONE"
 

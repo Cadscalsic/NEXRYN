@@ -135,6 +135,9 @@ class IntegratedCapabilityQualificationEngine:
                 })
                 continue
             valid.append(self._source_flattened(item))
+        support_lineage = [
+            self._accepted_evidence_support_lineage(item) for item in valid
+        ]
 
         required_sources = (
             int(required_independent_sources)
@@ -172,6 +175,34 @@ class IntegratedCapabilityQualificationEngine:
             "accepted_evidence_ids": [
                 item.get("accepted_evidence_id") for item in valid
             ],
+            "supporting_accepted_evidence_refs": support_lineage,
+            "raw_evidence_ids": sorted({
+                str(item.get("raw_evidence_id") or item.get("raw_result_id"))
+                for item in support_lineage
+                if item.get("raw_evidence_id") or item.get("raw_result_id")
+            }),
+            "origin_task_execution_ids": sorted({
+                str(item.get("origin_task_execution_id"))
+                for item in support_lineage
+                if item.get("origin_task_execution_id") not in UNKNOWN
+            }),
+            "origin_task_ids": sorted({
+                str(item.get("origin_task_id"))
+                for item in support_lineage
+                if item.get("origin_task_id") not in UNKNOWN
+            }),
+            "qualification_support_lineage_state": (
+                "CAPABILITY_ASSESSMENT_LINEAGE_COMPLETE"
+                if support_lineage and all(
+                    item.get("accepted_evidence_origin_state")
+                    == "TASK_ORIGIN_PRESERVED"
+                    for item in support_lineage
+                )
+                else "CAPABILITY_ASSESSMENT_LINEAGE_NOT_APPLICABLE"
+                if not support_lineage
+                else "CAPABILITY_ASSESSMENT_LINEAGE_PARTIAL"
+            ),
+            "task_provenance_authority": "NONE",
             "rejected_evidence": rejected,
             "blocking_rejected_evidence_count": len([
                 item for item in rejected
@@ -267,6 +298,27 @@ class IntegratedCapabilityQualificationEngine:
             "decision_reason": failures[0] if failures else "requirements_satisfied",
             "promotion_failures": failures,
             "accepted_evidence_ids": assessment["accepted_evidence_ids"],
+            "capability_evidence_support_lineage": assessment.get(
+                "supporting_accepted_evidence_refs", []
+            ),
+            "raw_evidence_ids": assessment.get("raw_evidence_ids", []),
+            "origin_task_execution_ids": assessment.get(
+                "origin_task_execution_ids", []
+            ),
+            "qualification_support_lineage_state": (
+                "QUALIFICATION_SUPPORT_LINEAGE_COMPLETE"
+                if assessment.get("qualification_support_lineage_state")
+                == "CAPABILITY_ASSESSMENT_LINEAGE_COMPLETE"
+                else "QUALIFICATION_SUPPORT_LINEAGE_NOT_APPLICABLE"
+                if not assessment.get("accepted_evidence_ids")
+                else "QUALIFICATION_SUPPORT_LINEAGE_PARTIAL"
+            ),
+            "qualification_support_attribution_semantics": (
+                "DIRECT_SUPPORT_LINEAGE"
+                if assessment.get("origin_task_execution_ids")
+                else "ATTRIBUTION_UNRESOLVED"
+            ),
+            "task_provenance_authority": "NONE",
             "independent_source_count": assessment["independent_source_count"],
             "causal_support_state": assessment["causal_support_state"],
             "reproducibility_state": assessment["reproducibility_state"],
@@ -653,6 +705,12 @@ class IntegratedCapabilityQualificationEngine:
                 "run_id",
                 "task_id",
                 "raw_validation_result_id",
+                "origin_task_execution_id",
+                "origin_run_id",
+                "origin_task_id",
+                "origin_attempt_id",
+                "origin_operation_id",
+                "origin_lineage_fingerprint",
             ):
                 if key in provenance and key not in flattened:
                     flattened[key] = provenance[key]
@@ -660,7 +718,72 @@ class IntegratedCapabilityQualificationEngine:
                 flattened["source_lineage"] = provenance["upstream_lineage_refs"]
             if "raw_result_id" not in flattened:
                 flattened["raw_result_id"] = provenance.get("raw_validation_result_id")
+        origin = item.get("accepted_evidence_origin")
+        if isinstance(origin, Mapping):
+            for key in (
+                "raw_evidence_id",
+                "raw_result_id",
+                "origin_task_execution_id",
+                "origin_run_id",
+                "origin_task_id",
+                "origin_attempt_id",
+                "origin_operation_id",
+                "origin_lineage_fingerprint",
+                "accepted_evidence_origin_state",
+            ):
+                if key in origin and key not in flattened:
+                    flattened[key] = origin[key]
         return flattened
+
+    def _accepted_evidence_support_lineage(
+        self,
+        item: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        origin = item.get("accepted_evidence_origin")
+        origin = dict(origin) if isinstance(origin, Mapping) else {}
+        return {
+            "accepted_evidence_id": item.get("accepted_evidence_id"),
+            "evidence_decision_id": item.get("evidence_decision_id"),
+            "raw_evidence_id": (
+                origin.get("raw_evidence_id")
+                or item.get("raw_evidence_id")
+                or item.get("raw_result_id")
+                or item.get("raw_validation_result_id")
+            ),
+            "raw_result_id": (
+                origin.get("raw_result_id")
+                or item.get("raw_result_id")
+                or item.get("raw_validation_result_id")
+            ),
+            "origin_task_execution_id": (
+                origin.get("origin_task_execution_id")
+                or item.get("origin_task_execution_id")
+            ),
+            "origin_run_id": origin.get("origin_run_id") or item.get("origin_run_id"),
+            "origin_task_id": (
+                origin.get("origin_task_id") or item.get("origin_task_id")
+            ),
+            "origin_attempt_id": (
+                origin.get("origin_attempt_id") or item.get("origin_attempt_id")
+            ),
+            "origin_operation_id": (
+                origin.get("origin_operation_id")
+                or item.get("origin_operation_id")
+            ),
+            "origin_lineage_fingerprint": (
+                origin.get("origin_lineage_fingerprint")
+                or item.get("origin_lineage_fingerprint")
+            ),
+            "accepted_evidence_origin_state": (
+                origin.get("accepted_evidence_origin_state")
+                or item.get("accepted_evidence_origin_state")
+                or "LEGACY_ORIGIN_UNVERIFIED"
+            ),
+            "source_identity": item.get("canonical_source_identity"),
+            "producer_operation_id": item.get("producer_operation_id"),
+            "task_provenance_authority": "NONE",
+            "qualification_authority": "NONE",
+        }
 
     def _causal_support_state(self, item: Mapping[str, Any]) -> str:
         value = str(

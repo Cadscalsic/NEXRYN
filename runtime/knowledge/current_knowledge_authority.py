@@ -9,15 +9,17 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from runtime.epistemic.accepted_evidence_assessment import (
-    AcceptedEvidenceEpistemicAssessmentEngine,
-)
 from runtime.truth.current_truth_admission import CurrentTruthAdmissionGate
 from runtime.validation.accepted_evidence_lifecycle import (
     AcceptedEvidenceLifecycleEngine,
 )
+
+if TYPE_CHECKING:
+    from runtime.epistemic.accepted_evidence_assessment import (
+        AcceptedEvidenceEpistemicAssessmentEngine,
+    )
 
 
 UNKNOWN = {None, "", "UNKNOWN", "NOT_AVAILABLE", "Not Available"}
@@ -119,6 +121,7 @@ class KnowledgeAssessment:
     causal_support_state: str
     reproducibility_state: str
     contradiction_state: str
+    support_lineage_records: list[dict[str, Any]]
     support_dependency_graph: dict[str, Any]
     support_fingerprint: str
 
@@ -138,13 +141,21 @@ class KnowledgeCurrentAuthorityEngine:
         state_dir: str | Path | None = None,
         *,
         truth_admission_gate: CurrentTruthAdmissionGate | None = None,
-        epistemic_assessment_engine: AcceptedEvidenceEpistemicAssessmentEngine | None = None,
+        epistemic_assessment_engine: (
+            "AcceptedEvidenceEpistemicAssessmentEngine | None"
+        ) = None,
         evidence_lifecycle_engine: AcceptedEvidenceLifecycleEngine | None = None,
     ) -> None:
         self.state_dir = Path(state_dir) if state_dir is not None else None
         self.truth_admission_gate = truth_admission_gate or CurrentTruthAdmissionGate()
+        if epistemic_assessment_engine is None:
+            from runtime.epistemic.accepted_evidence_assessment import (
+                AcceptedEvidenceEpistemicAssessmentEngine,
+            )
+
+            epistemic_assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine()
         self.epistemic_assessment_engine = (
-            epistemic_assessment_engine or AcceptedEvidenceEpistemicAssessmentEngine()
+            epistemic_assessment_engine
         )
         self.evidence_lifecycle_engine = (
             evidence_lifecycle_engine or AcceptedEvidenceLifecycleEngine()
@@ -333,6 +344,7 @@ class KnowledgeCurrentAuthorityEngine:
                 if graph["contradictory_current_support"]
                 else "NO_UNRESOLVED_CONTRADICTION"
             ),
+            support_lineage_records=graph["support_lineage_records"],
             support_dependency_graph=graph,
             support_fingerprint=support_fingerprint,
         )
@@ -710,19 +722,59 @@ class KnowledgeCurrentAuthorityEngine:
 
     def support_dependency_graph(self, support: Mapping[str, Any]) -> dict[str, Any]:
         item = dict(support or {})
+        epistemic_assessments = [
+            dict(value) for value in item.get("epistemic_assessments", []) or []
+            if isinstance(value, Mapping)
+        ]
+        accepted_evidence = [
+            dict(value) for value in item.get("accepted_evidence", []) or []
+            if isinstance(value, Mapping)
+        ]
+        support_lineage_records = []
+        for assessment in epistemic_assessments:
+            for row in assessment.get("accepted_evidence_lineage", []) or []:
+                if isinstance(row, Mapping):
+                    support_lineage_records.append({
+                        **dict(row),
+                        "lineage_source": "EPISTEMIC_ASSESSMENT",
+                        "epistemic_assessment_id": assessment.get(
+                            "epistemic_assessment_id"
+                        ),
+                    })
+        for evidence in accepted_evidence:
+            support_lineage_records.append(
+                self._accepted_evidence_lineage_record(evidence)
+            )
         return {
             "supporting_truths": [
                 dict(value) for value in item.get("supporting_truths", []) or []
                 if isinstance(value, Mapping)
             ],
-            "epistemic_assessments": [
-                dict(value) for value in item.get("epistemic_assessments", []) or []
-                if isinstance(value, Mapping)
-            ],
-            "accepted_evidence": [
-                dict(value) for value in item.get("accepted_evidence", []) or []
-                if isinstance(value, Mapping)
-            ],
+            "epistemic_assessments": epistemic_assessments,
+            "accepted_evidence": accepted_evidence,
+            "support_lineage_records": support_lineage_records,
+            "origin_task_execution_ids": sorted({
+                str(row.get("origin_task_execution_id"))
+                for row in support_lineage_records
+                if row.get("origin_task_execution_id") not in UNKNOWN
+            }),
+            "raw_evidence_ids": sorted({
+                str(row.get("raw_evidence_id") or row.get("raw_result_id"))
+                for row in support_lineage_records
+                if row.get("raw_evidence_id") or row.get("raw_result_id")
+            }),
+            "knowledge_support_lineage_state": (
+                "KNOWLEDGE_SUPPORT_LINEAGE_COMPLETE"
+                if support_lineage_records and all(
+                    row.get("accepted_evidence_origin_state")
+                    == "TASK_ORIGIN_PRESERVED"
+                    for row in support_lineage_records
+                )
+                else "KNOWLEDGE_SUPPORT_LINEAGE_NOT_OBSERVED"
+                if not support_lineage_records
+                else "KNOWLEDGE_SUPPORT_LINEAGE_PARTIAL"
+            ),
+            "task_provenance_authority": "NONE",
             "source_identities": sorted(
                 str(value) for value in item.get("source_identities", []) or []
             ),
@@ -749,6 +801,59 @@ class KnowledgeCurrentAuthorityEngine:
             "run_count_inflation": bool(item.get("run_count_inflation", False)),
             "task_count_inflation": bool(item.get("task_count_inflation", False)),
             "artifact_count_inflation": bool(item.get("artifact_count_inflation", False)),
+        }
+
+    def _accepted_evidence_lineage_record(
+        self,
+        evidence: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        item = dict(evidence or {})
+        origin = item.get("accepted_evidence_origin")
+        origin = dict(origin) if isinstance(origin, Mapping) else {}
+        provenance = item.get("source_provenance")
+        provenance = dict(provenance) if isinstance(provenance, Mapping) else {}
+        return {
+            "lineage_source": "ACCEPTED_EVIDENCE",
+            "accepted_evidence_id": item.get("accepted_evidence_id"),
+            "evidence_decision_id": item.get("evidence_decision_id"),
+            "raw_evidence_id": (
+                origin.get("raw_evidence_id")
+                or item.get("raw_evidence_id")
+                or item.get("raw_result_id")
+                or provenance.get("raw_validation_result_id")
+            ),
+            "raw_result_id": (
+                origin.get("raw_result_id")
+                or item.get("raw_result_id")
+                or provenance.get("raw_validation_result_id")
+            ),
+            "origin_task_execution_id": (
+                origin.get("origin_task_execution_id")
+                or item.get("origin_task_execution_id")
+                or provenance.get("origin_task_execution_id")
+            ),
+            "origin_run_id": (
+                origin.get("origin_run_id")
+                or item.get("origin_run_id")
+                or provenance.get("origin_run_id")
+            ),
+            "origin_task_id": (
+                origin.get("origin_task_id")
+                or item.get("origin_task_id")
+                or provenance.get("origin_task_id")
+            ),
+            "origin_lineage_fingerprint": (
+                origin.get("origin_lineage_fingerprint")
+                or item.get("origin_lineage_fingerprint")
+                or provenance.get("origin_lineage_fingerprint")
+            ),
+            "accepted_evidence_origin_state": (
+                origin.get("accepted_evidence_origin_state")
+                or item.get("accepted_evidence_origin_state")
+                or "LEGACY_ORIGIN_UNVERIFIED"
+            ),
+            "task_provenance_authority": "NONE",
+            "knowledge_authority": "NONE",
         }
 
     def _decision(

@@ -62,6 +62,36 @@ def _support(*truths, sources=None, **overrides):
     return payload
 
 
+def _accepted_evidence(evidence_id, *, run_id="run_a", task_id="task_a"):
+    origin = {
+        "accepted_evidence_origin_state": "TASK_ORIGIN_PRESERVED",
+        "raw_evidence_id": f"raw_{evidence_id}",
+        "raw_result_id": f"raw_{evidence_id}",
+        "origin_task_execution_id": f"task_execution_{run_id}_{task_id}",
+        "origin_run_id": run_id,
+        "origin_task_id": task_id,
+        "origin_lineage_fingerprint": f"origin_fp_{evidence_id}",
+        "authority": "NONE",
+    }
+    return {
+        "accepted_evidence_id": evidence_id,
+        "evidence_decision_id": f"decision_{evidence_id}",
+        "evidence_acceptance_state": "ACCEPTED",
+        "accepted_evidence_origin": origin,
+        "accepted_evidence_origin_state": "TASK_ORIGIN_PRESERVED",
+        "accepted_evidence_current_state": {
+            "accepted_evidence_id": evidence_id,
+            "evidence_id": evidence_id,
+            "current_status": "ACTIVE",
+            "is_currently_accepted": True,
+            "current_acceptance_decision_id": f"decision_{evidence_id}",
+            "current_lifecycle_decision_id": f"decision_{evidence_id}",
+            "authority": "VALIDATION_EVIDENCE_EVALUATOR",
+            "fingerprint": "test-only-not-used-by-support-graph",
+        },
+    }
+
+
 def _active_knowledge(tmp_path, truth_count=2):
     truth_engine = _truth_engine(tmp_path)
     knowledge_engine = _knowledge_engine(tmp_path, truth_engine)
@@ -138,6 +168,30 @@ def test_knowledge_identity_excludes_run_task_evidence_and_truth_decision():
     assert first.to_dict()["identity_excludes_run_id"] is True
     assert first.to_dict()["identity_excludes_evidence_id"] is True
     assert first.to_dict()["identity_excludes_truth_decision_id"] is True
+
+
+def test_knowledge_support_graph_preserves_evidence_lineage_without_authority():
+    engine = KnowledgeCurrentAuthorityEngine()
+    graph = engine.support_dependency_graph(
+        {
+            "accepted_evidence": [
+                _accepted_evidence("accepted_a", task_id="task_a"),
+                _accepted_evidence("accepted_b", task_id="task_b"),
+            ],
+            "source_identities": ["source:a", "source:b"],
+        }
+    )
+
+    assert graph["knowledge_support_lineage_state"] == (
+        "KNOWLEDGE_SUPPORT_LINEAGE_COMPLETE"
+    )
+    assert graph["origin_task_execution_ids"] == [
+        "task_execution_run_a_task_a",
+        "task_execution_run_a_task_b",
+    ]
+    assert graph["raw_evidence_ids"] == ["raw_accepted_a", "raw_accepted_b"]
+    assert graph["task_provenance_authority"] == "NONE"
+    assert graph["support_lineage_records"][0]["knowledge_authority"] == "NONE"
 
 
 def test_noncurrent_truth_stale_assessment_and_contradiction_deny_commitment(tmp_path):

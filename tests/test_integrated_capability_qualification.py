@@ -59,7 +59,29 @@ def _accepted(
             "source_lineage": [source],
             "run_id": run_id,
             "task_id": task_id,
+            "raw_validation_result_id": f"raw_{evidence_id}",
+            "origin_task_execution_id": f"task_execution_{run_id}_{task_id}",
+            "origin_run_id": run_id,
+            "origin_task_id": task_id,
+            "origin_attempt_id": f"attempt_{evidence_id}",
+            "origin_operation_id": source,
+            "origin_lineage_fingerprint": f"origin_fp_{evidence_id}",
         },
+        "accepted_evidence_origin": {
+            "accepted_evidence_origin_state": "TASK_ORIGIN_PRESERVED",
+            "raw_evidence_id": f"raw_{evidence_id}",
+            "raw_result_id": f"raw_{evidence_id}",
+            "acceptance_decision_id": f"decision_{evidence_id}",
+            "origin_task_execution_id": f"task_execution_{run_id}_{task_id}",
+            "origin_run_id": run_id,
+            "origin_task_id": task_id,
+            "origin_attempt_id": f"attempt_{evidence_id}",
+            "origin_operation_id": source,
+            "origin_lineage_fingerprint": f"origin_fp_{evidence_id}",
+            "authority": "NONE",
+            "behavioral_authority": "NONE",
+        },
+        "accepted_evidence_origin_state": "TASK_ORIGIN_PRESERVED",
         "capability_causal_support_state": (
             "CAUSALLY_SUPPORTED" if causal else "OBSERVED_ONLY"
         ),
@@ -222,6 +244,10 @@ def test_same_source_repeated_across_tasks_does_not_inflate_independence():
     decision = _decision(CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED, evidence)
     assert decision["independent_source_count"] == 1
     assert decision["decision_state"] == "PROMOTION_DENIED"
+    assert len(decision["origin_task_execution_ids"]) == 10
+    assert decision["qualification_support_lineage_state"] == (
+        "QUALIFICATION_SUPPORT_LINEAGE_COMPLETE"
+    )
 
 
 def test_multiple_artifact_ids_from_same_source_do_not_inflate_independence():
@@ -349,3 +375,38 @@ def test_accepted_evidence_copy_does_not_create_independence():
     )
     assert decision["independent_source_count"] == 1
     assert decision["decision_state"] == "PROMOTION_DENIED"
+
+
+def test_capability_assessment_preserves_accepted_evidence_task_lineage():
+    first = _accepted("accepted_a", source="source_a", task_id="task_a")
+    second = _accepted("accepted_b", source="source_b", task_id="task_b")
+
+    result = IntegratedCapabilityQualificationEngine().decide(
+        _subject(),
+        [first, second],
+        requested_level=CapabilityQualificationLevel.OPERATIONALLY_OBSERVED,
+        architecture_present=True,
+        runtime_reachable=True,
+    )
+    assessment = result["capability_evidence_assessment"]
+    decision = result["qualification_decision"]
+
+    assert assessment["qualification_support_lineage_state"] == (
+        "CAPABILITY_ASSESSMENT_LINEAGE_COMPLETE"
+    )
+    assert assessment["accepted_evidence_ids"] == [
+        "accepted_a",
+        "accepted_b",
+    ]
+    assert assessment["origin_task_execution_ids"] == [
+        "task_execution_run_a_task_a",
+        "task_execution_run_a_task_b",
+    ]
+    assert decision["qualification_support_lineage_state"] == (
+        "QUALIFICATION_SUPPORT_LINEAGE_COMPLETE"
+    )
+    assert decision["qualification_support_attribution_semantics"] == (
+        "DIRECT_SUPPORT_LINEAGE"
+    )
+    assert decision["task_provenance_authority"] == "NONE"
+    assert decision["qualification_implies_truth"] is False

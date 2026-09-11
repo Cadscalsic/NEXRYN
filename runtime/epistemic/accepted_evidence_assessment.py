@@ -148,6 +148,10 @@ class AcceptedEvidenceEpistemicAssessmentEngine:
             item for item in grouped.get(effective_claim_id, [])
             if item.get("evidence_direction") == "CONTRADICTING"
         ]
+        support_lineage = [
+            self._accepted_evidence_lineage(item)
+            for item in supporting + contradicting
+        ]
         source_engine = EvidenceSourceIndependenceEngine()
         source_coverage = source_engine.source_coverage(
             supporting,
@@ -192,6 +196,40 @@ class AcceptedEvidenceEpistemicAssessmentEngine:
             "current_accepted_evidence_ids": [
                 item.get("accepted_evidence_id") for item in supporting + contradicting
             ],
+            "accepted_evidence_lineage": support_lineage,
+            "supporting_evidence_lineage": [
+                self._accepted_evidence_lineage(item) for item in supporting
+            ],
+            "contradicting_evidence_lineage": [
+                self._accepted_evidence_lineage(item) for item in contradicting
+            ],
+            "raw_evidence_ids": sorted({
+                str(item.get("raw_evidence_id") or item.get("raw_result_id"))
+                for item in support_lineage
+                if item.get("raw_evidence_id") or item.get("raw_result_id")
+            }),
+            "origin_task_execution_ids": sorted({
+                str(item.get("origin_task_execution_id"))
+                for item in support_lineage
+                if item.get("origin_task_execution_id") not in {None, ""}
+            }),
+            "origin_task_ids": sorted({
+                str(item.get("origin_task_id"))
+                for item in support_lineage
+                if item.get("origin_task_id") not in {None, ""}
+            }),
+            "epistemic_lineage_state": (
+                "EPISTEMIC_LINEAGE_COMPLETE"
+                if support_lineage and all(
+                    item.get("accepted_evidence_origin_state")
+                    == "TASK_ORIGIN_PRESERVED"
+                    for item in support_lineage
+                )
+                else "EPISTEMIC_LINEAGE_NOT_APPLICABLE"
+                if not support_lineage
+                else "EPISTEMIC_LINEAGE_PARTIAL"
+            ),
+            "task_provenance_authority": "NONE",
             "supporting_accepted_evidence_ids": [
                 item.get("accepted_evidence_id") for item in supporting
             ],
@@ -352,6 +390,74 @@ class AcceptedEvidenceEpistemicAssessmentEngine:
             "runtime_authority": "NONE",
             "budget_authority": "NONE",
             "execution_authority": "NONE",
+        }
+
+    def _accepted_evidence_lineage(
+        self,
+        accepted_evidence: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        item = dict(accepted_evidence or {})
+        origin = item.get("accepted_evidence_origin")
+        origin = dict(origin) if isinstance(origin, Mapping) else {}
+        provenance = item.get("source_provenance")
+        provenance = dict(provenance) if isinstance(provenance, Mapping) else {}
+        return {
+            "accepted_evidence_id": item.get("accepted_evidence_id"),
+            "evidence_decision_id": item.get("evidence_decision_id"),
+            "raw_evidence_id": (
+                origin.get("raw_evidence_id")
+                or item.get("raw_evidence_id")
+                or item.get("raw_result_id")
+                or provenance.get("raw_validation_result_id")
+            ),
+            "raw_result_id": (
+                origin.get("raw_result_id")
+                or item.get("raw_result_id")
+                or provenance.get("raw_validation_result_id")
+            ),
+            "origin_task_execution_id": (
+                origin.get("origin_task_execution_id")
+                or item.get("origin_task_execution_id")
+                or provenance.get("origin_task_execution_id")
+            ),
+            "origin_run_id": (
+                origin.get("origin_run_id")
+                or item.get("origin_run_id")
+                or provenance.get("origin_run_id")
+            ),
+            "origin_task_id": (
+                origin.get("origin_task_id")
+                or item.get("origin_task_id")
+                or provenance.get("origin_task_id")
+            ),
+            "origin_attempt_id": (
+                origin.get("origin_attempt_id")
+                or item.get("origin_attempt_id")
+                or provenance.get("origin_attempt_id")
+            ),
+            "origin_operation_id": (
+                origin.get("origin_operation_id")
+                or item.get("origin_operation_id")
+                or provenance.get("origin_operation_id")
+            ),
+            "origin_lineage_fingerprint": (
+                origin.get("origin_lineage_fingerprint")
+                or item.get("origin_lineage_fingerprint")
+                or provenance.get("origin_lineage_fingerprint")
+            ),
+            "accepted_evidence_origin_state": (
+                origin.get("accepted_evidence_origin_state")
+                or item.get("accepted_evidence_origin_state")
+                or "LEGACY_ORIGIN_UNVERIFIED"
+            ),
+            "source_provenance_fingerprint": (
+                origin.get("source_provenance_fingerprint")
+                or item.get("source_provenance_fingerprint")
+                or provenance.get("source_provenance_fingerprint")
+            ),
+            "task_provenance_authority": "NONE",
+            "truth_authority": "NONE",
+            "knowledge_authority": "NONE",
         }
 
     def _admit_current_accepted_evidence(

@@ -8,11 +8,12 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from runtime.epistemic.accepted_evidence_assessment import (
-    AcceptedEvidenceEpistemicAssessmentEngine,
-)
+if TYPE_CHECKING:
+    from runtime.epistemic.accepted_evidence_assessment import (
+        AcceptedEvidenceEpistemicAssessmentEngine,
+    )
 
 
 UNKNOWN = {None, "", "UNKNOWN", "NOT_AVAILABLE", "Not Available"}
@@ -52,13 +53,11 @@ class TruthCurrentAuthorityLifecycleEngine:
         state_dir: str | Path | None = None,
         *,
         epistemic_assessment_engine: (
-            AcceptedEvidenceEpistemicAssessmentEngine | None
+            "AcceptedEvidenceEpistemicAssessmentEngine | None"
         ) = None,
     ) -> None:
         self.state_dir = Path(state_dir) if state_dir is not None else None
-        self.epistemic_assessment_engine = (
-            epistemic_assessment_engine or AcceptedEvidenceEpistemicAssessmentEngine()
-        )
+        self.epistemic_assessment_engine = epistemic_assessment_engine
 
     def create_active_truth(
         self,
@@ -470,8 +469,9 @@ class TruthCurrentAuthorityLifecycleEngine:
         for assessment in item.get("epistemic_assessments") or []:
             if not isinstance(assessment, Mapping):
                 continue
-            currentness = self.epistemic_assessment_engine.is_epistemic_assessment_current(
-                assessment
+            currentness = (
+                self._epistemic_assessment_engine()
+                .is_epistemic_assessment_current(assessment)
             )
             if currentness.get("assessment_current_state") != (
                 "CURRENT_EPISTEMIC_ASSESSMENT"
@@ -501,6 +501,17 @@ class TruthCurrentAuthorityLifecycleEngine:
                 and not contradictory
             ),
         }
+
+    def _epistemic_assessment_engine(self):
+        if self.epistemic_assessment_engine is None:
+            from runtime.epistemic.accepted_evidence_assessment import (
+                AcceptedEvidenceEpistemicAssessmentEngine,
+            )
+
+            self.epistemic_assessment_engine = (
+                AcceptedEvidenceEpistemicAssessmentEngine()
+            )
+        return self.epistemic_assessment_engine
 
     def _decision(
         self,

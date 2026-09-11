@@ -713,6 +713,19 @@ class TruthCandidateEngine:
             "truth_facing_assessment_admission_state": state,
             "current_support_available": not failures,
             "currentness_validation": currentness,
+            "accepted_evidence_lineage": report.get("accepted_evidence_lineage", []),
+            "supporting_evidence_lineage": report.get(
+                "supporting_evidence_lineage", []
+            ),
+            "raw_evidence_ids": report.get("raw_evidence_ids", []),
+            "origin_task_execution_ids": report.get(
+                "origin_task_execution_ids", []
+            ),
+            "truth_facing_lineage_state": (
+                "TRUTH_FACING_LINEAGE_TRACEABLE"
+                if report.get("accepted_evidence_lineage")
+                else "TRUTH_FACING_LINEAGE_NOT_OBSERVED"
+            ),
             "admission_failures": sorted(set(failures)),
             "truth_authority": "NONE",
             "knowledge_authority": "NONE",

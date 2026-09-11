@@ -1,4 +1,5 @@
 import json
+import math
 import random
 import uuid
 from datetime import datetime
@@ -40,6 +41,13 @@ class TrainingAssistant:
     UNSEEN_TASK_BOOST = 3.0
     RECENT_TASK_PENALTY = 0.1
     TARGET_EXPERIENCE_PER_CAPABILITY = 3
+    ADAPTIVE_SELECTION_RECENCY_WINDOW = 5
+    MAX_EXPOSURE_PENALTY = 600.0
+    MAX_RECENCY_PENALTY = 320.0
+    MAX_NOVELTY_BONUS = 120.0
+    MAX_INFORMATION_GAIN_BONUS = 180.0
+    MAX_COVERAGE_BONUS = 90.0
+    MAX_REMEDIATION_ADJUSTMENT = 260.0
     SELECTION_MODES = {"random", "weighted_random", "curriculum"}
 
     def __init__(
@@ -2229,6 +2237,210 @@ class TrainingAssistant:
             return "stability_recovery_probe" in evidence_terms
         return False
 
+    def _bounded_score(self, value, lower=0.0, upper=1.0):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            numeric = lower
+        if not math.isfinite(numeric):
+            numeric = lower
+        return max(float(lower), min(float(upper), numeric))
+
+    def _recent_selection_positions(self, task_file, window=None):
+        window = (
+            self.ADAPTIVE_SELECTION_RECENCY_WINDOW
+            if window is None else max(int(window), 1)
+        )
+        recent_runs = list(self.selection_memory.get("recent_runs", []) or [])
+        positions = []
+        for age, run in enumerate(reversed(recent_runs[-window:]), start=1):
+            if not isinstance(run, dict):
+                continue
+            task_ids = [str(item) for item in run.get("task_ids", []) or []]
+            if str(task_file) in task_ids:
+                positions.append(age)
+        return positions
+
+    def _recent_selection_term_counts(self, task_directory=None, window=None):
+        window = (
+            self.ADAPTIVE_SELECTION_RECENCY_WINDOW
+            if window is None else max(int(window), 1)
+        )
+        recent_runs = list(self.selection_memory.get("recent_runs", []) or [])
+        counts = {}
+        selected_task_ids = set()
+        for run in recent_runs[-window:]:
+            if not isinstance(run, dict):
+                continue
+            for task_file in run.get("task_ids", []) or []:
+                task_file = str(task_file)
+                selected_task_ids.add(task_file)
+                metadata = self._task_metadata(task_file, task_directory)
+                for term in self._metadata_terms(metadata):
+                    counts[term] = counts.get(term, 0) + 1
+        return counts, selected_task_ids
+
+    def _adaptive_selection_score(
+        self,
+        task_file,
+        base_priority,
+        task_terms,
+        concepts,
+        capabilities,
+        priority_reasons,
+        survival_matches=None,
+        domain_matches=None,
+        economy_matches=None,
+        academy_matches=None,
+        task_directory=None,
+    ):
+        record = self._task_record(task_file)
+        times_selected = self._bounded_score(
+            record.get("times_selected"),
+            lower=0.0,
+            upper=10_000.0,
+        )
+        recent_selection_count = self._bounded_score(
+            record.get("recent_selection_count"),
+            lower=0.0,
+            upper=10_000.0,
+        )
+        recent_positions = self._recent_selection_positions(task_file)
+        recent_term_counts, recent_task_ids = self._recent_selection_term_counts(
+            task_directory=task_directory,
+        )
+        previous_batch = {
+            str(item)
+            for item in self.selection_memory.get("previous_batch", []) or []
+        }
+        task_terms = {
+            self._term(term)
+            for term in task_terms
+            if self._term(term)
+        }
+        repeated_recently = bool(recent_positions) or str(task_file) in previous_batch
+        exposure_penalty = min(
+            self.MAX_EXPOSURE_PENALTY,
+            max(0.0, times_selected - 2.0) * 18.0
+            + max(0.0, recent_selection_count - 1.0) * 28.0,
+        )
+        recency_penalty = 0.0
+        for age in recent_positions:
+            recency_penalty += max(0.0, 7.0 - float(age)) * 28.0
+        if str(task_file) in previous_batch:
+            recency_penalty += 130.0
+        recency_penalty = min(self.MAX_RECENCY_PENALTY, recency_penalty)
+
+        if times_selected <= 0:
+            novelty_seed = 95.0
+        elif times_selected <= 2:
+            novelty_seed = 45.0
+        else:
+            novelty_seed = 0.0
+        overlap = sum(1 for term in task_terms if recent_term_counts.get(term, 0) > 0)
+        overlap_ratio = overlap / max(len(task_terms), 1)
+        novelty_bonus = min(
+            self.MAX_NOVELTY_BONUS,
+            novelty_seed * max(0.25, 1.0 - overlap_ratio),
+        )
+
+        unobserved_signals = sum(
+            1
+            for reason in priority_reasons
+            if str(reason).startswith("unobserved_target:")
+            or str(reason).startswith("low_target_coverage:")
+            or str(reason).startswith("active_lifecycle_gap:")
+        )
+        independent_value_signals = (
+            len(survival_matches or [])
+            + len(domain_matches or [])
+            + len(economy_matches or [])
+            + len(academy_matches or [])
+        )
+        information_gain_bonus = min(
+            self.MAX_INFORMATION_GAIN_BONUS,
+            unobserved_signals * 18.0 + independent_value_signals * 14.0,
+        )
+        if times_selected > 0 and not independent_value_signals:
+            information_gain_bonus *= 0.55
+
+        coverage_terms = [
+            self._term(term)
+            for term in list(concepts or []) + list(capabilities or [])
+            if self._term(term)
+        ]
+        undercovered_terms = [
+            term
+            for term in coverage_terms
+            if recent_term_counts.get(term, 0) <= 0
+        ]
+        coverage_bonus = min(
+            self.MAX_COVERAGE_BONUS,
+            len(set(undercovered_terms)) * 12.0,
+        )
+        if str(task_file) in recent_task_ids:
+            coverage_bonus *= 0.35
+
+        remediation_adjustment = 0.0
+        remediation = self.selection_memory.get("last_evidence_remediation", {})
+        if isinstance(remediation, dict):
+            remediation_task = remediation.get("evidence_remediation_task")
+            remediation_terms = {
+                self._term(remediation.get("evidence_remediation_deficit")),
+                self._term(remediation.get("evidence_remediation_responsible_area")),
+            }
+            remediation_terms.discard("")
+            if remediation_task == task_file:
+                remediation_adjustment += 180.0
+            elif remediation_terms and task_terms.intersection(remediation_terms):
+                remediation_adjustment += 90.0
+        remediation_adjustment = min(
+            self.MAX_REMEDIATION_ADJUSTMENT,
+            remediation_adjustment,
+        )
+
+        final_score = (
+            self._bounded_score(base_priority, lower=-100_000.0, upper=100_000.0)
+            - exposure_penalty
+            - recency_penalty
+            + novelty_bonus
+            + information_gain_bonus
+            + coverage_bonus
+            + remediation_adjustment
+        )
+        reasons = ["adaptive_selection_score_applied"]
+        if exposure_penalty:
+            reasons.append("exposure_penalty_applied")
+        if recency_penalty:
+            reasons.append("recency_penalty_applied")
+        if novelty_bonus:
+            reasons.append("novelty_bonus_applied")
+        if information_gain_bonus:
+            reasons.append("information_gain_bonus_applied")
+        if coverage_bonus:
+            reasons.append("coverage_bonus_applied")
+        if remediation_adjustment:
+            reasons.append("remediation_adjustment_preserved")
+        if repeated_recently and final_score > 0:
+            reasons.append("repeated_task_retained_when_value_exceeds_penalty")
+        return {
+            "base_priority": round(float(base_priority), 4),
+            "exposure_penalty": round(exposure_penalty, 4),
+            "recency_penalty": round(recency_penalty, 4),
+            "novelty_bonus": round(novelty_bonus, 4),
+            "information_gain_bonus": round(information_gain_bonus, 4),
+            "coverage_bonus": round(coverage_bonus, 4),
+            "remediation_adjustment": round(remediation_adjustment, 4),
+            "final_selection_score": round(final_score, 4),
+            "times_selected": int(times_selected),
+            "recent_selection_count": int(recent_selection_count),
+            "recent_selection_positions": recent_positions,
+            "selection_reason": reasons,
+            "authority": "TrainingAssistant",
+            "dataset_expansion_authority": "NONE",
+            "runtime_budget_authority": "NONE",
+        }
+
     def _elite_priority_for(
         self,
         task_file,
@@ -2366,6 +2578,25 @@ class TrainingAssistant:
             priority += academy_priority
             reasons.extend(academy_reasons)
         priority += max(0, 20 - order) * 0.01
+        base_priority = round(priority, 4)
+        adaptive_score = self._adaptive_selection_score(
+            task_file,
+            base_priority,
+            task_terms,
+            concepts,
+            capabilities,
+            reasons,
+            survival_matches=survival_matches,
+            domain_matches=domain_matches,
+            economy_matches=economy_matches,
+            academy_matches=academy_matches,
+            task_directory=task_directory,
+        )
+        priority = adaptive_score["final_selection_score"]
+        reasons = list(dict.fromkeys([
+            *reasons,
+            *adaptive_score.get("selection_reason", []),
+        ]))
         return {
             "task_file": task_file,
             "original_order": order,
@@ -2374,6 +2605,28 @@ class TrainingAssistant:
             "required_operational_capabilities": capabilities,
             "evidence_terms": sorted(evidence_terms),
             "priority": round(priority, 4),
+            "base_priority": base_priority,
+            "adaptive_selection_score": adaptive_score,
+            "exposure_penalty": adaptive_score["exposure_penalty"],
+            "recency_penalty": adaptive_score["recency_penalty"],
+            "novelty_bonus": adaptive_score["novelty_bonus"],
+            "information_gain_bonus": adaptive_score[
+                "information_gain_bonus"
+            ],
+            "coverage_bonus": adaptive_score["coverage_bonus"],
+            "remediation_adjustment": adaptive_score[
+                "remediation_adjustment"
+            ],
+            "final_selection_score": adaptive_score[
+                "final_selection_score"
+            ],
+            "times_selected": adaptive_score["times_selected"],
+            "recent_selection_count": adaptive_score[
+                "recent_selection_count"
+            ],
+            "recent_selection_positions": adaptive_score[
+                "recent_selection_positions"
+            ],
             "priority_reasons": reasons,
             "survival_reappearance_matches": survival_matches,
             "domain_citizenship_matches": domain_matches,
@@ -2421,9 +2674,16 @@ class TrainingAssistant:
         priorities.sort(
             key=lambda item: (
                 -item["priority"],
+                item.get("recent_selection_count", 0),
+                item.get("times_selected", 0),
                 item["original_order"],
             )
         )
+        for rank, item in enumerate(priorities, start=1):
+            item["selection_rank"] = rank
+            item["tie_breaking_policy"] = (
+                "final_selection_score_then_lowest_recent_exposure_then_order"
+            )
         return rotated, priorities, survival_targets, domain_gaps, population_policy
 
     def _select_elite_task(
@@ -2484,6 +2744,17 @@ class TrainingAssistant:
                 [],
             ),
             "capability_population_evolution_policy": population_policy,
+            "adaptive_task_selection_contract": {
+                "formula": (
+                    "base_priority - exposure_penalty - recency_penalty "
+                    "+ novelty_bonus + information_gain_bonus "
+                    "+ coverage_bonus + remediation_adjustment"
+                ),
+                "selector_decision_owner": "TrainingAssistant",
+                "dataset_expansion_authority": "NONE",
+                "runtime_budget_authority": "NONE",
+                "elite_pool_expansion_authority": "NONE",
+            },
             "elite_task_priorities": priorities,
             "next_elite_task_index_after_completion": (
                 start + selected_rotated_index + 1
@@ -2549,6 +2820,17 @@ class TrainingAssistant:
                 [],
             ),
             "capability_population_evolution_policy": population_policy,
+            "adaptive_task_selection_contract": {
+                "formula": (
+                    "base_priority - exposure_penalty - recency_penalty "
+                    "+ novelty_bonus + information_gain_bonus "
+                    "+ coverage_bonus + remediation_adjustment"
+                ),
+                "selector_decision_owner": "TrainingAssistant",
+                "dataset_expansion_authority": "NONE",
+                "runtime_budget_authority": "NONE",
+                "elite_pool_expansion_authority": "NONE",
+            },
             "elite_task_priorities": priorities,
             "next_elite_task_index_after_completion": (
                 int(self.state.get("next_elite_task_index", 0))

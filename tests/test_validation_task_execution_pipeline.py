@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 
 from runtime.evidence.evidence_plan_store import EvidenceAcquisitionPlanStore
@@ -183,6 +184,21 @@ def test_scheduled_validation_task_executes_and_captures_raw_result(tmp_path):
     assert envelope["raw_validation_result_id"] == raw_result["raw_result_id"]
     assert envelope["run_id"] == plan["source_run_id"]
     assert envelope["task_id"] == plan["source_task_id"]
+    assert envelope["task_execution_origin_classification"] == (
+        "DIRECT_TASK_EXECUTION_ORIGIN"
+    )
+    assert envelope["origin_task_execution_id"].startswith("task_execution_")
+    assert envelope["origin_operation_id"] == raw_result["execution_id"]
+    assert envelope["origin_run_id"] == plan["source_run_id"]
+    assert envelope["origin_task_id"] == plan["source_task_id"]
+    assert envelope["origin_attempt_id"] == raw_result["validation_attempt_id"]
+    assert envelope["task_execution_origin"]["source_type"] == "TASK_EXECUTION"
+    assert envelope["task_execution_origin"]["authority"] == "NONE"
+    assert raw_result["origin_task_execution_id"].startswith("task_execution_")
+    assert raw_result["origin_operation_id"] == raw_result["execution_id"]
+    assert raw_result["origin_lineage_fingerprint"] == (
+        envelope["origin_lineage_fingerprint"]
+    )
     assert envelope["execution_plan_id"] == plan["plan_id"]
     assert envelope["executor_invocation_id"] == raw_result["execution_id"]
     assert envelope["validation_attempt_id"].startswith("validation_attempt_")
@@ -349,6 +365,153 @@ def test_three_batch_results_remain_task_local_and_distinct(tmp_path):
     }
     assert len(ids) == 3
     assert tasks == {"task_0", "task_1", "task_2"}
+    origins = {
+        report["RAW_VALIDATION_RESULT_ENVELOPE"]["origin_task_execution_id"]
+        for report in reports
+    }
+    assert len(origins) == 3
+
+
+def test_task_execution_origin_blocks_copied_metadata_attack(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    _, schedule = _scheduled_plan(tmp_path, _registry(curriculum))
+    report = ValidationTaskExecutionPipeline(
+        tmp_path,
+        _registry(curriculum),
+    ).execute_schedule(schedule["schedule_id"])
+    raw_result = _read_json(
+        tmp_path / "raw_results" / f"{report['raw_result_id']}.json"
+    )
+    copied = deepcopy(raw_result)
+    copied["task_id"] = "copied_task"
+    copied["RAW_VALIDATION_RESULT_ENVELOPE"]["task_id"] = "copied_task"
+
+    check = ValidationTaskExecutionPipeline(
+        tmp_path,
+        _registry(curriculum),
+    ).evaluate_raw_result_identity_integrity(
+        copied,
+        run_id=raw_result["run_id"],
+        execution_plan_id=raw_result["execution_plan_id"],
+    )
+
+    assert check["raw_result_identity_integrity_state"] == (
+        "RAW_RESULT_IDENTITY_CONFLICT_DETECTED"
+    )
+    assert "task_execution_origin_task_mismatch" in check[
+        "raw_result_identity_conflicts"
+    ]
+    assert "immutable_identity_fingerprint_mismatch" in check[
+        "raw_result_identity_conflicts"
+    ]
+
+
+def test_task_execution_origin_blocks_same_task_cross_run_attribution(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    first_persisted, first_schedule = _scheduled_plan(
+        first_root,
+        _registry(curriculum),
+    )
+    second_persisted, second_schedule = _scheduled_plan(
+        second_root,
+        _registry(curriculum),
+    )
+    first_plan_path = (
+        first_root / "pending" / f"{first_persisted['evidence_plan_id']}.json"
+    )
+    first_schedule_path = (
+        first_root / "schedules" / f"{first_schedule['schedule_id']}.json"
+    )
+    second_plan_path = (
+        second_root / "pending" / f"{second_persisted['evidence_plan_id']}.json"
+    )
+    second_schedule_path = (
+        second_root / "schedules" / f"{second_schedule['schedule_id']}.json"
+    )
+    first_plan = _read_json(first_plan_path)
+    first_schedule_record = _read_json(first_schedule_path)
+    second_plan = _read_json(second_plan_path)
+    second_schedule_record = _read_json(second_schedule_path)
+    first_plan["source_run_id"] = "run_cross_1"
+    first_schedule_record["source_run_id"] = "run_cross_1"
+    second_plan["source_run_id"] = "run_cross_2"
+    second_schedule_record["source_run_id"] = "run_cross_2"
+    first_plan_path.write_text(json.dumps(first_plan, indent=2), encoding="utf-8")
+    first_schedule_path.write_text(
+        json.dumps(first_schedule_record, indent=2),
+        encoding="utf-8",
+    )
+    second_plan_path.write_text(json.dumps(second_plan, indent=2), encoding="utf-8")
+    second_schedule_path.write_text(
+        json.dumps(second_schedule_record, indent=2),
+        encoding="utf-8",
+    )
+    first = ValidationTaskExecutionPipeline(
+        first_root,
+        _registry(curriculum),
+    ).execute_schedule(first_schedule["schedule_id"])
+    second = ValidationTaskExecutionPipeline(
+        second_root,
+        _registry(curriculum),
+    ).execute_schedule(second_schedule["schedule_id"])
+    first_raw = _read_json(
+        first_root / "raw_results" / f"{first['raw_result_id']}.json"
+    )
+    second_raw = _read_json(
+        second_root / "raw_results" / f"{second['raw_result_id']}.json"
+    )
+
+    assert first_raw["origin_task_id"] == second_raw["origin_task_id"]
+    assert first_raw["origin_task_id"] == "task-localized-remap"
+    assert first_raw["origin_task_execution_id"] != (
+        second_raw["origin_task_execution_id"]
+    )
+    assert first_raw["origin_run_id"] != second_raw["origin_run_id"]
+
+    check = ValidationTaskExecutionPipeline(
+        first_root,
+        _registry(curriculum),
+    ).evaluate_raw_result_identity_integrity(
+        first_raw,
+        run_id=second_raw["run_id"],
+        execution_plan_id=second_raw["execution_plan_id"],
+    )
+
+    assert "previous_or_foreign_run_identity" in check[
+        "raw_result_identity_conflicts"
+    ]
+    assert first_raw["origin_task_execution_id"] != (
+        second_raw["origin_task_execution_id"]
+    )
+
+
+def test_duplicate_artifacts_preserve_origin_without_claiming_independence(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    _, schedule = _scheduled_plan(tmp_path, _registry(curriculum))
+    report = ValidationTaskExecutionPipeline(
+        tmp_path,
+        _registry(curriculum),
+    ).execute_schedule(schedule["schedule_id"])
+    raw_result = _read_json(
+        tmp_path / "raw_results" / f"{report['raw_result_id']}.json"
+    )
+    duplicate = deepcopy(raw_result)
+    duplicate["raw_result_id"] = "raw_validation_result_duplicate_copy"
+    duplicate["raw_validation_result_id"] = duplicate["raw_result_id"]
+    duplicate["canonical_raw_result_id"] = duplicate["raw_result_id"]
+
+    assert raw_result["origin_task_execution_id"] == (
+        duplicate["origin_task_execution_id"]
+    )
+    assert raw_result["origin_lineage_fingerprint"] == (
+        duplicate["origin_lineage_fingerprint"]
+    )
+    assert raw_result["producer_source_type"] == duplicate["producer_source_type"]
 
 
 def test_scheduler_alone_does_not_execute_task(tmp_path):
