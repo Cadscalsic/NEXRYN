@@ -1,0 +1,104 @@
+{
+  "accepted_evidence_created": false,
+  "assessment": {
+    "assessment_failures": [],
+    "assessment_fingerprint": "56a28449136546157da07b4eba8f7fc3a375315c6c6511d842bc5ca07def9af7",
+    "assessment_state": "NEED_ASSESSMENT_ACCEPTED",
+    "authority": "NONE",
+    "candidate_fingerprint": "08f6a743022d5cc6d892eeb8111b59e0f37a797fc2b460c5a4a999bb6a0b8f29",
+    "canonical_subject_valid": true,
+    "contradiction_present": false,
+    "created_at": "2026-09-13T11:25:27.671050+00:00",
+    "current_lifecycle_states_valid": true,
+    "deficit_source_valid": true,
+    "deficit_still_current": true,
+    "duplicate_current_need_exists": true,
+    "evidence_need_id": "current_evidence_need_e576f1237d8778a8",
+    "evidence_plan_created": false,
+    "need_type": "REPRODUCIBILITY_REQUIRED",
+    "need_type_justified": true,
+    "schema_version": "1.0",
+    "source_decision_current": true,
+    "source_deficit_refs": [
+      {
+        "source_assessment_id": "capability_evidence_assessment_fc337f2b4446",
+        "source_authority": "INTEGRATED_CAPABILITY_QUALIFICATION_ENGINE",
+        "source_decision_id": "qualification_decision_8065c67908a0",
+        "source_failure": "independent_reproducibility_not_established"
+      }
+    ],
+    "subject": {
+      "capability_id": "capability_2857115a4af5bb9d",
+      "claim_id": "Not Available",
+      "claim_subject_ref": "Not Available",
+      "context_class": "qualification",
+      "domain": "color",
+      "evidence_scope": "capability_support",
+      "qualification_subject_id": "capability_2857115a4af5bb9d",
+      "schema_version": "1.0",
+      "subject_id": "evidence_need_subject_0afc1bea94b7f84c",
+      "target_type": "capability"
+    },
+    "support_already_sufficient": false,
+    "system": "evidence_need_assessment",
+    "target_exists": true,
+    "validation_sponsorship_created": false
+  },
+  "authority": "CURRENT_EVIDENCE_NEED_AUTHORITY_ENGINE",
+  "budget_authority": "NONE",
+  "created_at": "2026-09-13T11:25:27.673060+00:00",
+  "decision_fingerprint": "b376c717d901a00b93eeeec204869080f07085716610be60069ee3676fc95e64",
+  "decision_state": "CURRENT_NEED_ALREADY_ACTIVE",
+  "evidence_need_decision_id": "current_evidence_need_decision_b376c717d901a00b",
+  "evidence_need_id": "current_evidence_need_e576f1237d8778a8",
+  "evidence_plan_created": false,
+  "execution_authority": "NONE",
+  "goal_authority": "NONE",
+  "intent_authority": "NONE",
+  "knowledge_authority": "NONE",
+  "lifecycle_status": "ACTIVE",
+  "need_type": "REPRODUCIBILITY_REQUIRED",
+  "planning_authority": "NONE",
+  "previous_decision_id": "current_evidence_need_decision_27a0c61ede626797",
+  "provenance": {
+    "candidate_fingerprint": "08f6a743022d5cc6d892eeb8111b59e0f37a797fc2b460c5a4a999bb6a0b8f29",
+    "producer": "IntegratedCapabilityQualificationEngine",
+    "provenance": {
+      "assessment_run_id": "controlled_runtime_qualification_binding",
+      "capability_evidence_assessment_id": "capability_evidence_assessment_fc337f2b4446",
+      "qualification_decision_id": "qualification_decision_8065c67908a0",
+      "source": "qualification_deficit",
+      "source_decision_fingerprint": "c6a77647f0dd3341b088606f08a9903c787334bfb77e0fa24f392c5b120bc4b1",
+      "source_deficit_current": true
+    }
+  },
+  "qualification_authority": "NONE",
+  "raw_evidence_created": false,
+  "reason": "CURRENT_NEED_ALREADY_ACTIVE",
+  "schema_version": "1.0",
+  "source_deficit_refs": [
+    {
+      "source_assessment_id": "capability_evidence_assessment_fc337f2b4446",
+      "source_authority": "INTEGRATED_CAPABILITY_QUALIFICATION_ENGINE",
+      "source_decision_id": "qualification_decision_8065c67908a0",
+      "source_failure": "independent_reproducibility_not_established"
+    }
+  ],
+  "subject": {
+    "capability_id": "capability_2857115a4af5bb9d",
+    "claim_id": "Not Available",
+    "claim_subject_ref": "Not Available",
+    "context_class": "qualification",
+    "domain": "color",
+    "evidence_scope": "capability_support",
+    "qualification_subject_id": "capability_2857115a4af5bb9d",
+    "schema_version": "1.0",
+    "subject_id": "evidence_need_subject_0afc1bea94b7f84c",
+    "target_type": "capability"
+  },
+  "system": "current_evidence_need_decision",
+  "truth_authority": "NONE",
+  "validation_request_created": false,
+  "validation_schedule_created": false,
+  "validation_sponsorship_created": false
+}

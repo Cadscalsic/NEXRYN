@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime.claim_identity import ClaimIdentityError, claim_identity_for_evidence_plan
+from runtime.evidence.validation_request import ValidationRequestAuthorityEngine
 
 
 class EvidenceAcquisitionPlanStore:
@@ -129,6 +130,8 @@ class EvidenceAcquisitionPlanStore:
             "target_candidate": plan.get("target_candidate"),
             "target_operation": plan.get("target_operation"),
             "source_task_id": plan.get("source_task_id"),
+            "source_evidence_need_id": plan.get("source_evidence_need_id"),
+            "validation_scope": plan.get("validation_scope"),
             "governed_reentry_action": plan.get("governed_reentry_action"),
         }
 
@@ -205,12 +208,72 @@ class EvidenceAcquisitionPlanStore:
                 raw_plan.get("governed_reentry_action")
                 or raw_plan.get("evidence_acquisition_governed_reentry_action")
             ),
+            "validation_request_id": self._term(
+                raw_plan.get("validation_request_id")
+                or raw_plan.get("source_validation_request_id")
+            ),
+            "source_validation_request_id": self._term(
+                raw_plan.get("source_validation_request_id")
+                or raw_plan.get("validation_request_id")
+            ),
+            "source_validation_request_decision_id": self._term(
+                raw_plan.get("source_validation_request_decision_id")
+            ),
+            "source_validation_sponsorship_id": self._term(
+                raw_plan.get("source_validation_sponsorship_id")
+                or raw_plan.get("validation_sponsorship_id")
+            ),
+            "source_evidence_need_id": self._term(
+                raw_plan.get("source_evidence_need_id")
+                or raw_plan.get("evidence_need_id")
+            ),
+            "source_evidence_need_decision_id": self._term(
+                raw_plan.get("source_evidence_need_decision_id")
+            ),
+            "capability_id": self._term(raw_plan.get("capability_id")),
+            "capability_subject": (
+                dict(raw_plan.get("capability_subject"))
+                if isinstance(raw_plan.get("capability_subject"), dict)
+                else {}
+            ),
+            "qualification_target_level": self._term(
+                raw_plan.get("qualification_target_level")
+            ),
+            "current_qualification_level": self._term(
+                raw_plan.get("current_qualification_level")
+            ),
+            "required_independent_sources": int(
+                raw_plan.get("required_independent_sources", 0) or 0
+            ),
+            "claim_id": self._term(raw_plan.get("claim_id")),
+            "claim_subject_ref": (
+                raw_plan.get("claim_subject_ref")
+                if isinstance(raw_plan.get("claim_subject_ref"), dict)
+                else self._term(raw_plan.get("claim_subject_ref"))
+            ),
+            "need_type": self._term(raw_plan.get("need_type")),
+            "validation_scope": self._term(
+                raw_plan.get("validation_scope")
+                or raw_plan.get("requested_validation_scope")
+            ),
+            "evidence_candidate_id": self._term(
+                raw_plan.get("evidence_candidate_id")
+            ),
+            "source_task_execution_id": self._term(
+                raw_plan.get("source_task_execution_id")
+            ),
+            "training_experience_origin": (
+                raw_plan.get("training_experience_origin")
+                if isinstance(raw_plan.get("training_experience_origin"), dict)
+                else {}
+            ),
             "authority": {
                 "truth": "NONE",
                 "trust": "NONE",
                 "graduation": "NONE",
                 "execution": "NONE",
             },
+            "plan_authority": "EVIDENCE_ACQUISITION_PLAN_STORE",
             "truth_authority": "NONE",
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
@@ -291,6 +354,257 @@ class EvidenceAcquisitionPlanStore:
         if plan.get("constitutional_boundary") != self.BOUNDARY:
             failures.append("invalid_constitutional_boundary")
         return failures
+
+    def plan_from_validation_request(self, request: dict[str, Any]) -> dict[str, Any]:
+        request = request if isinstance(request, dict) else {}
+        subject = request.get("subject") if isinstance(request.get("subject"), dict) else {}
+        need = (
+            request.get("evidence_need")
+            if isinstance(request.get("evidence_need"), dict)
+            else {}
+        )
+        target = request.get("target") if isinstance(request.get("target"), dict) else {}
+        validation_request_id = self._term(request.get("validation_request_id"))
+        evidence_need_id = self._term(request.get("evidence_need_id"))
+        return {
+            **need,
+            "source_run_id": validation_request_id,
+            "source_task_id": evidence_need_id,
+            "source_candidate_id": (
+                subject.get("capability_id")
+                or target.get("capability_id")
+                or need.get("target_candidate")
+            ),
+            "source_operation": (
+                need.get("target_operation")
+                or subject.get("need_type")
+                or request.get("requested_validation_scope")
+            ),
+            "evidence_acquisition_state": "EVIDENCE_ACQUISITION_PLAN_READY",
+            "evidence_acquisition_trigger": "VALIDATION_REQUEST_ADMISSION",
+            "validation_request_id": validation_request_id,
+            "source_validation_request_id": validation_request_id,
+            "source_validation_request_decision_id": self._term(
+                request.get("current_decision_id")
+            ),
+            "source_validation_sponsorship_id": self._term(
+                request.get("validation_sponsorship_id")
+            ),
+            "source_evidence_need_id": evidence_need_id,
+            "source_evidence_need_decision_id": self._term(
+                request.get("evidence_need_decision_id")
+            ),
+            "capability_id": self._term(subject.get("capability_id")),
+            "capability_subject": (
+                dict(subject.get("capability_subject"))
+                if isinstance(subject.get("capability_subject"), dict)
+                else {}
+            ),
+            "qualification_target_level": self._term(
+                subject.get("qualification_target_level")
+            ),
+            "current_qualification_level": self._term(
+                subject.get("current_qualification_level")
+            ),
+            "required_independent_sources": int(
+                subject.get("required_independent_sources", 0) or 0
+            ),
+            "claim_id": self._term(subject.get("claim_id")),
+            "claim_subject_ref": subject.get("claim_subject_ref"),
+            "need_type": self._term(subject.get("need_type") or request.get("need_type")),
+            "validation_scope": self._term(request.get("requested_validation_scope")),
+            "target_candidate": self._term(
+                need.get("target_candidate") or subject.get("capability_id")
+            ),
+            "target_operation": self._term(
+                need.get("target_operation") or subject.get("need_type")
+            ),
+            "request_provenance": request.get("provenance", {}),
+            "expected_tie_break_impact": self._term(
+                need.get("expected_tie_break_impact") or "ADVISORY"
+            ),
+        }
+
+    def assess_validation_request_admission(
+        self,
+        validation_request_id: str,
+        *,
+        request_authority: ValidationRequestAuthorityEngine,
+        active_schedule_index: list[dict[str, Any]] | None = None,
+        governance_blocks: list[dict[str, Any] | str] | None = None,
+    ) -> dict[str, Any]:
+        self.initialize()
+        request = request_authority.get_current_validation_request(
+            validation_request_id
+        )
+        failures: list[str] = []
+        plan_payload: dict[str, Any] = {}
+        normalized_plan: dict[str, Any] = {}
+        equivalent_plan = None
+        if not request:
+            failures.append("missing_current_validation_request")
+        elif not request.get("is_current"):
+            failures.append("validation_request_not_current")
+        else:
+            plan_payload = self.plan_from_validation_request(request)
+            normalized_plan = self.normalize_plan(plan_payload)
+            if self.validate_plan(normalized_plan):
+                failures.append("plan_contract_invalid")
+            equivalent_plan, _ = self._find_equivalent_unresolved(
+                normalized_plan.get("plan_fingerprint")
+            )
+        if active_schedule_index:
+            failures.append("validation_already_scheduled")
+        if governance_blocks:
+            failures.append("governance_block")
+        assessment = {
+            "schema_version": self.SCHEMA_VERSION,
+            "system": "evidence_plan_admission_assessment",
+            "validation_request_id": validation_request_id,
+            "request_current": bool(request and request.get("is_current")),
+            "sponsorship_current": bool(
+                request
+                and request.get("source_sponsorship_currentness_state") == "CURRENT"
+            ),
+            "need_current": bool(
+                request
+                and request.get("source_sponsorship_currentness_state") == "CURRENT"
+            ),
+            "target_valid": bool(
+                normalized_plan
+                and normalized_plan.get("target_candidate") != "Not Available"
+            ),
+            "scope_valid": bool(
+                normalized_plan
+                and normalized_plan.get("validation_scope") != "Not Available"
+            ),
+            "equivalent_plan_exists": bool(equivalent_plan),
+            "schedule_already_exists": bool(active_schedule_index),
+            "request_already_consumed": False,
+            "governance_allows_plan_creation": not bool(governance_blocks),
+            "assessment_failures": sorted(set(failures)),
+            "assessment_state": (
+                "EVIDENCE_PLAN_ADMISSION_ACCEPTED"
+                if not failures and not equivalent_plan
+                else "EVIDENCE_PLAN_ADMISSION_REUSED"
+                if equivalent_plan and not failures
+                else "EVIDENCE_PLAN_ADMISSION_DENIED"
+            ),
+            "authority": "NONE",
+            "plan_authority": "EVIDENCE_ACQUISITION_PLAN_STORE",
+            "candidate_plan_id": normalized_plan.get("plan_id"),
+            "candidate_plan_fingerprint": normalized_plan.get("plan_fingerprint"),
+            "existing_evidence_plan_id": (
+                equivalent_plan.get("plan_id") if equivalent_plan else "Not Available"
+            ),
+            "evidence_plan_created": False,
+            "validation_schedule_created": False,
+            "validation_execution_started": False,
+            "raw_evidence_created": False,
+            "accepted_evidence_created": False,
+            "qualification_authority": "NONE",
+            "truth_authority": "NONE",
+            "knowledge_authority": "NONE",
+            "selector_authority": "NONE",
+            "created_at": self._now(),
+        }
+        return assessment
+
+    def admit_validation_request_to_plan(
+        self,
+        validation_request_id: str,
+        *,
+        request_authority: ValidationRequestAuthorityEngine,
+        active_schedule_index: list[dict[str, Any]] | None = None,
+        governance_blocks: list[dict[str, Any] | str] | None = None,
+    ) -> dict[str, Any]:
+        assessment = self.assess_validation_request_admission(
+            validation_request_id,
+            request_authority=request_authority,
+            active_schedule_index=active_schedule_index,
+            governance_blocks=governance_blocks,
+        )
+        if assessment.get("assessment_failures"):
+            return {
+                **self._empty_report(),
+                "system": "evidence_plan_request_admission",
+                "evidence_plan_store_state": "READY",
+                "evidence_plan_storage_state": self._denied_plan_admission_state(
+                    assessment.get("assessment_failures", [])
+                ),
+                "validation_request_id": validation_request_id,
+                "assessment": assessment,
+                "request_consumed": False,
+                "request_consumption_state": "NOT_CONSUMED",
+                "evidence_plan_created": False,
+                "validation_schedule_created": False,
+                "validation_execution_started": False,
+                "raw_evidence_created": False,
+                "accepted_evidence_created": False,
+            }
+        request = request_authority.get_current_validation_request(
+            validation_request_id
+        )
+        if not request:
+            return {
+                **self._empty_report(),
+                "system": "evidence_plan_request_admission",
+                "evidence_plan_store_state": "READY",
+                "evidence_plan_storage_state": "DENIED_NO_CURRENT_VALIDATION_REQUEST",
+                "validation_request_id": validation_request_id,
+                "assessment": assessment,
+                "request_consumed": False,
+            }
+        persistence = self.persist_plan(self.plan_from_validation_request(request))
+        persisted = persistence.get("evidence_plan_storage_state") in {
+            "NEW_PLAN_PERSISTED",
+            "EQUIVALENT_PENDING_PLAN_REUSED",
+        }
+        consumption = {}
+        if persisted:
+            consumption = request_authority.consume_request(
+                validation_request_id,
+                evidence_plan_id=persistence.get("evidence_plan_id"),
+                consumer=self.__class__.__name__,
+                consumer_decision_id=persistence.get("evidence_plan_fingerprint"),
+            )
+        return {
+            **persistence,
+            "system": "evidence_plan_request_admission",
+            "validation_request_id": validation_request_id,
+            "source_validation_request_id": validation_request_id,
+            "source_validation_sponsorship_id": request.get(
+                "validation_sponsorship_id"
+            ),
+            "source_evidence_need_id": request.get("evidence_need_id"),
+            "assessment": assessment,
+            "request_consumed": bool(
+                persisted
+                and consumption.get("current_state", {}).get("lifecycle_status")
+                == "CONSUMED_TO_EVIDENCE_PLAN"
+            ),
+            "request_consumption_state": (
+                "CONSUMED_TO_EVIDENCE_PLAN" if persisted else "NOT_CONSUMED"
+            ),
+            "request_consumption": consumption,
+            "evidence_plan_created": persistence.get("evidence_plan_persisted", False),
+            "validation_schedule_created": False,
+            "validation_execution_started": False,
+            "raw_evidence_created": False,
+            "accepted_evidence_created": False,
+        }
+
+    def _denied_plan_admission_state(self, failures: list[str]) -> str:
+        reason = ";".join(failures)
+        if "missing_current_validation_request" in reason or "validation_request_not_current" in reason:
+            return "DENIED_NO_CURRENT_VALIDATION_REQUEST"
+        if "validation_already_scheduled" in reason:
+            return "VALIDATION_ALREADY_SCHEDULED"
+        if "governance_block" in reason:
+            return "DENIED_GOVERNANCE_BLOCK"
+        if "plan_contract_invalid" in reason:
+            return "PLAN_REJECTED_INVALID"
+        return "DENIED_EVIDENCE_PLAN_ADMISSION"
 
     def _plan_files(self, directory: Path) -> list[Path]:
         if not directory.exists():

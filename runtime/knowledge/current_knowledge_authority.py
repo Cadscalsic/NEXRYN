@@ -148,12 +148,6 @@ class KnowledgeCurrentAuthorityEngine:
     ) -> None:
         self.state_dir = Path(state_dir) if state_dir is not None else None
         self.truth_admission_gate = truth_admission_gate or CurrentTruthAdmissionGate()
-        if epistemic_assessment_engine is None:
-            from runtime.epistemic.accepted_evidence_assessment import (
-                AcceptedEvidenceEpistemicAssessmentEngine,
-            )
-
-            epistemic_assessment_engine = AcceptedEvidenceEpistemicAssessmentEngine()
         self.epistemic_assessment_engine = (
             epistemic_assessment_engine
         )
@@ -253,8 +247,9 @@ class KnowledgeCurrentAuthorityEngine:
         current_assessments: list[str] = []
         stale_assessments: list[str] = []
         for assessment in graph["epistemic_assessments"]:
-            currentness = self.epistemic_assessment_engine.is_epistemic_assessment_current(
-                assessment
+            currentness = (
+                self._epistemic_assessment_engine()
+                .is_epistemic_assessment_current(assessment)
             )
             assessment_id = str(
                 assessment.get("epistemic_assessment_id")
@@ -855,6 +850,17 @@ class KnowledgeCurrentAuthorityEngine:
             "task_provenance_authority": "NONE",
             "knowledge_authority": "NONE",
         }
+
+    def _epistemic_assessment_engine(self):
+        if self.epistemic_assessment_engine is None:
+            from runtime.epistemic.accepted_evidence_assessment import (
+                AcceptedEvidenceEpistemicAssessmentEngine,
+            )
+
+            self.epistemic_assessment_engine = (
+                AcceptedEvidenceEpistemicAssessmentEngine()
+            )
+        return self.epistemic_assessment_engine
 
     def _decision(
         self,

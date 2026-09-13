@@ -4040,6 +4040,15 @@ try:
     runtime_watchdog.checkpoint("task_list_loaded")
 
     from runtime.evidence.evidence_plan_store import EvidenceAcquisitionPlanStore
+    from runtime.evidence.natural_validation_orchestrator import (
+        NaturalCanonicalValidationOrchestrator,
+    )
+    from runtime.evidence.natural_qualification_binding import (
+        NaturalQualificationAssessmentBinding,
+    )
+    from runtime.evidence.training_outcome_validation_boundary import (
+        TrainingOutcomeValidationBoundary,
+    )
     from runtime.learning.training_assistant import TrainingAssistant
     from runtime.validation.validation_task_execution_pipeline import (
         ValidationTaskExecutionPipeline,
@@ -4127,6 +4136,27 @@ try:
         and plan_creation_result
     ):
         evidence_plan_store_report["plan_creation_result"] = plan_creation_result
+    natural_validation_orchestrator = NaturalCanonicalValidationOrchestrator(
+        evidence_plan_store=evidence_plan_store,
+    )
+    natural_qualification_binding = NaturalQualificationAssessmentBinding(
+        evidence_plan_store=evidence_plan_store,
+    )
+    natural_qualification_binding_report = (
+        natural_qualification_binding.assess_current_accepted_evidence(
+            run_id=runtime_metrics["run_id"],
+        )
+    )
+    natural_validation_pre_schedule_report = (
+        natural_validation_orchestrator.orchestrate(
+            [
+                training_batch,
+                evidence_plan_store_report,
+                natural_qualification_binding_report,
+            ],
+            max_new_needs=3,
+        )
+    )
     validation_scheduler = ValidationTaskScheduler(
         root_path=evidence_plan_store.root_path,
         curriculum_registry=training_assistant.validation_curriculum_registry,
@@ -4191,6 +4221,12 @@ try:
         "validation_evidence_evaluation_report": (
             validation_evidence_evaluation_report
         ),
+        "natural_validation_pre_schedule_report": (
+            natural_validation_pre_schedule_report
+        ),
+        "natural_qualification_binding_report": (
+            natural_qualification_binding_report
+        ),
         "arena_evidence_admission_report": arena_evidence_admission_report,
         "arena_formal_selection_report": arena_formal_selection_report,
         **{
@@ -4242,6 +4278,12 @@ try:
     )
     training_alignment["validation_evidence_evaluation_report"] = (
         validation_evidence_evaluation_report
+    )
+    training_alignment["natural_validation_pre_schedule_report"] = (
+        natural_validation_pre_schedule_report
+    )
+    training_alignment["natural_qualification_binding_report"] = (
+        natural_qualification_binding_report
     )
     training_alignment["arena_evidence_admission_report"] = (
         arena_evidence_admission_report
@@ -4495,6 +4537,8 @@ try:
     )
 
     all_results = []
+    training_validation_boundary = TrainingOutcomeValidationBoundary()
+    training_validation_boundary_reports = []
     successful_tasks = 0
     failed_tasks = 0
     incomplete_tasks = 0
@@ -4619,6 +4663,67 @@ try:
                 task_result["execution_plan_id"] = (
                     task_plan_reference["execution_plan_id"]
                 )
+                try:
+                    validation_boundary_report = (
+                        training_validation_boundary.assess_outcome(
+                            {
+                                **task_result,
+                                "task_id": task_file,
+                                "run_id": task_plan_reference["run_id"],
+                                "execution_plan_id": (
+                                    task_plan_reference["execution_plan_id"]
+                                ),
+                                "task_execution_id": (
+                                    f"{task_plan_reference['run_id']}:{task_file}"
+                                ),
+                                "selection_purpose": "TRAINING",
+                            },
+                            task_metadata={},
+                            selection_context={
+                                "task_id": task_file,
+                                "selection_purpose": "TRAINING",
+                            },
+                            persist=True,
+                            route_to_plan=False,
+                        )
+                    )
+                except Exception as boundary_error:
+                    validation_boundary_report = {
+                        "system": "training_outcome_validation_boundary",
+                        "boundary_evaluation_state": "FAILED_CLOSED",
+                        "candidate_created": False,
+                        "validation_request_created": False,
+                        "failure_reason": str(boundary_error),
+                        "authority": "NONE",
+                        "behavioral_authority": "NONE",
+                    }
+                task_result["training_outcome_validation_boundary_report"] = (
+                    validation_boundary_report
+                )
+                training_validation_boundary_reports.append({
+                    "task": task_file,
+                    "candidate_created": bool(
+                        validation_boundary_report.get("candidate_created")
+                    ),
+                    "validation_request_created": bool(
+                        validation_boundary_report.get(
+                            "validation_request_created"
+                        )
+                    ),
+                    "candidate_state": (
+                        validation_boundary_report.get(
+                            "evidence_candidate",
+                            {},
+                        ).get("candidate_state")
+                    ),
+                    "request_state": (
+                        validation_boundary_report.get(
+                            "validation_request",
+                            {},
+                        ).get("request_state")
+                    ),
+                    "authority": validation_boundary_report.get("authority"),
+                })
             if first_task_started and "first_task_completed" not in (
                 runtime_watchdog.checkpoints
             ):
@@ -4754,6 +4859,133 @@ try:
             4,
         )
 
+    training_outcome_validation_boundary_summary = {
+        "system": "training_outcome_validation_boundary",
+        "boundary": (
+            "TRAINING_EXPERIENCE_MAY_REQUEST_GOVERNED_VALIDATION_BUT_IS_NOT_EVIDENCE"
+        ),
+        "authority": "NONE",
+        "behavioral_authority": "NONE",
+        "task_outcome_count": len(all_results),
+        "evidence_candidate_count": sum(
+            1
+            for report in training_validation_boundary_reports
+            if report.get("candidate_created")
+        ),
+        "validation_request_count": sum(
+            1
+            for report in training_validation_boundary_reports
+            if report.get("validation_request_created")
+        ),
+        "direct_raw_evidence_created": False,
+        "direct_accepted_evidence_created": False,
+        "realized_yield_selector_consumption": False,
+        "selector_scoring_changed": False,
+        "reports": training_validation_boundary_reports,
+    }
+    training_batch["training_outcome_validation_boundary_report"] = (
+        training_outcome_validation_boundary_summary
+    )
+    natural_validation_post_execution_report = (
+        natural_validation_orchestrator.orchestrate(
+            all_results,
+            max_new_needs=3,
+        )
+    )
+    natural_validation_orchestration_report = {
+        "system": "natural_canonical_validation_orchestrator_summary",
+        "authority": "NONE",
+        "behavioral_authority": "NONE",
+        "pre_schedule": natural_validation_pre_schedule_report,
+        "post_execution": natural_validation_post_execution_report,
+        "natural_deficit_count": (
+            natural_validation_pre_schedule_report.get("natural_deficit_count", 0)
+            + natural_validation_post_execution_report.get(
+                "natural_deficit_count",
+                0,
+            )
+        ),
+        "natural_need_candidate_count": (
+            natural_validation_pre_schedule_report.get(
+                "natural_need_candidate_count",
+                0,
+            )
+            + natural_validation_post_execution_report.get(
+                "natural_need_candidate_count",
+                0,
+            )
+        ),
+        "natural_need_decision_count": (
+            natural_validation_pre_schedule_report.get(
+                "natural_need_decision_count",
+                0,
+            )
+            + natural_validation_post_execution_report.get(
+                "natural_need_decision_count",
+                0,
+            )
+        ),
+        "qualification_assessment_invocation_count": (
+            natural_qualification_binding_report.get(
+                "qualification_assessment_invocation_count",
+                0,
+            )
+        ),
+        "qualification_assessment_not_applicable_count": (
+            natural_qualification_binding_report.get(
+                "qualification_assessment_not_applicable_count",
+                0,
+            )
+        ),
+        "qualification_decision_ids": (
+            natural_qualification_binding_report.get(
+                "qualification_decision_ids",
+                [],
+            )
+        ),
+        "structured_deficit_count": (
+            natural_qualification_binding_report.get(
+                "structured_deficit_count",
+                0,
+            )
+        ),
+        "natural_active_need_count": len(set(
+            natural_validation_pre_schedule_report.get(
+                "natural_active_need_ids",
+                [],
+            )
+            + natural_validation_post_execution_report.get(
+                "natural_active_need_ids",
+                [],
+            )
+        )),
+        "natural_active_need_ids": sorted(set(
+            natural_validation_pre_schedule_report.get(
+                "natural_active_need_ids",
+                [],
+            )
+            + natural_validation_post_execution_report.get(
+                "natural_active_need_ids",
+                [],
+            )
+        )),
+        "realized_yield_selector_consumption": False,
+        "raw_evidence_created_directly": False,
+        "accepted_evidence_created_directly": False,
+    }
+    training_batch["natural_validation_orchestration_report"] = (
+        natural_validation_orchestration_report
+    )
+    training_batch["natural_qualification_binding_report"] = (
+        natural_qualification_binding_report
+    )
+    evidence_plan_store_report["natural_validation_orchestration_report"] = (
+        natural_validation_orchestration_report
+    )
+    evidence_plan_store_report["natural_qualification_binding_report"] = (
+        natural_qualification_binding_report
+    )
+
     from runtime.validation.raw_result_lifecycle_applicability import (
         raw_result_lifecycle_applicability_evaluator,
     )
@@ -4866,6 +5098,24 @@ try:
         training_report["raw_result_applicability_report"] = dict(
             raw_result_applicability_report
         )
+        training_report["TRAINING_OUTCOME_VALIDATION_BOUNDARY_REPORT"] = dict(
+            training_outcome_validation_boundary_summary
+        )
+        training_report["training_outcome_validation_boundary_report"] = dict(
+            training_outcome_validation_boundary_summary
+        )
+        training_report["NATURAL_VALIDATION_ORCHESTRATION_REPORT"] = dict(
+            natural_validation_orchestration_report
+        )
+        training_report["natural_validation_orchestration_report"] = dict(
+            natural_validation_orchestration_report
+        )
+        training_report["NATURAL_QUALIFICATION_BINDING_REPORT"] = dict(
+            natural_qualification_binding_report
+        )
+        training_report["natural_qualification_binding_report"] = dict(
+            natural_qualification_binding_report
+        )
         pre_final_report_diagnostics.phase_exit(
             "TRAINING_REPORT_GENERATION",
             report_keys=len(training_report) if isinstance(training_report, dict) else 0,
@@ -4911,6 +5161,12 @@ try:
             ),
             "RAW_RESULT_APPLICABILITY_REPORT": raw_result_applicability_report,
             "raw_result_applicability_report": raw_result_applicability_report,
+            "training_outcome_validation_boundary_report": (
+                training_outcome_validation_boundary_summary
+            ),
+            "TRAINING_OUTCOME_VALIDATION_BOUNDARY_REPORT": (
+                training_outcome_validation_boundary_summary
+            ),
             "arena_evidence_admission_report": arena_evidence_admission_report,
             "arena_formal_selection_report": arena_formal_selection_report,
             "training_report": training_report,
@@ -4948,6 +5204,18 @@ try:
             ),
             "evidence_plan_store_report": evidence_plan_store_report,
             "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
+            "natural_validation_orchestration_report": (
+                natural_validation_orchestration_report
+            ),
+            "NATURAL_VALIDATION_ORCHESTRATION_REPORT": (
+                natural_validation_orchestration_report
+            ),
+            "natural_qualification_binding_report": (
+                natural_qualification_binding_report
+            ),
+            "NATURAL_QUALIFICATION_BINDING_REPORT": (
+                natural_qualification_binding_report
+            ),
             "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
             "performance_report": performance_report,
             "tasks_executed": len(all_results),
@@ -4988,6 +5256,18 @@ try:
                 "finalization_duration": 0,
                 "minimal_terminal_closure": True,
                 "post_task_enrichment": "deferred",
+                "training_outcome_evidence_candidate_count": (
+                    training_outcome_validation_boundary_summary.get(
+                        "evidence_candidate_count",
+                        0,
+                    )
+                ),
+                "training_outcome_validation_request_count": (
+                    training_outcome_validation_boundary_summary.get(
+                        "validation_request_count",
+                        0,
+                    )
+                ),
             },
         )
         runtime_metadata["requested_report_level"] = args.report_level
@@ -5190,6 +5470,24 @@ try:
     )
     training_report["raw_result_applicability_report"] = dict(
         raw_result_applicability_report
+    )
+    training_report["TRAINING_OUTCOME_VALIDATION_BOUNDARY_REPORT"] = dict(
+        training_outcome_validation_boundary_summary
+    )
+    training_report["training_outcome_validation_boundary_report"] = dict(
+        training_outcome_validation_boundary_summary
+    )
+    training_report["NATURAL_VALIDATION_ORCHESTRATION_REPORT"] = dict(
+        natural_validation_orchestration_report
+    )
+    training_report["natural_validation_orchestration_report"] = dict(
+        natural_validation_orchestration_report
+    )
+    training_report["NATURAL_QUALIFICATION_BINDING_REPORT"] = dict(
+        natural_qualification_binding_report
+    )
+    training_report["natural_qualification_binding_report"] = dict(
+        natural_qualification_binding_report
     )
     if (
         selection_training_diversity_report.get(
@@ -8049,6 +8347,12 @@ try:
         ),
         "RAW_RESULT_APPLICABILITY_REPORT": raw_result_applicability_report,
         "raw_result_applicability_report": raw_result_applicability_report,
+        "training_outcome_validation_boundary_report": (
+            training_outcome_validation_boundary_summary
+        ),
+        "TRAINING_OUTCOME_VALIDATION_BOUNDARY_REPORT": (
+            training_outcome_validation_boundary_summary
+        ),
         "arena_evidence_admission_report": arena_evidence_admission_report,
         "arena_formal_selection_report": arena_formal_selection_report,
         "training_report": training_report,
@@ -8086,6 +8390,18 @@ try:
         ),
         "evidence_plan_store_report": evidence_plan_store_report,
         "EVIDENCE_PLAN_STORE_REPORT": evidence_plan_store_report,
+        "natural_validation_orchestration_report": (
+            natural_validation_orchestration_report
+        ),
+        "NATURAL_VALIDATION_ORCHESTRATION_REPORT": (
+            natural_validation_orchestration_report
+        ),
+        "natural_qualification_binding_report": (
+            natural_qualification_binding_report
+        ),
+        "NATURAL_QUALIFICATION_BINDING_REPORT": (
+            natural_qualification_binding_report
+        ),
         "pending_evidence_acquisition_plans": pending_evidence_acquisition_plans,
         "performance_report": performance_report,
         "PERFORMANCE_REPORT": performance_intelligence_report,

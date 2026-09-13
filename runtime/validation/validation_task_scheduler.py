@@ -7,6 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from runtime.evidence.current_evidence_need import CurrentEvidenceNeedAuthorityEngine
+from runtime.evidence.validation_sponsorship import ValidationSponsorshipAuthorityEngine
+from runtime.evidence.validation_request import ValidationRequestAuthorityEngine
 from runtime.training.validation_curriculum_registry import (
     ValidationCurriculumRegistry,
 )
@@ -25,10 +28,26 @@ class ValidationTaskScheduler:
             "runtime/state/evidence_acquisition_plans"
         ),
         curriculum_registry: ValidationCurriculumRegistry | None = None,
+        need_authority: CurrentEvidenceNeedAuthorityEngine | None = None,
+        sponsorship_authority: ValidationSponsorshipAuthorityEngine | None = None,
+        request_authority: ValidationRequestAuthorityEngine | None = None,
     ):
         self.root_path = Path(root_path)
         self.pending_path = self.root_path / "pending"
         self.schedules_path = self.root_path / "schedules"
+        self.need_authority = need_authority or CurrentEvidenceNeedAuthorityEngine()
+        self.sponsorship_authority = (
+            sponsorship_authority
+            or ValidationSponsorshipAuthorityEngine(
+                need_authority=self.need_authority,
+            )
+        )
+        self.request_authority = (
+            request_authority
+            or ValidationRequestAuthorityEngine(
+                sponsorship_authority=self.sponsorship_authority,
+            )
+        )
         self.curriculum_registry = (
             curriculum_registry or ValidationCurriculumRegistry()
         )
@@ -145,43 +164,30 @@ class ValidationTaskScheduler:
             return self._link_existing_schedule(plan, path, existing, base)
 
         now = self._now()
-        prepared = {
+        scheduled = {
             **plan,
             "updated_at": now,
-            "lifecycle_state": "SCHEDULING_PREPARED",
-            "scheduling_state": "SCHEDULING_PREPARED",
+            "lifecycle_state": "SCHEDULED",
+            "scheduling_state": "SCHEDULED",
             "scheduling_admission_state": "ADMITTED",
             "scheduling_admission_reason": "admission_contract_satisfied",
             "schedule_id": schedule["schedule_id"],
             "execution_state": "NOT_STARTED",
             "execution_invoked": False,
             "execution_authority": "NONE",
+            "boot_recovery_route": "SCHEDULED_TO_VALIDATION_EXECUTION_PIPELINE",
         }
-        prepared.setdefault("history", []).append({
+        scheduled.setdefault("history", []).append({
             "timestamp": now,
-            "state": "SCHEDULING_PREPARED",
-            "event": "validation_scheduling_prepared",
+            "state": "SCHEDULED",
+            "event": "validation_schedule_linked_to_plan",
             "schedule_id": schedule["schedule_id"],
         })
         try:
-            self._atomic_write(path, prepared)
             self._atomic_write(
                 self.schedules_path / f"{schedule['schedule_id']}.json",
                 schedule,
             )
-            scheduled = {
-                **prepared,
-                "updated_at": self._now(),
-                "lifecycle_state": "SCHEDULED",
-                "scheduling_state": "SCHEDULED",
-                "boot_recovery_route": "SCHEDULED_TO_VALIDATION_EXECUTION_PIPELINE",
-            }
-            scheduled.setdefault("history", []).append({
-                "timestamp": scheduled["updated_at"],
-                "state": "SCHEDULED",
-                "event": "validation_schedule_linked_to_plan",
-                "schedule_id": schedule["schedule_id"],
-            })
             self._atomic_write(path, scheduled)
         except (OSError, TypeError, ValueError) as error:
             return self._blocked(
@@ -240,6 +246,16 @@ class ValidationTaskScheduler:
         )
 
     def _admission(self, plan: dict[str, Any]) -> dict[str, Any]:
+        currentness = self.schedule_admission_assessment(plan)
+        if currentness["assessment_failures"]:
+            failure = currentness["assessment_failures"][0]
+            return self._admission_block(
+                self._currentness_block_state(failure),
+                failure,
+                "preschedule_currentness_revalidation",
+                "restore_current_need_sponsorship_or_plan_lineage_before_scheduling",
+                assessment=currentness,
+            )
         lifecycle = plan.get("lifecycle_state")
         if lifecycle not in {"WAITING_EXECUTION", "SCHEDULING_PREPARED"}:
             return self._admission_block(
@@ -337,6 +353,92 @@ class ValidationTaskScheduler:
             "recommended_action": "persist_governed_validation_schedule",
             "selected_task_metadata": task,
             "selected_curriculum_metadata": lookup.get("curriculum") or {},
+            "schedule_admission_assessment": currentness,
+        }
+
+    def schedule_admission_assessment(self, plan: dict[str, Any]) -> dict[str, Any]:
+        failures: list[str] = []
+        lineage_required = any(
+            self._term(plan.get(field)) != "Not Available"
+            for field in (
+                "source_validation_sponsorship_id",
+                "source_evidence_need_id",
+            )
+        )
+        if not lineage_required:
+            return {
+                "schema_version": "1.0",
+                "system": "validation_schedule_admission_assessment",
+                "authority": "NONE",
+                "lineage_model": "LEGACY_UNBOUND_PLAN",
+                "plan_admissible": True,
+                "need_still_current": "NOT_EVALUATED_LEGACY_PLAN",
+                "sponsorship_still_valid": "NOT_EVALUATED_LEGACY_PLAN",
+                "request_lineage_valid": "NOT_EVALUATED_LEGACY_PLAN",
+                "task_binding_resolved": True,
+                "target_valid": True,
+                "scope_valid": True,
+                "duplicate_schedule": False,
+                "current_equivalent_execution": False,
+                "governance_permitted": True,
+                "assessment_failures": [],
+            }
+        need_state = self.need_authority.get_current_evidence_need_state(
+            plan.get("source_evidence_need_id")
+        )
+        sponsorship_state = self.sponsorship_authority.get_current_validation_sponsorship(
+            plan.get("source_validation_sponsorship_id")
+        )
+        request_state = self.request_authority.get_current_validation_request(
+            plan.get("source_validation_request_id")
+        )
+        if not need_state or not need_state.get("is_current"):
+            failures.append("source_need_not_current")
+        if not sponsorship_state or not sponsorship_state.get("is_current"):
+            failures.append("source_sponsorship_not_current")
+        if not request_state or request_state.get("currentness_integrity_state") != "VALID":
+            failures.append("source_request_lineage_invalid")
+        elif request_state.get("lifecycle_status") != "CONSUMED_TO_EVIDENCE_PLAN":
+            failures.append("source_request_not_consumed_to_plan")
+        if self._term(plan.get("capability_id")) == "Not Available":
+            failures.append("missing_capability_id")
+        if self._term(plan.get("validation_scope")) == "Not Available":
+            failures.append("invalid_validation_scope")
+        if self._term(plan.get("selected_validation_task_id")) == "Not Available":
+            failures.append("missing_validation_task_binding")
+        return {
+            "schema_version": "1.0",
+            "system": "validation_schedule_admission_assessment",
+            "authority": "NONE",
+            "lineage_model": "CANONICAL_REQUEST_BOUND_PLAN",
+            "evidence_plan_id": plan.get("plan_id"),
+            "source_validation_request_id": plan.get("source_validation_request_id"),
+            "source_validation_sponsorship_id": plan.get(
+                "source_validation_sponsorship_id"
+            ),
+            "source_evidence_need_id": plan.get("source_evidence_need_id"),
+            "plan_admissible": not failures,
+            "need_still_current": bool(need_state and need_state.get("is_current")),
+            "sponsorship_still_valid": bool(
+                sponsorship_state and sponsorship_state.get("is_current")
+            ),
+            "request_lineage_valid": bool(
+                request_state
+                and request_state.get("currentness_integrity_state") == "VALID"
+                and request_state.get("lifecycle_status")
+                == "CONSUMED_TO_EVIDENCE_PLAN"
+            ),
+            "task_binding_resolved": self._term(
+                plan.get("selected_validation_task_id")
+            ) != "Not Available",
+            "target_valid": self._term(plan.get("target_candidate")) != "Not Available",
+            "scope_valid": self._term(plan.get("validation_scope")) != "Not Available",
+            "duplicate_schedule": bool(
+                self._find_schedule(self.schedule_fingerprint(plan))
+            ),
+            "current_equivalent_execution": False,
+            "governance_permitted": True,
+            "assessment_failures": sorted(set(failures)),
         }
 
     def _schedule_record(
@@ -352,6 +454,30 @@ class ValidationTaskScheduler:
             "schedule_id": schedule_id,
             "plan_id": plan.get("plan_id"),
             "plan_fingerprint": plan.get("plan_fingerprint"),
+            "source_validation_request_id": plan.get("source_validation_request_id"),
+            "source_validation_request_decision_id": plan.get(
+                "source_validation_request_decision_id"
+            ),
+            "source_validation_sponsorship_id": plan.get(
+                "source_validation_sponsorship_id"
+            ),
+            "source_evidence_need_id": plan.get("source_evidence_need_id"),
+            "source_evidence_need_decision_id": plan.get(
+                "source_evidence_need_decision_id"
+            ),
+            "capability_id": plan.get("capability_id"),
+            "capability_subject": plan.get("capability_subject") or {},
+            "qualification_target_level": plan.get(
+                "qualification_target_level"
+            ),
+            "current_qualification_level": plan.get(
+                "current_qualification_level"
+            ),
+            "required_independent_sources": plan.get(
+                "required_independent_sources"
+            ),
+            "need_type": plan.get("need_type"),
+            "validation_scope": plan.get("validation_scope"),
             "source_run_id": plan.get("source_run_id"),
             "source_task_id": plan.get("source_task_id"),
             "batch_id": plan.get("batch_id"),
@@ -364,6 +490,7 @@ class ValidationTaskScheduler:
             "target_operation": plan.get("target_operation"),
             "claim_id": plan.get("claim_id"),
             "claim_subject": plan.get("claim_subject"),
+            "claim_subject_ref": plan.get("claim_subject_ref"),
             "claim_subject_owner": plan.get("claim_subject_owner"),
             "claim_evidence_binding_authority": plan.get(
                 "claim_evidence_binding_authority"
@@ -376,6 +503,7 @@ class ValidationTaskScheduler:
             ),
             "tie_break_strategy": plan.get("tie_break_strategy"),
             "scheduling_authority": "VALIDATION_SCHEDULER",
+            "schedule_authority": "VALIDATION_TASK_SCHEDULER",
             "scheduling_admission_state": "ADMITTED",
             "scheduling_admission_reason": "admission_contract_satisfied",
             "scheduling_timestamp": now,
@@ -387,6 +515,10 @@ class ValidationTaskScheduler:
             "schedule_fingerprint": fingerprint,
             "constitutional_boundary": self.BOUNDARY,
             "selected_task_metadata": admission.get("selected_task_metadata") or {},
+            "schedule_admission_assessment": admission.get(
+                "schedule_admission_assessment",
+                {},
+            ),
         }
 
     def schedule_fingerprint(self, plan: dict[str, Any]) -> str:
@@ -417,6 +549,7 @@ class ValidationTaskScheduler:
             "selected_curriculum_id": "Not Available",
             "selection_state": "NOT_SELECTED",
             "scheduling_authority": "VALIDATION_SCHEDULER",
+            "schedule_authority": "VALIDATION_TASK_SCHEDULER",
             "scheduling_admission_state": "NOT_EVALUATED",
             "scheduling_admission_reason": "not_evaluated",
             "scheduling_state": "NOT_SCHEDULED",
@@ -514,6 +647,7 @@ class ValidationTaskScheduler:
         reason: str,
         stage: str,
         action: str,
+        assessment: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return {
             "scheduling_admission_state": outcome,
@@ -521,7 +655,23 @@ class ValidationTaskScheduler:
             "blocked_stage": stage,
             "responsible_component": "VALIDATION_TASK_SCHEDULER",
             "recommended_action": action,
+            "schedule_admission_assessment": assessment or {},
         }
+
+    def _currentness_block_state(self, failure: str) -> str:
+        if failure == "source_need_not_current":
+            return "DENIED_SOURCE_NEED_NOT_CURRENT"
+        if failure == "source_sponsorship_not_current":
+            return "DENIED_SOURCE_SPONSORSHIP_NOT_CURRENT"
+        if failure == "source_request_lineage_invalid":
+            return "DENIED_REQUEST_LINEAGE_INVALID"
+        if failure == "missing_validation_task_binding":
+            return "BLOCKED_MISSING_SELECTED_TASK"
+        if failure == "missing_capability_id":
+            return "BLOCKED_INVALID_PLAN_STATE"
+        if failure == "invalid_validation_scope":
+            return "BLOCKED_INVALID_PLAN_STATE"
+        return "BLOCKED_PRESCHEDULE_CURRENTNESS"
 
     def _load_plan(
         self,

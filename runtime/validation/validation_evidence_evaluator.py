@@ -1692,7 +1692,98 @@ class ValidationEvidenceEvaluator:
             "selected_curriculum_id"
         ):
             failures.append("curriculum_id_mismatch")
+        envelope = (
+            raw_result.get("RAW_VALIDATION_RESULT_ENVELOPE")
+            or raw_result.get("raw_validation_result_envelope")
+            or {}
+        )
+        envelope = envelope if isinstance(envelope, dict) else {}
+        failures.extend(self._execution_context_binding_failures(
+            plan,
+            schedule,
+            raw_result,
+            envelope,
+        ))
         return failures
+
+    def _execution_context_binding_failures(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+        envelope: dict[str, Any],
+    ) -> list[str]:
+        failures: list[str] = []
+        raw_attempt = self._term(raw_result.get("validation_attempt_id"))
+        envelope_attempt = self._term(envelope.get("validation_attempt_id"))
+        if raw_attempt == "Not Available" or envelope_attempt == "Not Available":
+            failures.append("DENIED_MISSING_ATTEMPT_BINDING")
+        elif raw_attempt != envelope_attempt:
+            failures.append("ATTEMPT_IDENTITY_MISMATCH")
+
+        raw_producer = self._term(raw_result.get("producer_operation_id"))
+        envelope_producer = self._term(envelope.get("producer_operation_id"))
+        if raw_producer == "Not Available" or envelope_producer == "Not Available":
+            failures.append("PRODUCER_OPERATION_BINDING_MISSING")
+        elif raw_producer != envelope_producer:
+            failures.append("PRODUCER_OPERATION_MISMATCH")
+
+        raw_execution = self._term(raw_result.get("execution_id"))
+        envelope_execution = self._term(
+            envelope.get("execution_id") or envelope.get("executor_invocation_id")
+        )
+        if raw_execution != "Not Available" and envelope_execution != "Not Available":
+            if raw_execution != envelope_execution:
+                failures.append("EXECUTION_IDENTITY_MISMATCH")
+
+        plan_capability = self._term(plan.get("capability_id"))
+        schedule_capability = self._term(schedule.get("capability_id"))
+        raw_capability = self._term(raw_result.get("capability_id"))
+        capability_required = (
+            plan_capability != "Not Available"
+            or schedule_capability != "Not Available"
+            or raw_capability != "Not Available"
+        )
+        if capability_required:
+            if plan_capability == "Not Available" or schedule_capability == "Not Available":
+                failures.append("CAPABILITY_BINDING_MISSING")
+            elif plan_capability != schedule_capability:
+                failures.append("CAPABILITY_BINDING_MISMATCH")
+            if raw_capability != "Not Available" and raw_capability != plan_capability:
+                failures.append("CAPABILITY_BINDING_MISMATCH")
+
+        plan_scope = self._canonical_validation_scope(plan.get("validation_scope"))
+        schedule_scope = self._canonical_validation_scope(schedule.get("validation_scope"))
+        raw_scope = self._canonical_validation_scope(raw_result.get("validation_scope"))
+        scope_required = (
+            plan_scope != "Not Available"
+            or schedule_scope != "Not Available"
+            or raw_scope != "Not Available"
+        )
+        if scope_required:
+            if plan_scope == "Not Available" or schedule_scope == "Not Available":
+                failures.append("VALIDATION_SCOPE_MISSING")
+            elif plan_scope != schedule_scope:
+                failures.append("VALIDATION_SCOPE_MISMATCH")
+            if raw_scope != "Not Available" and raw_scope != plan_scope:
+                failures.append("VALIDATION_SCOPE_MISMATCH")
+        return sorted(set(failures))
+
+    def _canonical_validation_scope(self, value: Any) -> str:
+        term = self._term(value)
+        if term == "Not Available":
+            return term
+        normalized = str(term).strip().upper()
+        allowed = {
+            "SOURCE_INDEPENDENCE",
+            "REPRODUCIBILITY",
+            "GENERAL_SUPPORT",
+            "CAUSAL",
+            "CAUSAL_SUPPORT",
+            "REVALIDATION",
+            "CROSS_SOURCE_CONSENSUS",
+        }
+        return normalized if normalized in allowed else "Not Available"
 
     def _evaluation_contract(self, raw_task: dict[str, Any]) -> dict[str, Any]:
         contract = raw_task.get("evaluation_contract")
@@ -1973,6 +2064,32 @@ class ValidationEvidenceEvaluator:
             "selected_curriculum_id": plan.get(
                 "selected_curriculum_id",
                 raw_result.get("selected_curriculum_id"),
+            ),
+            "capability_id": (
+                plan.get("capability_id")
+                or schedule.get("capability_id")
+                or raw_result.get("capability_id")
+            ),
+            "capability_subject": (
+                plan.get("capability_subject")
+                or schedule.get("capability_subject")
+                or raw_result.get("capability_subject")
+                or {}
+            ),
+            "qualification_target_level": (
+                plan.get("qualification_target_level")
+                or schedule.get("qualification_target_level")
+                or raw_result.get("qualification_target_level")
+            ),
+            "current_qualification_level": (
+                plan.get("current_qualification_level")
+                or schedule.get("current_qualification_level")
+                or raw_result.get("current_qualification_level")
+            ),
+            "required_independent_sources": (
+                plan.get("required_independent_sources")
+                or schedule.get("required_independent_sources")
+                or raw_result.get("required_independent_sources")
             ),
             "target_candidate": plan.get("target_candidate"),
             "target_operation": plan.get("target_operation"),

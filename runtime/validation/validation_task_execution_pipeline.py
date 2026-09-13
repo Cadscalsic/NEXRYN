@@ -8,6 +8,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from runtime.evidence.current_evidence_need import CurrentEvidenceNeedAuthorityEngine
+from runtime.evidence.validation_request import ValidationRequestAuthorityEngine
+from runtime.evidence.validation_sponsorship import ValidationSponsorshipAuthorityEngine
 from runtime.training.validation_curriculum_registry import (
     ValidationCurriculumRegistry,
 )
@@ -36,11 +39,27 @@ class ValidationTaskExecutionPipeline:
             "runtime/state/evidence_acquisition_plans"
         ),
         curriculum_registry: ValidationCurriculumRegistry | None = None,
+        need_authority: CurrentEvidenceNeedAuthorityEngine | None = None,
+        sponsorship_authority: ValidationSponsorshipAuthorityEngine | None = None,
+        request_authority: ValidationRequestAuthorityEngine | None = None,
     ):
         self.root_path = Path(root_path)
         self.pending_path = self.root_path / "pending"
         self.schedules_path = self.root_path / "schedules"
         self.raw_results_path = self.root_path / "raw_results"
+        self.need_authority = need_authority or CurrentEvidenceNeedAuthorityEngine()
+        self.sponsorship_authority = (
+            sponsorship_authority
+            or ValidationSponsorshipAuthorityEngine(
+                need_authority=self.need_authority,
+            )
+        )
+        self.request_authority = (
+            request_authority
+            or ValidationRequestAuthorityEngine(
+                sponsorship_authority=self.sponsorship_authority,
+            )
+        )
         self.curriculum_registry = (
             curriculum_registry or ValidationCurriculumRegistry()
         )
@@ -283,6 +302,16 @@ class ValidationTaskExecutionPipeline:
         )
 
     def _admission(self, schedule: dict[str, Any]) -> dict[str, Any]:
+        currentness = self.execution_admission_assessment(schedule)
+        if currentness["assessment_failures"]:
+            failure = currentness["assessment_failures"][0]
+            return self._admission_block(
+                self._currentness_block_state(failure),
+                failure,
+                "preexecution_currentness_revalidation",
+                "restore_current_need_sponsorship_plan_or_schedule_before_execution",
+                assessment=currentness,
+            )
         if schedule.get("scheduling_state") != "SCHEDULED":
             return self._admission_block(
                 "BLOCKED_INVALID_SCHEDULE_STATE",
@@ -405,10 +434,127 @@ class ValidationTaskExecutionPipeline:
             "blocked_stage": "none",
             "responsible_component": "VALIDATION_EXECUTION_PIPELINE",
             "recommended_action": "invoke_scheduled_validation_task_runner",
+            "execution_admission_assessment": currentness,
             "plan": plan,
             "plan_path": plan_path,
             "task": task,
             "payload": self._materialize_payload(task, schedule, plan),
+        }
+
+    def execution_admission_assessment(self, schedule: dict[str, Any]) -> dict[str, Any]:
+        failures: list[str] = []
+        lineage_required = any(
+            self._term(schedule.get(field)) != "Not Available"
+            for field in (
+                "source_validation_sponsorship_id",
+                "source_evidence_need_id",
+            )
+        )
+        plan = None
+        plan_path = None
+        plan_error = None
+        if self._term(schedule.get("plan_id")) != "Not Available":
+            plan, plan_path, plan_error = self._load_plan(schedule.get("plan_id"))
+        if not lineage_required:
+            return {
+                "schema_version": "1.0",
+                "system": "validation_execution_admission_assessment",
+                "authority": "NONE",
+                "lineage_model": "LEGACY_UNBOUND_SCHEDULE",
+                "schedule_executable": True,
+                "schedule_current": schedule.get("scheduling_state") == "SCHEDULED",
+                "plan_current": "NOT_EVALUATED_LEGACY_SCHEDULE",
+                "need_current": "NOT_EVALUATED_LEGACY_SCHEDULE",
+                "sponsorship_current": "NOT_EVALUATED_LEGACY_SCHEDULE",
+                "request_lineage_valid": "NOT_EVALUATED_LEGACY_SCHEDULE",
+                "task_binding_valid": self._term(
+                    schedule.get("selected_validation_task_id")
+                ) != "Not Available",
+                "capability_valid": True,
+                "claim_valid": True,
+                "scope_valid": True,
+                "duplicate_execution": bool(self._existing_raw_result(schedule)),
+                "retry_allowed": int(schedule.get("attempt_count", 0) or 0) == 0,
+                "governance_permits": True,
+                "assessment_failures": [],
+            }
+        need_state = self.need_authority.get_current_evidence_need_state(
+            schedule.get("source_evidence_need_id")
+        )
+        sponsorship_state = self.sponsorship_authority.get_current_validation_sponsorship(
+            schedule.get("source_validation_sponsorship_id")
+        )
+        request_state = self.request_authority.get_current_validation_request(
+            schedule.get("source_validation_request_id")
+        )
+        if schedule.get("scheduling_state") != "SCHEDULED":
+            failures.append("schedule_not_scheduled")
+        if plan_error or not plan or not plan_path:
+            failures.append("plan_not_current_or_missing")
+        elif plan.get("lifecycle_state") not in {
+            "SCHEDULED",
+            "EXECUTION_STARTED",
+            "EXECUTION_COMPLETED_RESULT_CAPTURE_PENDING",
+            "RAW_RESULT_CAPTURED",
+        }:
+            failures.append("plan_not_executable")
+        if not need_state or not need_state.get("is_current"):
+            failures.append("source_need_not_current")
+        if not sponsorship_state or not sponsorship_state.get("is_current"):
+            failures.append("source_sponsorship_not_current")
+        if not request_state or request_state.get("currentness_integrity_state") != "VALID":
+            failures.append("source_request_lineage_invalid")
+        elif request_state.get("lifecycle_status") != "CONSUMED_TO_EVIDENCE_PLAN":
+            failures.append("source_request_not_consumed_to_plan")
+        if self._term(schedule.get("selected_validation_task_id")) == "Not Available":
+            failures.append("missing_validation_task")
+        if self._term(schedule.get("capability_id")) == "Not Available":
+            failures.append("missing_capability_id")
+        if self._term(schedule.get("validation_scope")) == "Not Available":
+            failures.append("invalid_validation_scope")
+        if schedule.get("active_execution_lease") is True:
+            failures.append("active_execution_lease_present")
+        if int(schedule.get("attempt_count", 0) or 0) >= 1:
+            failures.append("attempt_limit_reached")
+        if self._existing_raw_result(schedule):
+            failures.append("validation_execution_already_exists")
+        return {
+            "schema_version": "1.0",
+            "system": "validation_execution_admission_assessment",
+            "authority": "NONE",
+            "lineage_model": "CANONICAL_SCHEDULE_BOUND_EXECUTION",
+            "validation_schedule_id": schedule.get("schedule_id"),
+            "evidence_plan_id": schedule.get("plan_id"),
+            "source_validation_request_id": schedule.get(
+                "source_validation_request_id"
+            ),
+            "source_validation_sponsorship_id": schedule.get(
+                "source_validation_sponsorship_id"
+            ),
+            "source_evidence_need_id": schedule.get("source_evidence_need_id"),
+            "schedule_executable": not failures,
+            "schedule_current": schedule.get("scheduling_state") == "SCHEDULED",
+            "plan_current": bool(plan and plan.get("lifecycle_state") == "SCHEDULED"),
+            "need_current": bool(need_state and need_state.get("is_current")),
+            "sponsorship_current": bool(
+                sponsorship_state and sponsorship_state.get("is_current")
+            ),
+            "request_lineage_valid": bool(
+                request_state
+                and request_state.get("currentness_integrity_state") == "VALID"
+                and request_state.get("lifecycle_status")
+                == "CONSUMED_TO_EVIDENCE_PLAN"
+            ),
+            "task_binding_valid": self._term(
+                schedule.get("selected_validation_task_id")
+            ) != "Not Available",
+            "capability_valid": self._term(schedule.get("capability_id")) != "Not Available",
+            "claim_valid": True,
+            "scope_valid": self._term(schedule.get("validation_scope")) != "Not Available",
+            "duplicate_execution": "validation_execution_already_exists" in failures,
+            "retry_allowed": int(schedule.get("attempt_count", 0) or 0) == 0,
+            "governance_permits": True,
+            "assessment_failures": sorted(set(failures)),
         }
 
     def _run_task(
@@ -713,6 +859,24 @@ class ValidationTaskExecutionPipeline:
             "schedule_fingerprint": schedule.get("schedule_fingerprint"),
             "selected_validation_task_id": schedule.get("selected_validation_task_id"),
             "selected_curriculum_id": schedule.get("selected_curriculum_id"),
+            "capability_id": schedule.get("capability_id") or plan.get("capability_id"),
+            "capability_subject": (
+                schedule.get("capability_subject")
+                or plan.get("capability_subject")
+                or {}
+            ),
+            "qualification_target_level": (
+                schedule.get("qualification_target_level")
+                or plan.get("qualification_target_level")
+            ),
+            "current_qualification_level": (
+                schedule.get("current_qualification_level")
+                or plan.get("current_qualification_level")
+            ),
+            "required_independent_sources": (
+                schedule.get("required_independent_sources")
+                or plan.get("required_independent_sources")
+            ),
             "target_candidate": schedule.get("target_candidate"),
             "target_operation": schedule.get("target_operation"),
             "claim_id": schedule.get("claim_id") or plan.get("claim_id"),
@@ -1713,6 +1877,10 @@ class ValidationTaskExecutionPipeline:
                 "structural_ineligibility_reason",
             ),
             "selected_curriculum_id": schedule.get("selected_curriculum_id"),
+            "execution_admission_assessment": raw_result.get(
+                "execution_admission_assessment",
+                {},
+            ),
             "execution_admission_evaluated": True,
             "execution_admission_state": "ADMITTED",
             "execution_admission_reason": "execution_contract_satisfied",
@@ -1874,6 +2042,7 @@ class ValidationTaskExecutionPipeline:
         reason: str,
         stage: str,
         action: str,
+        assessment: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return {
             "execution_admission_state": state,
@@ -1881,7 +2050,31 @@ class ValidationTaskExecutionPipeline:
             "blocked_stage": stage,
             "responsible_component": "VALIDATION_EXECUTION_PIPELINE",
             "recommended_action": action,
+            "execution_admission_assessment": assessment or {},
         }
+
+    def _currentness_block_state(self, failure: str) -> str:
+        if failure == "source_need_not_current":
+            return "DENIED_SOURCE_NEED_NOT_CURRENT"
+        if failure == "source_sponsorship_not_current":
+            return "DENIED_SOURCE_SPONSORSHIP_NOT_CURRENT"
+        if failure == "plan_not_current_or_missing":
+            return "DENIED_PLAN_NOT_CURRENT"
+        if failure == "plan_not_executable":
+            return "DENIED_PLAN_NOT_EXECUTABLE"
+        if failure == "source_request_lineage_invalid":
+            return "DENIED_REQUEST_LINEAGE_INVALID"
+        if failure == "schedule_not_scheduled":
+            return "BLOCKED_INVALID_SCHEDULE_STATE"
+        if failure == "missing_validation_task":
+            return "BLOCKED_MISSING_VALIDATION_TASK"
+        if failure == "validation_execution_already_exists":
+            return "VALIDATION_EXECUTION_ALREADY_EXISTS"
+        if failure == "active_execution_lease_present":
+            return "BLOCKED_ACTIVE_EXECUTION"
+        if failure == "attempt_limit_reached":
+            return "BLOCKED_ATTEMPT_LIMIT"
+        return "BLOCKED_PREEXECUTION_CURRENTNESS"
 
     def _schedule_identity(self, schedule: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -1926,6 +2119,16 @@ class ValidationTaskExecutionPipeline:
             "claim_evidence_binding_state": schedule.get(
                 "claim_evidence_binding_state"
             ),
+            "source_validation_request_id": schedule.get(
+                "source_validation_request_id",
+            ),
+            "source_validation_sponsorship_id": schedule.get(
+                "source_validation_sponsorship_id",
+            ),
+            "source_evidence_need_id": schedule.get("source_evidence_need_id"),
+            "capability_id": schedule.get("capability_id"),
+            "need_type": schedule.get("need_type"),
+            "validation_scope": schedule.get("validation_scope"),
             "tie_break_strategy": schedule.get("tie_break_strategy", "Not Available"),
         }
 

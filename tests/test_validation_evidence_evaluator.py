@@ -27,6 +27,9 @@ from runtime.validation.validation_task_execution_pipeline import (
     ValidationTaskExecutionPipeline,
 )
 from runtime.validation.validation_task_scheduler import ValidationTaskScheduler
+from tests.test_evidence_plan_to_validation_schedule_boundary import (
+    _chain_to_waiting_plan as _canonical_chain_to_waiting_plan,
+)
 
 
 def _plan(**overrides):
@@ -192,6 +195,27 @@ def _accepted_result(tmp_path, registry, **plan_overrides):
     }
 
 
+def _canonical_captured_result(tmp_path, registry):
+    (
+        need,
+        sponsor,
+        requests,
+        _store,
+        scheduler,
+        _sponsorship_state,
+        plan_report,
+    ) = _canonical_chain_to_waiting_plan(tmp_path)
+    schedule = scheduler.schedule_plan(plan_report["evidence_plan_id"])
+    raw = ValidationTaskExecutionPipeline(
+        tmp_path / "plans",
+        registry,
+        need_authority=need,
+        sponsorship_authority=sponsor,
+        request_authority=requests,
+    ).execute_schedule(schedule["schedule_id"])
+    return plan_report, schedule, raw
+
+
 def _read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -338,11 +362,13 @@ def test_fresh_accepted_evidence_preserves_native_source_provenance(tmp_path):
     assert accepted["accepted_evidence_origin"]["raw_evidence_id"] == (
         raw["raw_result_id"]
     )
-    assert accepted["origin_task_execution_id"] == raw["origin_task_execution_id"]
-    assert accepted["origin_run_id"] == raw["origin_run_id"]
-    assert accepted["origin_task_id"] == raw["origin_task_id"]
+    assert accepted["origin_task_execution_id"] == (
+        provenance["origin_task_execution_id"]
+    )
+    assert accepted["origin_run_id"] == provenance["origin_run_id"]
+    assert accepted["origin_task_id"] == provenance["origin_task_id"]
     assert accepted["origin_lineage_fingerprint"] == (
-        raw["origin_lineage_fingerprint"]
+        provenance["origin_lineage_fingerprint"]
     )
     assert accepted["accepted_evidence_origin"]["authority"] == "NONE"
     assert accepted["truth_authority"] == "NONE"
@@ -889,8 +915,12 @@ def test_broken_provenance_lineage_fails_closed_before_acceptance(tmp_path):
         persisted["evidence_plan_id"]
     )
 
-    assert report["evidence_acceptance_state"] == "REJECTED"
-    assert "source_provenance_not_bound" in report["governed_acceptance_contract_failures"]
+    assert report["evaluation_admission_state"] == "BLOCKED_RECORD_ALIGNMENT_FAILURE"
+    assert "PRODUCER_OPERATION_BINDING_MISSING" in report[
+        "evaluation_admission_reason"
+    ]
+    assert report["comparison_invoked"] is False
+    assert report["evidence_accepted"] is False
 
 
 def test_missing_source_identity_fails_closed_before_acceptance(tmp_path):
@@ -932,6 +962,109 @@ def test_invalid_current_run_binding_fails_closed(tmp_path):
         "BLOCKED_RAW_VALIDATION_BINDING_CONFLICTED"
     )
     assert report["evidence_accepted"] is False
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "value", "expected_reason"),
+    [
+        (
+            "raw",
+            "validation_attempt_id",
+            "validation_attempt_attacker",
+            "ATTEMPT_IDENTITY_MISMATCH",
+        ),
+        (
+            "schedule",
+            "capability_id",
+            "capability_attacker",
+            "CAPABILITY_BINDING_MISMATCH",
+        ),
+        (
+            "schedule",
+            "validation_scope",
+            "CAUSAL_SUPPORT",
+            "VALIDATION_SCOPE_MISMATCH",
+        ),
+    ],
+)
+def test_context_binding_mismatch_blocks_before_scoring(
+    tmp_path,
+    target,
+    field,
+    value,
+    expected_reason,
+):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    plan_report, schedule, raw = _canonical_captured_result(tmp_path, registry)
+    paths = {
+        "raw": tmp_path / "plans" / "raw_results" / f"{raw['raw_result_id']}.json",
+        "schedule": (
+            tmp_path / "plans" / "schedules" / f"{schedule['schedule_id']}.json"
+        ),
+    }
+    record = _read_json(paths[target])
+    record[field] = value
+    paths[target].write_text(json.dumps(record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path / "plans", registry).evaluate_plan(
+        plan_report["evidence_plan_id"]
+    )
+
+    assert report["evaluation_admission_state"] == "BLOCKED_RECORD_ALIGNMENT_FAILURE"
+    assert expected_reason in report["evaluation_admission_reason"]
+    assert report["comparison_invoked"] is False
+    assert report["evidence_accepted"] is False
+    assert list((tmp_path / "plans" / "accepted_evidence").glob("*.json")) == []
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "expected_reason"),
+    [
+        ("raw", "validation_attempt_id", "DENIED_MISSING_ATTEMPT_BINDING"),
+        ("schedule", "capability_id", "CAPABILITY_BINDING_MISSING"),
+        ("schedule", "validation_scope", "VALIDATION_SCOPE_MISSING"),
+    ],
+)
+def test_required_context_binding_missing_blocks_before_scoring(
+    tmp_path,
+    target,
+    field,
+    expected_reason,
+):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    plan_report, schedule, raw = _canonical_captured_result(tmp_path, registry)
+    paths = {
+        "raw": tmp_path / "plans" / "raw_results" / f"{raw['raw_result_id']}.json",
+        "schedule": (
+            tmp_path / "plans" / "schedules" / f"{schedule['schedule_id']}.json"
+        ),
+    }
+    record = _read_json(paths[target])
+    record.pop(field, None)
+    paths[target].write_text(json.dumps(record), encoding="utf-8")
+
+    report = ValidationEvidenceEvaluator(tmp_path / "plans", registry).evaluate_plan(
+        plan_report["evidence_plan_id"]
+    )
+
+    assert report["evaluation_admission_state"] == "BLOCKED_RECORD_ALIGNMENT_FAILURE"
+    assert expected_reason in report["evaluation_admission_reason"]
+    assert report["comparison_invoked"] is False
+    assert report["evidence_accepted"] is False
+
+
+def test_capability_not_applicable_legacy_result_remains_valid(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    result = _accepted_result(tmp_path, registry)
+
+    assert result["report"]["evidence_acceptance_state"] == "ACCEPTED"
+    assert result["report"]["accepted_evidence_artifact_created"] is True
 
 
 def test_downstream_consumer_rejects_raw_result_bypass(tmp_path):
