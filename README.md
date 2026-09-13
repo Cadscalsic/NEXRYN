@@ -1,166 +1,565 @@
- NEXRYN Alpha 1.9
+NEXRYN Alpha 1.9
+Next Recursive Adaptive Reasoning Network
 
-**Next Recursive Adaptive Reasoning Network**
+NEXRYN is an experimental cognitive architecture for studying adaptive intelligence through structured reasoning, symbolic perception, evidence-governed learning, contextual memory, causal analysis, knowledge reuse, and bounded cognitive control.
 
-NEXRYN is an experimental cognitive architecture designed to explore adaptive intelligence through symbolic perception, concept formation, governed reasoning, contextual memory, causal understanding, and knowledge reuse.
+Rather than treating intelligence as a single prediction function, NEXRYN explores intelligence as a coordinated runtime composed of specialized cognitive systems that perceive, reason, generate hypotheses, evaluate evidence, preserve state, regulate computational resources, and maintain explicit governance boundaries.
 
-Unlike conventional AI systems that rely primarily on large-scale statistical learning, NEXRYN investigates how intelligence can emerge from structured cognition, semantic abstractions, adaptive memory, causal relationships, and self-governed reasoning processes.
+The project investigates how an intelligent system can move beyond isolated task solving toward a persistent cognitive architecture capable of accumulating reusable experience, forming structured concepts, testing claims, tracking causal relationships, and adapting its reasoning processes over time.
 
-Its long-term objective is to evolve into a unified cognitive runtime capable of learning from experience, preserving identity continuity, discovering reusable knowledge, constructing causal models, and continuously improving its reasoning capabilities.
+NEXRYN is currently an Alpha-stage research system. Many subsystems are operational, while others remain experimental, partially integrated, or under active validation.
 
----
+Core Research Principles
+Adaptive
 
- Core Principles
+NEXRYN is designed to improve its internal cognitive state through experience, validation, evidence accumulation, reusable programs, memory, and feedback-driven development.
 
- Adaptive
-Continuously improves through experience, feedback, and knowledge accumulation.
+Adaptation is treated as a governed process rather than unrestricted self-modification.
 
- Modular
-Built as interoperable cognitive systems that can evolve independently.
+Modular
 
- Explainable
-Produces traceable reasoning paths, semantic abstractions, and causal explanations.
+The architecture is divided into independent but interoperable cognitive subsystems.
 
- Efficient
-Optimizes cognitive resources through memory reuse, bounded reasoning, and adaptive execution.
+Reasoning, memory, evidence, validation, governance, execution, planning, repair, learning, and observability are intentionally separated so that each layer can evolve without collapsing the entire system into a monolithic pipeline.
 
- Governed
-Protects truth integrity, identity continuity, constitutional constraints, and runtime stability.
+Explainable
 
----
+NEXRYN emphasizes traceability.
 
- Current Capabilities
+Important cognitive operations can expose:
 
- Cognitive Runtime
+candidate origin
+execution lineage
+evidence lineage
+qualification decisions
+causal contribution
+validation state
+runtime authority
+rejection reasons
+resource decisions
 
-- Symbolic perception and object extraction
-- Concept discovery and abstraction
-- Semantic memory and contextual memory
-- Context retrieval and reuse
-- Strategy reuse and strategy evolution
-- Program synthesis and transformation matching
-- World model evaluation
-- Dependency reasoning
-- Causal reasoning
-- Transformation discovery
-- Multi-transformation analysis
-- Adaptive cognitive budgeting
-- Runtime self-monitoring and introspection
+The goal is not only to produce an answer, but to preserve enough structure to explain how and why the system reached it.
 
- Knowledge Systems
+Efficient
 
-- Concept lifecycle management
-- Truth candidate generation
-- Truth validation and commitment
-- Concept graduation
-- Semantic abstraction
-- Transformation classification
-- Knowledge reuse mechanisms
-- Counterfactual reasoning support
+Cognitive work is explicitly bounded.
 
- Governance Framework
+NEXRYN includes mechanisms for:
 
-- Truth governance
-- Identity governance
-- Constitutional integrity protection
-- Contradiction detection
-- Contextual truth validation
-- Semantic drift monitoring
-- Identity continuity stabilization
-- Runtime safety controls
+route budgeting
+reasoning-depth limits
+selective execution
+fast shutdown
+memory reuse
+program reuse
+bounded repair
+route contribution analysis
+resource-aware planning
 
-  Learning Systems
+The system investigates the idea of Minimal Sufficient Cognition: use only the cognitive work required to reach a reliable result.
 
-- Adaptive training pipeline
-- Transfer learning
-- Strategy evolution
-- Success-driven reinforcement
-- Program reuse foundations
-- Cognitive reward systems
-- Self-repair mechanisms
-- Training diversity controls
+Governed
 
-  Causal Systems
+NEXRYN separates observation, proposal, validation, acceptance, qualification, commitment, and execution authority.
 
-- Transformation causal graphs
-- Multi-step causal chains
-- Dependency tracking
-- Causal alignment analysis
-- Causal relation discovery
+Governance mechanisms are designed to prevent internal metrics, telemetry, or intermediate artifacts from silently becoming authoritative.
 
----
+This includes explicit boundaries for:
 
-  In Active Development
+evidence acceptance
+capability qualification
+truth commitment
+identity continuity
+execution authority
+runtime budgets
+validation
+repair
+Architectural Overview
 
-  Advanced Cognitive Systems
+NEXRYN is organized around two major architectural layers.
 
-- Causal Spine
-- Contextual Truth Engine
-- Concept hierarchy construction
-- Multi-hop causal reasoning
-- Knowledge composition engine
+Core Cognitive Layer
 
- Spatial & Structural Reasoning
+The Core layer contains foundational reasoning and cognitive abstractions.
 
-- Relative position reasoning
-- Object-relative motion reasoning
-- Topological reasoning
-- Topological change detection
-- Scaling reasoning
-- Containment reasoning
-- Occlusion reasoning
-- Hidden object recovery
-- Route completion
-- Path finding
+Its responsibilities include:
 
- Learning & Curriculum
+symbolic object representation
+transformation reasoning
+spatial reasoning
+concept formation
+semantic structures
+causal relations
+program synthesis primitives
+inference logic
+memory abstractions
+governance primitives
+cognitive constraints
+Runtime Layer
 
-- Curriculum Manager
-- Rare Concept Scheduler
-- Concept Coverage Auditor
-- Dynamic Task Diversity Engine
-- Frontier Concept Discovery
+The Runtime layer coordinates production execution.
 
- Runtime Evolution
+It manages:
 
-- Cognitive economy layer
-- Motivation and reward architecture
-- Fast governance path
-- Program knowledge library
-- World governance layer
+pipeline orchestration
+task execution
+reasoning stages
+budget enforcement
+evidence lifecycles
+validation
+adaptive reuse
+qualification
+reporting
+persistence
+diagnostics
+runtime observability
 
----
+The current production path remains governed through the runtime execution architecture, with explicit authority boundaries between planning, execution, evidence, validation, qualification, and persistence.
 
- Vision
+Cognitive Runtime
 
-NEXRYN aims to transition from task-specific problem solving toward a unified cognitive runtime capable of:
+Current runtime capabilities include:
 
-- Adaptive learning
-- Explainable reasoning
-- Concept formation
-- Causal understanding
-- Knowledge reuse
-- Context-aware decision making
-- Identity preservation
-- Autonomous self-improvement
+symbolic task interpretation
+object and structure extraction
+pattern and transformation analysis
+candidate generation
+transformation matching
+inference
+program synthesis
+residual repair
+dependency reasoning
+bounded search
+world-model evaluation
+candidate arena evaluation
+executable intelligence validation
+adaptive cognitive budgeting
+runtime diagnostics
+introspection
+execution-plan enforcement
+fast success termination
+route-level contribution telemetry
 
-The long-term objective is not merely to solve individual tasks, but to develop a system capable of accumulating reusable cognitive knowledge and applying it to novel situations through structured reasoning and adaptive generalization.
+NEXRYN also records runtime provenance so that candidate production, route contribution, validation, repair, and evidence lifecycles can be reconstructed after execution.
 
----
+Memory and Reuse
 
- Status
+NEXRYN contains several persistent memory surfaces rather than a single global memory.
 
-NEXRYN is an active experimental research project currently in the Alpha stage.
+These include mechanisms for:
 
-The architecture evolves continuously as new cognitive capabilities, governance mechanisms, learning systems, and reasoning frameworks are developed and validated.
+episodic experience
+reusable programs
+strategy storage
+task-selection history
+repair history
+semantic concepts
+truth records
+cognitive state persistence
+training state
+operational capability experience
 
-Interfaces, APIs, runtime behaviors, and internal cognitive structures may change significantly between releases.
+The architecture distinguishes:
 
-Research contributions, experimentation, and collaboration are welcome.
+persistence
+from
+retrieval
+from
+reuse
+from
+causal benefit.
 
----
+This distinction is important: storing or retrieving previous experience does not automatically prove that the experience improved a later solution.
 
- License
+Evidence and Validation
 
-This project is licensed under the MIT License.
+Evidence is treated as a governed lifecycle.
+
+A simplified validated flow is:
+
+Claim
+→ Evidence Requirement
+→ Evidence Plan
+→ Validation Request
+→ Validation Schedule
+→ Validation Execution
+→ Raw Validation Result
+→ Evidence Evaluation
+→ Evidence Decision
+→ Accepted Evidence
+
+NEXRYN explicitly separates:
+
+Raw Result
+!=
+Evaluated Evidence
+!=
+Accepted Evidence
+!=
+Truth
+
+Accepted evidence must pass canonical identity, provenance, binding, and authority checks.
+
+The current acceptance path is fail-closed: missing or inconsistent authority-bearing identity prevents evidence acceptance.
+
+Capability Qualification
+
+NEXRYN is developing an integrated capability qualification system designed to answer:
+
+What level of capability has actually been demonstrated?
+
+Capability state is intentionally separated from raw performance metrics.
+
+The qualification model distinguishes evidence levels such as:
+
+architecturally present
+runtime reachable
+operationally observed
+causally demonstrated
+reproducibly supported
+
+Qualification depends on governed accepted evidence rather than raw task success alone.
+
+The architecture also separates:
+
+Capability Qualification
+!=
+Truth
+!=
+Trust
+!=
+Runtime Authority
+
+A capability being demonstrated does not automatically grant execution privilege, truth status, or unrestricted reuse authority.
+
+Evidence-Driven Development Loop
+
+NEXRYN is being developed toward a closed evidence-driven improvement loop:
+
+Capability Assessment
+→ Qualification Deficit
+→ Current Evidence Need
+→ Validation Sponsorship
+→ Validation Request
+→ Evidence Plan
+→ Validation
+→ Accepted Evidence
+→ Capability Reassessment
+
+Several boundaries of this loop are already operational and verified.
+
+The remaining work focuses on completing natural runtime continuity across the entire lifecycle without synthetic downstream object injection.
+
+The design principle is:
+
+The system should not merely detect what it does not know. It should be able to request, acquire, evaluate, and integrate the evidence required to reduce that uncertainty.
+
+Causal Reasoning
+
+NEXRYN contains causal reasoning and causal-observability infrastructure for:
+
+transformation relationships
+dependency chains
+candidate lineage
+repair contribution
+causal source attribution
+counterfactual analysis
+multi-step causal relations
+route contribution analysis
+
+Importantly, NEXRYN distinguishes:
+
+Activity
+!=
+Causal Contribution
+
+A subsystem is not credited merely because it executed.
+
+Where possible, NEXRYN attempts to determine whether a component materially contributed to the final result.
+
+Cognitive Budgeting
+
+NEXRYN treats computation as a governed resource.
+
+Runtime budgeting currently includes:
+
+authoritative execution plans
+route admission limits
+reasoning-depth bounds
+dependency-depth limits
+route execution receipts
+deferred-route accounting
+contribution telemetry
+marginal-route analysis
+
+Controlled experiments have shown that increasing route capacity does not necessarily improve solution quality.
+
+This has motivated research into task-adaptive cognitive allocation rather than simply increasing computation.
+
+Adaptive route prediction remains experimental and is not currently authorized to control production execution.
+
+Governance Architecture
+
+Governance is a first-class architectural layer.
+
+Current governance concepts include:
+
+execution authority
+evidence authority
+validation authority
+qualification authority
+truth authority
+identity constraints
+constitutional boundaries
+runtime budget authority
+repair authority
+observability isolation
+
+The architecture follows a general principle:
+
+Measurement must not become authority merely because it exists.
+
+Telemetry, reporting, diagnostics, and experimental predictors remain observational unless explicitly granted authority by a governed contract.
+
+Truth and Knowledge Systems
+
+NEXRYN contains structured truth and knowledge lifecycles.
+
+Research areas include:
+
+claim identity
+evidence binding
+evidence diversity
+contradiction handling
+truth candidacy
+truth commitment
+knowledge projection
+knowledge persistence
+reversibility
+provenance
+source independence
+
+Truth is intentionally separated from:
+
+confidence
+performance
+capability qualification
+memory persistence
+repeated observations
+
+The project emphasizes truth integrity over raw performance.
+
+Repair and Recovery
+
+NEXRYN contains bounded repair mechanisms for recovering from near-correct or incomplete candidate solutions.
+
+Current repair infrastructure includes:
+
+residual analysis
+localized candidate repair
+repair lineage
+repair memory
+repair budgeting
+repair reachability diagnostics
+
+Repair is intentionally constrained.
+
+Current self-repair mechanisms operate on runtime cognitive state and candidate structures, not unrestricted autonomous source-code mutation.
+
+Observability and Runtime Forensics
+
+NEXRYN contains extensive observability infrastructure for analyzing its own behavior.
+
+Examples include:
+
+runtime topology observations
+state authority deltas
+candidate origin tracking
+route contribution telemetry
+evidence lineage
+validation identity
+qualification traces
+authority maps
+causal lineage
+runtime reports
+production reachability audits
+
+These observational systems are intentionally isolated from cognitive authority.
+
+Their role is to explain and measure the runtime, not govern it.
+
+Execution Modes
+
+NEXRYN currently supports multiple runtime modes, including:
+
+Fast
+Adaptive
+Full / Deep analysis paths
+
+These modes are intended to represent different cognitive and reporting budgets.
+
+Their semantic differentiation continues to be refined as the architecture matures.
+
+A future objective is to make each execution mode clearly correspond to a distinct runtime contract rather than merely different reporting or execution limits.
+
+Active Research Areas
+
+Current development priorities include:
+
+Epistemic Architecture
+evidence-driven capability qualification
+evidence-to-knowledge promotion
+independent source reasoning
+contradiction and counterevidence handling
+qualification reassessment
+evidence deficit reduction
+Cognitive Learning
+reusable program execution
+cross-run learning
+strategy transfer
+causal learning attribution
+memory quality
+learned-object provenance
+transfer effectiveness
+Structural Reasoning
+relative spatial relations
+object-relative motion
+topology
+containment
+occlusion
+hidden-object recovery
+scaling
+route and path reasoning
+compositional transformations
+Runtime Intelligence
+cognitive economy
+adaptive resource allocation
+route-value estimation
+runtime self-monitoring
+controlled recovery
+bounded reasoning
+execution-mode specialization
+Governance
+constitutional reasoning
+world-governance research
+capability authority
+identity continuity
+truth integrity
+evidence authority
+safe autonomy
+Research Methodology
+
+NEXRYN development follows a forensic and evidence-driven methodology.
+
+A typical architectural development cycle is:
+
+Forensic Investigation
+        ↓
+Architectural Finding
+        ↓
+Contract Design
+        ↓
+Minimal Repair
+        ↓
+Integration
+        ↓
+Regression Testing
+        ↓
+Runtime Verification
+        ↓
+Evidence Classification
+
+Architectural claims are classified according to the level of evidence available.
+
+Examples include:
+
+architecturally present
+runtime reachable
+operationally observed
+causally demonstrated
+reproducibly supported
+
+The project avoids treating code existence as proof of effective intelligence.
+
+Research Philosophy
+
+NEXRYN is built around several principles:
+
+Computation is not automatically cognitive work.
+
+Memory is not automatically learning.
+
+Execution is not automatically causal contribution.
+
+Persistence is not automatically knowledge.
+
+Validation is not automatically truth.
+
+Capability is not automatically authority.
+
+More cognition is not automatically better cognition.
+
+The broader research objective is to understand how an intelligent system can determine:
+
+what it knows
+why it believes it
+what evidence supports it
+what remains uncertain
+what capability has actually been demonstrated
+what computation is worth performing
+what experience should be reused
+and when reasoning should stop
+Long-Term Vision
+
+NEXRYN aims to evolve from a task-solving architecture into a unified adaptive cognitive runtime capable of:
+
+structured perception
+concept formation
+causal understanding
+evidence-governed learning
+contextual reasoning
+reusable knowledge
+bounded self-improvement
+identity continuity
+explainable decision-making
+resource-rational cognition
+adaptive generalization
+
+The long-term objective is not simply to solve more tasks.
+
+It is to develop a system capable of building, testing, preserving, revising, and reusing structured cognitive knowledge across changing environments.
+
+Project Status
+
+Version: Alpha 1.9
+Stage: Active Experimental Research
+Architecture: Modular Cognitive Runtime
+Primary Focus: Adaptive Intelligence, Governance, Evidence, Causality, and Cognitive Reuse
+
+NEXRYN remains under active development.
+
+Interfaces, APIs, internal schemas, execution behavior, cognitive contracts, and runtime structures may change significantly between Alpha releases.
+
+Experimental features should not be interpreted as production-ready autonomous intelligence.
+
+Collaboration
+
+Research contributions and technical collaboration are welcome, particularly in areas such as:
+
+symbolic reasoning
+ARC-style abstraction
+cognitive architectures
+program synthesis
+causal inference
+epistemic reasoning
+memory systems
+adaptive computation
+explainable AI
+AI governance
+autonomous learning
+resource-rational reasoning
+License
+
+NEXRYN is released under the MIT License.
+
 See the LICENSE file for details.
