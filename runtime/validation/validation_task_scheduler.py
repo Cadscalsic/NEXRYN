@@ -465,7 +465,16 @@ class ValidationTaskScheduler:
             "source_evidence_need_decision_id": plan.get(
                 "source_evidence_need_decision_id"
             ),
+            "canonical_source_identity": plan.get("canonical_source_identity"),
+            "source_lineage": list(plan.get("source_lineage") or []),
             "capability_id": plan.get("capability_id"),
+            "capability_identity_schema": plan.get("capability_identity_schema"),
+            "capability_id_v2": plan.get("capability_id_v2"),
+            "capability_operation_id_v2": plan.get("capability_operation_id_v2"),
+            "validation_context_identity_schema": plan.get(
+                "validation_context_identity_schema"
+            ),
+            "validation_context_id": plan.get("validation_context_id"),
             "capability_subject": plan.get("capability_subject") or {},
             "qualification_target_level": plan.get(
                 "qualification_target_level"

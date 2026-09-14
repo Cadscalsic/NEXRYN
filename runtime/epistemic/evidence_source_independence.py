@@ -530,7 +530,26 @@ class EvidenceSourceIndependenceEngine:
         return None
 
     def _value(self, item: Mapping[str, Any], key: str) -> Any:
-        value = item.get(key)
+        provenance = item.get("source_provenance")
+        if (
+            key
+            in {
+                "producer_operation_id",
+                "producer_component_id",
+                "producer_source_type",
+                "origin_task_execution_id",
+                "origin_run_id",
+                "origin_task_id",
+                "origin_lineage_fingerprint",
+            }
+            and isinstance(provenance, Mapping)
+            and provenance.get(key) not in UNKNOWN
+        ):
+            value = provenance.get(key)
+        else:
+            value = item.get(key)
+            if value in UNKNOWN and isinstance(provenance, Mapping):
+                value = provenance.get(key)
         if value in UNKNOWN:
             return None
         return value

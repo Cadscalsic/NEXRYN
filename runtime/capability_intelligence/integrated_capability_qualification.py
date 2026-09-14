@@ -138,6 +138,11 @@ class IntegratedCapabilityQualificationEngine:
         support_lineage = [
             self._accepted_evidence_support_lineage(item) for item in valid
         ]
+        causal_valid = [
+            item
+            for item in valid
+            if self._causal_support_state(item) == "CAUSALLY_SUPPORTED"
+        ]
 
         required_sources = (
             int(required_independent_sources)
@@ -145,13 +150,11 @@ class IntegratedCapabilityQualificationEngine:
             else self.default_required_independent_sources
         )
         coverage = self.source_engine.source_coverage(
-            valid,
-            claim_id=valid[0].get("claim_id") if valid else None,
+            causal_valid,
+            claim_id=causal_valid[0].get("claim_id") if causal_valid else None,
             required_independent_sources=required_sources,
         )
-        causal_count = sum(
-            1 for item in valid if self._causal_support_state(item) == "CAUSALLY_SUPPORTED"
-        )
+        causal_count = len(causal_valid)
         observed_count = len(valid)
         independent_count = int(
             coverage.get("current_proven_independent_source_count") or 0
@@ -212,9 +215,13 @@ class IntegratedCapabilityQualificationEngine:
             "valid_accepted_evidence_count": len(valid),
             "observed_supporting_evidence_count": observed_count,
             "causal_supporting_evidence_count": causal_count,
+            "independent_causal_evidence_ids": [
+                item.get("accepted_evidence_id") for item in causal_valid
+            ],
             "independent_source_count": independent_count,
             "required_independent_sources": required_sources,
             "source_coverage": coverage,
+            "source_coverage_filter": "CAUSALLY_SUPPORTED_ACCEPTED_EVIDENCE_ONLY",
             "causal_support_state": (
                 "CAUSALLY_SUPPORTED" if causal_count else "CAUSAL_SUPPORT_NOT_ESTABLISHED"
             ),
@@ -676,11 +683,7 @@ class IntegratedCapabilityQualificationEngine:
         item_capability = item.get("capability_id")
         if item_capability not in UNKNOWN and item_capability != capability_id:
             return "capability_id_mismatch"
-        item_operation = _token(
-            item.get("target_operation")
-            or item.get("source_operation")
-            or item.get("operation")
-        )
+        item_operation = self._capability_support_operation(item)
         if item_operation not in UNKNOWN and item_operation != subject["operation"]:
             return "capability_operation_mismatch"
         provenance = item.get("source_provenance")
@@ -692,6 +695,25 @@ class IntegratedCapabilityQualificationEngine:
             if source_identity.get("source_identity_state") != "PROVEN":
                 return "source_provenance_not_bound"
         return None
+
+    def _capability_support_operation(self, item: Mapping[str, Any]) -> str:
+        binding = item.get("capability_operation_support_binding")
+        binding = binding if isinstance(binding, Mapping) else {}
+        capability_subject = item.get("capability_subject")
+        capability_subject = (
+            capability_subject if isinstance(capability_subject, Mapping) else {}
+        )
+        return _token(
+            item.get("capability_support_operation")
+            or item.get("supported_capability_operation")
+            or item.get("capability_operation")
+            or binding.get("operation")
+            or binding.get("capability_operation")
+            or capability_subject.get("operation")
+            or item.get("target_operation")
+            or item.get("source_operation")
+            or item.get("operation")
+        )
 
     def _source_flattened(self, item: Mapping[str, Any]) -> dict[str, Any]:
         flattened = dict(item)

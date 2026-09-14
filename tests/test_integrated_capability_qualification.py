@@ -29,9 +29,19 @@ def _accepted(
     run_id: str = "run_a",
     task_id: str = "task_a",
     causal: bool = False,
+    target_operation: str | None = None,
+    support_operation: str | None = None,
+    include_capability_subject: bool = False,
+    include_support_binding: bool = False,
 ):
     capability_subject = subject or _subject()
     capability_id = capability_id_for_subject(capability_subject)
+    subject_payload = capability_subject.canonical_payload()
+    bound_support_operation = (
+        support_operation
+        if support_operation is not None
+        else subject_payload["operation"]
+    )
     item = {
         "accepted_evidence_id": evidence_id,
         "evidence_acceptance_state": "ACCEPTED",
@@ -43,7 +53,7 @@ def _accepted(
             "accepted_evidence_id": evidence_id,
         },
         "capability_id": capability_id,
-        "target_operation": capability_subject.canonical_payload()["operation"],
+        "target_operation": target_operation or subject_payload["operation"],
         "evidence_direction": "SUPPORTING",
         "producer_operation_id": source,
         "producer_component_id": "validation_task_execution_pipeline",
@@ -86,6 +96,23 @@ def _accepted(
             "CAUSALLY_SUPPORTED" if causal else "OBSERVED_ONLY"
         ),
     }
+    if include_capability_subject:
+        item["capability_subject"] = subject_payload
+    if include_support_binding:
+        item["capability_operation_support_binding"] = {
+            "binding_state": "BOUND",
+            "capability_id": capability_id,
+            "capability_subject": subject_payload,
+            "operation": bound_support_operation,
+            "validation_target_operation": item["target_operation"],
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+            "truth_authority": "NONE",
+            "qualification_authority": "NONE",
+        }
+        item["capability_support_capability_id"] = capability_id
+        item["capability_support_operation"] = bound_support_operation
+        item["supported_capability_operation"] = bound_support_operation
     return item
 
 
@@ -185,6 +212,236 @@ def test_valid_reproducible_support():
     assert decision["decision_state"] == "PROMOTION_GRANTED"
     assert decision["granted_level"] == "REPRODUCIBLY_SUPPORTED"
     assert decision["independent_source_count"] == 2
+
+
+def test_validation_target_operation_does_not_mask_bound_capability_operation():
+    evidence = _accepted(
+        "accepted_validation_need",
+        target_operation="SOURCE_INDEPENDENCE_REQUIRED",
+        include_support_binding=True,
+        causal=True,
+    )
+    decision = _decision(CapabilityQualificationLevel.CAUSALLY_DEMONSTRATED, [evidence])
+    assert decision["decision_state"] == "PROMOTION_GRANTED"
+    assert decision["accepted_evidence_ids"] == ["accepted_validation_need"]
+
+
+def test_capability_subject_operation_binds_legacy_validation_evidence():
+    evidence = _accepted(
+        "accepted_legacy_validation_need",
+        target_operation="SOURCE_INDEPENDENCE_REQUIRED",
+        include_capability_subject=True,
+        causal=True,
+    )
+    decision = _decision(CapabilityQualificationLevel.CAUSALLY_DEMONSTRATED, [evidence])
+    assert decision["decision_state"] == "PROMOTION_GRANTED"
+    assert decision["accepted_evidence_ids"] == ["accepted_legacy_validation_need"]
+
+
+def test_same_capability_different_support_operation_fails_closed():
+    evidence = _accepted(
+        "accepted_wrong_operation",
+        target_operation="SOURCE_INDEPENDENCE_REQUIRED",
+        support_operation="rotate",
+        include_support_binding=True,
+        causal=True,
+    )
+    assessment = IntegratedCapabilityQualificationEngine().assess_capability_evidence(
+        _subject(),
+        [evidence],
+    )
+    assert assessment["valid_accepted_evidence_count"] == 0
+    assert assessment["rejected_evidence"] == [
+        {
+            "accepted_evidence_id": "accepted_wrong_operation",
+            "rejection_reason": "capability_operation_mismatch",
+        }
+    ]
+
+
+def test_correct_capability_but_missing_operation_binding_fails_closed():
+    evidence = _accepted(
+        "accepted_missing_operation_binding",
+        target_operation="SOURCE_INDEPENDENCE_REQUIRED",
+        causal=True,
+    )
+    assessment = IntegratedCapabilityQualificationEngine().assess_capability_evidence(
+        _subject(),
+        [evidence],
+    )
+    assert assessment["valid_accepted_evidence_count"] == 0
+    assert assessment["rejected_evidence"][0]["rejection_reason"] == (
+        "capability_operation_mismatch"
+    )
+
+
+def test_correct_operation_but_wrong_capability_fails_closed():
+    evidence = _accepted(
+        "accepted_wrong_capability",
+        support_operation="replace_color",
+        include_support_binding=True,
+        causal=True,
+    )
+    evidence["capability_id"] = capability_id_for_subject(_subject(operation="rotate"))
+    assessment = IntegratedCapabilityQualificationEngine().assess_capability_evidence(
+        _subject(),
+        [evidence],
+    )
+    assert assessment["valid_accepted_evidence_count"] == 0
+    assert assessment["rejected_evidence"][0]["rejection_reason"] == (
+        "capability_id_mismatch"
+    )
+
+
+def test_claim_binding_does_not_override_wrong_capability():
+    evidence = _accepted(
+        "accepted_same_claim_wrong_capability",
+        claim_id="claim_replace_color",
+        support_operation="replace_color",
+        include_support_binding=True,
+        causal=True,
+    )
+    evidence["capability_id"] = capability_id_for_subject(_subject(operation="rotate"))
+    decision = _decision(CapabilityQualificationLevel.CAUSALLY_DEMONSTRATED, [evidence])
+    assert decision["decision_state"] == "PROMOTION_DENIED"
+    assert "some_evidence_rejected" in decision["promotion_failures"]
+
+
+def test_valid_capability_operation_support_but_dependent_source_no_reproducibility():
+    first = _accepted(
+        "accepted_a",
+        target_operation="SOURCE_INDEPENDENCE_REQUIRED",
+        include_support_binding=True,
+        source="source_a",
+        run_id="run_a",
+        causal=True,
+    )
+    second = _accepted(
+        "accepted_b",
+        target_operation="SOURCE_INDEPENDENCE_REQUIRED",
+        include_support_binding=True,
+        source="source_a",
+        run_id="run_b",
+        causal=True,
+    )
+    decision = _decision(
+        CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED,
+        [first, second],
+    )
+    assert decision["accepted_evidence_ids"] == ["accepted_a", "accepted_b"]
+    assert decision["independent_source_count"] == 1
+    assert decision["decision_state"] == "PROMOTION_DENIED"
+
+
+def test_valid_independent_source_wrong_operation_still_rejected():
+    first = _accepted("accepted_a", source="source_a", causal=True)
+    wrong = _accepted(
+        "accepted_wrong_operation",
+        source="source_b",
+        support_operation="rotate",
+        include_support_binding=True,
+        causal=True,
+    )
+    decision = _decision(
+        CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED,
+        [first, wrong],
+    )
+    assert decision["accepted_evidence_ids"] == ["accepted_a"]
+    assert decision["independent_source_count"] == 1
+    assert "some_evidence_rejected" in decision["promotion_failures"]
+
+
+def test_independent_non_causal_evidence_does_not_increase_reproducible_count():
+    causal = _accepted(
+        "accepted_causal",
+        source="source_a",
+        causal=True,
+    )
+    non_causal = _accepted(
+        "accepted_non_causal",
+        source="source_b",
+        causal=False,
+    )
+    result = IntegratedCapabilityQualificationEngine().decide(
+        _subject(),
+        [causal, non_causal],
+        requested_level=CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED,
+        architecture_present=True,
+        runtime_reachable=True,
+    )
+    assessment = result["capability_evidence_assessment"]
+    decision = result["qualification_decision"]
+
+    assert assessment["valid_accepted_evidence_count"] == 2
+    assert assessment["causal_supporting_evidence_count"] == 1
+    assert assessment["independent_causal_evidence_ids"] == ["accepted_causal"]
+    assert assessment["independent_source_count"] == 1
+    assert assessment["source_coverage_filter"] == (
+        "CAUSALLY_SUPPORTED_ACCEPTED_EVIDENCE_ONLY"
+    )
+    assert decision["decision_state"] == "PROMOTION_DENIED"
+    assert "independent_reproducibility_not_established" in (
+        decision["promotion_failures"]
+    )
+
+
+def test_independent_causal_wrong_claim_does_not_join_claim_scoped_count():
+    first = _accepted(
+        "accepted_causal_a",
+        claim_id="claim_replace_color",
+        source="source_a",
+        causal=True,
+    )
+    wrong_claim = _accepted(
+        "accepted_causal_wrong_claim",
+        claim_id="claim_validation_scope",
+        source="source_b",
+        causal=True,
+    )
+    result = IntegratedCapabilityQualificationEngine().decide(
+        _subject(),
+        [first, wrong_claim],
+        requested_level=CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED,
+        architecture_present=True,
+        runtime_reachable=True,
+    )
+    assessment = result["capability_evidence_assessment"]
+
+    assert assessment["causal_supporting_evidence_count"] == 2
+    assert assessment["source_coverage"]["claim_id"] == "claim_replace_color"
+    assert assessment["source_coverage"]["supporting_evidence_count"] == 1
+    assert assessment["independent_source_count"] == 1
+    assert result["qualification_decision"]["decision_state"] == "PROMOTION_DENIED"
+
+
+def test_two_independent_causal_sources_on_same_claim_satisfy_reproducibility():
+    first = _accepted(
+        "accepted_causal_a",
+        claim_id="claim_replace_color",
+        source="source_a",
+        causal=True,
+    )
+    second = _accepted(
+        "accepted_causal_b",
+        claim_id="claim_replace_color",
+        source="source_b",
+        causal=True,
+    )
+    result = IntegratedCapabilityQualificationEngine().decide(
+        _subject(),
+        [first, second],
+        requested_level=CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED,
+        architecture_present=True,
+        runtime_reachable=True,
+    )
+    assessment = result["capability_evidence_assessment"]
+
+    assert assessment["independent_source_count"] == 2
+    assert assessment["independent_causal_evidence_ids"] == [
+        "accepted_causal_a",
+        "accepted_causal_b",
+    ]
+    assert result["qualification_decision"]["decision_state"] == "PROMOTION_GRANTED"
 
 
 @pytest.mark.parametrize(

@@ -565,6 +565,19 @@ class ValidationTaskExecutionPipeline:
     ) -> dict[str, Any]:
         payload = self._materialize_payload(task, schedule, plan)
         runner_input = payload["runner_input_payload"]
+        raw_task = task.get("raw_task") or {}
+        source_descriptor = (
+            raw_task.get("source_descriptor")
+            if isinstance(raw_task.get("source_descriptor"), dict)
+            else {}
+        )
+        if raw_task.get("validation_task_type") == "causal_operation_effect":
+            return self._run_causal_operation_effect_task(
+                raw_task,
+                runner_input,
+                schedule,
+                plan,
+            )
         return {
             "predicted_output": {
                 "runner_output_type": "validation_task_manifest_observation",
@@ -585,6 +598,134 @@ class ValidationTaskExecutionPipeline:
                 "runner_id": self.RUNNER_ID,
                 "target_reference_forwarded_to_solver": False,
             },
+            "canonical_source_identity": source_descriptor.get(
+                "canonical_source_identity"
+            ),
+            "source_lineage": list(source_descriptor.get("source_lineage") or []),
+        }
+
+    def _run_causal_operation_effect_task(
+        self,
+        raw_task: dict[str, Any],
+        runner_input: dict[str, Any],
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        case = raw_task.get("causal_validation_case") or {}
+        source_descriptor = (
+            raw_task.get("source_descriptor")
+            if isinstance(raw_task.get("source_descriptor"), dict)
+            else {}
+        )
+        treatment = case.get("treatment") or {}
+        control = case.get("control") or {}
+        expected = case.get("expected_output")
+        treatment_output = treatment.get("output")
+        control_output = control.get("output")
+        treatment_exact = treatment_output == expected
+        control_exact = control_output == expected
+        treatment_score = 1.0 if treatment_exact else 0.0
+        control_score = 1.0 if control_exact else 0.0
+        causal = {
+            "schema_version": "1.0",
+            "method": "CONTROLLED_TRANSFORMATION_EFFECT",
+            "capability_id": schedule.get("capability_id") or plan.get("capability_id"),
+            "capability_identity_schema": (
+                schedule.get("capability_identity_schema")
+                or plan.get("capability_identity_schema")
+            ),
+            "capability_id_v2": (
+                schedule.get("capability_id_v2") or plan.get("capability_id_v2")
+            ),
+            "capability_operation_id_v2": (
+                schedule.get("capability_operation_id_v2")
+                or plan.get("capability_operation_id_v2")
+            ),
+            "validation_context_identity_schema": (
+                schedule.get("validation_context_identity_schema")
+                or plan.get("validation_context_identity_schema")
+            ),
+            "validation_context_id": (
+                schedule.get("validation_context_id")
+                or plan.get("validation_context_id")
+            ),
+            "operation": (
+                case.get("operation")
+                or schedule.get("capability_subject", {}).get("operation")
+                or schedule.get("target_operation")
+            ),
+            "qualification_claim_id": (
+                schedule.get("claim_id")
+                or plan.get("claim_id")
+                or case.get("qualification_claim_id")
+            ),
+            "input": case.get("input"),
+            "treatment_execution_id": self._scoped_id(
+                "causal_treatment_execution",
+                {
+                    "schedule_id": schedule.get("schedule_id"),
+                    "operation": case.get("operation") or schedule.get("target_operation"),
+                    "plan_id": plan.get("plan_id"),
+                },
+            ),
+            "counterfactual_id": self._scoped_id(
+                "causal_counterfactual",
+                {
+                    "schedule_id": schedule.get("schedule_id"),
+                    "intervention": "target_operation_removed",
+                    "plan_id": plan.get("plan_id"),
+                },
+            ),
+            "operation_executed": treatment.get("operation_executed", True) is True,
+            "operation_output_consumed": (
+                treatment.get("operation_output_consumed", True) is True
+            ),
+            "counterfactual_valid": control.get("counterfactual_valid", True) is True,
+            "same_input": control.get("input", case.get("input")) == case.get("input"),
+            "same_non_target_operations": (
+                control.get("same_non_target_operations", True) is True
+            ),
+            "unrelated_control": control.get("unrelated_control", False) is True,
+            "treatment_outcome": {
+                "output": treatment_output,
+                "exact_match": treatment_exact,
+            },
+            "control_outcome": {
+                "output": control_output,
+                "exact_match": control_exact,
+            },
+            "treatment_score": treatment_score,
+            "control_score": control_score,
+            "minimum_effect": float(case.get("minimum_effect", 1.0) or 1.0),
+            "authority": "VALIDATION_EXECUTION_PIPELINE",
+            "behavioral_authority": "NONE",
+        }
+        return {
+            "predicted_output": {
+                "runner_output_type": "causal_operation_effect_observation",
+                "task_id": runner_input["task_id"],
+                "target_operation": runner_input["target_operation"],
+                "required_evidence": runner_input["required_evidence"],
+                "causal_validation_result": causal,
+            },
+            "case_outputs": [{
+                "case_id": "causal_case_0",
+                "output": {
+                    "task_id": runner_input["task_id"],
+                    "execution_scope": self.EXECUTION_SCOPE,
+                    "reference_visible_to_runner": False,
+                    "causal_validation_result": causal,
+                },
+            }],
+            "causal_validation_result": causal,
+            "runner_trace_reference": {
+                "runner_id": self.RUNNER_ID,
+                "target_reference_forwarded_to_solver": False,
+            },
+            "canonical_source_identity": source_descriptor.get(
+                "canonical_source_identity"
+            ),
+            "source_lineage": list(source_descriptor.get("source_lineage") or []),
         }
 
     def _materialize_payload(
@@ -818,6 +959,16 @@ class ValidationTaskExecutionPipeline:
             "origin_attempt_id": envelope.get("origin_attempt_id"),
             "origin_operation_id": envelope.get("origin_operation_id"),
             "origin_source_type": envelope.get("origin_source_type"),
+            "canonical_source_identity": (
+                runner_output.get("canonical_source_identity")
+                or schedule.get("canonical_source_identity")
+                or plan.get("canonical_source_identity")
+            ),
+            "source_lineage": (
+                list(runner_output.get("source_lineage") or [])
+                or list(schedule.get("source_lineage") or [])
+                or list(plan.get("source_lineage") or [])
+            ),
             "origin_lineage_fingerprint": envelope.get(
                 "origin_lineage_fingerprint"
             ),
@@ -860,6 +1011,25 @@ class ValidationTaskExecutionPipeline:
             "selected_validation_task_id": schedule.get("selected_validation_task_id"),
             "selected_curriculum_id": schedule.get("selected_curriculum_id"),
             "capability_id": schedule.get("capability_id") or plan.get("capability_id"),
+            "capability_identity_schema": (
+                schedule.get("capability_identity_schema")
+                or plan.get("capability_identity_schema")
+            ),
+            "capability_id_v2": (
+                schedule.get("capability_id_v2") or plan.get("capability_id_v2")
+            ),
+            "capability_operation_id_v2": (
+                schedule.get("capability_operation_id_v2")
+                or plan.get("capability_operation_id_v2")
+            ),
+            "validation_context_identity_schema": (
+                schedule.get("validation_context_identity_schema")
+                or plan.get("validation_context_identity_schema")
+            ),
+            "validation_context_id": (
+                schedule.get("validation_context_id")
+                or plan.get("validation_context_id")
+            ),
             "capability_subject": (
                 schedule.get("capability_subject")
                 or plan.get("capability_subject")
@@ -911,6 +1081,9 @@ class ValidationTaskExecutionPipeline:
             "runner_status": "COMPLETED",
             "predicted_output": runner_output.get("predicted_output"),
             "case_outputs": runner_output.get("case_outputs") or [],
+            "causal_validation_result": runner_output.get(
+                "causal_validation_result"
+            ),
             "runner_trace_reference": runner_output.get("runner_trace_reference"),
             "runtime_error": None,
             "resource_usage": {"executed_case_count": 1},

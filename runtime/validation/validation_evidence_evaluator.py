@@ -15,6 +15,9 @@ from runtime.claim_identity import (
 from runtime.training.validation_curriculum_registry import (
     ValidationCurriculumRegistry,
 )
+from runtime.validation.causal_validation_evidence import (
+    CausalValidationEvidenceEvaluator,
+)
 
 
 class ValidationEvidenceEvaluator:
@@ -36,6 +39,7 @@ class ValidationEvidenceEvaluator:
         "exact_grid_comparison",
         "structured_symbolic_output_comparison",
         "manifest_observation_comparison",
+        "causal_operation_effect_comparison",
     }
 
     def __init__(
@@ -56,6 +60,7 @@ class ValidationEvidenceEvaluator:
         self.curriculum_registry = (
             curriculum_registry or ValidationCurriculumRegistry()
         )
+        self.causal_evidence_evaluator = CausalValidationEvidenceEvaluator()
 
     def evaluate_captured_results(self) -> dict[str, Any]:
         self._initialize()
@@ -614,6 +619,16 @@ class ValidationEvidenceEvaluator:
         comparison_id: str,
         comparison_started_at: str,
     ) -> dict[str, Any]:
+        if contract.get("comparator_id") == "causal_operation_effect_comparison":
+            return self._compare_causal_operation_effect(
+                plan,
+                schedule,
+                raw_result,
+                contract,
+                sealed_reference,
+                comparison_id,
+                comparison_started_at,
+            )
         predicted_cases = raw_result.get("case_outputs") or []
         expected_cases = self._expected_cases(sealed_reference)
         case_results = []
@@ -739,6 +754,128 @@ class ValidationEvidenceEvaluator:
                 "extra_output_count": max(predicted_count - expected_count, 0),
             },
             "comparison_status": "SUCCESS",
+            "comparison_state": "COMPARISON_COMPLETED",
+            "runtime_error": None,
+            "evidence_state": "NOT_YET_DECIDED",
+            "arena_reentry_invoked": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
+        }
+
+    def _compare_causal_operation_effect(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+        contract: dict[str, Any],
+        sealed_reference: dict[str, Any],
+        comparison_id: str,
+        comparison_started_at: str,
+    ) -> dict[str, Any]:
+        causal_evidence = self.causal_evidence_evaluator.evaluate(
+            raw_result,
+            minimum_effect=contract.get("minimum_effect"),
+        )
+        contract_failures = causal_evidence.get("causal_support_contract_failures", [])
+        structurally_valid = bool(raw_result.get("causal_validation_result"))
+        fingerprint = self._comparable_fingerprint(
+            plan,
+            schedule,
+            raw_result,
+            sealed_reference,
+            contract,
+        )
+        return {
+            "schema_version": "1.0",
+            "comparable_result_id": (
+                f"comparable_result_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+            ),
+            "comparable_result_fingerprint": fingerprint,
+            "comparison_id": comparison_id,
+            **self._identity(plan, schedule, raw_result),
+            "comparator_id": contract.get("comparator_id"),
+            "comparator_version": contract.get(
+                "comparator_version",
+                self.DEFAULT_COMPARATOR_VERSION,
+            ),
+            "evaluation_contract_id": contract.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
+            "evaluation_contract_source": contract.get(
+                "contract_source",
+                "explicit_evaluation_contract",
+            ),
+            "sealed_reference_id": sealed_reference.get("sealed_reference_id"),
+            "sealed_reference_fingerprint": sealed_reference.get(
+                "sealed_reference_fingerprint"
+            ),
+            "sealed_reference_resolved": sealed_reference.get(
+                "sealed_reference_resolved",
+                True,
+            ),
+            "reference_integrity_state": sealed_reference.get(
+                "reference_integrity_state",
+                "VERIFIED",
+            ),
+            "target_reference_forwarded_to_solver": False,
+            "sealed_reference_opened_by_evaluator": True,
+            "sealed_reference_forwarded_to_solver": False,
+            "comparison_started_at": comparison_started_at,
+            "comparison_completed_at": self._now(),
+            "comparison_duration": 0,
+            "predicted_output_schema_valid": structurally_valid,
+            "reference_output_schema_valid": True,
+            "expected_case_count": 1,
+            "predicted_case_count": 1 if structurally_valid else 0,
+            "case_count": 1,
+            "compared_case_count": 1 if structurally_valid else 0,
+            "valid_case_count": 1 if structurally_valid else 0,
+            "invalid_case_count": 0 if structurally_valid else 1,
+            "case_coverage": 1.0 if structurally_valid else 0.0,
+            "case_comparison_results": [{
+                "case_index": 0,
+                "case_id": "causal_case_0",
+                "prediction_present": structurally_valid,
+                "reference_present": True,
+                "prediction_schema_valid": structurally_valid,
+                "reference_schema_valid": True,
+                "exact_match": structurally_valid,
+                "comparison_status": (
+                    "COMPARED" if structurally_valid else "INCOMPLETE"
+                ),
+            }],
+            "exact_match_count": 1 if structurally_valid else 0,
+            "exact_match_rate": 1.0 if structurally_valid else 0.0,
+            "comparator_defined_measurements": {
+                "causal_effect": causal_evidence.get("causal_effect"),
+                "minimum_effect": causal_evidence.get("minimum_effect"),
+                "causal_support_state": causal_evidence.get(
+                    "causal_support_state"
+                ),
+            },
+            "causal_evidence": causal_evidence,
+            "causal_evidence_id": causal_evidence.get("causal_evidence_id"),
+            "causal_support_state": causal_evidence.get("causal_support_state"),
+            "capability_causal_support_state": causal_evidence.get(
+                "capability_causal_support_state"
+            ),
+            "causal_support_contract_failures": contract_failures,
+            "grounding_measurements": {
+                "required_evidence": plan.get("required_evidence"),
+                "target_candidate": plan.get("target_candidate"),
+                "target_operation": plan.get("target_operation"),
+            },
+            "structural_measurements": {
+                "missing_output_count": 0 if structurally_valid else 1,
+                "extra_output_count": 0,
+            },
+            "comparison_status": "SUCCESS" if structurally_valid else "INCOMPLETE",
             "comparison_state": "COMPARISON_COMPLETED",
             "runtime_error": None,
             "evidence_state": "NOT_YET_DECIDED",
@@ -958,6 +1095,8 @@ class ValidationEvidenceEvaluator:
             "SOURCE_PROVENANCE_BOUND"
         ):
             raise ValueError("accepted_evidence_requires_bound_source_provenance")
+        identity = self._identity(plan, schedule, raw_result)
+        support_binding = self._capability_operation_support_binding(identity)
         accepted_origin = self._accepted_evidence_origin(
             raw_result=raw_result,
             source_provenance=source_provenance,
@@ -992,9 +1131,36 @@ class ValidationEvidenceEvaluator:
             "persistence_implies_acceptance": False,
             "raw_result_direct_acceptance_allowed": False,
             "evaluation_direct_acceptance_allowed": False,
-            **self._identity(plan, schedule, raw_result),
+            **identity,
+            "capability_operation_support_binding": support_binding,
+            "capability_operation_support_binding_state": support_binding.get(
+                "binding_state"
+            ),
+            "capability_operation_support_binding_authority": "OBSERVATION_ONLY",
+            "capability_operation_support_behavioral_authority": "NONE",
+            "capability_support_capability_id": support_binding.get(
+                "capability_id"
+            ),
+            "capability_support_operation": support_binding.get("operation"),
+            "supported_capability_operation": support_binding.get("operation"),
             "comparable_result_id": comparable.get("comparable_result_id"),
             "evidence_decision_id": decision.get("evidence_decision_id"),
+            "causal_evidence": comparable.get("causal_evidence"),
+            "causal_evidence_id": comparable.get("causal_evidence_id"),
+            "causal_support_state": comparable.get("causal_support_state"),
+            "causal_support_contract_failures": comparable.get(
+                "causal_support_contract_failures", []
+            ),
+            "capability_causal_support_state": comparable.get(
+                "capability_causal_support_state"
+            ),
+            "causal_evidence_authority": (
+                comparable.get("causal_evidence", {}).get(
+                    "causal_evidence_authority"
+                )
+                if isinstance(comparable.get("causal_evidence"), dict)
+                else None
+            ),
             "originating_arena_id": plan.get(
                 "originating_arena_id",
                 "arena_current_deliberation",
@@ -1046,6 +1212,39 @@ class ValidationEvidenceEvaluator:
             "claim_evidence_binding_behavioral_authority"
         )
         return artifact
+
+    def _capability_operation_support_binding(
+        self,
+        identity: dict[str, Any],
+    ) -> dict[str, Any]:
+        capability_subject = identity.get("capability_subject")
+        capability_subject = (
+            capability_subject if isinstance(capability_subject, dict) else {}
+        )
+        capability_id = identity.get("capability_id")
+        operation = capability_subject.get("operation")
+        missing = []
+        if self._term(capability_id) == "Not Available":
+            missing.append("capability_id")
+        if self._term(operation) == "Not Available":
+            missing.append("operation")
+        binding = {
+            "schema_version": "1.0",
+            "binding_type": "accepted_validation_evidence_capability_operation_support",
+            "binding_state": "BOUND" if not missing else "NOT_BOUND",
+            "capability_id": capability_id,
+            "capability_subject": capability_subject,
+            "operation": operation,
+            "validation_target_operation": identity.get("target_operation"),
+            "claim_id": identity.get("claim_id"),
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+            "truth_authority": "NONE",
+            "qualification_authority": "NONE",
+            "missing_fields": missing,
+        }
+        binding["binding_fingerprint"] = self._fingerprint(binding)
+        return binding
 
     def _accepted_evidence_origin(
         self,
@@ -2045,6 +2244,9 @@ class ValidationEvidenceEvaluator:
                 "producer_source_type"
             ),
             "source_lineage": source_provenance.get("upstream_lineage_refs"),
+            "canonical_source_identity": source_provenance.get(
+                "canonical_source_identity"
+            ),
             "source_provenance": source_provenance,
             "source_provenance_fingerprint": source_provenance.get(
                 "source_provenance_fingerprint"
@@ -2069,6 +2271,31 @@ class ValidationEvidenceEvaluator:
                 plan.get("capability_id")
                 or schedule.get("capability_id")
                 or raw_result.get("capability_id")
+            ),
+            "capability_identity_schema": (
+                plan.get("capability_identity_schema")
+                or schedule.get("capability_identity_schema")
+                or raw_result.get("capability_identity_schema")
+            ),
+            "capability_id_v2": (
+                plan.get("capability_id_v2")
+                or schedule.get("capability_id_v2")
+                or raw_result.get("capability_id_v2")
+            ),
+            "capability_operation_id_v2": (
+                plan.get("capability_operation_id_v2")
+                or schedule.get("capability_operation_id_v2")
+                or raw_result.get("capability_operation_id_v2")
+            ),
+            "validation_context_identity_schema": (
+                plan.get("validation_context_identity_schema")
+                or schedule.get("validation_context_identity_schema")
+                or raw_result.get("validation_context_identity_schema")
+            ),
+            "validation_context_id": (
+                plan.get("validation_context_id")
+                or schedule.get("validation_context_id")
+                or raw_result.get("validation_context_id")
             ),
             "capability_subject": (
                 plan.get("capability_subject")
@@ -2210,6 +2437,11 @@ class ValidationEvidenceEvaluator:
                     ),
                 ),
             ),
+            "canonical_source_identity": (
+                raw_result.get("canonical_source_identity")
+                or schedule.get("canonical_source_identity")
+                or plan.get("canonical_source_identity")
+            ),
             "validation_execution_id": raw_result.get(
                 "execution_id",
                 envelope.get(
@@ -2303,6 +2535,12 @@ class ValidationEvidenceEvaluator:
         raw_result: dict[str, Any],
     ) -> list[str]:
         candidates = [
+            plan.get("canonical_source_identity"),
+            schedule.get("canonical_source_identity"),
+            raw_result.get("canonical_source_identity"),
+            *(plan.get("source_lineage") or []),
+            *(schedule.get("source_lineage") or []),
+            *(raw_result.get("source_lineage") or []),
             plan.get("plan_id"),
             schedule.get("schedule_id"),
             raw_result.get("execution_plan_id"),
@@ -2310,7 +2548,6 @@ class ValidationEvidenceEvaluator:
             raw_result.get("dependency_link_id"),
             raw_result.get("dependency_chain_id"),
             raw_result.get("candidate_source_id"),
-            plan.get("source_candidate_id"),
         ]
         return sorted({
             str(item)

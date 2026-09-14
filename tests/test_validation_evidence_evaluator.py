@@ -375,6 +375,46 @@ def test_fresh_accepted_evidence_preserves_native_source_provenance(tmp_path):
     assert provenance["truth_authority"] == "NONE"
 
 
+def test_accepted_evidence_carries_capability_operation_support_binding(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+
+    capability_subject = {
+        "schema_version": "1.0",
+        "capability_name": "replace_color_capability",
+        "operation": "replace_color",
+        "domain": "color",
+        "qualifiers": {},
+    }
+    result = _accepted_result(
+        tmp_path,
+        registry,
+        capability_id="capability_replace_color",
+        capability_subject=capability_subject,
+    )
+    accepted = result["accepted"]
+    binding = accepted["capability_operation_support_binding"]
+
+    assert binding["binding_state"] == "BOUND"
+    assert binding["capability_id"] == accepted["capability_id"]
+    assert binding["capability_subject"] == accepted["capability_subject"]
+    assert binding["operation"] == accepted["capability_subject"]["operation"]
+    assert binding["validation_target_operation"] == accepted["target_operation"]
+    assert accepted["capability_support_capability_id"] == accepted["capability_id"]
+    assert accepted["capability_support_operation"] == (
+        accepted["capability_subject"]["operation"]
+    )
+    assert accepted["supported_capability_operation"] == (
+        accepted["capability_subject"]["operation"]
+    )
+    assert accepted["capability_operation_support_binding_authority"] == (
+        "OBSERVATION_ONLY"
+    )
+    assert accepted["capability_operation_support_behavioral_authority"] == "NONE"
+    assert accepted["truth_authority"] == "NONE"
+
+
 def test_accepted_evidence_does_not_invent_upstream_provenance(tmp_path):
     curriculum = tmp_path / "curriculum.json"
     _write_curriculum(curriculum)

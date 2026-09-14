@@ -395,6 +395,16 @@ class ValidationRequestAuthorityEngine:
                 "capability_id": subject_payload.get("capability_id"),
                 "claim_id": subject_payload.get("claim_id"),
                 "claim_subject_ref": subject_payload.get("claim_subject_ref"),
+                "target_operation": (
+                    (subject_payload.get("capability_subject") or {}).get(
+                        "operation"
+                    )
+                    if isinstance(
+                        subject_payload.get("capability_subject"),
+                        Mapping,
+                    )
+                    else None
+                ),
             },
             "need_type": need_type,
             "requested_validation_scope": subject_payload.get(
@@ -422,7 +432,16 @@ class ValidationRequestAuthorityEngine:
                     "validation_sponsorship_id"
                 ),
                 "target_candidate": subject_payload.get("capability_id"),
-                "target_operation": subject_payload.get("need_type"),
+                "target_operation": (
+                    (subject_payload.get("capability_subject") or {}).get(
+                        "operation"
+                    )
+                    if isinstance(
+                        subject_payload.get("capability_subject"),
+                        Mapping,
+                    )
+                    else subject_payload.get("need_type")
+                ),
                 "governed_reentry_action": (
                     "admit_request_to_future_evidence_plan_authority"
                 ),

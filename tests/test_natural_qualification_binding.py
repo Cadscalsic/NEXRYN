@@ -16,6 +16,16 @@ from runtime.evidence.validation_request import ValidationRequestAuthorityEngine
 from runtime.evidence.validation_sponsorship import (
     ValidationSponsorshipAuthorityEngine,
 )
+from runtime.training.validation_curriculum_registry import (
+    ValidationCurriculumRegistry,
+)
+from runtime.validation.validation_evidence_evaluator import (
+    ValidationEvidenceEvaluator,
+)
+from runtime.validation.validation_task_execution_pipeline import (
+    ValidationTaskExecutionPipeline,
+)
+from runtime.validation.validation_task_scheduler import ValidationTaskScheduler
 
 
 def _subject(operation="replace_color", domain="color"):
@@ -99,6 +109,62 @@ def _binding(tmp_path):
         evidence_plan_store=store,
         state_dir=tmp_path / "qualification_binding",
     )
+
+
+def _write_curriculum(path):
+    path.write_text(
+        json.dumps({
+            "tasks": [
+                {
+                    "task_id": "elite_validation_task_31",
+                    "task_name": "Cross Source Consensus",
+                    "target_capability": "replace_color",
+                    "target_domain": "Color",
+                    "primary_evidence_category": "CROSS_SOURCE_CONSENSUS",
+                    "secondary_evidence_categories": [
+                        "cross_source_consensus_evidence"
+                    ],
+                    "required_validation_evidence": (
+                        "cross_source_consensus_evidence"
+                    ),
+                    "required_grounding": [
+                        "cross_source_consensus",
+                        "select_cross_source_tie_break_validation_task",
+                    ],
+                    "expected_validation_contract": (
+                        "select_cross_source_tie_break_validation_task"
+                    ),
+                    "validation_objective": (
+                        "observe cross-source consensus without evaluator target"
+                    ),
+                    "expected_target_output": {
+                        "task_id": "elite_validation_task_31",
+                        "execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
+                        "reference_visible_to_runner": False,
+                    },
+                    "evaluation_contract": {
+                        "comparator_id": "manifest_observation_comparison",
+                        "comparator_version": "1.0",
+                        "minimum_case_coverage": 1.0,
+                        "exact_match_required": True,
+                    },
+                    "enabled": True,
+                }
+            ]
+        }),
+        encoding="utf-8",
+    )
+
+
+def _registry(path):
+    registry = ValidationCurriculumRegistry()
+    registry.register_curriculum(
+        identifier="elite_validation_academy",
+        display_name="Elite Validation Academy",
+        path=path,
+        enabled=True,
+    )
+    return registry
 
 
 def test_runtime_binding_invokes_qualification_with_governed_accepted_evidence(tmp_path):
@@ -233,3 +299,113 @@ def test_binding_loads_accepted_evidence_from_plan_store(tmp_path):
 
     assert report["accepted_evidence_input_count"] == 1
     assert report["qualification_assessment_invocation_count"] == 1
+
+
+def test_natural_plan_to_accepted_evidence_triggers_qualification_reassessment(tmp_path):
+    binding = _binding(tmp_path)
+    first = binding.assess_current_accepted_evidence(
+        run_id="run_binding",
+        accepted_evidence=[_accepted("accepted_a")],
+    )
+    need = CurrentEvidenceNeedAuthorityEngine(tmp_path / "needs")
+    sponsorship = ValidationSponsorshipAuthorityEngine(
+        tmp_path / "sponsorships",
+        need_authority=need,
+    )
+    request = ValidationRequestAuthorityEngine(
+        tmp_path / "requests",
+        sponsorship_authority=sponsorship,
+    )
+    orchestrator = NaturalCanonicalValidationOrchestrator(
+        evidence_plan_store=binding.evidence_plan_store,
+        need_authority=need,
+        sponsorship_authority=sponsorship,
+        request_authority=request,
+    )
+    orchestration = orchestrator.orchestrate(
+        first["qualification_results"],
+        max_new_needs=1,
+    )
+    plan_report = orchestration["orchestration_rows"][0]["plan_admission_report"]
+    plan_id = plan_report["evidence_plan_id"]
+
+    binding.evidence_plan_store.load_pending_plans()
+    binding.evidence_plan_store.mark_consumption_pending(plan_id)
+    binding.evidence_plan_store.persist_selection_from_consumption_report({
+        "current_plan_id": plan_id,
+        "selection_state": "WAITING_EXECUTION",
+        "selected_validation_task": "elite_validation_task_31",
+        "best_matching_curriculum": "Elite Validation Academy",
+        "current_required_evidence": "cross_source_consensus_evidence",
+        "current_target_operation": "SOURCE_INDEPENDENCE_REQUIRED",
+        "current_tie_break_strategy": "cross_source_consensus",
+        "selected_validation_task_metadata": {
+            "curriculum_id": "elite_validation_academy",
+        },
+    })
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    registry = _registry(curriculum)
+    scheduler = ValidationTaskScheduler(
+        tmp_path / "plans",
+        registry,
+        need_authority=need,
+        sponsorship_authority=sponsorship,
+        request_authority=request,
+    )
+    schedule = scheduler.schedule_plan(plan_id)
+    raw = ValidationTaskExecutionPipeline(
+        tmp_path / "plans",
+        registry,
+        need_authority=need,
+        sponsorship_authority=sponsorship,
+        request_authority=request,
+    ).execute_schedule(schedule["schedule_id"])
+    evaluation = ValidationEvidenceEvaluator(
+        tmp_path / "plans",
+        registry,
+    ).evaluate_plan(plan_id)
+
+    accepted_dir = tmp_path / "plans" / "accepted_evidence"
+    (accepted_dir / "accepted_a.json").write_text(
+        json.dumps(_accepted("accepted_a")),
+        encoding="utf-8",
+    )
+    reassessment = binding.assess_current_accepted_evidence(
+        run_id="run_after_accepted_evidence",
+    )
+    accepted_path = (
+        tmp_path
+        / "plans"
+        / "accepted_evidence"
+        / f"{evaluation['accepted_evidence_id']}.json"
+    )
+    accepted = json.loads(accepted_path.read_text(encoding="utf-8"))
+
+    assert schedule["scheduling_state"] == "SCHEDULED"
+    assert raw["execution_state"] == "RAW_RESULT_CAPTURED"
+    assert evaluation["evidence_acceptance_state"] == "ACCEPTED"
+    assert accepted["capability_subject"]["operation"] == _subject()["operation"]
+    assert accepted["capability_id"] == capability_id_for_subject(
+        accepted["capability_subject"]
+    )
+    assert accepted["qualification_target_level"] == (
+        CapabilityQualificationLevel.REPRODUCIBLY_SUPPORTED.value
+    )
+    assert reassessment["qualification_assessment_invocation_count"] == 1
+    assert reassessment["qualification_assessment_replay_count"] == 0
+    result = reassessment["qualification_results"][0]
+    assert result["qualification_binding"]["assessment_replay_state"] == (
+        "NEW_EVIDENCE_STATE"
+    )
+    assert result["qualification_decision"]["qualification_authority"] == (
+        "INTEGRATED_CAPABILITY_QUALIFICATION_ENGINE"
+    )
+    assert result["qualification_decision"]["decision_state"] == "PROMOTION_DENIED"
+    assert (
+        result["capability_evidence_assessment"]["independent_source_count"]
+        == 1
+    )
+    assert "independent_reproducibility_not_established" in (
+        result["qualification_decision"]["promotion_failures"]
+    )

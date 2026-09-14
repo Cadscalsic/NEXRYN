@@ -230,6 +230,14 @@ class EvidenceAcquisitionPlanStore:
             "source_evidence_need_decision_id": self._term(
                 raw_plan.get("source_evidence_need_decision_id")
             ),
+            "canonical_source_identity": self._term(
+                raw_plan.get("canonical_source_identity")
+            ),
+            "source_lineage": (
+                list(raw_plan.get("source_lineage"))
+                if isinstance(raw_plan.get("source_lineage"), list)
+                else []
+            ),
             "capability_id": self._term(raw_plan.get("capability_id")),
             "capability_subject": (
                 dict(raw_plan.get("capability_subject"))
@@ -393,6 +401,16 @@ class EvidenceAcquisitionPlanStore:
             "source_evidence_need_id": evidence_need_id,
             "source_evidence_need_decision_id": self._term(
                 request.get("evidence_need_decision_id")
+            ),
+            "canonical_source_identity": self._term(
+                need.get("canonical_source_identity")
+                or subject.get("canonical_source_identity")
+                or request.get("canonical_source_identity")
+            ),
+            "source_lineage": (
+                list(need.get("source_lineage"))
+                if isinstance(need.get("source_lineage"), list)
+                else []
             ),
             "capability_id": self._term(subject.get("capability_id")),
             "capability_subject": (
@@ -1220,6 +1238,15 @@ class EvidenceAcquisitionPlanStore:
 
         metadata = consumption_report.get("selected_validation_task_metadata")
         metadata = metadata if isinstance(metadata, dict) else {}
+        identity_fields = (
+            "capability_identity_schema",
+            "capability_id_v2",
+            "capability_operation_id_v2",
+            "validation_context_identity_schema",
+            "validation_context_id",
+            "canonical_source_identity",
+            "source_lineage",
+        )
         now = self._now()
         previous_state = plan.get("lifecycle_state")
         update_payload = {
@@ -1248,7 +1275,8 @@ class EvidenceAcquisitionPlanStore:
                 plan.get("required_evidence_category")
             ),
             "target_candidate": self._term(plan.get("target_candidate")),
-            "target_operation": self._term(
+            "target_operation": self._term(plan.get("target_operation")),
+            "selected_validation_target_operation": self._term(
                 consumption_report.get("current_target_operation")
                 or plan.get("target_operation")
             ),
@@ -1263,6 +1291,14 @@ class EvidenceAcquisitionPlanStore:
             "graduation_authority": "NONE",
             "boot_recovery_route": "WAITING_EXECUTION_TO_VALIDATION_SCHEDULER",
         }
+        for field in identity_fields:
+            value = metadata.get(field)
+            if value is None:
+                value = consumption_report.get(field)
+            if value is None:
+                value = plan.get(field)
+            if value is not None:
+                update_payload[field] = value
         updated = {**plan, **update_payload}
         updated.setdefault("history", []).append({
             "timestamp": now,
