@@ -215,6 +215,8 @@
   "active_execution_lease": false,
   "attempt_count": 1,
   "batch_id": null,
+  "candidate_disambiguation_d7_execution_state": null,
+  "candidate_disambiguation_execution": null,
   "candidate_execution_authority": "NONE",
   "canonical_raw_result_id": "raw_validation_result_3e58aa2cabfe",
   "capability_id": "Not Available",

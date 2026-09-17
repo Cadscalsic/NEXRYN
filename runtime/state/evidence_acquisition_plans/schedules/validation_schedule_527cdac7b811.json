@@ -3,6 +3,8 @@
   "RAW_VALIDATION_RESULT_ENVELOPE": null,
   "active_execution_lease": false,
   "attempt_count": 1,
+  "candidate_disambiguation_d7_execution_state": null,
+  "candidate_disambiguation_execution": null,
   "candidate_execution_authority": "NONE",
   "canonical_raw_result_id": null,
   "constitutional_boundary": "VALIDATION_SCHEDULE_IS_A_GOVERNED_FUTURE_EXECUTION_REQUEST_NOT_EXECUTION_OR_EVIDENCE",

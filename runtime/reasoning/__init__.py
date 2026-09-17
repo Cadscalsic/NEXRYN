@@ -158,6 +158,13 @@ from runtime.reasoning.color_mapping_engine import (
     color_mapping_engine
 )
 
+from runtime.reasoning.frozen_transformation import (
+
+    FrozenTransformationArtifact,
+
+    learn_transformation
+)
+
 from runtime.reasoning.invariant_filter import (
 
     InvariantFilter,

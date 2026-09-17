@@ -167,7 +167,7 @@ class CurrentTruthAdmissionGate:
 
         return CurrentTruthAdmission(
             truth_id=str(truth_id),
-            claim_id=str(current_claim_id),
+
             current_truth_decision_id=str(current_decision_id),
             current_status=str(current_status),
             current_state_fingerprint=str(current_fingerprint),

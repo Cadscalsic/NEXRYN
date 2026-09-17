@@ -221,6 +221,8 @@
   },
   "authority_boundary": "EVIDENCE_PLAN_DOES_NOT_GRANT_TRUTH_TRUST_GRADUATION_OR_EXECUTION_AUTHORITY",
   "boot_recovery_route": "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR",
+  "candidate_disambiguation_d7_execution_state": null,
+  "candidate_disambiguation_execution": null,
   "candidate_execution_authority": "NONE",
   "canonical_raw_result_id": "raw_validation_result_eaf6d3b5bf1f",
   "capability_id": "Not Available",
@@ -410,6 +412,49 @@
       "event": "raw_result_captured_plan_restored_at_boot",
       "state": "RAW_RESULT_CAPTURED",
       "timestamp": "2026-09-15T12:05:51.834689+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T18:58:27.070274+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260917_185825",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T19:00:04.933197+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T19:27:28.763687+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260917_192728",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T19:28:26.136454+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T20:47:39.104105+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T20:51:23.504947+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260917_205123",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T20:52:33.217978+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-17T23:16:29.842740+00:00"
     }
   ],
   "identity_schema_version": "1.0",
@@ -418,7 +463,7 @@
   "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
   "matching_score": 88.0,
   "need_type": "Not Available",
-  "observation_count": 8,
+  "observation_count": 11,
   "plan_authority": "EVIDENCE_ACQUISITION_PLAN_STORE",
   "plan_fingerprint": "dc9f76136cc8dacc32ddf38e0cc12dbfd667d9de55f20bfcdfb4253ee73b84c0",
   "plan_id": "evidence_plan_run_20260912_224712_014d0822c6",
@@ -790,7 +835,7 @@
   "training_experience_origin": {},
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-09-15T12:06:01.735213+00:00",
+  "updated_at": "2026-09-17T23:16:30.731966+00:00",
   "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
   "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
   "validation_request_id": "Not Available",

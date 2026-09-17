@@ -8,6 +8,8 @@ from .evaluation_timeout_guard import EvaluationTimeoutGuard
 from .metrics_budget_controller import MetricsBudgetController
 from .metrics_collector import MetricsCollector
 from .post_success_fast_path import PostSuccessFastPath
+from .arc_hidden_test_harness import NativeARCEvaluationHarness
+from .native_arc_solver_adapter import NativeARCSolverAdapter
 
 __all__ = [
     "AsyncMetricsWriter",
@@ -18,4 +20,6 @@ __all__ = [
     "MetricsBudgetController",
     "MetricsCollector",
     "PostSuccessFastPath",
+    "NativeARCEvaluationHarness",
+    "NativeARCSolverAdapter",
 ]
