@@ -7522,6 +7522,8 @@ try:
             input_grid=executable_task_io.get("input_grid"),
             target_grid=executable_task_io.get("target_grid"),
             runtime_context={
+                "run_id": runtime_metrics.get("run_id"),
+                "task_id": executable_task_io.get("task"),
                 "expected_candidate_sources": [
                     "normalized_program_candidates",
                     "semantic_compiler",
@@ -7532,6 +7534,32 @@ try:
             },
             analysis_only=True,
             task_signature=str(executable_task_io.get("task") or "unknown"),
+        )
+        candidate_disambiguation_production_invocation_report = (
+            natural_validation_orchestrator.orchestrate_candidate_disambiguation(
+                cognitive_candidate_arena_report,
+                current_run_id=runtime_metrics.get("run_id"),
+                max_new_needs=3,
+            )
+        )
+        cognitive_candidate_arena_report[
+            "candidate_disambiguation_production_invocation_report"
+        ] = candidate_disambiguation_production_invocation_report
+        cognitive_candidate_arena_report["candidate_arena_summary"][
+            "candidate_disambiguation_production_invocation_state"
+        ] = (
+            "D6_REACHED"
+            if candidate_disambiguation_production_invocation_report.get(
+                "d6_plan_reached_count",
+                0,
+            )
+            else "NO_D6_PLAN_REACHED"
+        )
+        cognitive_candidate_arena_report["candidate_arena_summary"][
+            "candidate_disambiguation_d6_plan_count"
+        ] = candidate_disambiguation_production_invocation_report.get(
+            "d6_plan_reached_count",
+            0,
         )
         downstream_route_contribution_manifest = (
             refresh_downstream_route_contribution_manifest(

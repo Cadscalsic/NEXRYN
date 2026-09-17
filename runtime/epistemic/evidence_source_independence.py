@@ -37,6 +37,18 @@ class EvidenceSourceIndependenceEngine:
             "source_identity_id",
         )
         if explicit:
+            if self._is_artifact_identity(item, explicit):
+                return self._identity_report(
+                    item,
+                    {
+                        "claim_id": self._value(item, "claim_id"),
+                        "partial_source_fields": {
+                            "canonical_source_identity": explicit,
+                        },
+                    },
+                    state="PARTIAL",
+                    reason="artifact_identity_is_not_source_identity",
+                )
             identity_payload = {
                 "claim_id": self._value(item, "claim_id"),
                 "canonical_source_identity": explicit,
@@ -71,6 +83,22 @@ class EvidenceSourceIndependenceEngine:
             "evidence_type",
         )
         if producer_operation_id and producer_component_id and producer_source_type:
+            if self._is_artifact_identity(item, producer_operation_id):
+                return self._identity_report(
+                    item,
+                    {
+                        "claim_id": self._value(item, "claim_id"),
+                        "partial_source_fields": {
+                            "producer_operation_id": producer_operation_id,
+                            "producer_component_id": producer_component_id,
+                            "producer_source_type": producer_source_type,
+                        },
+                    },
+                    state="PARTIAL",
+                    reason=(
+                        "producer_operation_id_is_artifact_identity_not_source_identity"
+                    ),
+                )
             identity_payload = {
                 "claim_id": self._value(item, "claim_id"),
                 "producer_component_id": producer_component_id,
@@ -528,6 +556,37 @@ class EvidenceSourceIndependenceEngine:
             if value:
                 return value
         return None
+
+    def _is_artifact_identity(self, item: Mapping[str, Any], value: Any) -> bool:
+        text = str(value or "")
+        if not text:
+            return False
+        artifact_keys = {
+            "accepted_evidence_id",
+            "evidence_decision_id",
+            "raw_result_id",
+            "raw_validation_result_id",
+            "validation_attempt_id",
+        }
+        for key in artifact_keys:
+            if text == str(self._value(item, key) or ""):
+                return True
+        provenance = item.get("source_provenance")
+        if isinstance(provenance, Mapping):
+            for key in artifact_keys:
+                if text == str(provenance.get(key) or ""):
+                    return True
+        origin = item.get("accepted_evidence_origin")
+        if isinstance(origin, Mapping):
+            for key in {
+                "raw_evidence_id",
+                "raw_result_id",
+                "acceptance_decision_id",
+                "origin_attempt_id",
+            }:
+                if text == str(origin.get(key) or ""):
+                    return True
+        return False
 
     def _value(self, item: Mapping[str, Any], key: str) -> Any:
         provenance = item.get("source_provenance")

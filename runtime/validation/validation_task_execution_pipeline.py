@@ -407,6 +407,26 @@ class ValidationTaskExecutionPipeline:
                 "payload_materialization",
                 "repair_validation_task_payload",
             )
+        disambiguation_contract = self._candidate_disambiguation_execution_contract(
+            schedule,
+            plan,
+            task,
+        )
+        if disambiguation_contract["contract_applicability"] == "APPLICABLE":
+            if disambiguation_contract["d7_execution_state"] != (
+                "DISCRIMINATIVE_EXECUTION_VALID"
+            ):
+                return self._admission_block(
+                    "BLOCKED_CANDIDATE_DISAMBIGUATION_CONTRACT",
+                    disambiguation_contract["d7_execution_state"],
+                    "candidate_disambiguation_execution_contract",
+                    "restore_candidate_disambiguation_lineage_or_probe_contract",
+                    assessment={
+                        "candidate_disambiguation_execution_contract": (
+                            disambiguation_contract
+                        ),
+                    },
+                )
         if self._existing_raw_result(schedule):
             return self._admission_block(
                 "BLOCKED_EXISTING_RAW_RESULT",
@@ -518,6 +538,22 @@ class ValidationTaskExecutionPipeline:
             failures.append("attempt_limit_reached")
         if self._existing_raw_result(schedule):
             failures.append("validation_execution_already_exists")
+        disambiguation_contract = {}
+        if plan:
+            disambiguation_contract = self._candidate_disambiguation_execution_contract(
+                schedule,
+                plan,
+                {},
+            )
+            if (
+                disambiguation_contract.get("contract_applicability")
+                == "APPLICABLE"
+                and disambiguation_contract.get("d7_execution_state")
+                != "DISCRIMINATIVE_EXECUTION_VALID"
+            ):
+                failures.append(
+                    f"candidate_disambiguation_contract_{disambiguation_contract.get('d7_execution_state')}"
+                )
         return {
             "schema_version": "1.0",
             "system": "validation_execution_admission_assessment",
@@ -554,6 +590,7 @@ class ValidationTaskExecutionPipeline:
             "duplicate_execution": "validation_execution_already_exists" in failures,
             "retry_allowed": int(schedule.get("attempt_count", 0) or 0) == 0,
             "governance_permits": True,
+            "candidate_disambiguation_execution_contract": disambiguation_contract,
             "assessment_failures": sorted(set(failures)),
         }
 
@@ -573,6 +610,18 @@ class ValidationTaskExecutionPipeline:
         )
         if raw_task.get("validation_task_type") == "causal_operation_effect":
             return self._run_causal_operation_effect_task(
+                raw_task,
+                runner_input,
+                schedule,
+                plan,
+            )
+        if (
+            raw_task.get("validation_task_type")
+            == "candidate_discriminative_probe"
+            or runner_input.get("target_operation")
+            == "candidate_discriminative_probe"
+        ):
+            return self._run_candidate_discriminative_probe_task(
                 raw_task,
                 runner_input,
                 schedule,
@@ -602,6 +651,76 @@ class ValidationTaskExecutionPipeline:
                 "canonical_source_identity"
             ),
             "source_lineage": list(source_descriptor.get("source_lineage") or []),
+        }
+
+    def _run_candidate_discriminative_probe_task(
+        self,
+        raw_task: dict[str, Any],
+        runner_input: dict[str, Any],
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        contract = self._candidate_disambiguation_execution_contract(
+            schedule,
+            plan,
+            {"raw_task": raw_task},
+        )
+        validation = {
+            "schema_version": "1.0",
+            "d7_execution_state": contract["d7_execution_state"],
+            "disambiguation_method": contract["disambiguation_method"],
+            "candidate_set_id": contract.get("candidate_set_id"),
+            "candidate_ids": contract.get("candidate_ids", []),
+            "candidate_a_id": contract.get("candidate_a_id"),
+            "candidate_b_id": contract.get("candidate_b_id"),
+            "candidate_a_prediction": contract.get("candidate_a_prediction"),
+            "candidate_b_prediction": contract.get("candidate_b_prediction"),
+            "prediction_difference": contract.get("prediction_difference"),
+            "discriminating_condition": contract.get("discriminating_condition"),
+            "expected_observation_a": contract.get("expected_observation_a"),
+            "expected_observation_b": contract.get("expected_observation_b"),
+            "discriminating_condition_exercised": (
+                contract["d7_execution_state"] == "DISCRIMINATIVE_EXECUTION_VALID"
+            ),
+            "disagreement_id": contract.get("disagreement_id"),
+            "disambiguation_need_id": contract.get("disambiguation_need_id"),
+            "evidence_plan_id": plan.get("plan_id"),
+            "validation_schedule_id": schedule.get("schedule_id"),
+            "validation_request_id": schedule.get("source_validation_request_id"),
+            "authority": "VALIDATION_EXECUTION_PIPELINE",
+            "behavioral_authority": "NONE",
+            "accepted_evidence_created": False,
+            "arena_winner_created": False,
+            "truth_authority": "NONE",
+        }
+        return {
+            "predicted_output": {
+                "runner_output_type": "candidate_discriminative_probe_observation",
+                "task_id": runner_input["task_id"],
+                "target_operation": runner_input["target_operation"],
+                "required_evidence": runner_input["required_evidence"],
+                "candidate_disambiguation_execution": validation,
+            },
+            "case_outputs": [{
+                "case_id": "candidate_discriminative_probe_case_0",
+                "output": {
+                    "task_id": runner_input["task_id"],
+                    "execution_scope": self.EXECUTION_SCOPE,
+                    "reference_visible_to_runner": False,
+                    "candidate_disambiguation_execution": validation,
+                },
+            }],
+            "candidate_disambiguation_execution": validation,
+            "runner_trace_reference": {
+                "runner_id": self.RUNNER_ID,
+                "target_reference_forwarded_to_solver": False,
+            },
+            "canonical_source_identity": validation.get("disambiguation_need_id"),
+            "source_lineage": [
+                validation.get("disambiguation_need_id"),
+                validation.get("candidate_set_id"),
+                validation.get("disagreement_id"),
+            ],
         }
 
     def _run_causal_operation_effect_task(
@@ -764,6 +883,197 @@ class ValidationTaskExecutionPipeline:
             "runner_input_payload": runner_input,
             "sealed_reference_payload": sealed_reference,
             "target_reference_forwarded_to_solver": False,
+        }
+
+    def _candidate_disambiguation_execution_contract(
+        self,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        task: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self._is_candidate_disambiguation_execution(schedule, plan, task):
+            return {
+                "contract_applicability": "NOT_APPLICABLE",
+                "d7_execution_state": "EXECUTION_NOT_APPLICABLE",
+            }
+        intent = self._candidate_disambiguation_intent(schedule, plan)
+        failures: list[str] = []
+        candidate_ids = [
+            str(item)
+            for item in intent.get("candidate_ids", []) or []
+            if str(item or "").strip()
+        ]
+        predictions = intent.get("expected_discriminating_outcome", {}).get(
+            "candidate_predictions",
+        )
+        if not predictions:
+            predictions = intent.get("expected_candidate_predictions")
+        if not intent.get("disambiguation_need_id"):
+            failures.append("missing_disambiguation_need_id")
+        if not intent.get("candidate_set_id"):
+            failures.append("missing_candidate_set_id")
+        if len(candidate_ids) < 2:
+            failures.append("missing_candidate_identity")
+        if not intent.get("disagreement_id"):
+            failures.append("missing_disagreement_identity")
+        if schedule.get("plan_id") != plan.get("plan_id"):
+            failures.append("cross_plan_execution")
+        if (
+            schedule.get("canonical_source_identity")
+            and intent.get("disambiguation_need_id")
+            and schedule.get("canonical_source_identity")
+            != intent.get("disambiguation_need_id")
+        ):
+            failures.append("stale_disambiguation_plan")
+        if not self._candidate_predictions_differ(predictions):
+            failures.append("non_discriminating_execution")
+        candidate_a = candidate_ids[0] if candidate_ids else None
+        candidate_b = candidate_ids[1] if len(candidate_ids) > 1 else None
+        prediction_a = (
+            predictions.get(candidate_a)
+            if isinstance(predictions, dict) and candidate_a
+            else None
+        )
+        prediction_b = (
+            predictions.get(candidate_b)
+            if isinstance(predictions, dict) and candidate_b
+            else None
+        )
+        state = "DISCRIMINATIVE_EXECUTION_VALID"
+        if "missing_candidate_identity" in failures:
+            state = "INVALID_CANDIDATE_BINDING"
+        elif "missing_disagreement_identity" in failures:
+            state = "INVALID_DISAGREEMENT_BINDING"
+        elif "missing_candidate_set_id" in failures:
+            state = "CANDIDATE_SET_CHANGED"
+        elif "cross_plan_execution" in failures:
+            state = "STALE_DISAMBIGUATION_PLAN"
+        elif "stale_disambiguation_plan" in failures:
+            state = "STALE_DISAMBIGUATION_PLAN"
+        elif "non_discriminating_execution" in failures:
+            state = "NON_DISCRIMINATING_EXECUTION"
+        elif failures:
+            state = "DISAGREEMENT_NO_LONGER_PRESENT"
+        return {
+            "contract_applicability": "APPLICABLE",
+            "d7_execution_state": state,
+            "contract_failures": sorted(set(failures)),
+            "disambiguation_method": "DIRECT",
+            "candidate_set_id": intent.get("candidate_set_id"),
+            "candidate_ids": candidate_ids,
+            "candidate_a_id": candidate_a,
+            "candidate_b_id": candidate_b,
+            "candidate_a_prediction": prediction_a,
+            "candidate_b_prediction": prediction_b,
+            "prediction_difference": self._prediction_difference(
+                prediction_a,
+                prediction_b,
+            ),
+            "discriminating_condition": (
+                "DIRECT_OUTPUT_DIFFERENCE_ON_FROZEN_ARENA_CONTEXT"
+            ),
+            "expected_observation_a": prediction_a,
+            "expected_observation_b": prediction_b,
+            "disagreement_id": intent.get("disagreement_id"),
+            "disagreement_type": intent.get("disagreement_type"),
+            "disambiguation_need_id": intent.get("disambiguation_need_id"),
+            "validation_request_id": schedule.get("source_validation_request_id"),
+            "evidence_plan_id": plan.get("plan_id"),
+            "validation_schedule_id": schedule.get("schedule_id"),
+            "candidate_identity_preserved": "missing_candidate_identity" not in failures,
+            "candidate_set_identity_preserved": "missing_candidate_set_id" not in failures,
+            "disagreement_identity_preserved": (
+                "missing_disagreement_identity" not in failures
+            ),
+            "plan_to_schedule_binding": schedule.get("plan_id") == plan.get("plan_id"),
+        }
+
+    def _is_candidate_disambiguation_execution(
+        self,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+        task: dict[str, Any],
+    ) -> bool:
+        raw_task = task.get("raw_task") if isinstance(task, dict) else {}
+        return any(
+            value == "candidate_discriminative_probe_evidence"
+            for value in (
+                schedule.get("required_evidence"),
+                plan.get("required_evidence"),
+            )
+        ) or any(
+            value == "candidate_discriminative_probe"
+            for value in (
+                schedule.get("target_operation"),
+                plan.get("target_operation"),
+                schedule.get("tie_break_strategy"),
+                plan.get("tie_break_strategy"),
+            )
+        ) or raw_task.get("validation_task_type") == "candidate_discriminative_probe"
+
+    def _candidate_disambiguation_intent(
+        self,
+        schedule: dict[str, Any],
+        plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        for source in (plan, schedule):
+            subject = source.get("capability_subject")
+            if isinstance(subject, dict) and isinstance(
+                subject.get("validation_intent"),
+                dict,
+            ):
+                return dict(subject["validation_intent"])
+            evidence_need = source.get("evidence_need")
+            if isinstance(evidence_need, dict) and isinstance(
+                evidence_need.get("candidate_disambiguation_validation_intent"),
+                dict,
+            ):
+                return dict(evidence_need["candidate_disambiguation_validation_intent"])
+            provenance = source.get("provenance")
+            if isinstance(provenance, dict) and isinstance(
+                provenance.get("candidate_disambiguation_validation_intent"),
+                dict,
+            ):
+                return dict(provenance["candidate_disambiguation_validation_intent"])
+        return {}
+
+    def _candidate_predictions_differ(self, predictions: Any) -> bool:
+        if not isinstance(predictions, dict) or len(predictions) < 2:
+            return False
+        encoded = {
+            json.dumps(value, sort_keys=True, ensure_ascii=True, default=str)
+            for value in predictions.values()
+        }
+        return len(encoded) > 1
+
+    def _prediction_difference(self, left: Any, right: Any) -> dict[str, Any]:
+        if left == right:
+            return {"difference_state": "NO_DIFFERENCE", "differing_positions": []}
+        differences = []
+        if isinstance(left, list) and isinstance(right, list):
+            for row_index, left_row in enumerate(left):
+                right_row = right[row_index] if row_index < len(right) else None
+                if isinstance(left_row, list) and isinstance(right_row, list):
+                    width = max(len(left_row), len(right_row))
+                    for col_index in range(width):
+                        lval = left_row[col_index] if col_index < len(left_row) else None
+                        rval = right_row[col_index] if col_index < len(right_row) else None
+                        if lval != rval:
+                            differences.append({
+                                "row": row_index,
+                                "col": col_index,
+                                "candidate_a": lval,
+                                "candidate_b": rval,
+                            })
+                elif left_row != right_row:
+                    differences.append({
+                        "row": row_index,
+                        "candidate_a": left_row,
+                        "candidate_b": right_row,
+                    })
+        return {
+            "difference_state": "PREDICTIONS_DIFFER",
+            "differing_positions": differences,
         }
 
     def _raw_result_record(
@@ -1083,6 +1393,15 @@ class ValidationTaskExecutionPipeline:
             "case_outputs": runner_output.get("case_outputs") or [],
             "causal_validation_result": runner_output.get(
                 "causal_validation_result"
+            ),
+            "candidate_disambiguation_execution": runner_output.get(
+                "candidate_disambiguation_execution"
+            ),
+            "candidate_disambiguation_d7_execution_state": (
+                (
+                    runner_output.get("candidate_disambiguation_execution")
+                    or {}
+                ).get("d7_execution_state")
             ),
             "runner_trace_reference": runner_output.get("runner_trace_reference"),
             "runtime_error": None,
@@ -1832,6 +2151,12 @@ class ValidationTaskExecutionPipeline:
             "raw_validation_result_envelope": raw_result.get(
                 "raw_validation_result_envelope",
             ),
+            "candidate_disambiguation_execution": raw_result.get(
+                "candidate_disambiguation_execution",
+            ),
+            "candidate_disambiguation_d7_execution_state": raw_result.get(
+                "candidate_disambiguation_d7_execution_state",
+            ),
             "evidence_state": "NOT_EVALUATED",
             "active_execution_lease": False,
             "boot_recovery_route": "RAW_RESULT_CAPTURED_TO_VALIDATION_EVIDENCE_EVALUATOR",
@@ -1913,6 +2238,12 @@ class ValidationTaskExecutionPipeline:
             ),
             "raw_validation_result_envelope": raw_result.get(
                 "raw_validation_result_envelope",
+            ),
+            "candidate_disambiguation_execution": raw_result.get(
+                "candidate_disambiguation_execution",
+            ),
+            "candidate_disambiguation_d7_execution_state": raw_result.get(
+                "candidate_disambiguation_d7_execution_state",
             ),
             "execution_state": raw_result.get("result_state", "RAW_RESULT_CAPTURED"),
             "execution_invoked": True,
@@ -2028,6 +2359,12 @@ class ValidationTaskExecutionPipeline:
             ),
             "RAW_VALIDATION_RESULT_ENVELOPE": envelope,
             "raw_validation_result_envelope": envelope,
+            "candidate_disambiguation_execution": raw_result.get(
+                "candidate_disambiguation_execution",
+            ),
+            "candidate_disambiguation_d7_execution_state": raw_result.get(
+                "candidate_disambiguation_d7_execution_state",
+            ),
             "run_id": raw_result.get("run_id"),
             "batch_id": raw_result.get("batch_id"),
             "task_id": raw_result.get("task_id"),
@@ -2247,6 +2584,8 @@ class ValidationTaskExecutionPipeline:
             return "BLOCKED_ACTIVE_EXECUTION"
         if failure == "attempt_limit_reached":
             return "BLOCKED_ATTEMPT_LIMIT"
+        if failure.startswith("candidate_disambiguation_contract_"):
+            return "BLOCKED_CANDIDATE_DISAMBIGUATION_CONTRACT"
         return "BLOCKED_PREEXECUTION_CURRENTNESS"
 
     def _schedule_identity(self, schedule: dict[str, Any]) -> dict[str, Any]:

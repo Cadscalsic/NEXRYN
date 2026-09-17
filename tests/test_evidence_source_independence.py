@@ -225,6 +225,100 @@ def test_missing_provenance_returns_unknown():
     assert coverage["current_proven_independent_source_count"] == 0
 
 
+def _weak_evidence(evidence_id, **overrides):
+    item = {
+        "accepted_evidence_id": evidence_id,
+        "claim_id": "claim_a",
+        "evidence_direction": "SUPPORTING",
+        "evidence_acceptance_state": "ACCEPTED",
+    }
+    item.update(overrides)
+    return item
+
+
+def test_different_run_only_weak_provenance_does_not_count():
+    engine = EvidenceSourceIndependenceEngine()
+    coverage = engine.source_coverage([
+        _weak_evidence("accepted_a", source_run_id="run_a"),
+        _weak_evidence("accepted_b", source_run_id="run_b"),
+    ], claim_id="claim_a")
+
+    assert coverage["current_proven_independent_source_count"] == 0
+    assert len(coverage["unknown_dependence_artifacts"]) == 2
+
+
+def test_different_task_only_weak_provenance_does_not_count():
+    engine = EvidenceSourceIndependenceEngine()
+    coverage = engine.source_coverage([
+        _weak_evidence("accepted_a", selected_validation_task_id="task_a"),
+        _weak_evidence("accepted_b", selected_validation_task_id="task_b"),
+    ], claim_id="claim_a")
+
+    assert coverage["current_proven_independent_source_count"] == 0
+
+
+def test_different_run_task_tuple_weak_provenance_does_not_count():
+    engine = EvidenceSourceIndependenceEngine()
+    coverage = engine.source_coverage([
+        _weak_evidence(
+            "accepted_a",
+            source_run_id="run_a",
+            selected_validation_task_id="task_a",
+        ),
+        _weak_evidence(
+            "accepted_b",
+            source_run_id="run_b",
+            selected_validation_task_id="task_b",
+        ),
+    ], claim_id="claim_a")
+
+    assert coverage["current_proven_independent_source_count"] == 0
+
+
+def test_different_evidence_id_only_does_not_count_as_source_identity():
+    engine = EvidenceSourceIndependenceEngine()
+    coverage = engine.source_coverage([
+        _weak_evidence(
+            "accepted_a",
+            source_provenance={
+                "source_provenance_state": "SOURCE_PROVENANCE_BOUND",
+                "producer_operation_id": "accepted_a",
+                "producer_component_id": "validation_task_execution_pipeline",
+                "producer_source_type": "scheduled_validation_task",
+            },
+        ),
+        _weak_evidence(
+            "accepted_b",
+            source_provenance={
+                "source_provenance_state": "SOURCE_PROVENANCE_BOUND",
+                "producer_operation_id": "accepted_b",
+                "producer_component_id": "validation_task_execution_pipeline",
+                "producer_source_type": "scheduled_validation_task",
+            },
+        ),
+    ], claim_id="claim_a")
+
+    assert coverage["current_proven_independent_source_count"] == 0
+    assert {
+        row["reason"] for row in coverage["unknown_dependence_artifacts"]
+    } == {"producer_operation_id_is_artifact_identity_not_source_identity"}
+
+
+def test_causal_support_with_weak_provenance_keeps_causality_but_no_independence_credit():
+    engine = EvidenceSourceIndependenceEngine()
+    evidence = _weak_evidence(
+        "accepted_causal",
+        causal_support_state="CAUSALLY_SUPPORTED",
+        source_run_id="run_a",
+        selected_validation_task_id="task_a",
+    )
+
+    coverage = engine.source_coverage([evidence], claim_id="claim_a")
+
+    assert evidence["causal_support_state"] == "CAUSALLY_SUPPORTED"
+    assert coverage["current_proven_independent_source_count"] == 0
+
+
 def test_potential_independence_does_not_certify_realized_independence():
     engine = EvidenceSourceIndependenceEngine()
     potential = engine.independent_source_potential(

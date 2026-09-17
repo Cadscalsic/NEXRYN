@@ -19,6 +19,7 @@ class EvidenceNeedType(str, Enum):
     REPRODUCIBILITY_REQUIRED = "REPRODUCIBILITY_REQUIRED"
     CONTRADICTION_RESOLUTION_REQUIRED = "CONTRADICTION_RESOLUTION_REQUIRED"
     REVALIDATION_REQUIRED = "REVALIDATION_REQUIRED"
+    CANDIDATE_DISAMBIGUATION_REQUIRED = "CANDIDATE_DISAMBIGUATION_REQUIRED"
 
 
 class EvidenceNeedLifecycleStatus(str, Enum):
@@ -38,6 +39,7 @@ class DeficitSignalType(str, Enum):
     CONTRADICTION_RESOLUTION_DEFICIT = "CONTRADICTION_RESOLUTION_DEFICIT"
     REVALIDATION_DEFICIT = "REVALIDATION_DEFICIT"
     GENERAL_SUPPORT_DEFICIT = "GENERAL_SUPPORT_DEFICIT"
+    CANDIDATE_DISAMBIGUATION_DEFICIT = "CANDIDATE_DISAMBIGUATION_DEFICIT"
     NOT_ELIGIBLE_FOR_NEED_PROPOSAL = "NOT_ELIGIBLE_FOR_NEED_PROPOSAL"
 
 
@@ -56,6 +58,9 @@ NEED_TYPE_TO_SUPPORT_CLASS = {
     EvidenceNeedType.REVALIDATION_REQUIRED.value: (
         "fresh_governed_revalidation_support"
     ),
+    EvidenceNeedType.CANDIDATE_DISAMBIGUATION_REQUIRED.value: (
+        "candidate_disambiguation_validation_support"
+    ),
 }
 
 
@@ -68,6 +73,7 @@ ALLOWED_PRODUCERS = {
     "TruthCurrentAuthorityLifecycle",
     "KnowledgeCurrentAuthority",
     "CurrentEvidenceNeedAuthorityEngine",
+    "CandidateDisambiguationEvidenceLayer",
 }
 
 
@@ -1077,6 +1083,12 @@ class CurrentEvidenceNeedAuthorityEngine:
                 support.get("revalidation_state") == "REVALIDATED"
                 or support.get("fresh_governed_validation_support") is True
             )
+        if need_type == EvidenceNeedType.CANDIDATE_DISAMBIGUATION_REQUIRED.value:
+            return support.get("candidate_disambiguation_state") in {
+                "DISAMBIGUATED",
+                "TIE_CONFIRMED_NON_DISCRIMINATING_EVIDENCE",
+                "TIE_REMAINS_OBSERVATIONALLY_EQUIVALENT",
+            }
         return False
 
     def _state_integrity_valid(self, state: Mapping[str, Any]) -> bool:

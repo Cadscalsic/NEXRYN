@@ -39,6 +39,7 @@ REQUEST_SCOPE_BY_SPONSORSHIP_SCOPE = {
     "INDEPENDENT_REPLICATION_VALIDATION": "REPRODUCIBILITY",
     "CONTRADICTION_RESOLUTION_VALIDATION": "CONTRADICTION_RESOLUTION",
     "REVALIDATION": "REVALIDATION",
+    "CANDIDATE_DISAMBIGUATION_VALIDATION": "CANDIDATE_DISAMBIGUATION",
 }
 
 
@@ -78,6 +79,12 @@ REQUEST_NEED_CONTRACT = {
         "required_evidence": "governed_revalidation_evidence",
         "required_validation_task": "governed_revalidation_task",
         "tie_break_strategy": "governed_revalidation",
+    },
+    "CANDIDATE_DISAMBIGUATION_REQUIRED": {
+        "required_evidence_category": "CANDIDATE_DISAMBIGUATION",
+        "required_evidence": "candidate_discriminative_probe_evidence",
+        "required_validation_task": "candidate_discriminative_probe_validation_task",
+        "tie_break_strategy": "candidate_discriminative_probe",
     },
 }
 

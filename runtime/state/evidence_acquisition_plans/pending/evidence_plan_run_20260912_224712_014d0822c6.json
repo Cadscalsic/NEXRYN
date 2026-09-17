@@ -394,6 +394,22 @@
       "event": "raw_result_captured_plan_restored_at_boot",
       "state": "RAW_RESULT_CAPTURED",
       "timestamp": "2026-09-13T17:01:58.181838+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-14T19:14:07.241801+00:00"
+    },
+    {
+      "event": "equivalent_plan_observed",
+      "source_run_id": "run_20260914_191406",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-14T19:15:18.650124+00:00"
+    },
+    {
+      "event": "raw_result_captured_plan_restored_at_boot",
+      "state": "RAW_RESULT_CAPTURED",
+      "timestamp": "2026-09-15T12:05:51.834689+00:00"
     }
   ],
   "identity_schema_version": "1.0",
@@ -402,7 +418,7 @@
   "matching_explanation": "primary_required_evidence_match, required_evidence_category_match, cross_source_compatibility, cross_domain_usefulness, operational_reuse_signal",
   "matching_score": 88.0,
   "need_type": "Not Available",
-  "observation_count": 7,
+  "observation_count": 8,
   "plan_authority": "EVIDENCE_ACQUISITION_PLAN_STORE",
   "plan_fingerprint": "dc9f76136cc8dacc32ddf38e0cc12dbfd667d9de55f20bfcdfb4253ee73b84c0",
   "plan_id": "evidence_plan_run_20260912_224712_014d0822c6",
@@ -774,7 +790,7 @@
   "training_experience_origin": {},
   "trust_authority": "NONE",
   "truth_authority": "NONE",
-  "updated_at": "2026-09-13T17:02:02.994582+00:00",
+  "updated_at": "2026-09-15T12:06:01.735213+00:00",
   "validation_execution_authority": "VALIDATION_EXECUTION_PIPELINE",
   "validation_execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
   "validation_request_id": "Not Available",

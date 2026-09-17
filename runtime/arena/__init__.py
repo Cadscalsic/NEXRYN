@@ -5,6 +5,10 @@ from runtime.arena.candidate_diversity_analyzer import (
     CandidateDiversityAnalyzer,
     candidate_diversity_analyzer,
 )
+from runtime.arena.candidate_disambiguation import (
+    CandidateDisambiguationEvidenceLayer,
+    candidate_disambiguation_evidence_layer,
+)
 from runtime.arena.candidate_normalizer import CandidateNormalizer, candidate_normalizer
 from runtime.arena.candidate_proposal_gateway import (
     CandidateProposalGateway,
@@ -30,6 +34,8 @@ __all__ = [
     "arena_memory",
     "CandidateDiversityAnalyzer",
     "candidate_diversity_analyzer",
+    "CandidateDisambiguationEvidenceLayer",
+    "candidate_disambiguation_evidence_layer",
     "CandidateNormalizer",
     "candidate_normalizer",
     "CandidateProposalGateway",

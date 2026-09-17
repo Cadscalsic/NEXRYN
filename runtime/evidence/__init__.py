@@ -13,6 +13,12 @@ from runtime.evidence.current_evidence_need import (
     EvidenceNeedSubject,
     EvidenceNeedType,
 )
+from runtime.evidence.candidate_disambiguation_planning_adapter import (
+    CandidateDisambiguationPlanningAdapter,
+)
+from runtime.evidence.candidate_disambiguation_production_invocation import (
+    CandidateDisambiguationProductionInvocationPolicy,
+)
 from runtime.evidence.training_outcome_validation_boundary import (
     TrainingOutcomeValidationBoundary,
 )
@@ -41,6 +47,8 @@ from runtime.evidence.validation_request import (
 
 __all__ = [
     "CurrentEvidenceNeedAuthorityEngine",
+    "CandidateDisambiguationPlanningAdapter",
+    "CandidateDisambiguationProductionInvocationPolicy",
     "CurrentEvidenceNeedError",
     "DeficitSignalType",
     "EVIDENCE_CATEGORIES",

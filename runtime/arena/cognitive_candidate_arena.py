@@ -9,6 +9,7 @@ import numpy as np
 
 from runtime.arena.arena_memory import ArenaMemory
 from runtime.arena.candidate_diversity_analyzer import CandidateDiversityAnalyzer
+from runtime.arena.candidate_disambiguation import CandidateDisambiguationEvidenceLayer
 from runtime.arena.candidate_normalizer import CandidateNormalizer
 from runtime.arena.candidate_proposal_gateway import CandidateProposalGateway
 from runtime.arena.candidate_scorer import CandidateScorer
@@ -30,6 +31,7 @@ class CognitiveCandidateArena:
         simulator: CandidateSimulator | None = None,
         scorer: CandidateScorer | None = None,
         diversity_analyzer: CandidateDiversityAnalyzer | None = None,
+        disambiguation_layer: CandidateDisambiguationEvidenceLayer | None = None,
         dominance_guard: SourceDominanceGuard | None = None,
         winner_policy: WinnerSelectionPolicy | None = None,
         memory: ArenaMemory | None = None,
@@ -39,6 +41,9 @@ class CognitiveCandidateArena:
         self.simulator = simulator or CandidateSimulator()
         self.scorer = scorer or CandidateScorer()
         self.diversity_analyzer = diversity_analyzer or CandidateDiversityAnalyzer()
+        self.disambiguation_layer = (
+            disambiguation_layer or CandidateDisambiguationEvidenceLayer()
+        )
         self.dominance_guard = dominance_guard or SourceDominanceGuard()
         self.winner_policy = winner_policy or WinnerSelectionPolicy()
         self.memory = memory or ArenaMemory()
@@ -80,6 +85,14 @@ class CognitiveCandidateArena:
             scores.append(score)
 
         selection = self.winner_policy.select(scores, simulations, analysis_only=analysis_only)
+        disambiguation = self.disambiguation_layer.analyze(
+            eligible,
+            scores,
+            simulations,
+            selection,
+            runtime_context=runtime_context,
+            task_signature=task_signature,
+        )
         winner_score = selection.get("winner_candidate") or {}
         selected_states = {"WINNER_SELECTED", "CONDITIONAL_WINNER", "SANDBOX_ONLY_WINNER"}
         winner = (
@@ -190,6 +203,24 @@ class CognitiveCandidateArena:
             "missing_candidate_sources": source_policy["missing_sources"],
             "no_competition_reason": self._no_competition_reason(eligible, diversity, gateway_report, blocked),
             "selection_explanation": selection.get("selection_explanation"),
+            "candidate_set_id": disambiguation.get("candidate_set_id"),
+            "candidate_identity_contract_state": disambiguation.get(
+                "candidate_identity_contract_state"
+            ),
+            "candidate_disagreement_model_state": disambiguation.get(
+                "disagreement_model_state"
+            ),
+            "candidate_disambiguation_need_count": disambiguation.get(
+                "disambiguation_need_count",
+                0,
+            ),
+            "candidate_disambiguation_authority": disambiguation.get("authority"),
+            "candidate_disambiguation_behavioral_authority": (
+                disambiguation.get("behavioral_authority")
+            ),
+            "candidate_disambiguation_resolution_state": disambiguation.get(
+                "resolution_state"
+            ),
             "validation_probe_candidate_id": validation_probe.get("candidate_id") if validation_probe else None,
             "validation_probe_operation": validation_probe.get("operation") if validation_probe else None,
             "validation_probe_source": validation_probe.get("source") if validation_probe else None,
@@ -273,6 +304,7 @@ class CognitiveCandidateArena:
                 "diversity_report": diversity,
                 "dominance_report": dominance,
                 "selection_report": selection,
+                "candidate_disambiguation_report": disambiguation,
                 "simulations": simulations,
                 "scores": scores,
                 "governance_decisions": governance,

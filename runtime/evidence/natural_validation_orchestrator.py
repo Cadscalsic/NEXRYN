@@ -6,6 +6,12 @@ from typing import Any, Iterable, Mapping
 from runtime.evidence.current_evidence_need import (
     CurrentEvidenceNeedAuthorityEngine,
 )
+from runtime.evidence.candidate_disambiguation_planning_adapter import (
+    CandidateDisambiguationPlanningAdapter,
+)
+from runtime.evidence.candidate_disambiguation_production_invocation import (
+    CandidateDisambiguationProductionInvocationPolicy,
+)
 from runtime.evidence.evidence_plan_store import EvidenceAcquisitionPlanStore
 from runtime.evidence.validation_request import ValidationRequestAuthorityEngine
 from runtime.evidence.validation_sponsorship import (
@@ -45,6 +51,16 @@ class NaturalCanonicalValidationOrchestrator:
             )
         )
         self.evidence_plan_store = evidence_plan_store or EvidenceAcquisitionPlanStore()
+        self.candidate_disambiguation_invocation_policy = (
+            CandidateDisambiguationProductionInvocationPolicy(
+                CandidateDisambiguationPlanningAdapter(
+                    need_authority=self.need_authority,
+                    sponsorship_authority=self.sponsorship_authority,
+                    request_authority=self.request_authority,
+                    plan_store=self.evidence_plan_store,
+                )
+            )
+        )
 
     def orchestrate(
         self,
@@ -155,6 +171,19 @@ class NaturalCanonicalValidationOrchestrator:
             "intent_authority": "NONE",
             "budget_authority": "NONE",
         }
+
+    def orchestrate_candidate_disambiguation(
+        self,
+        arena_report: Mapping[str, Any] | None,
+        *,
+        current_run_id: str | None = None,
+        max_new_needs: int = 3,
+    ) -> dict[str, Any]:
+        return self.candidate_disambiguation_invocation_policy.invoke_from_arena_report(
+            arena_report,
+            current_run_id=current_run_id,
+            max_needs=max_new_needs,
+        )
 
     def _orchestrate_candidate(
         self,
