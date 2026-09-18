@@ -281,6 +281,81 @@ def test_inert_arena_report_does_not_require_target_operation_when_raw_result_no
     assert "Expected artifact missing" not in report
 
 
+def test_historical_validation_is_explicitly_temporal_and_separate_from_applicability():
+    state = {
+        "run_id": "run_20260918_134610",
+        "VALIDATION_TASK_EXECUTION_REPORT": {
+            "schedule_id": "validation_schedule_2d691993a3f0",
+            "execution_id": "validation_execution_ee0df5fc5fed",
+            "execution_state": "RAW_RESULT_CAPTURED",
+            "run_id": "run_20260911_201658",
+        },
+        "RAW_RESULT_APPLICABILITY_REPORT": {
+            "raw_result_applicability_state": "RAW_RESULT_NOT_APPLICABLE",
+            "raw_result_producer_obligation_count": 0,
+            "qualifying_producer_count": 0,
+        },
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata={"execution_id": "run_20260918_134610"},
+    )
+
+    assert "Validation Activity Temporal State: HISTORICAL_PERSISTED_ACTIVITY" in report
+    assert "Validation Schedule Origin Run Id: run_20260911_201658" in report
+    assert "Validation Execution Origin Run Id: run_20260911_201658" in report
+    assert "Validation Activity Current Run: FALSE" in report
+    assert "Validation Execution State: RAW_RESULT_CAPTURED" in report
+    assert "Raw Result Applicability State: RAW_RESULT_NOT_APPLICABLE" in report
+
+
+def test_current_validation_execution_is_current_run_activity():
+    state = {
+        "VALIDATION_TASK_EXECUTION_REPORT": {
+            "schedule_id": "validation_schedule_current",
+            "execution_id": "validation_execution_current",
+            "execution_state": "RAW_RESULT_CAPTURED",
+            "run_id": "run_current",
+            "execution_invoked": True,
+            "execution_started": True,
+            "raw_result_captured": True,
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata={"execution_id": "run_current"},
+    )
+
+    assert "Validation Activity Temporal State: CURRENT_RUN_ACTIVITY" in report
+    assert "Validation Activity Run Id: run_current" in report
+    assert "Validation Activity Current Run: TRUE" in report
+
+
+def test_cross_run_continuation_is_distinct_from_historical_projection():
+    state = {
+        "VALIDATION_TASK_EXECUTION_REPORT": {
+            "schedule_id": "validation_schedule_continuation",
+            "execution_id": "validation_execution_continuation",
+            "execution_state": "RAW_RESULT_CAPTURED",
+            "run_id": "run_a",
+            "execution_invoked_in_current_run": True,
+            "execution_started": True,
+        }
+    }
+
+    report = DeterministicFinalReportRenderer().render(
+        state,
+        runtime_metadata={"execution_id": "run_b"},
+    )
+
+    assert "Validation Activity Temporal State: CROSS_RUN_CONTINUATION" in report
+    assert "Validation Execution Origin Run Id: run_a" in report
+    assert "Validation Activity Run Id: run_b" in report
+    assert "Validation Activity Current Run: TRUE" in report
+
+
 def test_explicit_target_operation_remains_bound_when_raw_result_not_applicable():
     report = DeterministicFinalReportRenderer().render(
         {

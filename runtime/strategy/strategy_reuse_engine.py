@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Iterable, Mapping
 
 
@@ -107,10 +108,13 @@ class StrategyReuseEngine:
         )
 
     def _score(self, value: Any) -> float:
+        if value is None:
+            return 0.0
         try:
-            return max(0.0, min(1.0, float(value)))
+            score = float(value)
         except (TypeError, ValueError):
             return 0.0
+        return max(0.0, min(1.0, score)) if math.isfinite(score) else 0.0
 
 
 strategy_reuse_engine = StrategyReuseEngine()

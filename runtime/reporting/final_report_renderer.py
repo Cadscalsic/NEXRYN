@@ -1324,6 +1324,11 @@ class DeterministicFinalReportRenderer:
         raw_result_not_applicable = (
             raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE"
         )
+        temporal = self._validation_activity_temporal_state(
+            canonical,
+            validation,
+            evaluation,
+        )
         validation_target_required = bool(validation) and not raw_result_not_applicable and (
             raw_result_captured
             or self._meaningful_token(validation.get("scheduled_validation_task"))
@@ -1442,6 +1447,11 @@ class DeterministicFinalReportRenderer:
         bind("evidence_plan_id", "Evidence Plan Id", ["report_state.EVIDENCE_GENERATION_REPORT.evidence_plan_id", "report_state.EVIDENCE_GENERATION_REPORT.plan_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.evidence_plan_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_plan_id"], required=False, absence="NOT_PRODUCED")
         bind("scheduled_validation_task", "Scheduled Validation Task", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_validation_task", "report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_task", "report_state.EVIDENCE_GENERATION_REPORT.scheduled_validation_task"], required=False, absence="NOT_PRODUCED")
         bind("validation_schedule_id", "Validation Schedule Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_schedule_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.schedule_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_schedule_id"], required=False, absence="NOT_PRODUCED")
+        fields["validation_activity_temporal_state"] = self._resolved_human_field("validation_activity_temporal_state", "Validation Activity Temporal State", temporal["state"], "computed.validation_activity_temporal_state")
+        fields["validation_schedule_origin_run_id"] = self._resolved_human_field("validation_schedule_origin_run_id", "Validation Schedule Origin Run Id", temporal["schedule_origin_run_id"], "computed.validation_activity_temporal_state.schedule_origin_run_id")
+        fields["validation_execution_origin_run_id"] = self._resolved_human_field("validation_execution_origin_run_id", "Validation Execution Origin Run Id", temporal["execution_origin_run_id"], "computed.validation_activity_temporal_state.execution_origin_run_id")
+        fields["validation_activity_run_id"] = self._resolved_human_field("validation_activity_run_id", "Validation Activity Run Id", temporal["current_activity_run_id"], "computed.validation_activity_temporal_state.current_activity_run_id")
+        fields["validation_activity_current_run"] = self._resolved_human_field("validation_activity_current_run", "Validation Activity Current Run", temporal["current_run_activity"], "computed.validation_activity_temporal_state.current_run_activity")
         bind("execution_admission", "Execution Admission", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_admission", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_admission_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
         bind("validation_execution_id", "Validation Execution Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_execution_id"], required=False, absence="NOT_PRODUCED")
@@ -1621,6 +1631,75 @@ class DeterministicFinalReportRenderer:
             "Engineering Conclusion Binding Conflict Count": len(engineering_conflicts),
             "Engineering Conclusion Projection Divergence Count": len(engineering_conflicts),
             "Human Report Generic Unavailable Value Count": generic_not_available,
+        }
+
+    def _validation_activity_temporal_state(
+        self,
+        canonical: dict[str, Any],
+        validation: dict[str, Any],
+        evaluation: dict[str, Any],
+    ) -> dict[str, Any]:
+        state = canonical.get("report_state", {})
+        metadata = canonical.get("runtime_metadata", {})
+        current_run_id = self._first_meaningful(
+            metadata.get("execution_id"),
+            state.get("run_id"),
+            default=None,
+        )
+        envelope = self._first_dict(
+            validation,
+            "RAW_VALIDATION_RESULT_ENVELOPE",
+            "raw_validation_result_envelope",
+        )
+        schedule_origin = self._first_meaningful(
+            validation.get("schedule_source_run_id"),
+            validation.get("schedule_origin_run_id"),
+            validation.get("source_run_id"),
+            validation.get("run_id"),
+            evaluation.get("schedule_source_run_id"),
+            default=None,
+        )
+        execution_origin = self._first_meaningful(
+            validation.get("execution_source_run_id"),
+            validation.get("origin_run_id"),
+            envelope.get("origin_run_id"),
+            envelope.get("run_id"),
+            validation.get("run_id"),
+            default=None,
+        )
+        current_activity = any(
+            validation.get(key) is True
+            for key in (
+                "current_run_execution",
+                "current_run_activity",
+                "runner_invoked_in_current_run",
+                "execution_invoked_in_current_run",
+            )
+        )
+        if not current_activity and current_run_id == execution_origin:
+            current_activity = any(
+                validation.get(key) is True
+                for key in (
+                    "execution_invoked",
+                    "execution_started",
+                    "raw_result_captured",
+                )
+            )
+        has_activity = bool(validation or evaluation)
+        if current_activity and current_run_id != execution_origin:
+            temporal_state = "CROSS_RUN_CONTINUATION"
+        elif current_activity:
+            temporal_state = "CURRENT_RUN_ACTIVITY"
+        elif has_activity:
+            temporal_state = "HISTORICAL_PERSISTED_ACTIVITY"
+        else:
+            temporal_state = "NOT_AVAILABLE"
+        return {
+            "state": temporal_state,
+            "schedule_origin_run_id": schedule_origin or "NOT_AVAILABLE",
+            "execution_origin_run_id": execution_origin or "NOT_AVAILABLE",
+            "current_activity_run_id": current_run_id if current_activity else "NOT_AVAILABLE",
+            "current_run_activity": current_activity,
         }
 
     def _human_report_conflict_attribution(
@@ -2266,9 +2345,14 @@ class DeterministicFinalReportRenderer:
             f"Evidence Plan Id: {self._human_value(canonical, 'evidence_plan_id')}",
             f"Scheduled Validation Task: {self._human_value(canonical, 'scheduled_validation_task')}",
             f"Validation Schedule Id: {self._human_value(canonical, 'validation_schedule_id')}",
+            f"Validation Activity Temporal State: {self._human_value(canonical, 'validation_activity_temporal_state')}",
+            f"Validation Schedule Origin Run Id: {self._human_value(canonical, 'validation_schedule_origin_run_id')}",
             f"Execution Admission: {self._human_value(canonical, 'execution_admission')}",
             f"Validation Execution State: {self._human_value(canonical, 'validation_execution_state')}",
             f"Validation Execution Id: {self._human_value(canonical, 'validation_execution_id')}",
+            f"Validation Execution Origin Run Id: {self._human_value(canonical, 'validation_execution_origin_run_id')}",
+            f"Validation Activity Run Id: {self._human_value(canonical, 'validation_activity_run_id')}",
+            f"Validation Activity Current Run: {self._human_value(canonical, 'validation_activity_current_run')}",
             f"Raw Result Applicability State: {self._human_value(canonical, 'raw_result_applicability_state')}",
             f"Raw Result Applicability Reason: {self._human_value(canonical, 'raw_result_applicability_reason')}",
             f"Raw Result Producer Obligation Count: {self._human_value(canonical, 'raw_result_producer_obligation_count')}",

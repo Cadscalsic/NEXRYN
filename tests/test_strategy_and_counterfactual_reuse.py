@@ -29,6 +29,29 @@ def test_strategy_reuse_promotes_committed_truths_to_solution_methods():
     )
 
 
+def test_strategy_reuse_treats_nullable_and_non_finite_scores_as_missing():
+    report = StrategyReuseEngine().evaluate(
+        truths=[{
+            "concept": "growth",
+            "truth_confidence": None,
+            "commit_score": float("nan"),
+        }],
+        hypotheses=[{
+            "concept": "growth",
+            "confidence": None,
+        }],
+        stored_strategies=[{
+            "concept": "growth",
+            "confidence": None,
+            "success_rate": float("inf"),
+        }],
+    )
+
+    assert report["strategy_hits"] == 0
+    assert report["strategy_misses"] == 1
+    assert report["missed_strategies"][0]["reuse_score"] == 0.0
+
+
 def test_counterfactual_reuse_tracks_hits_and_success():
     report = CounterfactualReuseEngine().evaluate(
         counterfactuals=[{
