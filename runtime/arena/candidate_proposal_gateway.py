@@ -119,6 +119,19 @@ class CandidateProposalGateway:
             "dependency_support": _score(data.get("dependency_support", 0.0)),
             "identity_support": _score(data.get("identity_support", data.get("identity_confidence", 0.0))),
             "localization_support": _score(data.get("localization_support", 0.0)),
+            "truth_support_metric": deepcopy(data.get("truth_support_metric")),
+            "localization_quality_metric": deepcopy(
+                data.get("localization_quality_metric")
+            ),
+            "candidate_support_grounding": deepcopy(
+                data.get("candidate_support_grounding")
+            ),
+            "truth_support_observations": deepcopy(
+                data.get("truth_support_observations") or []
+            ),
+            "localization_observations": deepcopy(
+                data.get("localization_observations") or []
+            ),
             "proposal_status": status,
             "rejection_reasons": reasons,
             **provenance_fields,

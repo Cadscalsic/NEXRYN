@@ -40,6 +40,7 @@ class ValidationEvidenceEvaluator:
         "structured_symbolic_output_comparison",
         "manifest_observation_comparison",
         "causal_operation_effect_comparison",
+        "candidate_disambiguation_evidence_comparison",
     }
 
     def __init__(
@@ -619,6 +620,18 @@ class ValidationEvidenceEvaluator:
         comparison_id: str,
         comparison_started_at: str,
     ) -> dict[str, Any]:
+        if contract.get("comparator_id") == (
+            "candidate_disambiguation_evidence_comparison"
+        ):
+            return self._compare_candidate_disambiguation(
+                plan,
+                schedule,
+                raw_result,
+                contract,
+                sealed_reference,
+                comparison_id,
+                comparison_started_at,
+            )
         if contract.get("comparator_id") == "causal_operation_effect_comparison":
             return self._compare_causal_operation_effect(
                 plan,
@@ -758,6 +771,168 @@ class ValidationEvidenceEvaluator:
             "runtime_error": None,
             "evidence_state": "NOT_YET_DECIDED",
             "arena_reentry_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "tie_resolved": False,
+            "winner_selected": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
+        }
+
+    def _compare_candidate_disambiguation(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+        contract: dict[str, Any],
+        sealed_reference: dict[str, Any],
+        comparison_id: str,
+        comparison_started_at: str,
+    ) -> dict[str, Any]:
+        observed = raw_result.get("candidate_disambiguation_execution")
+        observed = observed if isinstance(observed, dict) else {}
+        frozen = (
+            schedule.get("candidate_disambiguation_execution_contract")
+            or schedule.get("candidate_disambiguation_execution")
+        )
+        frozen = frozen if isinstance(frozen, dict) else {}
+        binding_fields = (
+            "candidate_set_id",
+            "candidate_a_id",
+            "candidate_b_id",
+            "candidate_a_prediction",
+            "candidate_b_prediction",
+            "disagreement_id",
+            "disambiguation_need_id",
+        )
+        failures = []
+        for field in binding_fields:
+            if observed.get(field) is None or frozen.get(field) is None:
+                failures.append(f"MISSING_{field.upper()}")
+            elif observed.get(field) != frozen.get(field):
+                failures.append(f"{field.upper()}_MISMATCH")
+        identity_bindings = {
+            "evidence_plan_id": plan.get("plan_id"),
+            "validation_schedule_id": schedule.get("schedule_id"),
+            "validation_request_id": schedule.get("source_validation_request_id"),
+        }
+        for field, expected in identity_bindings.items():
+            if observed.get(field) is None or expected is None:
+                failures.append(f"MISSING_{field.upper()}")
+            elif observed.get(field) != expected:
+                failures.append(f"{field.upper()}_MISMATCH")
+        if observed.get("d7_execution_state") != "DISCRIMINATIVE_EXECUTION_VALID":
+            failures.append("D7_EXECUTION_NOT_VALID")
+        outcome = observed.get("observed_outcome")
+        if outcome is None or observed.get("observed_outcome_bound") is not True:
+            failures.append("MISSING_OBSERVED_OUTCOME")
+        prediction_a = observed.get("candidate_a_prediction")
+        prediction_b = observed.get("candidate_b_prediction")
+        if prediction_a == prediction_b:
+            direction = "NON_DISCRIMINATING"
+        elif outcome is None or failures:
+            direction = "INVALID_COMPARISON"
+        else:
+            matches_a = outcome == prediction_a
+            matches_b = outcome == prediction_b
+            if matches_a and matches_b:
+                direction = "SUPPORTS_BOTH"
+            elif matches_a:
+                direction = "SUPPORTS_A_OVER_B"
+            elif matches_b:
+                direction = "SUPPORTS_B_OVER_A"
+            else:
+                direction = "SUPPORTS_NEITHER"
+        structurally_valid = not failures and direction != "INVALID_COMPARISON"
+        fingerprint = self._comparable_fingerprint(
+            plan, schedule, raw_result, sealed_reference, contract
+        )
+        return {
+            "schema_version": "1.0",
+            "comparable_result_id": (
+                f"comparable_result_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+            ),
+            "comparable_result_fingerprint": fingerprint,
+            "comparison_id": comparison_id,
+            **self._identity(plan, schedule, raw_result),
+            "comparator_id": contract.get("comparator_id"),
+            "comparator_version": contract.get(
+                "comparator_version", self.DEFAULT_COMPARATOR_VERSION
+            ),
+            "evaluation_contract_id": contract.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
+            "sealed_reference_id": sealed_reference.get("sealed_reference_id"),
+            "sealed_reference_fingerprint": sealed_reference.get(
+                "sealed_reference_fingerprint"
+            ),
+            "sealed_reference_resolved": sealed_reference.get(
+                "sealed_reference_resolved", True
+            ),
+            "reference_integrity_state": sealed_reference.get(
+                "reference_integrity_state", "VERIFIED"
+            ),
+            "target_reference_forwarded_to_solver": False,
+            "sealed_reference_opened_by_evaluator": True,
+            "sealed_reference_forwarded_to_solver": False,
+            "comparison_started_at": comparison_started_at,
+            "comparison_completed_at": self._now(),
+            "comparison_duration": 0,
+            "candidate_set_id": observed.get("candidate_set_id"),
+            "candidate_a_id": observed.get("candidate_a_id"),
+            "candidate_b_id": observed.get("candidate_b_id"),
+            "candidate_a_prediction": prediction_a,
+            "candidate_b_prediction": prediction_b,
+            "observed_outcome": outcome,
+            "disagreement_id": observed.get("disagreement_id"),
+            "disambiguation_need_id": observed.get("disambiguation_need_id"),
+            "candidate_disambiguation_binding_failures": sorted(set(failures)),
+            "candidate_disambiguation_binding_state": (
+                "BOUND" if structurally_valid else "INVALID_BINDING"
+            ),
+            "disambiguation_evidence_direction": direction,
+            "predicted_output_schema_valid": structurally_valid,
+            "reference_output_schema_valid": True,
+            "expected_case_count": 1,
+            "predicted_case_count": 1 if outcome is not None else 0,
+            "case_count": 1,
+            "compared_case_count": 1 if structurally_valid else 0,
+            "valid_case_count": 1 if structurally_valid else 0,
+            "invalid_case_count": 0 if structurally_valid else 1,
+            "case_coverage": 1.0 if structurally_valid else 0.0,
+            "case_comparison_results": [],
+            "exact_match_count": int(direction in {
+                "SUPPORTS_A_OVER_B", "SUPPORTS_B_OVER_A", "SUPPORTS_BOTH"
+            }),
+            "exact_match_rate": 1.0 if structurally_valid else 0.0,
+            "comparator_defined_measurements": {
+                "disambiguation_evidence_direction": direction,
+                "binding_failure_count": len(set(failures)),
+            },
+            "grounding_measurements": {
+                "candidate_set_id": observed.get("candidate_set_id"),
+                "disagreement_id": observed.get("disagreement_id"),
+                "disambiguation_need_id": observed.get("disambiguation_need_id"),
+            },
+            "structural_measurements": {
+                "missing_output_count": int(outcome is None),
+                "extra_output_count": 0,
+            },
+            "comparison_status": "SUCCESS" if structurally_valid else "INCOMPLETE",
+            "comparison_state": "COMPARISON_COMPLETED",
+            "runtime_error": None,
+            "evidence_state": "NOT_YET_DECIDED",
+            "arena_reentry_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "tie_resolved": False,
+            "winner_selected": False,
             "truth_authority": "NONE",
             "trust_authority": "NONE",
             "graduation_authority": "NONE",
@@ -896,6 +1071,12 @@ class ValidationEvidenceEvaluator:
         comparable: dict[str, Any],
         contract: dict[str, Any],
     ) -> dict[str, Any]:
+        if comparable.get("comparator_id") == (
+            "candidate_disambiguation_evidence_comparison"
+        ):
+            return self._candidate_disambiguation_evidence_decision(
+                plan, schedule, raw_result, comparable, contract
+            )
         leakage = raw_result.get("runner_trace_reference", {}).get(
             "target_reference_forwarded_to_solver"
         ) is True
@@ -1061,6 +1242,109 @@ class ValidationEvidenceEvaluator:
             "constitutional_boundary": self.BOUNDARY,
             "constitutional_distinction": self.ACCEPTANCE_DISTINCTION,
             "next_consumer": self._next_consumer(acceptance),
+            "created_at": self._now(),
+        }
+
+    def _candidate_disambiguation_evidence_decision(
+        self,
+        plan: dict[str, Any],
+        schedule: dict[str, Any],
+        raw_result: dict[str, Any],
+        comparable: dict[str, Any],
+        contract: dict[str, Any],
+    ) -> dict[str, Any]:
+        direction = comparable.get(
+            "disambiguation_evidence_direction", "INVALID_COMPARISON"
+        )
+        failures = comparable.get("candidate_disambiguation_binding_failures", [])
+        valid = not failures and direction != "INVALID_COMPARISON"
+        decision_state = (
+            "EVIDENCE_SUPPORTED"
+            if direction in {
+                "SUPPORTS_A_OVER_B",
+                "SUPPORTS_B_OVER_A",
+                "SUPPORTS_BOTH",
+                "SUPPORTS_NEITHER",
+            }
+            else "NON_DISCRIMINATING"
+            if direction == "NON_DISCRIMINATING"
+            else "INVALID_BINDING"
+        )
+        terminal = "INSUFFICIENT" if valid else "REJECTED"
+        fingerprint = self._decision_fingerprint(
+            plan, schedule, raw_result, comparable, contract
+        )
+        return {
+            "schema_version": "1.0",
+            "evidence_decision_id": (
+                f"evidence_decision_{hashlib.sha1(fingerprint.encode()).hexdigest()[:12]}"
+            ),
+            "evidence_decision_fingerprint": fingerprint,
+            "evaluation_contract_id": contract.get("evaluation_contract_id"),
+            "evaluation_contract_fingerprint": contract.get(
+                "evaluation_contract_fingerprint",
+                self._contract_fingerprint(contract),
+            ),
+            "comparable_result_id": comparable.get("comparable_result_id"),
+            "comparable_result_fingerprint": comparable.get(
+                "comparable_result_fingerprint"
+            ),
+            **self._identity(plan, schedule, raw_result),
+            "evidence_evaluation_authority": self.AUTHORITY,
+            "evidence_evaluation_scope": "CANDIDATE_DISAMBIGUATION_D8_ONLY",
+            "candidate_disambiguation_d8_decision": True,
+            "evidence_decision_state": decision_state,
+            "disambiguation_evidence_direction": direction,
+            "candidate_disambiguation_binding_state": comparable.get(
+                "candidate_disambiguation_binding_state"
+            ),
+            "candidate_disambiguation_binding_failures": failures,
+            "candidate_set_id": comparable.get("candidate_set_id"),
+            "candidate_a_id": comparable.get("candidate_a_id"),
+            "candidate_b_id": comparable.get("candidate_b_id"),
+            "disagreement_id": comparable.get("disagreement_id"),
+            "disambiguation_need_id": comparable.get("disambiguation_need_id"),
+            "observed_outcome": comparable.get("observed_outcome"),
+            "evidence_admissibility_evaluated": True,
+            "evidence_admissibility_state": "ADMISSIBLE" if valid else "INADMISSIBLE",
+            "evidence_admissibility_reason": (
+                "frozen_candidate_predictions_compared_with_bound_observed_outcome"
+                if valid else "candidate_disambiguation_binding_failed_closed"
+            ),
+            "evidence_sufficiency_evaluated": True,
+            "evidence_sufficiency_state": "SUFFICIENT_FOR_D8_DECISION_ONLY" if valid else "NOT_EVALUATED",
+            "evidence_sufficiency_reason": "d8_direction_classified_without_d9_acceptance" if valid else "invalid_binding",
+            "evidence_direction_calculated": True,
+            "evidence_direction": direction,
+            "evidence_direction_reason": "observed_outcome_compared_to_frozen_candidate_predictions",
+            "evidence_acceptance_state": terminal,
+            "evidence_evaluation_outcome": f"D8_{decision_state}",
+            "evidence_acceptance_reason": "d8_decision_only_d9_acceptance_not_invoked",
+            "outcome_reason": "candidate_disambiguation_evidence_direction_recorded",
+            "evidence_decision_recorded": True,
+            "duplicate_evidence_detected": bool(
+                self._existing_decision_by_fingerprint(fingerprint)
+            ),
+            "accepted_evidence_artifact_created": False,
+            "evidence_accepted": False,
+            "d9_accepted_evidence_claimed": False,
+            "arena_evidence_admission_invoked": False,
+            "arena_reentry_invoked": False,
+            "candidate_score_changed": False,
+            "candidate_ranking_changed": False,
+            "tie_resolved": False,
+            "winner_selected": False,
+            "truth_granted": False,
+            "trust_granted": False,
+            "graduation_granted": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "candidate_execution_authority": "NONE",
+            "candidate_compilation_authority": "NONE",
+            "deployment_authority": "NONE",
+            "next_consumer": "FUTURE_D9_ACCEPTED_EVIDENCE_GATE",
+            "constitutional_boundary": self.BOUNDARY,
             "created_at": self._now(),
         }
 
@@ -1633,6 +1917,22 @@ class ValidationEvidenceEvaluator:
             "evidence_direction_calculated": True,
             "evidence_direction": decision.get("evidence_direction"),
             "evidence_direction_reason": decision.get("evidence_direction_reason"),
+            "evidence_decision_state": decision.get("evidence_decision_state"),
+            "candidate_disambiguation_d8_decision": decision.get(
+                "candidate_disambiguation_d8_decision", False
+            ),
+            "disambiguation_evidence_direction": decision.get(
+                "disambiguation_evidence_direction"
+            ),
+            "candidate_disambiguation_binding_state": decision.get(
+                "candidate_disambiguation_binding_state"
+            ),
+            "candidate_disambiguation_binding_failures": decision.get(
+                "candidate_disambiguation_binding_failures", []
+            ),
+            "d9_accepted_evidence_claimed": decision.get(
+                "d9_accepted_evidence_claimed", False
+            ),
             "evidence_acceptance_state": terminal,
             "evidence_evaluation_outcome": decision.get(
                 "evidence_evaluation_outcome",

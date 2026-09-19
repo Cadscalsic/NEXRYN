@@ -1,0 +1,93 @@
+{
+  "authority": "CI_GOVERNANCE_ONLY",
+  "behavioral_authority": "NONE",
+  "canonical_test_vector_references": [
+    "runtime/arena/contracts/candidate_simulator_1.0_vectors.json"
+  ],
+  "canonical_vector_set_fingerprint": "f99fa105d7bd4bd1fe5d3c2e84997c06b7aaf1e30f4c060990893df74284aca5",
+  "compatibility_policy": {
+    "declared_compatible": "VERIFIED_COMPATIBLE_REPLAY",
+    "different_version": "MIGRATION_REQUIRED",
+    "exact": "EXACT_VERSION_REPLAY",
+    "missing_identity": "UNDETERMINED",
+    "unknown_contract": "UNSUPPORTED_LEGACY_CONTRACT"
+  },
+  "contract_id": "nexryn.arena.candidate_simulator",
+  "creation_or_update_timestamp": "2026-09-20T00:00:00Z",
+  "execution_relevant_fields": [
+    "program.steps",
+    "step.operation",
+    "step.parameters",
+    "operation order"
+  ],
+  "explicitly_inert_fields": [
+    "duplicate_object.duplication_count",
+    "duplicate_object.duplication_policy"
+  ],
+  "failure_semantics": [
+    "unsupported operation preserves grid and marks simulation unsuccessful",
+    "step exception is recorded and subsequent steps continue"
+  ],
+  "fingerprint_namespace": "nexryn.arena.candidate_simulator@1.0",
+  "immutable_fingerprint": "2bdf320eb2792d72b43525649f323598af2f69162d0ddadd7ff3181b9de8d3d3",
+  "normalization_rules": [
+    "operation aliases canonicalized",
+    "preservation and noop steps omitted",
+    "unknown parameters retained fail-closed"
+  ],
+  "schema_version": "executor_semantic_contract.v1",
+  "semantic_surface_fingerprint": "79158fe53a7be1ccc95fe12cc1f09c1369a49e54090a175d7d324084e7784776",
+  "semantic_surface_inventory": {
+    "runtime/arena/candidate_normalizer.py": [
+      "_candidate",
+      "_collapse_key",
+      "_step",
+      "_semantic_fingerprint",
+      "_semantic_program",
+      "_normalize_operation"
+    ],
+    "runtime/arena/candidate_simulator.py": [
+      "simulate",
+      "_predicted_localization",
+      "_execute",
+      "_array"
+    ]
+  },
+  "semantic_version": "1.0",
+  "serialization_rules": [
+    "UTF-8 JSON",
+    "sorted keys",
+    "ASCII escapes",
+    "compact separators"
+  ],
+  "source_component": "runtime.arena.executor_contract",
+  "supported_operation_set": [
+    "connect_components",
+    "construct_path",
+    "duplicate_object",
+    "mirror_horizontal",
+    "mirror_object",
+    "mirror_vertical",
+    "noop",
+    "preserve_colors",
+    "preserve_density",
+    "preserve_grid",
+    "preserve_shape",
+    "preserve_size",
+    "preserve_symmetry",
+    "preserve_topology",
+    "recolor",
+    "remove_object",
+    "replace_color",
+    "rotate",
+    "translate"
+  ],
+  "version_policy": {
+    "BACKWARD_COMPATIBLE_SEMANTIC_EXTENSION": "MINOR_BUMP",
+    "CONTRACT_METADATA_CHANGE": "NO_BUMP_WITH_MANIFEST_REFRESH",
+    "NON_SEMANTIC_CHANGE": "NO_BUMP",
+    "SEMANTIC_BREAKING_CHANGE": "MAJOR_BUMP_AND_NEW_NAMESPACE",
+    "SEMANTIC_PATCH_CHANGE": "PATCH_BUMP",
+    "UNCLASSIFIED_POTENTIAL_SEMANTIC_CHANGE": "REJECT"
+  }
+}

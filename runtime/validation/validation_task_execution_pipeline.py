@@ -679,6 +679,12 @@ class ValidationTaskExecutionPipeline:
             "discriminating_condition": contract.get("discriminating_condition"),
             "expected_observation_a": contract.get("expected_observation_a"),
             "expected_observation_b": contract.get("expected_observation_b"),
+            "observed_outcome": raw_task.get(
+                "candidate_disambiguation_observed_outcome"
+            ),
+            "observed_outcome_bound": raw_task.get(
+                "candidate_disambiguation_observed_outcome"
+            ) is not None,
             "discriminating_condition_exercised": (
                 contract["d7_execution_state"] == "DISCRIMINATIVE_EXECUTION_VALID"
             ),
@@ -994,7 +1000,7 @@ class ValidationTaskExecutionPipeline:
         plan: dict[str, Any],
         task: dict[str, Any],
     ) -> bool:
-        raw_task = task.get("raw_task") if isinstance(task, dict) else {}
+        raw_task = (task.get("raw_task") or {}) if isinstance(task, dict) else {}
         return any(
             value == "candidate_discriminative_probe_evidence"
             for value in (

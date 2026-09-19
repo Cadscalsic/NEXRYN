@@ -17,6 +17,9 @@ from runtime.arena.candidate_simulator import CandidateSimulator
 from runtime.arena.source_dominance_guard import SourceDominanceGuard
 from runtime.telemetry.route_contribution import ROUTE_LINEAGE_FIELDS
 from runtime.arena.winner_selection_policy import WinnerSelectionPolicy
+from runtime.arena.candidate_support_grounding import (
+    apply_candidate_support_grounding,
+)
 
 
 class CognitiveCandidateArena:
@@ -61,6 +64,13 @@ class CognitiveCandidateArena:
         gateway_report = self.gateway.submit(proposals)
         normalization = self.normalizer.normalize(gateway_report["proposals"])
         candidates = normalization["normalized_candidates"]
+        for index, candidate in enumerate(candidates):
+            candidate["run_id"] = runtime_context.get("run_id")
+            candidate["task_id"] = runtime_context.get("task_id")
+            candidate["execution_plan_id"] = runtime_context.get(
+                "execution_plan_id"
+            )
+            candidates[index] = apply_candidate_support_grounding(candidate)
         target_size = int(np.array(target_grid).size) if target_grid is not None else 1
         for candidate in candidates:
             candidate["target_size"] = max(target_size, 1)
@@ -79,6 +89,18 @@ class CognitiveCandidateArena:
         scores = []
         for candidate in eligible:
             simulation = self.simulator.simulate(candidate, input_grid=input_grid, target_grid=target_grid)
+            localization_observation = simulation.get("localization_observation")
+            if (
+                isinstance(localization_observation, Mapping)
+                and localization_observation.get("applicability_state")
+                == "SPATIAL_LOCALIZATION_APPLICABLE"
+            ):
+                candidate["localization_observations"] = [
+                    dict(localization_observation)
+                ]
+                grounded = apply_candidate_support_grounding(candidate)
+                candidate.clear()
+                candidate.update(grounded)
             simulations[candidate["candidate_id"]] = simulation
             score = self.scorer.score(candidate, simulation, governance[candidate["candidate_id"]])
             score["source"] = candidate.get("source")
@@ -161,6 +183,7 @@ class CognitiveCandidateArena:
         )
         compact = {
             "arena_state": arena_state,
+            "analysis_only": bool(analysis_only),
             "candidate_count": len(eligible),
             "unique_candidate_count": len(candidates),
             "cross_source_consensus_count": normalization.get(

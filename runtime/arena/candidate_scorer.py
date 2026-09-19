@@ -54,7 +54,8 @@ class CandidateScorer:
         }
         raw_score = sum(components[key] * self.weights[key] for key in self.weights)
         penalties = self._penalties(candidate, simulation, governance)
-        final = max(0.0, raw_score - sum(penalties.values()))
+        penalty_total = sum(penalties.values())
+        final = max(0.0, raw_score - penalty_total)
         blockers = []
         if governance.get("decision") == "BLOCK_CANDIDATE":
             blockers.append("governance_blocked")
@@ -62,12 +63,71 @@ class CandidateScorer:
             blockers.append("execution_errors")
         if candidate.get("metadata", {}).get("identity_violation"):
             blockers.append("identity_violation")
+        weighted_contributions = {
+            key: components[key] * weight
+            for key, weight in self.weights.items()
+        }
+        raw_inputs = {
+            "prediction_accuracy": simulation.get("prediction_accuracy"),
+            "difference_count": simulation.get("difference_count"),
+            "target_size": candidate.get("target_size"),
+            "source_confidence": candidate.get("source_confidence"),
+            "semantic_support": candidate.get("semantic_support"),
+            "context_support": candidate.get("context_support"),
+            "truth_support": candidate.get("truth_support"),
+            "dependency_support": candidate.get("dependency_support"),
+            "identity_support": candidate.get("identity_support"),
+            "localization_support": candidate.get("localization_support"),
+            "truth_support_metric": candidate.get("truth_support_metric"),
+            "localization_quality_metric": candidate.get(
+                "localization_quality_metric"
+            ),
+            "cross_example_consistency": candidate.get("cross_example_consistency"),
+            "governance_decision": governance.get("decision", "ALLOW_COMPETITION"),
+            "unsupported_step_count": len(simulation.get("unsupported_steps", []) or []),
+            "simulation_error_count": len(simulation.get("simulation_errors", []) or []),
+            "topology_score": simulation.get("topology_score"),
+            "program_step_count": len(candidate.get("program", {}).get("steps", []) or []),
+            "identity_violation": bool(candidate.get("metadata", {}).get("identity_violation")),
+            "semantic_operation_mismatch": bool(candidate.get("metadata", {}).get("semantic_operation_mismatch")),
+        }
         return {
             "system": self.system_name,
             "candidate_id": candidate.get("candidate_id"),
             "final_score": round(final, 4),
             "score_components": components,
             "penalties": penalties,
+            "score_composition": {
+                "schema_version": "candidate_score_composition.v1",
+                "producer": self.system_name,
+                "raw_inputs": raw_inputs,
+                "normalized_components": dict(components),
+                "weights": dict(self.weights),
+                "weighted_contributions": weighted_contributions,
+                "diagnostic_unweighted_components": [
+                    key for key in components if key not in self.weights
+                ],
+                "raw_score_unrounded": raw_score,
+                "penalty_inputs": {
+                    "unsupported_step_count": raw_inputs["unsupported_step_count"],
+                    "simulation_error_count": raw_inputs["simulation_error_count"],
+                    "difference_count": raw_inputs["difference_count"],
+                    "identity_violation": raw_inputs["identity_violation"],
+                    "topology_score": raw_inputs["topology_score"],
+                    "program_step_count": raw_inputs["program_step_count"],
+                    "localization_support": raw_inputs["localization_support"],
+                    "semantic_operation_mismatch": raw_inputs["semantic_operation_mismatch"],
+                    "governance_decision": raw_inputs["governance_decision"],
+                },
+                "penalties": dict(penalties),
+                "penalty_total": penalty_total,
+                "nonnegative_clamp_applied": raw_score - penalty_total < 0.0,
+                "final_score_unrounded": final,
+                "rounding_policy": "python_round_half_even_4_decimal_places",
+                "rounding_places": 4,
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+            },
             "eligible_for_selection": not blockers and final > 0.0,
             "selection_blockers": blockers,
         }

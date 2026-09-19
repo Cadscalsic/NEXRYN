@@ -15,6 +15,11 @@ from runtime.arena.candidate_proposal_gateway import (
     candidate_proposal_gateway,
 )
 from runtime.arena.candidate_scorer import CandidateScorer, candidate_scorer
+from runtime.arena.candidate_support_grounding import (
+    CandidateSupportGroundingEngine,
+    apply_candidate_support_grounding,
+    candidate_support_grounding_engine,
+)
 from runtime.arena.candidate_simulator import CandidateSimulator, candidate_simulator
 from runtime.arena.cognitive_candidate_arena import (
     CognitiveCandidateArena,
@@ -42,6 +47,9 @@ __all__ = [
     "candidate_proposal_gateway",
     "CandidateScorer",
     "candidate_scorer",
+    "CandidateSupportGroundingEngine",
+    "apply_candidate_support_grounding",
+    "candidate_support_grounding_engine",
     "CandidateSimulator",
     "candidate_simulator",
     "CognitiveCandidateArena",

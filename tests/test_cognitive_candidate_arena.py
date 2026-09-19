@@ -118,7 +118,7 @@ def test_same_source_duplicate_candidates_are_collapsed():
     assert len(candidate["provenance_history"]) == 2
 
 
-def test_cross_source_equivalent_candidates_remain_independent_for_evaluation():
+def test_cross_source_semantic_aliases_collapse_with_lineage_preserved():
     gateway = CandidateProposalGateway().submit([
         _proposal("program_generation", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
         _proposal("semantic_to_transformation_compiler", "global_recolor", [{"operation": "global_recolor", "parameters": {"color_mapping": {1: 2}}}]),
@@ -126,21 +126,22 @@ def test_cross_source_equivalent_candidates_remain_independent_for_evaluation():
     ])
 
     normalized = CandidateNormalizer().normalize(gateway["proposals"])
-    candidates = normalized["normalized_candidates"]
-    sources = sorted(candidate["source"] for candidate in candidates)
+    candidate = normalized["normalized_candidates"][0]
 
-    assert normalized["duplicate_candidates_collapsed"] == 0
-    assert len(candidates) == 3
-    assert sources == [
+    assert normalized["duplicate_candidates_collapsed"] == 2
+    assert len(normalized["normalized_candidates"]) == 1
+    assert candidate["sources"] == [
         "adaptive_reuse",
         "normalized_program_candidates",
         "semantic_compiler",
     ]
+    assert len(candidate["equivalent_candidate_ids"]) == 3
+    assert len(candidate["equivalent_executable_representations"]) == 3
     assert normalized["cross_source_consensus_count"] == 1
     consensus = normalized["cross_source_consensus_groups"][0]
     assert consensus["consensus_state"] == "CROSS_SOURCE_CONSENSUS"
-    assert consensus["sources"] == sources
-    assert all(candidate["cross_source_consensus"] is True for candidate in candidates)
+    assert consensus["sources"] == candidate["sources"]
+    assert candidate["cross_source_consensus"] is True
 
 
 def test_candidate_proposal_runtime_preserves_operational_investment_signal():
@@ -414,6 +415,46 @@ def test_topology_damaging_candidate_is_penalized():
 
     assert score["penalties"]["topology_destruction"] > 0.0
     assert score["penalties"]["unexplained_residuals"] > 0.0
+
+
+def test_candidate_score_preserves_complete_producer_composition_without_changing_score():
+    candidate = _proposal(
+        "semantic_compiler",
+        "replace_color",
+        [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}],
+    )
+    candidate["target_size"] = 4
+    simulation = {
+        "prediction_accuracy": 0.75,
+        "difference_count": 1,
+        "topology_score": 1.0,
+        "unsupported_steps": [],
+        "simulation_errors": [],
+    }
+    score = CandidateScorer().score(
+        candidate,
+        simulation,
+        {"decision": "ALLOW_COMPETITION", "reasons": []},
+    )
+
+    composition = score["score_composition"]
+    assert composition["schema_version"] == "candidate_score_composition.v1"
+    assert composition["raw_inputs"]["difference_count"] == 1
+    assert composition["raw_inputs"]["target_size"] == 4
+    assert composition["weights"]
+    assert composition["weighted_contributions"]
+    assert composition["raw_score_unrounded"] == sum(
+        composition["weighted_contributions"].values()
+    )
+    assert composition["penalty_total"] == sum(score["penalties"].values())
+    assert composition["final_score_unrounded"] == max(
+        0.0,
+        composition["raw_score_unrounded"] - composition["penalty_total"],
+    )
+    assert composition["rounding_policy"] == "python_round_half_even_4_decimal_places"
+    assert composition["authority"] == "OBSERVATION_ONLY"
+    assert composition["behavioral_authority"] == "NONE"
+    assert score["final_score"] == round(composition["final_score_unrounded"], 4)
 
 
 def test_identity_violating_candidate_is_blocked_but_visible():
@@ -828,7 +869,7 @@ def test_arena_source_flow_keeps_proposal_runtime_rejections_visible():
     }
 
 
-def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():
+def test_arena_collapses_cross_source_aliases_before_evaluation():
     report = _arena().run(
         [
             _proposal(
@@ -858,7 +899,7 @@ def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():
         },
     )
 
-    assert report["candidate_count"] == 3
+    assert report["candidate_count"] == 1
     assert report["cross_source_consensus_state"] == "CROSS_SOURCE_CONSENSUS"
     assert report["cross_source_consensus_count"] == 1
     assert sorted(report["cross_source_consensus_groups"][0]["sources"]) == [
@@ -866,10 +907,7 @@ def test_arena_detects_cross_source_consensus_without_pre_evaluation_merge():
         "normalized_program_candidates",
         "semantic_compiler",
     ]
-    assert all(
-        row["cross_source_consensus"] is True
-        for row in report["candidate_summary"]
-    )
+    assert report["candidate_summary"][0]["cross_source_consensus"] is True
 
 
 def test_arena_memory_statistics_are_operational():
@@ -919,7 +957,7 @@ def test_arena_report_is_compact_and_deterministic():
     assert "candidate_arena_diagnostics" not in first
 
 
-def test_diversity_analyzer_preserves_cross_source_program_variants():
+def test_diversity_analyzer_counts_collapsed_alias_lineages():
     gateway = CandidateProposalGateway().submit([
         _proposal("semantic_compiler", "replace_color", [{"operation": "replace_color", "parameters": {"color_mapping": {1: 2}}}]),
         _proposal("rule_engine", "remap_colors", [{"operation": "remap_colors", "parameters": {"color_mapping": {1: 2}}}]),
@@ -927,7 +965,7 @@ def test_diversity_analyzer_preserves_cross_source_program_variants():
     normalized = CandidateNormalizer().normalize(gateway["proposals"])["normalized_candidates"]
     diversity = CandidateDiversityAnalyzer().analyze(normalized)
 
-    assert diversity["candidate_count"] == 2
+    assert diversity["candidate_count"] == 1
     assert diversity["unique_program_count"] == 1
     assert diversity["source_count"] == 2
     assert diversity["diversity_sufficient"] is False

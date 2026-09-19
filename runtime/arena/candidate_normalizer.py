@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 import json
 from typing import Any, Mapping
 
+from runtime.arena.candidate_simulator import CandidateSimulator
+from runtime.arena.executor_contract import EXECUTOR_NORMALIZATION_VERSION
 from runtime.telemetry.route_contribution import ROUTE_LINEAGE_FIELDS
 
 
@@ -31,24 +34,48 @@ class CandidateNormalizer:
             collapsed += len(group) - 1
             equivalent_groups.append({
                 "program_signature": merged["program_signature"],
-                "candidate_ids": [item["candidate_id"] for item in group],
+                "candidate_ids": sorted(item["candidate_id"] for item in group),
                 "sources": sorted({source for item in group for source in item.get("sources", [item.get("source")])}),
                 "merged_candidate_id": merged["candidate_id"],
             })
+        equivalent_groups.sort(key=lambda item: item["program_signature"])
         consensus_groups = self._cross_source_consensus_groups(normalized)
         self._annotate_consensus(normalized, consensus_groups)
         normalized.sort(key=lambda item: item["candidate_id"])
+        raw_candidate_count = len(canonical)
+        equivalence_class_count = len(normalized)
+        alias_class_count = len(equivalent_groups)
+        total_alias_member_count = sum(
+            len(group["candidate_ids"]) for group in equivalent_groups
+        )
         return {
             "system": self.system_name,
             "normalized_candidates": normalized,
             "duplicate_candidates_collapsed": collapsed,
+            "count_semantics_schema": "candidate_normalization_counts.v1",
+            "raw_candidate_count": raw_candidate_count,
+            "semantic_equivalence_class_count": equivalence_class_count,
+            "equivalence_class_count": equivalence_class_count,
+            "singleton_class_count": equivalence_class_count - alias_class_count,
+            "alias_class_count": alias_class_count,
+            "total_alias_member_count": total_alias_member_count,
+            "collapsed_record_count": collapsed,
+            "retained_representative_count": equivalence_class_count,
+            "arena_candidate_count": equivalence_class_count,
             "equivalent_candidate_groups": equivalent_groups,
             "cross_source_consensus_groups": consensus_groups,
             "cross_source_consensus_count": len(consensus_groups),
             "normalization_success": True,
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+            "score_authority": "NONE",
+            "ranking_authority": "NONE",
+            "safe_winner_authority": "NONE",
+            "execution_authority": "NONE",
         }
 
     def _candidate(self, proposal: Mapping[str, Any]) -> dict[str, Any]:
+        source_record = deepcopy(dict(proposal))
         program = proposal.get("program") if isinstance(proposal.get("program"), Mapping) else {}
         steps = program.get("steps") if isinstance(program.get("steps"), list) else []
         normalized_steps = [self._step(step) for step in steps if isinstance(step, Mapping)]
@@ -65,6 +92,21 @@ class CandidateNormalizer:
             or source
         )
         candidate = deepcopy(dict(proposal))
+        semantic_program = self._semantic_program(program)
+        executor_contract_id = str(
+            proposal.get("executor_contract_id")
+            or CandidateSimulator.EXECUTOR_CONTRACT_ID
+        )
+        executor_contract_version = str(
+            proposal.get("executor_contract_version")
+            or CandidateSimulator.EXECUTOR_CONTRACT_VERSION
+        )
+        semantic_fingerprint = self._semantic_fingerprint(
+            semantic_program,
+            executor_contract_id,
+            executor_contract_version,
+        )
+        source_candidate_fingerprint = self._source_record_fingerprint(source_record)
         candidate.update({
             "candidate_id": str(proposal.get("candidate_id") or f"candidate:{source}:unknown"),
             "source": source,
@@ -82,7 +124,26 @@ class CandidateNormalizer:
             "dependency_support": _score(proposal.get("dependency_support", 0.0)),
             "identity_support": _score(proposal.get("identity_support", 0.0)),
             "localization_support": _score(proposal.get("localization_support", 0.0)),
-            "program_signature": self._program_signature(program),
+            "program_signature": semantic_fingerprint,
+            "semantic_fingerprint": semantic_fingerprint,
+            "semantic_equivalence_class_id": (
+                "semantic_equivalence_class:" + semantic_fingerprint
+            ),
+            "normalized_semantics": semantic_program,
+            "semantic_equivalence_scope": "CURRENT_ARENA_EXECUTOR_CONTRACT",
+            "semantic_equivalence_is_correctness_evidence": False,
+            "executor_contract_id": executor_contract_id,
+            "executor_contract_version": executor_contract_version,
+            "normalization_version": EXECUTOR_NORMALIZATION_VERSION,
+            "executor_contract_binding_state": (
+                "CURRENT_CONTRACT_VERIFIED"
+                if executor_contract_id == CandidateSimulator.EXECUTOR_CONTRACT_ID
+                and executor_contract_version
+                == CandidateSimulator.EXECUTOR_CONTRACT_VERSION
+                else "NONCURRENT_CONTRACT_PRESERVED_FAIL_CLOSED"
+            ),
+            "source_candidate_fingerprint": source_candidate_fingerprint,
+            "source_candidate_record": source_record,
             "provenance_history": [deepcopy(proposal.get("provenance", {}))],
             "supporting_hypotheses": [
                 proposal.get("hypothesis_id")
@@ -101,11 +162,13 @@ class CandidateNormalizer:
                 candidate[field] = deepcopy(value)
                 metadata[field] = deepcopy(value)
         candidate["metadata"] = metadata
+        candidate["semantic_alias_records"] = [
+            self._alias_record(candidate)
+        ]
         return candidate
 
     def _collapse_key(self, candidate: Mapping[str, Any]) -> str:
-        source = candidate.get("source") or "unknown"
-        return f"{candidate.get('program_signature')}::{source}"
+        return str(candidate.get("semantic_fingerprint") or candidate.get("program_signature"))
 
     def _step(self, step: Mapping[str, Any]) -> dict[str, Any]:
         operation = _normalize_operation(step.get("operation") or step.get("primitive"))
@@ -116,24 +179,38 @@ class CandidateNormalizer:
         }
 
     def _merge_group(self, group: list[dict[str, Any]]) -> dict[str, Any]:
-        base = deepcopy(group[0])
-        sources = sorted({source for item in group for source in item.get("sources", [])})
+        ordered_group = sorted(group, key=lambda item: str(item.get("candidate_id")))
+        base = deepcopy(ordered_group[0])
+        sources = sorted({source for item in ordered_group for source in item.get("sources", [])})
         origin_sources = sorted({
-            source for item in group
+            source for item in ordered_group
             for source in item.get("origin_sources", [item.get("origin_source")])
             if source
         })
         normalized_sources = sorted({
-            source for item in group
+            source for item in ordered_group
             for source in item.get("normalized_sources", [item.get("normalized_source")])
             if source
         })
         hypotheses = sorted({
-            hypothesis for item in group
+            hypothesis for item in ordered_group
             for hypothesis in item.get("supporting_hypotheses", [])
             if hypothesis
         })
-        base["candidate_id"] = "merged:" + base["program_signature"][:16]
+        base["candidate_id"] = "merged:" + base["semantic_fingerprint"][:16]
+        base["representative_source_candidate_id"] = ordered_group[0]["candidate_id"]
+        base["equivalence_reason"] = "EXECUTOR_SEMANTIC_FINGERPRINT_MATCH"
+        base["equivalent_executable_representations"] = [
+            {
+                "candidate_id": item["candidate_id"],
+                "program": deepcopy(item["program"]),
+                "program_fingerprint": self._raw_program_fingerprint(item["program"]),
+            }
+            for item in ordered_group
+        ]
+        base["semantic_alias_records"] = [
+            self._alias_record(item) for item in ordered_group
+        ]
         base["sources"] = sources
         base["source"] = sources[0] if sources else base.get("source")
         base["origin_sources"] = origin_sources
@@ -141,7 +218,9 @@ class CandidateNormalizer:
         base["normalized_sources"] = normalized_sources
         base["normalized_source"] = normalized_sources[0] if normalized_sources else base.get("normalized_source")
         base["supporting_hypotheses"] = hypotheses
-        base["source_confidence"] = max(_score(item.get("source_confidence")) for item in group)
+        base["source_confidence"] = max(
+            _score(item.get("source_confidence")) for item in ordered_group
+        )
         for field in (
             "semantic_support",
             "truth_support",
@@ -150,25 +229,29 @@ class CandidateNormalizer:
             "identity_support",
             "localization_support",
         ):
-            base[field] = round(sum(_score(item.get(field)) for item in group) / len(group), 4)
+            base[field] = round(
+                sum(_score(item.get(field)) for item in ordered_group)
+                / len(ordered_group),
+                4,
+            )
         base["provenance_history"] = [
-            history for item in group
+            history for item in ordered_group
             for history in item.get("provenance_history", [])
         ]
         base["confidence_contributions"] = {
             item.get("source"): _score(item.get("source_confidence"))
-            for item in group
+            for item in ordered_group
             if item.get("source")
         }
         route_execution_ids = sorted({
             route_id
-            for item in group
+            for item in ordered_group
             for route_id in item.get("origin_route_execution_ids", [])
             if route_id
         })
         route_ids = sorted({
             route_id
-            for item in group
+            for item in ordered_group
             for route_id in item.get("origin_route_ids", [])
             if route_id
         })
@@ -186,7 +269,7 @@ class CandidateNormalizer:
                 "ROUTE_ORIGIN_CURRENT"
                 if all(
                     item.get("route_lineage_scope_state") == "ROUTE_ORIGIN_CURRENT"
-                    for item in group
+                    for item in ordered_group
                     if item.get("origin_route_execution_ids")
                 )
                 else "ROUTE_ORIGIN_PARTIAL"
@@ -213,7 +296,9 @@ class CandidateNormalizer:
                 if base.get(field) is not None:
                     metadata[field] = deepcopy(base.get(field))
             base["metadata"] = metadata
-        base["equivalent_candidate_ids"] = [item["candidate_id"] for item in group]
+        base["equivalent_candidate_ids"] = [
+            item["candidate_id"] for item in ordered_group
+        ]
         return base
 
     def _cross_source_consensus_groups(
@@ -263,8 +348,80 @@ class CandidateNormalizer:
             candidate["consensus_sources"] = group["sources"]
 
     def _program_signature(self, program: Mapping[str, Any]) -> str:
-        payload = json.dumps(program, sort_keys=True, separators=(",", ":"))
-        return str(abs(hash(payload)))
+        payload = json.dumps(
+            program,
+            sort_keys=True,
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _raw_program_fingerprint(self, program: Mapping[str, Any]) -> str:
+        return self._program_signature(program)
+
+    def _semantic_fingerprint(
+        self,
+        program: Mapping[str, Any],
+        executor_contract_id: str,
+        executor_contract_version: str,
+    ) -> str:
+        return self._program_signature({
+            "executor_contract_id": executor_contract_id,
+            "executor_contract_version": executor_contract_version,
+            "normalized_semantics": program,
+        })
+
+    def _source_record_fingerprint(self, source_record: Mapping[str, Any]) -> str:
+        return self._program_signature(source_record)
+
+    def _alias_record(self, candidate: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "candidate_id": candidate.get("candidate_id"),
+            "candidate_fingerprint": candidate.get("source_candidate_fingerprint"),
+            "generator_source": candidate.get("source"),
+            "origin_source": candidate.get("origin_source"),
+            "parent_candidate_ids": deepcopy(
+                candidate.get("equivalent_candidate_ids", [])
+            ),
+            "executable_representation": deepcopy(candidate.get("program", {})),
+            "executable_fingerprint": self._raw_program_fingerprint(
+                candidate.get("program", {})
+            ),
+            "source_record": deepcopy(candidate.get("source_candidate_record", {})),
+            "source_record_fingerprint": candidate.get(
+                "source_candidate_fingerprint"
+            ),
+        }
+
+    def _semantic_program(self, program: Mapping[str, Any]) -> dict[str, Any]:
+        semantic_steps = []
+        for step in program.get("steps", []) or []:
+            if not isinstance(step, Mapping):
+                continue
+            operation = _normalize_operation(step.get("operation") or step.get("primitive"))
+            if operation in {
+                "noop",
+                "preserve_grid",
+                "preserve_colors",
+                "preserve_topology",
+                "preserve_shape",
+                "preserve_size",
+                "preserve_density",
+                "preserve_symmetry",
+            }:
+                continue
+            parameters = deepcopy(dict(step.get("parameters") or {}))
+            if operation == "duplicate_object":
+                parameters.pop("duplication_count", None)
+                parameters.pop("duplication_policy", None)
+            semantic_steps.append({
+                "operation": operation,
+                "parameters": parameters,
+            })
+        return {
+            "step_count": len(semantic_steps),
+            "steps": semantic_steps,
+        }
 
 
 def _score(value: Any) -> float:

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping
 
 
@@ -31,6 +34,8 @@ class NaturalProductionHandoffObserver:
         *,
         run_id: str | None = None,
         task_id: str | None = None,
+        execution_plan_id: str | None = None,
+        execution_plan_fingerprint: str | None = None,
         candidate: Mapping[str, Any] | None = None,
         materialization: Mapping[str, Any] | None = None,
         sandbox_validation: Mapping[str, Any] | None = None,
@@ -76,6 +81,16 @@ class NaturalProductionHandoffObserver:
         safe_winner = (
             arena_decision in SAFE_WINNER_STATES
             and bool(selected_candidate_id)
+        )
+        safe_winner_predicate = self._safe_winner_predicate_evaluation(
+            arena_map,
+            run_id=run_id,
+            task_id=task_id,
+            execution_plan_id=execution_plan_id,
+            execution_plan_fingerprint=execution_plan_fingerprint,
+            arena_decision=arena_decision,
+            selected_candidate_id=selected_candidate_id,
+            safe_winner=safe_winner,
         )
         grant_expected = safe_winner
         grant_state = str(grant_map.get("grant_state") or "NOT_REACHED")
@@ -200,6 +215,8 @@ class NaturalProductionHandoffObserver:
             "phase_3_state": phase_state,
             "run_id": str(run_id or production_map.get("run_id") or grant_map.get("run_id") or "UNKNOWN"),
             "task_id": str(task_id or candidate_map.get("task_id") or "UNKNOWN"),
+            "execution_plan_id": execution_plan_id,
+            "execution_plan_fingerprint": execution_plan_fingerprint,
             "candidate_generated": "PASSED" if candidate_generated else "BLOCKED",
             "candidate_id": candidate_identity.get("candidate_id"),
             "candidate_source": candidate_identity.get("candidate_source"),
@@ -219,6 +236,7 @@ class NaturalProductionHandoffObserver:
             "arena_decision": arena_decision,
             "arena_selected_candidate_id": selected_candidate_id,
             "safe_winner_selected": safe_winner,
+            "safe_winner_predicate_evaluation": safe_winner_predicate,
             "grant_boundary_reached": bool(grant_map),
             "grant_expected": grant_expected,
             "grant_state": grant_state,
@@ -256,6 +274,666 @@ class NaturalProductionHandoffObserver:
         }
         trace["trace_id"] = self._stable_id("natural_production_handoff", trace)
         return trace
+
+    def _safe_winner_predicate_evaluation(
+        self,
+        arena: Mapping[str, Any],
+        *,
+        run_id: str | None,
+        task_id: str | None,
+        execution_plan_id: str | None,
+        execution_plan_fingerprint: str | None,
+        arena_decision: str,
+        selected_candidate_id: Any,
+        safe_winner: bool,
+    ) -> dict[str, Any]:
+        diagnostics = (
+            arena.get("candidate_arena_diagnostics")
+            if isinstance(arena.get("candidate_arena_diagnostics"), Mapping)
+            else {}
+        )
+        selection = (
+            diagnostics.get("selection_report")
+            if isinstance(diagnostics.get("selection_report"), Mapping)
+            else {}
+        )
+        winner = (
+            selection.get("winner_candidate")
+            if isinstance(selection.get("winner_candidate"), Mapping)
+            else {}
+        )
+        second = (
+            selection.get("second_best_candidate")
+            if isinstance(selection.get("second_best_candidate"), Mapping)
+            else {}
+        )
+        thresholds = (
+            selection.get("thresholds")
+            if isinstance(selection.get("thresholds"), Mapping)
+            else {}
+        )
+        winner_id = winner.get("candidate_id") or selected_candidate_id
+        simulations = (
+            diagnostics.get("simulations")
+            if isinstance(diagnostics.get("simulations"), Mapping)
+            else {}
+        )
+        simulation = (
+            simulations.get(winner_id)
+            if winner_id and isinstance(simulations.get(winner_id), Mapping)
+            else {}
+        )
+        top_score = self._number(
+            winner.get("final_score"),
+            arena.get("winner_score"),
+        )
+        second_score = self._number(
+            second.get("final_score"),
+            arena.get("second_best_score"),
+        )
+        margin = self._number(
+            selection.get("selection_margin"),
+            arena.get("selection_margin"),
+        )
+        accuracy = self._number(simulation.get("prediction_accuracy"))
+        analysis_only = arena.get("analysis_only")
+        if analysis_only is None:
+            summary = arena.get("candidate_arena_summary")
+            if isinstance(summary, Mapping):
+                analysis_only = summary.get("analysis_only")
+        inputs_complete = all(
+            value is not None
+            for value in (top_score, margin, accuracy, analysis_only)
+        ) and bool(thresholds)
+        strong_score_required = float(thresholds.get("strong_score", 0.90))
+        strong_margin_required = float(thresholds.get("strong_margin", 0.05))
+        conditional_score_required = float(
+            thresholds.get("conditional_score", 0.80)
+        )
+        conditional_margin_required = float(
+            thresholds.get("conditional_margin", 0.02)
+        )
+        minimum_accuracy = float(thresholds.get("minimum_accuracy", 0.60))
+        minimum_score = float(thresholds.get("minimum_score", 0.55))
+        tie_margin = float(thresholds.get("tie_margin", 0.02))
+        accuracy_passed = accuracy is not None and accuracy >= minimum_accuracy
+        tie_observed = bool(second) and margin is not None and abs(margin) < tie_margin
+        strong_score_passed = (
+            top_score is not None and top_score >= strong_score_required
+        )
+        strong_margin_passed = (
+            margin is not None and margin >= strong_margin_required
+        )
+        strong_passed = strong_score_passed and strong_margin_passed
+        conditional_score_passed = (
+            top_score is not None and top_score >= conditional_score_required
+        )
+        conditional_margin_passed = (
+            margin is not None and margin >= conditional_margin_required
+        )
+        conditional_passed = (
+            conditional_score_passed and conditional_margin_passed
+        )
+        sandbox_passed = bool(
+            analysis_only
+            and top_score is not None
+            and top_score >= minimum_score
+            and accuracy_passed
+            and not tie_observed
+            and not strong_passed
+            and not conditional_passed
+        )
+        candidate_rows = arena.get("candidate_summary") or arena.get(
+            "candidate_rows"
+        ) or []
+        candidate_ids = [
+            row.get("candidate_id")
+            for row in candidate_rows
+            if isinstance(row, Mapping) and row.get("candidate_id")
+        ]
+        if not candidate_ids:
+            candidate_ids = [
+                row.get("candidate_id")
+                for row in diagnostics.get("scores", []) or []
+                if isinstance(row, Mapping) and row.get("candidate_id")
+            ]
+        if winner_id and winner_id not in candidate_ids:
+            candidate_ids.append(winner_id)
+        candidate_ids = sorted(set(candidate_ids))
+        score_rows = [
+            dict(row)
+            for row in diagnostics.get("scores", []) or []
+            if isinstance(row, Mapping) and row.get("candidate_id")
+        ]
+        if not score_rows:
+            score_rows = [dict(row) for row in (winner, second) if row]
+        score_rows.sort(
+            key=lambda row: (
+                -float(row.get("final_score", 0.0) or 0.0),
+                str(row.get("candidate_id") or ""),
+            )
+        )
+        ranked_candidate_scores = [
+            {
+                "rank_position": index + 1,
+                "candidate_id": row.get("candidate_id"),
+                "final_score": self._number(row.get("final_score")),
+                "eligible_for_selection": row.get("eligible_for_selection"),
+                "selection_blockers": list(row.get("selection_blockers") or []),
+                "score_components": dict(row.get("score_components") or {}),
+                "penalties": dict(row.get("penalties") or {}),
+                "score_composition": dict(row.get("score_composition") or {}),
+            }
+            for index, row in enumerate(score_rows)
+        ]
+        normalized_candidates = [
+            dict(row)
+            for row in arena.get("normalized_candidates", []) or []
+            if isinstance(row, Mapping) and row.get("candidate_id")
+        ]
+        selected_candidate = arena.get("selected_candidate")
+        if not isinstance(selected_candidate, Mapping):
+            selected_candidate = {}
+        if selected_candidate and not normalized_candidates:
+            normalized_candidates = [dict(selected_candidate)]
+        candidate_records = []
+        for candidate in normalized_candidates:
+            candidate_payload = dict(candidate)
+            candidate_fingerprint = hashlib.sha256(
+                json.dumps(
+                    candidate_payload,
+                    sort_keys=True,
+                    ensure_ascii=True,
+                    default=str,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            candidate_records.append({
+                "candidate_id": candidate.get("candidate_id"),
+                "immutable_fingerprint": candidate_fingerprint,
+                "candidate_type": candidate.get("candidate_type"),
+                "source": candidate.get("source"),
+                "source_run_id": candidate.get("source_run_id") or candidate.get("run_id"),
+                "source_task_id": candidate.get("source_task_id") or candidate.get("task_id"),
+                "qualification_reference": candidate.get("qualification_id"),
+                "program": candidate.get("program"),
+                "transformation": candidate.get("transformation"),
+                "source_artifact": candidate.get("source_artifact"),
+                "canonical_candidate": candidate_payload,
+            })
+        candidate_set_id = arena.get("candidate_set_id")
+        if not candidate_set_id:
+            candidate_set_id = self._stable_id(
+                "candidate_set", {"candidate_ids": candidate_ids}
+            )
+        binding = {
+            "run_id": str(run_id or "UNKNOWN"),
+            "task_id": str(task_id or "UNKNOWN"),
+            "execution_plan_id": execution_plan_id,
+            "execution_plan_fingerprint": execution_plan_fingerprint,
+            "candidate_set_id": candidate_set_id,
+            "candidate_ids": candidate_ids,
+            "selected_candidate_id": selected_candidate_id,
+        }
+        evaluation_timestamp = datetime.now(timezone.utc).isoformat()
+        arena_decision_id = self._stable_id(
+            "arena_decision",
+            {
+                **binding,
+                "selection_state": arena_decision,
+                "selection_margin": margin,
+            },
+        )
+        score_by_id = {
+            row.get("candidate_id"): row
+            for row in ranked_candidate_scores
+            if row.get("candidate_id")
+        }
+        candidate_by_id = {
+            row.get("candidate_id"): row
+            for row in candidate_records
+            if row.get("candidate_id")
+        }
+        governance = (
+            diagnostics.get("governance_decisions")
+            if isinstance(diagnostics.get("governance_decisions"), Mapping)
+            else {}
+        )
+        ordered_candidate_records = []
+        for score_row in ranked_candidate_scores:
+            candidate_id = score_row.get("candidate_id")
+            candidate_record = candidate_by_id.get(candidate_id, {})
+            canonical_candidate = candidate_record.get("canonical_candidate")
+            canonical_candidate = (
+                canonical_candidate
+                if isinstance(canonical_candidate, Mapping)
+                else {}
+            )
+            semantics = {
+                "operation": canonical_candidate.get("operation"),
+                "program": canonical_candidate.get("program"),
+                "transformation": canonical_candidate.get("transformation"),
+                "program_signature": canonical_candidate.get("program_signature"),
+            }
+            semantics_available = bool(
+                semantics.get("program")
+                or semantics.get("transformation")
+                or semantics.get("operation")
+            )
+            semantics_fingerprint = hashlib.sha256(
+                json.dumps(
+                    semantics,
+                    sort_keys=True,
+                    ensure_ascii=True,
+                    default=str,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            governance_record = governance.get(candidate_id, {})
+            if not isinstance(governance_record, Mapping):
+                governance_record = {}
+            qualification_payload = {
+                "candidate_id": candidate_id,
+                "decision": governance_record.get("decision"),
+                "reasons": list(governance_record.get("reasons") or []),
+                "run_id": binding["run_id"],
+                "task_id": binding["task_id"],
+            }
+            qualification_id = (
+                canonical_candidate.get("qualification_id")
+                or self._stable_id("arena_qualification", qualification_payload)
+            )
+            ordered_candidate_records.append({
+                "candidate_id": candidate_id,
+                "candidate_fingerprint": candidate_record.get("immutable_fingerprint"),
+                "candidate_type": (
+                    candidate_record.get("candidate_type")
+                    or canonical_candidate.get("learned_object_type")
+                    or "EXECUTABLE_CANDIDATE"
+                ),
+                "source_component": candidate_record.get("source"),
+                "source_artifact": candidate_record.get("source_artifact"),
+                "executable_semantics_reference": (
+                    canonical_candidate.get("program_signature")
+                    or f"candidate_semantics:{semantics_fingerprint[:16]}"
+                ),
+                "executable_semantics_fingerprint": semantics_fingerprint,
+                "executable_semantics_available": semantics_available,
+                "executable_semantics": semantics,
+                "score": score_row.get("final_score"),
+                "deterministic_rank": score_row.get("rank_position"),
+                "qualification_id": qualification_id,
+                "qualification_decision": governance_record.get("decision"),
+                "candidate_set_id": candidate_set_id,
+                "run_id": binding["run_id"],
+                "task_id": binding["task_id"],
+                "execution_plan_id": execution_plan_id,
+                "arena_decision_id": arena_decision_id,
+                "evaluation_timestamp": evaluation_timestamp,
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+            })
+        candidate_set_fingerprint = hashlib.sha256(
+            json.dumps(
+                [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "candidate_fingerprint": row["candidate_fingerprint"],
+                    }
+                    for row in ordered_candidate_records
+                ],
+                sort_keys=True,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        top_tie_candidate_ids = []
+        if ordered_candidate_records and top_score is not None:
+            top_tie_candidate_ids = sorted(
+                row["candidate_id"]
+                for row in ordered_candidate_records
+                if row.get("score") is not None
+                and abs(float(top_score) - float(row["score"])) < tie_margin
+            )
+        tie_group_payload = {
+            "candidate_set_id": candidate_set_id,
+            "candidate_ids": top_tie_candidate_ids,
+            "top_score": top_score,
+            "tie_margin": tie_margin,
+        }
+        top_tie_group_fingerprint = hashlib.sha256(
+            json.dumps(
+                tie_group_payload,
+                sort_keys=True,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        top_tie_group_id = f"arena_top_tie_group_{top_tie_group_fingerprint[:16]}"
+        for record in ordered_candidate_records:
+            record["tie_group_id"] = (
+                top_tie_group_id
+                if record["candidate_id"] in top_tie_candidate_ids
+                else None
+            )
+        canonical_contract_complete = bool(
+            ordered_candidate_records
+            and len(ordered_candidate_records) == len(score_by_id)
+            and len(ordered_candidate_records) == len(candidate_by_id)
+            and all(
+                row.get("candidate_id")
+                and row.get("candidate_fingerprint")
+                and row.get("score") is not None
+                and row.get("deterministic_rank") is not None
+                and row.get("qualification_id")
+                and row.get("executable_semantics_reference")
+                and row.get("executable_semantics_fingerprint")
+                and row.get("executable_semantics_available") is True
+                for row in ordered_candidate_records
+            )
+        )
+
+        def predicate(name: str, branch: str, observed: Any, required: Any, result: bool) -> dict[str, Any]:
+            return {
+                "predicate_name": name,
+                "branch": branch,
+                "observed_value": observed,
+                "required_value": required,
+                "result": bool(result),
+                "input_source": "cognitive_candidate_arena.winner_selection_policy",
+                "lineage_identity": dict(binding),
+                "temporal_run_binding": "CURRENT_RUN_BOUND",
+                "can_grant_behavioral_authority": False,
+                "telemetry_authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+            }
+
+        evaluations = [
+            predicate("PREDICTION_ACCURACY_THRESHOLD", "pre_selection", accuracy, f">={minimum_accuracy}", accuracy_passed),
+            predicate("UNRESOLVED_TIE", "tie", {"second_candidate_present": bool(second), "margin": margin}, f"margin_not_below_{tie_margin}", not tie_observed),
+            predicate("STRONG_WINNER_SCORE_THRESHOLD", "strong_winner", top_score, f">={strong_score_required}", strong_score_passed),
+            predicate("STRONG_WINNER_MARGIN_THRESHOLD", "strong_winner", margin, f">={strong_margin_required}", strong_margin_passed),
+            predicate("STRONG_WINNER", "strong_winner", {"score": strong_score_passed, "margin": strong_margin_passed}, "all_true", strong_passed),
+            predicate("CONDITIONAL_WINNER_SCORE_THRESHOLD", "conditional_winner", top_score, f">={conditional_score_required}", conditional_score_passed),
+            predicate("CONDITIONAL_WINNER_MARGIN_THRESHOLD", "conditional_winner", margin, f">={conditional_margin_required}", conditional_margin_passed),
+            predicate("CONDITIONAL_WINNER", "conditional_winner", {"score": conditional_score_passed, "margin": conditional_margin_passed}, "all_true", conditional_passed),
+            predicate("SANDBOX_WINNER", "sandbox_winner", {"analysis_only": analysis_only, "top_score": top_score}, {"analysis_only": True, "top_score": f">={minimum_score}"}, sandbox_passed),
+            predicate("SAFE_WINNER", "production_handoff", arena_decision, sorted(SAFE_WINNER_STATES), safe_winner),
+            predicate("EXECUTION_ELIGIBILITY", "production_handoff", {"safe_winner": safe_winner, "selected_candidate_id": selected_candidate_id}, {"safe_winner": True, "selected_candidate_present": True}, safe_winner and bool(selected_candidate_id)),
+        ]
+        earliest_failed = next(
+            (
+                row["predicate_name"]
+                for row in evaluations
+                if row["predicate_name"] in {
+                    "PREDICTION_ACCURACY_THRESHOLD",
+                    "UNRESOLVED_TIE",
+                    "STRONG_WINNER_SCORE_THRESHOLD",
+                    "STRONG_WINNER_MARGIN_THRESHOLD",
+                }
+                and row["result"] is False
+            ),
+            "NONE",
+        )
+        payload = {
+            "schema_version": "1.0",
+            "source_component": "natural_production_handoff_observer",
+            "predicate": (
+                "selection_state_in_safe_winner_states_and_selected_candidate_present"
+            ),
+            **binding,
+            "arena_decision_id": arena_decision_id,
+            "observed_selection_state": arena_decision,
+            "required_selection_states": sorted(SAFE_WINNER_STATES),
+            "selected_candidate_id": selected_candidate_id,
+            "safe_winner_selected": safe_winner,
+            "analysis_only": analysis_only,
+            "top_score": top_score,
+            "second_best_score": second_score,
+            "selection_margin": margin,
+            "prediction_accuracy": accuracy,
+            "thresholds": dict(thresholds),
+            "strong_winner_predicate_passed": strong_passed,
+            "conditional_winner_predicate_passed": conditional_passed,
+            "sandbox_winner_predicate_passed": sandbox_passed,
+            "safe_winner_predicate_passed": safe_winner,
+            "execution_eligibility_predicate_passed": (
+                safe_winner and bool(selected_candidate_id)
+            ),
+            "evidence_state": "NOT_CONSUMED_BY_WINNER_SELECTION_POLICY",
+            "evidence_requirement": "NONE",
+            "ranked_candidate_scores": ranked_candidate_scores,
+            "candidate_records": candidate_records,
+            "complete_evaluated_candidate_count": len(ordered_candidate_records),
+            "ordered_candidate_records": ordered_candidate_records,
+            "deterministic_ranking_policy": "FINAL_SCORE_DESC_THEN_CANDIDATE_ID_ASC",
+            "candidate_set_fingerprint": candidate_set_fingerprint,
+            "tie_threshold": tie_margin,
+            "top_tie_group_id": top_tie_group_id,
+            "top_tie_group_fingerprint": top_tie_group_fingerprint,
+            "top_tie_candidate_ids": top_tie_candidate_ids,
+            "top_tie_member_count": len(top_tie_candidate_ids),
+            "canonical_persistence_contract_state": (
+                "COMPLETE" if canonical_contract_complete else "INCOMPLETE"
+            ),
+            "predicate_evaluations": evaluations,
+            "earliest_failed_substantive_predicate": earliest_failed,
+            "predicate_inputs_complete": inputs_complete,
+            "predicate_evaluation_state": (
+                "EVALUATED" if inputs_complete else "INSUFFICIENT_OBSERVABILITY"
+            ),
+            "telemetry_authority": "OBSERVATION_ONLY",
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                payload,
+                sort_keys=True,
+                ensure_ascii=True,
+                default=str,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return {
+            **payload,
+            "predicate_record_id": f"safe_winner_predicate_{fingerprint[:16]}",
+            "immutable_fingerprint": fingerprint,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def verify_predicate_record(self, record: Mapping[str, Any]) -> bool:
+        payload = {
+            key: value
+            for key, value in record.items()
+            if key not in {
+                "predicate_record_id",
+                "immutable_fingerprint",
+                "created_at",
+                "production_handoff_id",
+                "artifact_fingerprint",
+            }
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                payload,
+                sort_keys=True,
+                ensure_ascii=True,
+                default=str,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return fingerprint == record.get("immutable_fingerprint")
+
+    def verify_canonical_arena_persistence(self, record: Mapping[str, Any]) -> bool:
+        rows = record.get("ordered_candidate_records")
+        candidates = record.get("candidate_records")
+        if not isinstance(rows, list) or not rows or not isinstance(candidates, list):
+            return False
+        ids = [row.get("candidate_id") for row in rows if isinstance(row, Mapping)]
+        if len(ids) != len(rows) or len(set(ids)) != len(ids):
+            return False
+        if record.get("complete_evaluated_candidate_count") != len(rows):
+            return False
+        if [row.get("deterministic_rank") for row in rows] != list(range(1, len(rows) + 1)):
+            return False
+        if ids != sorted(ids, key=lambda candidate_id: (
+            -float(next(row.get("score") for row in rows if row.get("candidate_id") == candidate_id)),
+            str(candidate_id),
+        )):
+            return False
+        canonical_by_id = {
+            row.get("candidate_id"): row
+            for row in candidates
+            if isinstance(row, Mapping) and row.get("candidate_id")
+        }
+        if set(canonical_by_id) != set(ids):
+            return False
+        for row in rows:
+            candidate = canonical_by_id[row["candidate_id"]]
+            canonical_payload = candidate.get("canonical_candidate")
+            semantics = row.get("executable_semantics")
+            if not isinstance(canonical_payload, Mapping) or not isinstance(semantics, Mapping):
+                return False
+            candidate_fingerprint = hashlib.sha256(json.dumps(
+                dict(canonical_payload), sort_keys=True, ensure_ascii=True,
+                default=str, separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            semantics_fingerprint = hashlib.sha256(json.dumps(
+                dict(semantics), sort_keys=True, ensure_ascii=True,
+                default=str, separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            if candidate_fingerprint != row.get("candidate_fingerprint"):
+                return False
+            if candidate_fingerprint != candidate.get("immutable_fingerprint"):
+                return False
+            if semantics_fingerprint != row.get("executable_semantics_fingerprint"):
+                return False
+            if row.get("candidate_set_id") != record.get("candidate_set_id"):
+                return False
+            if row.get("run_id") != record.get("run_id"):
+                return False
+            if row.get("task_id") != record.get("task_id"):
+                return False
+            if row.get("execution_plan_id") != record.get("execution_plan_id"):
+                return False
+            if row.get("arena_decision_id") != record.get("arena_decision_id"):
+                return False
+            if row.get("qualification_id") in (None, ""):
+                return False
+            if row.get("executable_semantics_available") is not True:
+                return False
+            if row.get("authority") != "OBSERVATION_ONLY" or row.get("behavioral_authority") != "NONE":
+                return False
+        candidate_set_fingerprint = hashlib.sha256(json.dumps(
+            [{"candidate_id": row["candidate_id"], "candidate_fingerprint": row["candidate_fingerprint"]} for row in rows],
+            sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        if candidate_set_fingerprint != record.get("candidate_set_fingerprint"):
+            return False
+        top_score = max(float(row["score"]) for row in rows)
+        ordered_scores = [float(row["score"]) for row in rows]
+        runner_up = ordered_scores[1] if len(ordered_scores) > 1 else None
+        expected_margin = round(top_score - runner_up, 4) if runner_up is not None else top_score
+        if top_score != record.get("top_score") or runner_up != record.get("second_best_score"):
+            return False
+        if expected_margin != record.get("selection_margin"):
+            return False
+        tie_threshold = float(record.get("tie_threshold"))
+        top_ids = sorted(row["candidate_id"] for row in rows if abs(top_score - float(row["score"])) < tie_threshold)
+        if top_ids != record.get("top_tie_candidate_ids"):
+            return False
+        if len(top_ids) != record.get("top_tie_member_count"):
+            return False
+        tie_payload = {
+            "candidate_set_id": record.get("candidate_set_id"),
+            "candidate_ids": top_ids,
+            "top_score": record.get("top_score"),
+            "tie_margin": tie_threshold,
+        }
+        tie_fingerprint = hashlib.sha256(json.dumps(
+            tie_payload, sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        if tie_fingerprint != record.get("top_tie_group_fingerprint"):
+            return False
+        if record.get("top_tie_group_id") != f"arena_top_tie_group_{tie_fingerprint[:16]}":
+            return False
+        if any(
+            row.get("tie_group_id") != (record["top_tie_group_id"] if row["candidate_id"] in top_ids else None)
+            for row in rows
+        ):
+            return False
+        return record.get("canonical_persistence_contract_state") == "COMPLETE"
+
+    def persist_predicate_record(
+        self,
+        trace: Mapping[str, Any],
+        artifact_root: str | os.PathLike[str] = (
+            "runtime/artifacts/safe_winner_predicates"
+        ),
+    ) -> dict[str, Any]:
+        record = trace.get("safe_winner_predicate_evaluation")
+        if (
+            not isinstance(record, Mapping)
+            or not self.verify_predicate_record(record)
+            or not self.verify_canonical_arena_persistence(record)
+        ):
+            raise ValueError("safe_winner_predicate_record_integrity_failed")
+        run_id = str(record.get("run_id") or "UNKNOWN")
+        root = Path(artifact_root)
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / f"{run_id}.json"
+        temporary = path.with_suffix(".json.tmp")
+        persisted_record = {
+            **dict(record),
+            "production_handoff_id": trace.get("trace_id"),
+        }
+        persisted_record["artifact_fingerprint"] = hashlib.sha256(
+            json.dumps(
+                persisted_record,
+                sort_keys=True,
+                ensure_ascii=True,
+                default=str,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        temporary.write_text(
+            json.dumps(
+                persisted_record,
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=True,
+                default=str,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, path)
+        persisted = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            not self.verify_predicate_record(persisted)
+            or not self.verify_canonical_arena_persistence(persisted)
+        ):
+            raise ValueError("persisted_safe_winner_predicate_record_invalid")
+        return {
+            "persistence_state": "PERSISTED_AND_VERIFIED",
+            "artifact_path": str(path),
+            "predicate_record_id": record.get("predicate_record_id"),
+            "immutable_fingerprint": record.get("immutable_fingerprint"),
+            "artifact_fingerprint": persisted.get("artifact_fingerprint"),
+            "production_handoff_id": trace.get("trace_id"),
+            "authority": "OBSERVATION_ONLY",
+            "behavioral_authority": "NONE",
+        }
+
+    def _number(self, *values: Any) -> float | None:
+        for value in values:
+            if value is None or isinstance(value, bool):
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+        return None
 
     def _candidate_identity(self, candidate: Mapping[str, Any]) -> dict[str, Any]:
         metadata = candidate.get("metadata") if isinstance(candidate.get("metadata"), Mapping) else {}

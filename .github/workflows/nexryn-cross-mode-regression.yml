@@ -34,3 +34,8 @@ jobs:
 
       - name: Cross-mode semantic regression gate
         run: python tools/cross_mode_regression_gate.py
+
+      - name: Executor semantic contract gate
+        run: |
+          python tools/executor_contract_ci.py
+          python -m pytest tests/test_executor_contract_ci.py tests/test_candidate_semantic_equivalence.py

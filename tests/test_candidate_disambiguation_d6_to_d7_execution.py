@@ -1,5 +1,8 @@
 import json
+from copy import deepcopy
 from pathlib import Path
+
+import pytest
 
 from runtime.arena import ArenaMemory, CognitiveCandidateArena
 from runtime.evidence import (
@@ -9,6 +12,9 @@ from runtime.evidence import (
 from runtime.training.validation_curriculum_registry import ValidationCurriculumRegistry
 from runtime.validation.validation_task_execution_pipeline import (
     ValidationTaskExecutionPipeline,
+)
+from runtime.validation.validation_evidence_evaluator import (
+    ValidationEvidenceEvaluator,
 )
 from runtime.validation.validation_task_scheduler import ValidationTaskScheduler
 
@@ -102,6 +108,16 @@ def _write_curriculum(path: Path, *, non_discriminating=False):
                         "validation_objective": (
                             "execute direct output-level discriminative probe"
                         ),
+                        "candidate_disambiguation_observed_outcome": [[2, 1, 2]],
+                        "expected_target_output": [[2, 1, 2]],
+                        "evaluation_contract": {
+                            "comparator_id": (
+                                "candidate_disambiguation_evidence_comparison"
+                            ),
+                            "comparator_version": "1.0",
+                            "minimum_case_coverage": 1.0,
+                            "exact_match_required": False,
+                        },
                         "enabled": True,
                     }
                 ]
@@ -222,6 +238,175 @@ def test_reprocessing_same_d6_schedule_reuses_raw_result_without_duplicate_execu
     assert second["execution_invoked"] is False
     assert first["raw_result_id"] == second["raw_result_id"]
     assert len(list((tmp_path / "state" / "evidence_acquisition_plans" / "raw_results").glob("*.json"))) == 1
+
+
+def test_d7_result_produces_d8_direction_without_d9_acceptance(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    adapter, _, plan_id = _produce_d6(tmp_path, run_id="run_d8")
+    registry = _registry(curriculum)
+    _, execution = _schedule_and_execute(tmp_path, adapter, plan_id, registry)
+
+    report = ValidationEvidenceEvaluator(
+        tmp_path / "state" / "evidence_acquisition_plans",
+        registry,
+    ).evaluate_plan(plan_id)
+
+    assert execution["candidate_disambiguation_execution"]["observed_outcome_bound"] is True
+    assert report["evidence_decision_state"] == "EVIDENCE_SUPPORTED"
+    assert report["disambiguation_evidence_direction"] == "SUPPORTS_A_OVER_B"
+    assert report["evidence_accepted"] is False
+    assert report["accepted_evidence_artifact_created"] is False
+    assert report["arena_reentry_invoked"] is False
+    assert report["winner_selected"] is False
+    accepted_path = (
+        tmp_path / "state" / "evidence_acquisition_plans" / "accepted_evidence"
+    )
+    assert list(accepted_path.glob("*.json")) == []
+
+
+def test_d8_replay_reuses_one_decision_without_authority_escalation(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    adapter, _, plan_id = _produce_d6(tmp_path, run_id="run_d8_replay")
+    registry = _registry(curriculum)
+    _schedule_and_execute(tmp_path, adapter, plan_id, registry)
+    evaluator = ValidationEvidenceEvaluator(
+        tmp_path / "state" / "evidence_acquisition_plans",
+        registry,
+    )
+
+    first = evaluator.evaluate_plan(plan_id)
+    second = evaluator.evaluate_plan(plan_id)
+
+    assert first["evidence_decision_id"] == second["evidence_decision_id"]
+    assert second["evidence_decision_creation_result"] == (
+        "REUSED_EXISTING_EVIDENCE_DECISION"
+    )
+    assert len(list(evaluator.evidence_decisions_path.glob("*.json"))) == 1
+    assert second["evidence_accepted"] is False
+    assert second["candidate_execution_authority"] == "NONE"
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected_direction"),
+    [
+        ([[2, 1, 2]], "SUPPORTS_A_OVER_B"),
+        ([[2, 2, 1]], "SUPPORTS_B_OVER_A"),
+        ([[9, 9, 9]], "SUPPORTS_NEITHER"),
+    ],
+)
+def test_d8_classifies_observed_outcome_against_both_frozen_predictions(
+    tmp_path,
+    outcome,
+    expected_direction,
+):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    adapter, _, plan_id = _produce_d6(tmp_path, run_id=f"run_{expected_direction}")
+    registry = _registry(curriculum)
+    schedule_report, _ = _schedule_and_execute(tmp_path, adapter, plan_id, registry)
+    root = tmp_path / "state" / "evidence_acquisition_plans"
+    plan = json.loads(next((root / "pending").glob("*.json")).read_text())
+    schedule = json.loads(
+        (root / "schedules" / f"{schedule_report['schedule_id']}.json").read_text()
+    )
+    raw = json.loads(next((root / "raw_results").glob("*.json")).read_text())
+    raw["candidate_disambiguation_execution"]["observed_outcome"] = outcome
+    evaluator = ValidationEvidenceEvaluator(root, registry)
+    comparable = evaluator._compare_candidate_disambiguation(
+        plan,
+        schedule,
+        raw,
+        {"comparator_id": "candidate_disambiguation_evidence_comparison"},
+        {"sealed_reference_resolved": True},
+        "comparison_direction_test",
+        "2026-09-19T00:00:00+00:00",
+    )
+
+    assert comparable["disambiguation_evidence_direction"] == expected_direction
+    assert comparable["candidate_disambiguation_binding_state"] == "BOUND"
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "candidate_set_id",
+        "candidate_a_id",
+        "candidate_b_id",
+        "candidate_a_prediction",
+        "candidate_b_prediction",
+        "disagreement_id",
+        "disambiguation_need_id",
+    ],
+)
+def test_d8_fails_closed_when_frozen_candidate_binding_is_mutated(tmp_path, field):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    adapter, _, plan_id = _produce_d6(tmp_path, run_id=f"run_attack_{field}")
+    registry = _registry(curriculum)
+    schedule_report, _ = _schedule_and_execute(tmp_path, adapter, plan_id, registry)
+    root = tmp_path / "state" / "evidence_acquisition_plans"
+    plan = json.loads(next((root / "pending").glob("*.json")).read_text())
+    schedule = json.loads(
+        (root / "schedules" / f"{schedule_report['schedule_id']}.json").read_text()
+    )
+    raw = json.loads(next((root / "raw_results").glob("*.json")).read_text())
+    attacked = deepcopy(raw)
+    attacked["candidate_disambiguation_execution"][field] = "ATTACKED"
+    evaluator = ValidationEvidenceEvaluator(root, registry)
+
+    comparable = evaluator._compare_candidate_disambiguation(
+        plan,
+        schedule,
+        attacked,
+        {"comparator_id": "candidate_disambiguation_evidence_comparison"},
+        {"sealed_reference_resolved": True},
+        "comparison_attack_test",
+        "2026-09-19T00:00:00+00:00",
+    )
+
+    assert comparable["candidate_disambiguation_binding_state"] == "INVALID_BINDING"
+    assert comparable["disambiguation_evidence_direction"] == "INVALID_COMPARISON"
+    assert comparable["candidate_disambiguation_binding_failures"]
+
+
+def test_d8_identical_predictions_are_non_discriminating_not_a_winner(tmp_path):
+    curriculum = tmp_path / "curriculum.json"
+    _write_curriculum(curriculum)
+    adapter, _, plan_id = _produce_d6(tmp_path, run_id="run_both_match_d8")
+    registry = _registry(curriculum)
+    schedule_report, _ = _schedule_and_execute(tmp_path, adapter, plan_id, registry)
+    root = tmp_path / "state" / "evidence_acquisition_plans"
+    plan = json.loads(next((root / "pending").glob("*.json")).read_text())
+    schedule = json.loads(
+        (root / "schedules" / f"{schedule_report['schedule_id']}.json").read_text()
+    )
+    raw = json.loads(next((root / "raw_results").glob("*.json")).read_text())
+    same_prediction = raw["candidate_disambiguation_execution"][
+        "candidate_a_prediction"
+    ]
+    raw["candidate_disambiguation_execution"]["candidate_b_prediction"] = (
+        same_prediction
+    )
+    schedule["candidate_disambiguation_execution"]["candidate_b_prediction"] = (
+        same_prediction
+    )
+    comparable = ValidationEvidenceEvaluator(
+        root, registry
+    )._compare_candidate_disambiguation(
+        plan,
+        schedule,
+        raw,
+        {"comparator_id": "candidate_disambiguation_evidence_comparison"},
+        {"sealed_reference_resolved": True},
+        "comparison_both_match_test",
+        "2026-09-19T00:00:00+00:00",
+    )
+
+    assert comparable["disambiguation_evidence_direction"] == "NON_DISCRIMINATING"
+    assert comparable["winner_selected"] is False
+    assert comparable["candidate_execution_authority"] == "NONE"
 
 
 def test_candidate_disambiguation_execution_fails_closed_on_identity_and_disagreement_breaks(tmp_path):

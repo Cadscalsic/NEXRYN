@@ -1719,6 +1719,11 @@ def _arena_proposal_from_source_record(source_name, record, index):
         "identity_support": proposal.get("identity_support", 0.55),
         "localization_support": proposal.get("localization_support", 0.5),
     })
+    from runtime.arena.candidate_support_grounding import (
+        apply_candidate_support_grounding,
+    )
+
+    proposal = apply_candidate_support_grounding(proposal)
     metadata = proposal.get("metadata")
     metadata = dict(metadata) if isinstance(metadata, dict) else {}
     metadata.setdefault("arena_source_diversification", True)
@@ -7524,6 +7529,7 @@ try:
             runtime_context={
                 "run_id": runtime_metrics.get("run_id"),
                 "task_id": executable_task_io.get("task"),
+                "execution_plan_id": runtime_metrics.get("execution_plan_id"),
                 "expected_candidate_sources": [
                     "normalized_program_candidates",
                     "semantic_compiler",
@@ -7669,6 +7675,11 @@ try:
                 natural_production_handoff_observer.build_trace(
                     run_id=runtime_metrics.get("run_id"),
                     task_id=str(executable_task_io.get("task") or "unknown"),
+                    execution_plan_id=runtime_metrics.get("execution_plan_id"),
+                    execution_plan_fingerprint=(
+                        authoritative_execution_plan.get("immutable_fingerprint")
+                        or authoritative_execution_plan.get("execution_plan_fingerprint")
+                    ),
                     candidate=observed_candidate,
                     materialization=materialization_report,
                     sandbox_validation=sandbox_validation_report,
@@ -7679,6 +7690,11 @@ try:
                     production_execution=None,
                     production_outcome=None,
                     run_budget_state="RUNTIME_BUDGET_FINALIZED",
+                )
+            )
+            natural_production_handoff_trace["predicate_record_persistence"] = (
+                natural_production_handoff_observer.persist_predicate_record(
+                    natural_production_handoff_trace,
                 )
             )
         executable_intelligence_result = {}
