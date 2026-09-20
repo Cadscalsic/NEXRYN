@@ -166,6 +166,14 @@ class CognitiveBlackboard:
                     )
                     if isinstance(rule, Mapping) and rule:
                         self.write("position_rule", rule)
+                    localized_rules = report.get("localized_rules", [])
+                    if isinstance(localized_rules, list) and localized_rules:
+                        self.update(
+                            "localized_prediction",
+                            {
+                                "active_localized_rule": localized_rules[0],
+                            },
+                        )
         self.update(
             "world_model",
             {
@@ -201,7 +209,12 @@ class CognitiveBlackboard:
             )
         )
         prerequisites_ready = bool(
-            self.position_rule
+            (
+                self.position_rule
+                or self.localized_prediction.get("localized_step_count", 0) > 0
+                or self.localized_prediction.get("localized_rule_count", 0) > 0
+                or self.localized_prediction.get("active_localized_rule")
+            )
             and self.synthesized_program.get("steps")
             and execution_plan.get("nodes") is not None
         )

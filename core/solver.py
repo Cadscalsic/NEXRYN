@@ -1,5 +1,10 @@
 import numpy as np
 
+from runtime.cognitive_pipeline import (
+    CognitiveContext,
+    CognitivePipelineOrchestrator,
+)
+
 
 class ARCSolver:
 
@@ -14,24 +19,18 @@ class ARCSolver:
 
     def solve(self):
 
-        predicted = np.copy(self.input_grid.grid)
-
-        for rule in self.rules:
-
-            # ---------------------------------
-            # COLOR CHANGE
-            # ---------------------------------
-
-            if rule["rule"] == "color_changes":
-
-                removed = rule["removed_colors"]
-                added = rule["added_colors"]
-
-                if len(removed) > 0 and len(added) > 0:
-
-                    old_color = removed[0]
-                    new_color = added[0]
-
-                    predicted[predicted == old_color] = new_color
-
-        return predicted
+        context = CognitiveContext(
+            input_grid=self.input_grid,
+            rules=list(self.rules),
+        )
+        context = CognitivePipelineOrchestrator().execute(context)
+        self.cognitive_context = context
+        self.cognitive_pipeline_report = {
+            "COGNITIVE_PIPELINE_REPORT": True,
+            "stage_timeline": list(context.stage_events),
+            "stage_snapshots": list(context.stage_snapshots),
+            "execution_trace": list(context.trace),
+        }
+        if context.final_output is None:
+            return np.copy(self.input_grid.grid)
+        return context.final_output

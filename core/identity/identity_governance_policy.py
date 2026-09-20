@@ -102,6 +102,11 @@ def evaluate_identity_governance(
         or identity_continuity_engine_report.get("identity_split") is True
         or identity_stability_state == "identity_branching_tracked"
     )
+    identity_runtime_replication = (
+        identity_runtime_report.get("identity_replication") is True
+        or identity_continuity_engine_report.get("identity_replication") is True
+        or identity_stability_state == "identity_replication_tracked"
+    )
     identity_runtime_merged = (
         identity_runtime_report.get("identity_merged") is True
         or identity_continuity_engine_report.get("identity_merged") is True
@@ -160,6 +165,16 @@ def evaluate_identity_governance(
         and identity_runtime_continuity is not None
         and identity_runtime_continuity >= stable_runtime_continuity_threshold
     )
+    replication_safe_policy = _safe_dict(
+        identity_runtime_report.get(
+            "replication_safe_policy",
+            identity_continuity_engine_report.get("replication_safe_policy"),
+        )
+    )
+    replication_safe_supported = (
+        identity_runtime_replication
+        and replication_safe_policy.get("execution_authorized") is True
+    )
 
     identity_continuity_above_limit = (
         runtime_gates.get("identity_continuity_above_limit") is True
@@ -173,6 +188,7 @@ def evaluate_identity_governance(
         or stable_runtime_continuity_supported
         or transformed_identity_runtime_supported
         or fragile_semantic_spine_integration_supported
+        or replication_safe_supported
     )
 
     semantic_drift_below_limit = (
@@ -227,6 +243,7 @@ def evaluate_identity_governance(
             runtime_identity_stable
             or stable_runtime_continuity_supported
             or fragile_semantic_spine_integration_supported
+            or replication_safe_supported
             or (
                 identity_continuity_above_limit
                 and not identity_runtime_split
@@ -282,6 +299,7 @@ def evaluate_identity_governance(
         "identity_runtime_state": identity_runtime_state,
         "identity_runtime_ready": identity_runtime_ready,
         "identity_runtime_split": identity_runtime_split,
+        "identity_runtime_replication": identity_runtime_replication,
         "identity_runtime_merged": identity_runtime_merged,
         "identity_runtime_supported": identity_continuity_above_limit,
         "identity_runtime_continuity": identity_runtime_continuity,
@@ -291,6 +309,8 @@ def evaluate_identity_governance(
             transformed_identity_runtime_supported,
         "fragile_semantic_spine_integration_supported":
             fragile_semantic_spine_integration_supported,
+        "replication_safe_policy": replication_safe_policy,
+        "replication_safe_supported": replication_safe_supported,
         "semantic_drift_score": semantic_drift_score,
         "semantic_spine_score": semantic_spine_score,
         "thresholds": {

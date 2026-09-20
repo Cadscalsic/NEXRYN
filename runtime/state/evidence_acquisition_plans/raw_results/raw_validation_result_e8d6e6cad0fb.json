@@ -1,0 +1,64 @@
+{
+  "attempt_number": 1,
+  "candidate_execution_authority": "NONE",
+  "case_outputs": [
+    {
+      "case_id": "manifest_case_0",
+      "output": {
+        "execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
+        "reference_visible_to_runner": false,
+        "task_id": "elite_validation_task_31"
+      }
+    }
+  ],
+  "comparison_state": "NOT_COMPARED",
+  "constitutional_boundary": "RAW_VALIDATION_TASK_OUTPUT_IS_AN_UNEVALUATED_OBSERVATION_AND_MUST_NOT_BE_TREATED_AS_EVIDENCE_BEFORE_EXPLICIT_EVALUATION",
+  "evidence_state": "NOT_EVALUATED",
+  "execution_completed_at": "2026-08-02T20:46:16.828740+00:00",
+  "execution_duration": 5.1e-05,
+  "execution_id": "validation_execution_72adf97745e0",
+  "execution_mode": "SANDBOX_VALIDATION",
+  "execution_scope": "SCHEDULED_VALIDATION_TASK_ONLY",
+  "execution_started_at": "2026-08-02T20:46:16.821777+00:00",
+  "graduation_authority": "NONE",
+  "plan_fingerprint": "a5a026d186ad0b1a21e7c7ce9b2a1d96fc2b5c57d56cd36175a1c42a720180de",
+  "plan_id": "evidence_plan_run_20260731_065432_9c594cbbba",
+  "predicted_output": {
+    "reasoning_patterns": [
+      "advanced_multi_concept",
+      "Advanced Multi-Concept Validation Tasks",
+      "Color Transformation Capability"
+    ],
+    "required_evidence": "cross_source_consensus_evidence",
+    "runner_output_type": "validation_task_manifest_observation",
+    "target_operation": "replace_color",
+    "task_id": "elite_validation_task_31"
+  },
+  "raw_result_created_at": "2026-08-02T20:46:16.828740+00:00",
+  "raw_result_fingerprint": "466436141e74d5648fdc3d91a3e4c8ffd5d417280a6ddf0d2da55f3bda5ec120",
+  "raw_result_id": "raw_validation_result_e8d6e6cad0fb",
+  "required_evidence": "cross_source_consensus_evidence",
+  "required_evidence_category": "CROSS_SOURCE_CONSENSUS",
+  "resource_usage": {
+    "executed_case_count": 1
+  },
+  "result_state": "RAW_RESULT_CAPTURED",
+  "runner_id": "governed_validation_manifest_runner",
+  "runner_status": "COMPLETED",
+  "runner_trace_reference": {
+    "runner_id": "governed_validation_manifest_runner",
+    "target_reference_forwarded_to_solver": false
+  },
+  "runner_version": "1.0",
+  "runtime_error": null,
+  "schedule_fingerprint": "34176a332cddd2f5e72cd52513d4ee0ac523d3e2cba0e00d094c8204bdd6fd6a",
+  "schedule_id": "validation_schedule_527cdac7b811",
+  "schema_version": "1.0",
+  "selected_curriculum_id": "elite_validation_academy",
+  "selected_validation_task_id": "elite_validation_task_31",
+  "target_candidate": "semantic_to_transformation_compiler_0",
+  "target_operation": "replace_color",
+  "tie_break_strategy": "cross_source_consensus",
+  "trust_authority": "NONE",
+  "truth_authority": "NONE"
+}

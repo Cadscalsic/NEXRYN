@@ -1,0 +1,49 @@
+{
+  "accepted_evidence_created": false,
+  "authority": "CURRENT_EVIDENCE_NEED_AUTHORITY_ENGINE",
+  "budget_authority": "NONE",
+  "current_decision_id": "current_evidence_need_decision_9415f903be8a40e4",
+  "decision_fingerprint": "9415f903be8a40e426976a59b8e54b75b1569604947ecf4852f277b7bb1b5285",
+  "decision_state": "CURRENT_NEED_ALREADY_ACTIVE",
+  "evidence_need_id": "current_evidence_need_cd3fa71a02b6d6f2",
+  "evidence_plan_created": false,
+  "execution_authority": "NONE",
+  "goal_authority": "NONE",
+  "intent_authority": "NONE",
+  "is_actionable_current_need": true,
+  "knowledge_authority": "NONE",
+  "lifecycle_status": "ACTIVE",
+  "need_type": "SOURCE_INDEPENDENCE_REQUIRED",
+  "planning_authority": "NONE",
+  "previous_decision_id": "current_evidence_need_decision_adc68c18ad0d5bb7",
+  "qualification_authority": "NONE",
+  "raw_evidence_created": false,
+  "reason": "CURRENT_NEED_ALREADY_ACTIVE",
+  "schema_version": "1.0",
+  "source_deficit_refs": [
+    {
+      "source_assessment_id": "capability_evidence_assessment_fc337f2b4446",
+      "source_authority": "INTEGRATED_CAPABILITY_QUALIFICATION_ENGINE",
+      "source_decision_id": "qualification_decision_8065c67908a0",
+      "source_failure": "independent_reproducibility_not_established"
+    }
+  ],
+  "state_authority": "CURRENT_EVIDENCE_NEED_AUTHORITY_ENGINE",
+  "state_fingerprint": "d80d99556799df1cc5cc95cb478b426696d3fd6540c34dc086bb6bc9425ce173",
+  "subject": {
+    "capability_id": "capability_2857115a4af5bb9d",
+    "claim_id": "Not Available",
+    "claim_subject_ref": "Not Available",
+    "context_class": "qualification",
+    "domain": "color",
+    "evidence_scope": "capability_support",
+    "qualification_subject_id": "capability_2857115a4af5bb9d",
+    "schema_version": "1.0",
+    "subject_id": "evidence_need_subject_0afc1bea94b7f84c",
+    "target_type": "capability"
+  },
+  "system": "current_evidence_need_state",
+  "truth_authority": "NONE",
+  "updated_at": "2026-09-13T11:28:38.223647+00:00",
+  "validation_sponsorship_created": false
+}

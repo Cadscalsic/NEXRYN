@@ -34,6 +34,15 @@ from runtime.process.process_semantic_context_engine import (
     ProcessSemanticContext,
     ProcessSemanticContextEngine,
 )
+from runtime.process.process_semantic_context_foundation import (
+    CognitiveArtifactSemanticContextEngine,
+    ResidualCluster,
+    SemanticBoundary,
+    SemanticContext,
+    SemanticContextRegistry,
+    SemanticResidual,
+    UnknownRegion,
+)
 from runtime.process.process_semantic_engine import (
     ProcessSemanticEngine,
     ProcessSemanticModel,
@@ -46,6 +55,31 @@ from runtime.process.process_transition_graph import ProcessTransitionGraph
 from runtime.process.process_strength_estimator import ProcessStrengthEstimator
 from runtime.process.process_transition_extractor import (
     ProcessTransitionExtractor,
+)
+from runtime.process.state_transition_engine import (
+    StateTransitionEngine,
+    state_transition_engine,
+)
+from runtime.process.process_simulator import (
+    ProcessSimulator,
+    process_simulator,
+)
+from runtime.process.process_context_runtime import (
+    ProcessContextModel,
+    ProcessContextRuntime,
+    process_context_runtime,
+)
+from runtime.process.process_context_generator import (
+    ProcessContextGenerator,
+    process_context_generator,
+)
+from runtime.process.process_context_simulator import (
+    ProcessContextSimulator,
+    process_context_simulator,
+)
+from runtime.process.state_transition_builder import (
+    StateTransitionBuilder,
+    state_transition_builder,
 )
 from runtime.process.typed_process_dependency_memory import (
     TypedProcessDependency,
@@ -69,16 +103,36 @@ __all__ = [
     "ProcessDependencyValidator",
     "ProcessSemanticContextEngine",
     "ProcessSemanticContext",
+    "CognitiveArtifactSemanticContextEngine",
+    "ResidualCluster",
+    "SemanticBoundary",
+    "SemanticContext",
+    "SemanticContextRegistry",
+    "SemanticResidual",
+    "UnknownRegion",
     "ProcessSemanticEngine",
     "ProcessSemanticModel",
     "ProcessInvariantEngine",
     "ProcessStateGraph",
     "ProcessState",
+    "ProcessContextModel",
+    "ProcessContextGenerator",
+    "ProcessContextRuntime",
+    "ProcessContextSimulator",
+    "ProcessSimulator",
     "ProcessStrengthEstimator",
+    "StateTransitionEngine",
+    "StateTransitionBuilder",
     "ProcessTransitionGraph",
     "ProcessTransitionExtractor",
     "ReasonedDependencyChain",
     "TypedProcessDependency",
     "TypedProcessDependencyMemory",
     "process_semantic_engine",
+    "process_context_runtime",
+    "process_context_generator",
+    "process_context_simulator",
+    "process_simulator",
+    "state_transition_engine",
+    "state_transition_builder",
 ]

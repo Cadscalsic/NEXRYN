@@ -98,6 +98,87 @@ from runtime.reasoning.hypothesis_arbitration_engine import (
     hypothesis_arbitration_engine
 )
 
+from runtime.reasoning.change_detection_engine import (
+
+    ChangeDetectionEngine,
+
+    change_detection_engine
+)
+
+from runtime.reasoning.transformation_salience_engine import (
+
+    TransformationSalienceEngine,
+
+    transformation_salience_engine
+)
+
+from runtime.reasoning.transformation_synthesis_engine import (
+
+    TransformationSynthesisEngine,
+
+    transformation_synthesis_engine
+)
+
+from runtime.reasoning.mechanistic_reasoning_engine import (
+
+    MechanisticReasoningEngine,
+
+    mechanistic_reasoning_engine
+)
+
+from runtime.reasoning.transformation_explanation_engine import (
+
+    TransformationExplanationEngine,
+
+    transformation_explanation_engine
+)
+
+from runtime.reasoning.transformation_language_engine import (
+
+    TransformationLanguageEngine,
+
+    transformation_language_engine
+)
+
+from runtime.reasoning.transformation_theory_engine import (
+
+    TransformationTheory,
+
+    TransformationTheoryEngine,
+
+    transformation_theory_engine
+)
+
+from runtime.reasoning.color_mapping_engine import (
+
+    ColorMappingMatrix,
+
+    ColorMappingReasoningEngine,
+
+    color_mapping_engine
+)
+
+from runtime.reasoning.frozen_transformation import (
+
+    FrozenTransformationArtifact,
+
+    learn_transformation
+)
+
+from runtime.reasoning.invariant_filter import (
+
+    InvariantFilter,
+
+    invariant_filter
+)
+
+from runtime.reasoning.object_centric_reasoner import (
+
+    ObjectCentricReasoner,
+
+    object_centric_reasoner
+)
+
 # ============================================
 # COGNITIVE PRESSURE
 # ============================================
@@ -114,6 +195,41 @@ from runtime.reasoning.generalization import (
     ARCGeneralizationEngine,
 
     generalization_engine
+)
+
+from runtime.reasoning.residual_reasoning_engine import (
+
+    ResidualReasoningEngine,
+
+    residual_reasoning_engine
+)
+
+from runtime.reasoning.spatial_residual_repair import (
+
+    SpatialResidualRepair,
+
+    spatial_residual_repair
+)
+
+from runtime.reasoning.object_residual_repair import (
+
+    ObjectResidualRepair,
+
+    object_residual_repair
+)
+
+from runtime.reasoning.counterfactual_repair_engine import (
+
+    CounterfactualRepairEngine,
+
+    counterfactual_repair_engine
+)
+
+from runtime.reasoning.reasoning_graph_report import (
+
+    ReasoningGraphReportBuilder,
+
+    reasoning_graph_report_builder
 )
 
 # ============================================
@@ -186,6 +302,50 @@ __all__ = [
 
     "hypothesis_arbitration_engine",
 
+    "ChangeDetectionEngine",
+
+    "change_detection_engine",
+
+    "TransformationSalienceEngine",
+
+    "transformation_salience_engine",
+
+    "TransformationSynthesisEngine",
+
+    "transformation_synthesis_engine",
+
+    "MechanisticReasoningEngine",
+
+    "mechanistic_reasoning_engine",
+
+    "TransformationExplanationEngine",
+
+    "transformation_explanation_engine",
+
+    "TransformationLanguageEngine",
+
+    "transformation_language_engine",
+
+    "TransformationTheory",
+
+    "TransformationTheoryEngine",
+
+    "transformation_theory_engine",
+
+    "ColorMappingMatrix",
+
+    "ColorMappingReasoningEngine",
+
+    "color_mapping_engine",
+
+    "InvariantFilter",
+
+    "invariant_filter",
+
+    "ObjectCentricReasoner",
+
+    "object_centric_reasoner",
+
     # ========================================
     # COGNITIVE PRESSURE
     # ========================================
@@ -213,4 +373,28 @@ __all__ = [
     "SpatialReasoningEngine",
 
     "spatial_reasoning_engine",
+
+    # ========================================
+    # RESIDUAL REPAIR
+    # ========================================
+
+    "ResidualReasoningEngine",
+
+    "residual_reasoning_engine",
+
+    "SpatialResidualRepair",
+
+    "spatial_residual_repair",
+
+    "ObjectResidualRepair",
+
+    "object_residual_repair",
+
+    "CounterfactualRepairEngine",
+
+    "counterfactual_repair_engine",
+
+    "ReasoningGraphReportBuilder",
+
+    "reasoning_graph_report_builder",
 ]

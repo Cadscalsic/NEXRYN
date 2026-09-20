@@ -9,6 +9,10 @@ from core.dependency.process_dependency_memory import (
     REQUIRED_PROCESS_DEPENDENCY_RELATIONS,
     normalize_process_dependency_relation,
 )
+from runtime.dependency.dependency_sync_engine import (
+    MAX_DEPENDENCY_CHAINS,
+    MAX_DEPENDENCY_DEPTH,
+)
 
 
 @dataclass(frozen=True)
@@ -293,7 +297,7 @@ class ProcessDependencyGraph:
     def _resolve_from_graph_relations(
         self,
         process: str,
-        max_depth: int = 6,
+        max_depth: int = MAX_DEPENDENCY_DEPTH,
     ) -> dict[str, Any]:
         process = str(process or "").strip()
 
@@ -361,6 +365,14 @@ class ProcessDependencyGraph:
             ),
             "process_dependency_links_used": len(used_relations),
             "resolution_source": "process_dependency_graph_fallback",
+            "adaptive_dependency_budget": {
+                "MAX_DEPENDENCY_DEPTH": max_depth,
+                "MAX_DEPENDENCY_CHAINS": MAX_DEPENDENCY_CHAINS,
+                "dependency_early_exit_enabled": True,
+                "dependency_reuse_enabled": True,
+                "dependency_depth_guard_applied":
+                len(used_relations) >= max_depth,
+            },
         }
 
     def chain_records_for(self, process: str) -> list[dict[str, Any]]:
@@ -418,11 +430,13 @@ class ProcessDependencyGraph:
         chains = []
 
         for root in roots:
+            if len(chains) >= MAX_DEPENDENCY_CHAINS:
+                break
             self._walk_chains(root, adjacency, [root], chains)
 
         return [
             chain
-            for chain in chains
+            for chain in chains[:MAX_DEPENDENCY_CHAINS]
             if len(chain) > 1
         ]
 
@@ -435,11 +449,19 @@ class ProcessDependencyGraph:
     ) -> None:
         children = adjacency.get(node, [])
 
+        if len(chains) >= MAX_DEPENDENCY_CHAINS:
+            return
+
         if not children:
             chains.append(path)
             return
 
         for child in children:
+            if len(chains) >= MAX_DEPENDENCY_CHAINS:
+                return
+            if len(path) >= MAX_DEPENDENCY_DEPTH:
+                chains.append(path)
+                return
             if child in path:
                 chains.append(path)
                 continue
@@ -514,6 +536,18 @@ class ProcessDependencyGraph:
             self.process_dependency_memory.report(),
             "process_dependency_links_loaded":
             self.process_dependency_memory.links_loaded,
+            "MAX_DEPENDENCY_DEPTH": MAX_DEPENDENCY_DEPTH,
+            "MAX_DEPENDENCY_CHAINS": MAX_DEPENDENCY_CHAINS,
+            "adaptive_dependency_budget": {
+                "max_depth": MAX_DEPENDENCY_DEPTH,
+                "max_chains": MAX_DEPENDENCY_CHAINS,
+                "dependency_early_exit_enabled": True,
+                "dependency_reuse_enabled": True,
+                "chains_returned": min(
+                    len(chain_records),
+                    MAX_DEPENDENCY_CHAINS,
+                ),
+            },
         }
 
 

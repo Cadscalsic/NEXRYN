@@ -1,0 +1,1736 @@
+{
+  "programs": [
+    {
+      "integrity_verified": true,
+      "match_confidence": 1.0,
+      "metadata": {
+        "accuracy": 1.0,
+        "concept": "symbolic_remapping",
+        "program_family_id": "program-family-570af78c70f0fc7a",
+        "promotion_evidence": [
+          "c65e1df0a7dc085546b94eaf923876aef49b427917763857b73d83ea661828ec"
+        ],
+        "residual_count": 0,
+        "semantic_contradictions": [],
+        "source": "evaluation_stage",
+        "success_state": "EXACT_SUCCESS",
+        "task_signature": {
+          "concepts": [
+            "cardinality",
+            "causal",
+            "color_mapping",
+            "color_preservation",
+            "context",
+            "density_modulation",
+            "density_preservation",
+            "dependency",
+            "dependency_reasoning",
+            "directional_motion",
+            "duplication",
+            "gravity",
+            "growth",
+            "identity_forking",
+            "identity_persistence",
+            "motion",
+            "none",
+            "numerical_reasoning",
+            "object_count",
+            "object_counting",
+            "object_identity_preservation",
+            "path_construction",
+            "path_finding",
+            "position",
+            "position_preservation",
+            "program",
+            "propagation",
+            "quantity_preservation",
+            "quantity_transformation",
+            "reachability",
+            "reachability_graph",
+            "replication",
+            "route_completion",
+            "set_reasoning",
+            "shape_preservation",
+            "shape_relation",
+            "size_preservation",
+            "strategy",
+            "symbolic_remapping",
+            "symmetry_preservation",
+            "symmetry_reasoning",
+            "topological_growth",
+            "topological_reasoning",
+            "topology",
+            "topology_preservation",
+            "transformation"
+          ],
+          "constraints": [],
+          "contexts": [
+            "area_increases",
+            "attribute_mapping_preservation",
+            "axis_consistency",
+            "boundary_geometry_preservation",
+            "cardinality",
+            "cardinality_consistent",
+            "cardinality_context",
+            "cardinality_final_state",
+            "cardinality_initial_state",
+            "cardinality_known",
+            "cardinality_transition_1",
+            "color_context",
+            "color_preservation",
+            "color_stability",
+            "color_transformation",
+            "connectivity_expands",
+            "connectivity_preservation",
+            "coordinate_anchor_preservation",
+            "direction_preserved",
+            "direction_vector_exists",
+            "directional_consistency_preserved",
+            "directional_displacement",
+            "directional_motion",
+            "directional_motion_context",
+            "directional_spread",
+            "duplication",
+            "expanded_connectivity_exists",
+            "geometric_transformation",
+            "growth",
+            "growth_context",
+            "identity_continuity",
+            "identity_forking",
+            "identity_persistence",
+            "identity_preservation",
+            "identity_preservation_under_growth",
+            "identity_preserved",
+            "identity_split",
+            "local_shape",
+            "local_shape_preservation",
+            "local_shape_preserved",
+            "local_topology_preserved",
+            "max_depth_reached",
+            "mirror_consistency",
+            "new_instance_exists",
+            "no_color_reassignment",
+            "numerical_reasoning_context",
+            "object_core",
+            "object_count_growth",
+            "object_count_increase",
+            "object_counting_context",
+            "object_creation",
+            "object_identity_exists",
+            "object_identity_preservation",
+            "object_instance_copied",
+            "object_persistence",
+            "object_set_membership_known",
+            "position_change",
+            "position_context",
+            "position_delta",
+            "position_delta_applied",
+            "position_preservation",
+            "position_stability",
+            "position_updated",
+            "process_context",
+            "process_dependency_chains",
+            "process_semantic_engine",
+            "process_semantic_synthesis",
+            "process_state_graph",
+            "propagation",
+            "propagation_context",
+            "propagation_transformation",
+            "quantity_preservation_context",
+            "quantity_transformation_context",
+            "region_expansion",
+            "region_relation_preservation",
+            "relative_position_preservation",
+            "replication",
+            "replication_context",
+            "set_membership_stable",
+            "set_reasoning_context",
+            "set_size_measured",
+            "shape_context",
+            "shape_preservation",
+            "shape_preserved",
+            "shape_stability",
+            "signal_transfer",
+            "source_object_exists",
+            "source_pattern_exists",
+            "source_pattern_motion",
+            "source_pattern_preservation",
+            "source_pattern_preserved",
+            "source_shape_preserved",
+            "state",
+            "state_spreads_to_neighbor",
+            "state_transition_state",
+            "structural_copying",
+            "structural_transformation",
+            "symmetry_context",
+            "symmetry_preservation",
+            "symmetry_reasoning",
+            "symmetry_relation",
+            "topological_growth",
+            "topological_growth_context",
+            "topology_anchor_exists",
+            "topology_context",
+            "topology_expansion",
+            "topology_preservation",
+            "topology_preserved",
+            "topology_splitting",
+            "topology_stability",
+            "transition",
+            "unfolds_to"
+          ],
+          "transformations": [
+            "duplicate_object",
+            "duplication",
+            "growth_context",
+            "identity_preservation",
+            "object_color_mapping",
+            "preserve_colors",
+            "preserve_density",
+            "preserve_objects",
+            "preserve_position",
+            "preserve_shape",
+            "preserve_size",
+            "preserve_symmetry",
+            "preserve_topology"
+          ]
+        }
+      },
+      "operation_sequence": [
+        {
+          "index": 0,
+          "operation": "replace_color",
+          "parameters": {
+            "added_colors": [
+              3
+            ],
+            "attribute_deltas": [
+              {
+                "color": [
+                  1,
+                  3
+                ],
+                "identity_confidence": 0.705,
+                "input_object_id": "obj_1",
+                "output_object_id": "obj_2",
+                "position": [
+                  0,
+                  0
+                ],
+                "shape": [
+                  "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                  "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2"
+                ],
+                "size": [
+                  12,
+                  8
+                ],
+                "topology": {
+                  "holes": [
+                    1,
+                    1
+                  ],
+                  "is_solid": [
+                    false,
+                    false
+                  ]
+                }
+              },
+              {
+                "color": [
+                  2,
+                  2
+                ],
+                "identity_confidence": 0.965,
+                "input_object_id": "obj_2",
+                "output_object_id": "obj_4",
+                "position": [
+                  0,
+                  0
+                ],
+                "shape": [
+                  "0,0",
+                  "0,0"
+                ],
+                "size": [
+                  1,
+                  1
+                ],
+                "topology": {
+                  "holes": [
+                    0,
+                    0
+                  ],
+                  "is_solid": [
+                    true,
+                    true
+                  ]
+                }
+              }
+            ],
+            "color_mapping": {
+              "1": 3
+            },
+            "localization_confidence": 0.8867,
+            "localization_ready": true,
+            "localization_type": "color_mapping",
+            "mapping": {
+              "1": 3
+            },
+            "mapping_type": "object_color_mapping",
+            "object_mappings": [
+              {
+                "centroid_delta": [
+                  0,
+                  0
+                ],
+                "identity_confidence": 0.705,
+                "input_object": {
+                  "bbox": {
+                    "height": 5,
+                    "max_col": 4,
+                    "max_row": 4,
+                    "min_col": 0,
+                    "min_row": 0,
+                    "width": 5
+                  },
+                  "canonical_shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                  "cells": [
+                    [
+                      0,
+                      2
+                    ],
+                    [
+                      1,
+                      1
+                    ],
+                    [
+                      1,
+                      2
+                    ],
+                    [
+                      1,
+                      3
+                    ],
+                    [
+                      2,
+                      0
+                    ],
+                    [
+                      2,
+                      1
+                    ],
+                    [
+                      2,
+                      3
+                    ],
+                    [
+                      2,
+                      4
+                    ],
+                    [
+                      3,
+                      1
+                    ],
+                    [
+                      3,
+                      2
+                    ],
+                    [
+                      3,
+                      3
+                    ],
+                    [
+                      4,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 2.0
+                  },
+                  "color": 1,
+                  "edge_touching": true,
+                  "holes": 1,
+                  "id": "obj_1",
+                  "is_solid": false,
+                  "normalized_shape": [
+                    [
+                      0,
+                      2
+                    ],
+                    [
+                      1,
+                      1
+                    ],
+                    [
+                      1,
+                      2
+                    ],
+                    [
+                      1,
+                      3
+                    ],
+                    [
+                      2,
+                      0
+                    ],
+                    [
+                      2,
+                      1
+                    ],
+                    [
+                      2,
+                      3
+                    ],
+                    [
+                      2,
+                      4
+                    ],
+                    [
+                      3,
+                      1
+                    ],
+                    [
+                      3,
+                      2
+                    ],
+                    [
+                      3,
+                      3
+                    ],
+                    [
+                      4,
+                      2
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        4,
+                        0
+                      ],
+                      "bottom_right": [
+                        4,
+                        4
+                      ],
+                      "top_left": [
+                        0,
+                        0
+                      ],
+                      "top_right": [
+                        0,
+                        4
+                      ]
+                    },
+                    "area": 25,
+                    "bbox": {
+                      "height": 5,
+                      "max_col": 4,
+                      "max_row": 4,
+                      "min_col": 0,
+                      "min_row": 0,
+                      "width": 5
+                    },
+                    "canonical_shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "density": 0.48,
+                    "edge_touching": true,
+                    "height": 5,
+                    "holes": 1,
+                    "horizontal_symmetry": true,
+                    "is_solid": false,
+                    "normalized_shape": [
+                      [
+                        0,
+                        2
+                      ],
+                      [
+                        1,
+                        1
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        1,
+                        3
+                      ],
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        3
+                      ],
+                      [
+                        2,
+                        4
+                      ],
+                      [
+                        3,
+                        1
+                      ],
+                      [
+                        3,
+                        2
+                      ],
+                      [
+                        3,
+                        3
+                      ],
+                      [
+                        4,
+                        2
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        0,
+                        2
+                      ],
+                      [
+                        1,
+                        1
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        1,
+                        3
+                      ],
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        3
+                      ],
+                      [
+                        2,
+                        4
+                      ],
+                      [
+                        3,
+                        1
+                      ],
+                      [
+                        3,
+                        2
+                      ],
+                      [
+                        3,
+                        3
+                      ],
+                      [
+                        4,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 12,
+                    "shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                    "size": 12,
+                    "vertical_symmetry": true,
+                    "width": 5
+                  },
+                  "shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                  "size": 12
+                },
+                "input_object_id": "obj_1",
+                "output_object": {
+                  "bbox": {
+                    "height": 3,
+                    "max_col": 3,
+                    "max_row": 3,
+                    "min_col": 1,
+                    "min_row": 1,
+                    "width": 3
+                  },
+                  "canonical_shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                  "cells": [
+                    [
+                      1,
+                      1
+                    ],
+                    [
+                      1,
+                      2
+                    ],
+                    [
+                      1,
+                      3
+                    ],
+                    [
+                      2,
+                      1
+                    ],
+                    [
+                      2,
+                      3
+                    ],
+                    [
+                      3,
+                      1
+                    ],
+                    [
+                      3,
+                      2
+                    ],
+                    [
+                      3,
+                      3
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 2.0
+                  },
+                  "color": 3,
+                  "edge_touching": false,
+                  "holes": 1,
+                  "id": "obj_2",
+                  "is_solid": false,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ],
+                    [
+                      0,
+                      1
+                    ],
+                    [
+                      0,
+                      2
+                    ],
+                    [
+                      1,
+                      0
+                    ],
+                    [
+                      1,
+                      2
+                    ],
+                    [
+                      2,
+                      0
+                    ],
+                    [
+                      2,
+                      1
+                    ],
+                    [
+                      2,
+                      2
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        3,
+                        1
+                      ],
+                      "bottom_right": [
+                        3,
+                        3
+                      ],
+                      "top_left": [
+                        1,
+                        1
+                      ],
+                      "top_right": [
+                        1,
+                        3
+                      ]
+                    },
+                    "area": 9,
+                    "bbox": {
+                      "height": 3,
+                      "max_col": 3,
+                      "max_row": 3,
+                      "min_col": 1,
+                      "min_row": 1,
+                      "width": 3
+                    },
+                    "canonical_shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "density": 0.8889,
+                    "edge_touching": false,
+                    "height": 3,
+                    "holes": 1,
+                    "horizontal_symmetry": true,
+                    "is_solid": false,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ],
+                      [
+                        0,
+                        1
+                      ],
+                      [
+                        0,
+                        2
+                      ],
+                      [
+                        1,
+                        0
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        1,
+                        1
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        1,
+                        3
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        3
+                      ],
+                      [
+                        3,
+                        1
+                      ],
+                      [
+                        3,
+                        2
+                      ],
+                      [
+                        3,
+                        3
+                      ]
+                    ],
+                    "perimeter_size": 8,
+                    "shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                    "size": 8,
+                    "vertical_symmetry": true,
+                    "width": 3
+                  },
+                  "shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                  "size": 8
+                },
+                "output_object_id": "obj_2",
+                "shape_similarity": 0.25,
+                "size_preserved": false,
+                "topology_preserved": true
+              },
+              {
+                "centroid_delta": [
+                  0,
+                  0
+                ],
+                "identity_confidence": 0.965,
+                "input_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 2,
+                    "max_row": 2,
+                    "min_col": 2,
+                    "min_row": 2,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      2,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 2.0
+                  },
+                  "color": 2,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_2",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        2,
+                        2
+                      ],
+                      "bottom_right": [
+                        2,
+                        2
+                      ],
+                      "top_left": [
+                        2,
+                        2
+                      ],
+                      "top_right": [
+                        2,
+                        2
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "input_object_id": "obj_2",
+                "output_object": {
+                  "bbox": {
+                    "height": 1,
+                    "max_col": 2,
+                    "max_row": 2,
+                    "min_col": 2,
+                    "min_row": 2,
+                    "width": 1
+                  },
+                  "canonical_shape_signature": "0,0",
+                  "cells": [
+                    [
+                      2,
+                      2
+                    ]
+                  ],
+                  "center": {
+                    "col": 2.0,
+                    "row": 2.0
+                  },
+                  "color": 2,
+                  "edge_touching": false,
+                  "holes": 0,
+                  "id": "obj_4",
+                  "is_solid": true,
+                  "normalized_shape": [
+                    [
+                      0,
+                      0
+                    ]
+                  ],
+                  "shape_analysis": {
+                    "anchors": {
+                      "bottom_left": [
+                        2,
+                        2
+                      ],
+                      "bottom_right": [
+                        2,
+                        2
+                      ],
+                      "top_left": [
+                        2,
+                        2
+                      ],
+                      "top_right": [
+                        2,
+                        2
+                      ]
+                    },
+                    "area": 1,
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "density": 1.0,
+                    "edge_touching": false,
+                    "height": 1,
+                    "holes": 0,
+                    "horizontal_symmetry": true,
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "perimeter_cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "perimeter_size": 1,
+                    "shape_signature": "0,0",
+                    "size": 1,
+                    "vertical_symmetry": true,
+                    "width": 1
+                  },
+                  "shape_signature": "0,0",
+                  "size": 1
+                },
+                "output_object_id": "obj_4",
+                "shape_similarity": 1.0,
+                "size_preserved": true,
+                "topology_preserved": true
+              }
+            ],
+            "removed_colors": []
+          }
+        }
+      ],
+      "program": {
+        "concept": "symbolic_remapping",
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "replace_color",
+            "parameters": {
+              "added_colors": [
+                3
+              ],
+              "attribute_deltas": [
+                {
+                  "color": [
+                    1,
+                    3
+                  ],
+                  "identity_confidence": 0.705,
+                  "input_object_id": "obj_1",
+                  "output_object_id": "obj_2",
+                  "position": [
+                    0,
+                    0
+                  ],
+                  "shape": [
+                    "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                    "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2"
+                  ],
+                  "size": [
+                    12,
+                    8
+                  ],
+                  "topology": {
+                    "holes": [
+                      1,
+                      1
+                    ],
+                    "is_solid": [
+                      false,
+                      false
+                    ]
+                  }
+                },
+                {
+                  "color": [
+                    2,
+                    2
+                  ],
+                  "identity_confidence": 0.965,
+                  "input_object_id": "obj_2",
+                  "output_object_id": "obj_4",
+                  "position": [
+                    0,
+                    0
+                  ],
+                  "shape": [
+                    "0,0",
+                    "0,0"
+                  ],
+                  "size": [
+                    1,
+                    1
+                  ],
+                  "topology": {
+                    "holes": [
+                      0,
+                      0
+                    ],
+                    "is_solid": [
+                      true,
+                      true
+                    ]
+                  }
+                }
+              ],
+              "color_mapping": {
+                "1": 3
+              },
+              "localization_confidence": 0.8867,
+              "localization_ready": true,
+              "localization_type": "color_mapping",
+              "mapping": {
+                "1": 3
+              },
+              "mapping_type": "object_color_mapping",
+              "object_mappings": [
+                {
+                  "centroid_delta": [
+                    0,
+                    0
+                  ],
+                  "identity_confidence": 0.705,
+                  "input_object": {
+                    "bbox": {
+                      "height": 5,
+                      "max_col": 4,
+                      "max_row": 4,
+                      "min_col": 0,
+                      "min_row": 0,
+                      "width": 5
+                    },
+                    "canonical_shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                    "cells": [
+                      [
+                        0,
+                        2
+                      ],
+                      [
+                        1,
+                        1
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        1,
+                        3
+                      ],
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        3
+                      ],
+                      [
+                        2,
+                        4
+                      ],
+                      [
+                        3,
+                        1
+                      ],
+                      [
+                        3,
+                        2
+                      ],
+                      [
+                        3,
+                        3
+                      ],
+                      [
+                        4,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "color": 1,
+                    "edge_touching": true,
+                    "holes": 1,
+                    "id": "obj_1",
+                    "is_solid": false,
+                    "normalized_shape": [
+                      [
+                        0,
+                        2
+                      ],
+                      [
+                        1,
+                        1
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        1,
+                        3
+                      ],
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        3
+                      ],
+                      [
+                        2,
+                        4
+                      ],
+                      [
+                        3,
+                        1
+                      ],
+                      [
+                        3,
+                        2
+                      ],
+                      [
+                        3,
+                        3
+                      ],
+                      [
+                        4,
+                        2
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          4,
+                          0
+                        ],
+                        "bottom_right": [
+                          4,
+                          4
+                        ],
+                        "top_left": [
+                          0,
+                          0
+                        ],
+                        "top_right": [
+                          0,
+                          4
+                        ]
+                      },
+                      "area": 25,
+                      "bbox": {
+                        "height": 5,
+                        "max_col": 4,
+                        "max_row": 4,
+                        "min_col": 0,
+                        "min_row": 0,
+                        "width": 5
+                      },
+                      "canonical_shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                      "center": {
+                        "col": 2.0,
+                        "row": 2.0
+                      },
+                      "density": 0.48,
+                      "edge_touching": true,
+                      "height": 5,
+                      "holes": 1,
+                      "horizontal_symmetry": true,
+                      "is_solid": false,
+                      "normalized_shape": [
+                        [
+                          0,
+                          2
+                        ],
+                        [
+                          1,
+                          1
+                        ],
+                        [
+                          1,
+                          2
+                        ],
+                        [
+                          1,
+                          3
+                        ],
+                        [
+                          2,
+                          0
+                        ],
+                        [
+                          2,
+                          1
+                        ],
+                        [
+                          2,
+                          3
+                        ],
+                        [
+                          2,
+                          4
+                        ],
+                        [
+                          3,
+                          1
+                        ],
+                        [
+                          3,
+                          2
+                        ],
+                        [
+                          3,
+                          3
+                        ],
+                        [
+                          4,
+                          2
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          0,
+                          2
+                        ],
+                        [
+                          1,
+                          1
+                        ],
+                        [
+                          1,
+                          2
+                        ],
+                        [
+                          1,
+                          3
+                        ],
+                        [
+                          2,
+                          0
+                        ],
+                        [
+                          2,
+                          1
+                        ],
+                        [
+                          2,
+                          3
+                        ],
+                        [
+                          2,
+                          4
+                        ],
+                        [
+                          3,
+                          1
+                        ],
+                        [
+                          3,
+                          2
+                        ],
+                        [
+                          3,
+                          3
+                        ],
+                        [
+                          4,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 12,
+                      "shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                      "size": 12,
+                      "vertical_symmetry": true,
+                      "width": 5
+                    },
+                    "shape_signature": "0,2|1,1|1,2|1,3|2,0|2,1|2,3|2,4|3,1|3,2|3,3|4,2",
+                    "size": 12
+                  },
+                  "input_object_id": "obj_1",
+                  "output_object": {
+                    "bbox": {
+                      "height": 3,
+                      "max_col": 3,
+                      "max_row": 3,
+                      "min_col": 1,
+                      "min_row": 1,
+                      "width": 3
+                    },
+                    "canonical_shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                    "cells": [
+                      [
+                        1,
+                        1
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        1,
+                        3
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        3
+                      ],
+                      [
+                        3,
+                        1
+                      ],
+                      [
+                        3,
+                        2
+                      ],
+                      [
+                        3,
+                        3
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "color": 3,
+                    "edge_touching": false,
+                    "holes": 1,
+                    "id": "obj_2",
+                    "is_solid": false,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ],
+                      [
+                        0,
+                        1
+                      ],
+                      [
+                        0,
+                        2
+                      ],
+                      [
+                        1,
+                        0
+                      ],
+                      [
+                        1,
+                        2
+                      ],
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        2,
+                        1
+                      ],
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          3,
+                          1
+                        ],
+                        "bottom_right": [
+                          3,
+                          3
+                        ],
+                        "top_left": [
+                          1,
+                          1
+                        ],
+                        "top_right": [
+                          1,
+                          3
+                        ]
+                      },
+                      "area": 9,
+                      "bbox": {
+                        "height": 3,
+                        "max_col": 3,
+                        "max_row": 3,
+                        "min_col": 1,
+                        "min_row": 1,
+                        "width": 3
+                      },
+                      "canonical_shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                      "center": {
+                        "col": 2.0,
+                        "row": 2.0
+                      },
+                      "density": 0.8889,
+                      "edge_touching": false,
+                      "height": 3,
+                      "holes": 1,
+                      "horizontal_symmetry": true,
+                      "is_solid": false,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ],
+                        [
+                          0,
+                          1
+                        ],
+                        [
+                          0,
+                          2
+                        ],
+                        [
+                          1,
+                          0
+                        ],
+                        [
+                          1,
+                          2
+                        ],
+                        [
+                          2,
+                          0
+                        ],
+                        [
+                          2,
+                          1
+                        ],
+                        [
+                          2,
+                          2
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          1,
+                          1
+                        ],
+                        [
+                          1,
+                          2
+                        ],
+                        [
+                          1,
+                          3
+                        ],
+                        [
+                          2,
+                          1
+                        ],
+                        [
+                          2,
+                          3
+                        ],
+                        [
+                          3,
+                          1
+                        ],
+                        [
+                          3,
+                          2
+                        ],
+                        [
+                          3,
+                          3
+                        ]
+                      ],
+                      "perimeter_size": 8,
+                      "shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                      "size": 8,
+                      "vertical_symmetry": true,
+                      "width": 3
+                    },
+                    "shape_signature": "0,0|0,1|0,2|1,0|1,2|2,0|2,1|2,2",
+                    "size": 8
+                  },
+                  "output_object_id": "obj_2",
+                  "shape_similarity": 0.25,
+                  "size_preserved": false,
+                  "topology_preserved": true
+                },
+                {
+                  "centroid_delta": [
+                    0,
+                    0
+                  ],
+                  "identity_confidence": 0.965,
+                  "input_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "color": 2,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_2",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          2,
+                          2
+                        ],
+                        "bottom_right": [
+                          2,
+                          2
+                        ],
+                        "top_left": [
+                          2,
+                          2
+                        ],
+                        "top_right": [
+                          2,
+                          2
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 2,
+                        "max_row": 2,
+                        "min_col": 2,
+                        "min_row": 2,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 2.0,
+                        "row": 2.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          2,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "input_object_id": "obj_2",
+                  "output_object": {
+                    "bbox": {
+                      "height": 1,
+                      "max_col": 2,
+                      "max_row": 2,
+                      "min_col": 2,
+                      "min_row": 2,
+                      "width": 1
+                    },
+                    "canonical_shape_signature": "0,0",
+                    "cells": [
+                      [
+                        2,
+                        2
+                      ]
+                    ],
+                    "center": {
+                      "col": 2.0,
+                      "row": 2.0
+                    },
+                    "color": 2,
+                    "edge_touching": false,
+                    "holes": 0,
+                    "id": "obj_4",
+                    "is_solid": true,
+                    "normalized_shape": [
+                      [
+                        0,
+                        0
+                      ]
+                    ],
+                    "shape_analysis": {
+                      "anchors": {
+                        "bottom_left": [
+                          2,
+                          2
+                        ],
+                        "bottom_right": [
+                          2,
+                          2
+                        ],
+                        "top_left": [
+                          2,
+                          2
+                        ],
+                        "top_right": [
+                          2,
+                          2
+                        ]
+                      },
+                      "area": 1,
+                      "bbox": {
+                        "height": 1,
+                        "max_col": 2,
+                        "max_row": 2,
+                        "min_col": 2,
+                        "min_row": 2,
+                        "width": 1
+                      },
+                      "canonical_shape_signature": "0,0",
+                      "center": {
+                        "col": 2.0,
+                        "row": 2.0
+                      },
+                      "density": 1.0,
+                      "edge_touching": false,
+                      "height": 1,
+                      "holes": 0,
+                      "horizontal_symmetry": true,
+                      "is_solid": true,
+                      "normalized_shape": [
+                        [
+                          0,
+                          0
+                        ]
+                      ],
+                      "perimeter_cells": [
+                        [
+                          2,
+                          2
+                        ]
+                      ],
+                      "perimeter_size": 1,
+                      "shape_signature": "0,0",
+                      "size": 1,
+                      "vertical_symmetry": true,
+                      "width": 1
+                    },
+                    "shape_signature": "0,0",
+                    "size": 1
+                  },
+                  "output_object_id": "obj_4",
+                  "shape_similarity": 1.0,
+                  "size_preserved": true,
+                  "topology_preserved": true
+                }
+              ],
+              "removed_colors": []
+            }
+          }
+        ]
+      },
+      "program_id": "program-dea77d0c6aabb1a4",
+      "stale": false,
+      "task_signature_id": "c65e1df0a7dc085546b94eaf923876aef49b427917763857b73d83ea661828ec",
+      "updated_at": 1789744603.428163,
+      "validation_state": "stable"
+    }
+  ]
+}

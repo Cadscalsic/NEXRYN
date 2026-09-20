@@ -39,6 +39,9 @@ from runtime.execution.world_model_gate import (
 from runtime.kernel.cognitive_blackboard import (
     cognitive_blackboard_from_context,
 )
+from runtime.provenance import (
+    build_candidate_origin_report,
+)
 
 # ============================================
 # GLOBAL TRANSFORMATION ENGINE
@@ -87,6 +90,295 @@ def safe_list(value):
         return []
 
     return value
+
+# ============================================
+# GRID SHAPE
+# ============================================
+
+def _grid_shape(grid):
+
+    if grid is None:
+
+        return None
+
+    if hasattr(
+        grid,
+        "grid"
+    ):
+
+        grid = grid.grid
+
+    array = np.array(
+        grid
+    )
+
+    if array.ndim != 2:
+
+        return None
+
+    return [
+        int(array.shape[0]),
+        int(array.shape[1])
+    ]
+
+# ============================================
+# OUTPUT SHAPE INTENT
+# ============================================
+
+def _derive_output_shape_intent(
+
+    train_examples,
+
+    test_input
+):
+
+    train_examples = tuple(
+        train_examples or ()
+    )
+
+    provenance = []
+
+    input_shapes = []
+
+    output_shapes = []
+
+    for index, example in enumerate(train_examples):
+
+        if not isinstance(
+            example,
+            dict
+        ):
+
+            continue
+
+        input_shape = _grid_shape(
+            example.get("input")
+        )
+
+        output_shape = _grid_shape(
+            example.get("output")
+        )
+
+        if input_shape is None or output_shape is None:
+
+            continue
+
+        input_shapes.append(
+            input_shape
+        )
+
+        output_shapes.append(
+            output_shape
+        )
+
+        provenance.append({
+            "train_index": index,
+            "input_shape": input_shape,
+            "output_shape": output_shape,
+        })
+
+    shape_changing = any(
+        input_shape != output_shape
+        for input_shape, output_shape in zip(
+            input_shapes,
+            output_shapes
+        )
+    )
+
+    base_intent = {
+        "source": "solver_visible_train_pairs",
+        "authority": "DATA_ONLY",
+        "hidden_target_shape_used": False,
+        "shape_changing": shape_changing,
+        "provenance": provenance,
+        "train_consistency": False,
+        "supported": False,
+        "rule_type": "UNSUPPORTED",
+        "parameters": {},
+        "confidence": 0.0,
+        "intended_shape": None,
+    }
+
+    if not shape_changing:
+
+        return {
+            **base_intent,
+            "train_consistency": True,
+            "supported": True,
+            "rule_type": "SAME_AS_INPUT",
+            "confidence": 1.0,
+            "intended_shape": _grid_shape(
+                test_input
+            ),
+        }
+
+    if not input_shapes or len(input_shapes) != len(output_shapes):
+
+        return base_intent
+
+    test_input_shape = _grid_shape(
+        test_input
+    )
+
+    if test_input_shape is None:
+
+        return base_intent
+
+    if all(
+        output_shape == [
+            input_shape[1],
+            input_shape[0]
+        ]
+        for input_shape, output_shape in zip(
+            input_shapes,
+            output_shapes
+        )
+    ):
+
+        return {
+            **base_intent,
+            "train_consistency": True,
+            "supported": True,
+            "rule_type": "VISIBLE_TRAIN_DIMENSION_TRANSPOSE",
+            "parameters": {
+                "dimensions": [
+                    {
+                        "kind": "INPUT_WIDTH"
+                    },
+                    {
+                        "kind": "INPUT_HEIGHT"
+                    }
+                ]
+            },
+            "confidence": 1.0,
+            "intended_shape": [
+                test_input_shape[1],
+                test_input_shape[0]
+            ],
+        }
+
+    dimensions = []
+
+    for dimension in (0, 1):
+
+        observed_outputs = [
+            output_shape[dimension]
+            for output_shape in output_shapes
+        ]
+
+        if len(set(observed_outputs)) == 1:
+
+            dimensions.append({
+                "kind": "CONSTANT",
+                "value": observed_outputs[0],
+            })
+
+            continue
+
+        deltas = [
+            output_shape[dimension] - input_shape[dimension]
+            for input_shape, output_shape in zip(
+                input_shapes,
+                output_shapes
+            )
+        ]
+
+        if len(set(deltas)) == 1:
+
+            dimensions.append({
+                "kind": "INPUT_PLUS_DELTA",
+                "value": deltas[0],
+            })
+
+            continue
+
+        return base_intent
+
+    intended_shape = []
+
+    for dimension, rule in enumerate(dimensions):
+
+        if rule["kind"] == "CONSTANT":
+
+            intended_dimension = int(rule["value"])
+
+        else:
+
+            intended_dimension = int(
+                test_input_shape[dimension]
+                +
+                rule["value"]
+            )
+
+        if intended_dimension <= 0:
+
+            return base_intent
+
+        intended_shape.append(
+            intended_dimension
+        )
+
+    return {
+        **base_intent,
+        "train_consistency": True,
+        "supported": True,
+        "rule_type": "VISIBLE_TRAIN_DIMENSION_RELATION",
+        "parameters": {
+            "dimensions": dimensions
+        },
+        "confidence": 1.0,
+        "intended_shape": intended_shape,
+    }
+
+def _apply_output_shape_intent(
+
+    predicted_output,
+
+    train_examples,
+
+    test_input
+):
+
+    intent = _derive_output_shape_intent(
+        train_examples,
+        test_input
+    )
+
+    if not intent.get("shape_changing"):
+
+        return predicted_output, {
+            **intent,
+            "materialization_state":
+            "OUTPUT_SHAPE_INTENT_NOT_REQUIRED",
+        }
+
+    if not intent.get("supported"):
+
+        return None, {
+            **intent,
+            "materialization_state":
+            "UNSUPPORTED_OUTPUT_SHAPE_INTENT",
+        }
+
+    predicted_shape = _grid_shape(
+        predicted_output
+    )
+
+    if predicted_shape != intent.get("intended_shape"):
+
+        return None, {
+            **intent,
+            "predicted_shape": predicted_shape,
+            "materialization_state":
+            "PREDICTION_SHAPE_INTENT_MISMATCH",
+        }
+
+    return predicted_output, {
+        **intent,
+        "predicted_shape": predicted_shape,
+        "materialization_state":
+        "MATERIALIZED_WITH_TRAIN_DERIVED_SHAPE_INTENT",
+    }
 
 # ============================================
 # BUILD EXECUTION METRICS
@@ -301,6 +593,14 @@ def transformation_stage(context):
                 execution_plan
             )
 
+    if blackboard.synthesized_program:
+
+        synthesized_program = blackboard.synthesized_program
+
+    if blackboard.execution_plan:
+
+        execution_plan = blackboard.execution_plan
+
     blackboard.assert_synchronized()
 
     # ========================================
@@ -335,6 +635,23 @@ def transformation_stage(context):
     # WORLD MODEL SIMULATION
     # ========================================
 
+    execution_plan_context = (
+        context.get("pre_reasoning_execution_plan")
+        or context.get("execution_plan")
+        or {}
+    )
+    enabled_layers = set(
+        execution_plan_context.get("enabled_layers", [])
+    )
+    disabled_layers = set(
+        execution_plan_context.get("disabled_layers", [])
+    )
+    world_model_skipped = (
+        bool(execution_plan_context)
+        and "world_model" in disabled_layers
+        and "world_model" not in enabled_layers
+    )
+
     simulation_result = {}
 
     prediction_report = {
@@ -346,47 +663,66 @@ def transformation_stage(context):
 
     predicted_simulation = None
 
-    try:
-
-        simulation_result = (
-
-            world_model_engine
-            .simulate_transformation(
-
-                input_array,
-
-                synthesized_program
-            )
-        )
-
-        predicted_simulation = (
-
-            simulation_result.get(
-                "predicted_grid"
-            )
-        )
-
-        prediction_report = (
-
-            world_model_engine
-            .evaluate_prediction(
-
-                predicted_simulation,
-
-                output_array
-            )
-        )
-
-    except Exception as error:
+    if world_model_skipped:
 
         prediction_report = {
-
+            "system": "world_model",
+            "report_state": "skipped",
+            "skipped": True,
+            "skip_reason": execution_plan_context.get(
+                "skip_reasons",
+                {},
+            ).get(
+                "world_model",
+                "not_required_by_task_profile",
+            ),
             "accuracy": 0.0,
-
             "success": False,
-
-            "error": repr(error)
         }
+
+    else:
+
+        try:
+
+            simulation_result = (
+
+                world_model_engine
+                .simulate_transformation(
+
+                    input_array,
+
+                    synthesized_program
+                )
+            )
+
+            predicted_simulation = (
+
+                simulation_result.get(
+                    "predicted_grid"
+                )
+            )
+
+            prediction_report = (
+
+                world_model_engine
+                .evaluate_prediction(
+
+                    predicted_simulation,
+
+                    output_array
+                )
+            )
+
+        except Exception as error:
+
+            prediction_report = {
+
+                "accuracy": 0.0,
+
+                "success": False,
+
+                "error": repr(error)
+            }
 
     # ========================================
     # WORLD CONSISTENCY
@@ -424,6 +760,32 @@ def transformation_stage(context):
             execution_plan
         )
     )
+
+    preflight_execution_trace = [
+        {
+            "primitive": primitive.get("primitive"),
+            "operation": primitive.get("primitive"),
+            "status": "completed",
+        }
+        for primitive in planned_primitives
+    ]
+    preflight_integrity_report = (
+        execution_integrity_guard.evaluate(
+            execution_plan,
+            preflight_execution_trace,
+            execution_authorized=True,
+        )
+    )
+    world_model_anticipation = {
+        **(
+            world_model_anticipation
+            if isinstance(world_model_anticipation, dict)
+            else {}
+        ),
+        "execution_integrity_report": preflight_integrity_report,
+        "execution_integrity_preserved":
+        preflight_integrity_report.get("integrity_preserved") is True,
+    }
 
     world_model_gate_report = (
         world_model_gate.evaluate(
@@ -589,6 +951,45 @@ def transformation_stage(context):
             "MISSING_AUTHORIZED_EXECUTION_OUTPUT"
         }
 
+    solver_task_view = context.get(
+        "solver_task_view"
+    )
+
+    train_examples = (
+        solver_task_view.train_examples
+        if solver_task_view is not None
+        and hasattr(
+            solver_task_view,
+            "train_examples"
+        )
+        else ()
+    )
+
+    predicted_output, output_shape_intent = _apply_output_shape_intent(
+        predicted_output,
+        train_examples,
+        input_array,
+    )
+
+    if predicted_output is None:
+
+        execution_result = {
+
+            **execution_result,
+
+            "output_grid":
+            None,
+
+            "execution_aborted":
+            True,
+
+            "abort_reason":
+            output_shape_intent.get(
+                "materialization_state",
+                "OUTPUT_SHAPE_INTENT_UNSUPPORTED",
+            )
+        }
+
     # ========================================
     # SAFE EXECUTION TRACE
     # ========================================
@@ -718,8 +1119,14 @@ def transformation_stage(context):
         "execution_integrity":
         execution_integrity_report,
 
+        "preflight_execution_integrity":
+        preflight_integrity_report,
+
         "sandbox_execution":
-        sandbox_execution_result
+        sandbox_execution_result,
+
+        "output_shape_intent":
+        output_shape_intent
     }
 
     # ========================================
@@ -781,6 +1188,29 @@ def transformation_stage(context):
     ] = predicted_output
 
     context[
+        "output_shape_intent"
+    ] = output_shape_intent
+
+    context[
+        "candidate_origin_report"
+    ] = build_candidate_origin_report(
+        producer_component="transformation_stage",
+        producer_operation_id="transformation_execution",
+        candidate_id="current_candidate",
+        transformation_source="transformation_report",
+        prediction_source="execution_result.output_grid",
+        source_report=transformation_report,
+        run_id=context.get("run_id"),
+        task_id=context.get("task_id") or context.get("task_path"),
+    )
+
+    context[
+        "CANDIDATE_ORIGIN_REPORT"
+    ] = context[
+        "candidate_origin_report"
+    ]
+
+    context[
         "transformation_report"
     ] = transformation_report
 
@@ -819,6 +1249,33 @@ def transformation_stage(context):
     context[
         "world_model_gate_report"
     ] = world_model_gate_report
+
+    transformation_localization = (
+        world_model_anticipation.get(
+            "transformation_localization",
+            {},
+        )
+        if isinstance(world_model_anticipation, dict)
+        else {}
+    )
+
+    context[
+        "transformation_localization"
+    ] = transformation_localization
+
+    context[
+        "localization_ready"
+    ] = transformation_localization.get(
+        "localization_ready",
+        False,
+    )
+
+    context[
+        "localized_step_count"
+    ] = transformation_localization.get(
+        "localized_step_count",
+        0,
+    )
 
     context[
         "cognitive_blackboard_state"

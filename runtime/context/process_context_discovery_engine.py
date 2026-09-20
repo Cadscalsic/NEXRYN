@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping
 
 from core.epistemic_models import clamp
 from core.process_abstraction import ProcessAbstractionLayer
+from runtime.meta.supervisor import meta_supervisor
 
 
 PROCESS_CONCEPTS = {
@@ -65,6 +66,21 @@ class ProcessContextDiscoveryEngine:
             if isinstance(runtime_context, Mapping)
             else {}
         )
+
+        if not meta_supervisor.is_action_allowed("context_discovery"):
+            return {
+                "system": self.system_name,
+                "concept": concept,
+                "context_name": "",
+                "preconditions": [],
+                "transition_family": [],
+                "expected_outcomes": [],
+                "context_confidence": 0.0,
+                "process_context_discovered": False,
+                "status": "CONTEXT_DISCOVERY_BLOCKED_BY_META_SUPERVISOR",
+                "reason": "validated_context_reuse_selected",
+            }
+
         dependency_chain = (
             dependency_chain
             if dependency_chain is not None

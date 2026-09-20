@@ -16,7 +16,7 @@ class PersistentMemory:
 
         self,
 
-        memory_path="runtime_data/persistent_memory.json"
+        memory_path="runtime/artifacts/runtime_data/persistent_memory.json"
     ):
 
         self.memory_path = memory_path

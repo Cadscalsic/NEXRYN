@@ -23,7 +23,9 @@ class FailureAnalyzer:
 
         cognitive_cycle,
 
-        evaluation_result
+        evaluation_result,
+
+        introspection_report=None
     ):
 
         reasoning = cognitive_cycle.get(
@@ -45,11 +47,32 @@ class FailureAnalyzer:
             "execution",
             {}
         )
+        introspection = (
+            introspection_report
+            if isinstance(introspection_report, dict)
+            else evaluation_result.get(
+                "introspection_report",
+                {}
+            )
+        )
+
+        terminal_success = evaluation_result.get(
+            "success_state"
+        ) in {
+            "EXACT_SUCCESS",
+            "SUCCESS_WITH_RESIDUALS",
+            "HIGH_VALUE_PARTIAL_SUCCESS",
+            "LEARNING_PROGRESS",
+        } or evaluation_result.get(
+            "episode_completed"
+        ) is True
 
         analysis = {
 
             "failure_detected":
-            not evaluation_result.get(
+            False
+            if terminal_success
+            else not evaluation_result.get(
                 "success",
                 False
             ),
@@ -73,9 +96,12 @@ class FailureAnalyzer:
             ) is True,
 
             "reasoning_depth":
-            reasoning.get(
+            introspection.get(
                 "reasoning_depth",
-                0
+                reasoning.get(
+                    "reasoning_depth",
+                    0
+                )
             ),
 
             "cognitive_complexity":
@@ -85,28 +111,47 @@ class FailureAnalyzer:
             ),
 
             "semantic_density":
-            semantics.get(
-                "concept_count",
-                0
+            introspection.get(
+                "semantic_concept_count",
+                semantics.get(
+                    "concept_count",
+                    0
+                )
             ),
 
             "route_count":
-            routing.get(
-                "route_count",
-                0
+            introspection.get(
+                "active_routes",
+                routing.get(
+                    "route_count",
+                    0
+                )
             ),
 
             "execution_nodes":
-            execution.get(
-                "node_count",
-                0
+            introspection.get(
+                "execution_nodes",
+                execution.get(
+                    "node_count",
+                    0
+                )
+            ),
+
+            "pipeline_activity":
+            introspection.get(
+                "pipeline_activity",
+                {}
             ),
 
             "failure_causes":
             [],
 
             "diagnostic_signals":
-            []
+            [
+                "terminal_success_state"
+            ]
+            if terminal_success
+            else []
         }
 
         # ====================================

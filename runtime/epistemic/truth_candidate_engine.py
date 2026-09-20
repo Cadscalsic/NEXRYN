@@ -16,7 +16,8 @@ from runtime.relational import RelationalReasoningEngine
 
 
 class TruthCandidateEngine:
-    MINIMUM_INDEPENDENT_TASKS = 8
+    MINIMUM_INDEPENDENT_SOURCES = 8
+    MINIMUM_INDEPENDENT_TASKS = MINIMUM_INDEPENDENT_SOURCES
     CONTRADICTION_REVIEW_ZONE = SOFT_REVIEW_ZONE
     CONTEXTUAL_TRUTH_SUPPORT_THRESHOLD = (
         ContextualTruthSupportPolicy.SUPPORT_THRESHOLD
@@ -90,6 +91,13 @@ class TruthCandidateEngine:
 
     def __init__(self):
         self.truth_state_authority = TruthStateAuthority()
+        from runtime.epistemic.accepted_evidence_assessment import (
+            AcceptedEvidenceEpistemicAssessmentEngine,
+        )
+
+        self.accepted_evidence_assessment_engine = (
+            AcceptedEvidenceEpistemicAssessmentEngine()
+        )
         self.runtime_causal_alignment_engine = (
             RuntimeCausalAlignmentEngine()
         )
@@ -530,6 +538,202 @@ class TruthCandidateEngine:
             "required_action": None if passed else specification["action"],
         }
 
+    def _truth_independence_evidence(self, claim, context):
+        coverage = self._source_coverage(context)
+        generalization = context.get("knowledge_generalization", {})
+        generalization = generalization if isinstance(generalization, dict) else {}
+        legacy_task_count = int(generalization.get("used_task_count", 0) or 0)
+        expected_claim_id = context.get("claim_id") or claim
+        claim_id = coverage.get("claim_id") or expected_claim_id
+        claim_matches = not coverage.get("claim_id") or (
+            coverage.get("claim_id") == expected_claim_id
+        )
+        if coverage and claim_matches:
+            supporting = int(
+                coverage.get(
+                    "proven_independent_supporting_sources",
+                    coverage.get(
+                        "current_proven_independent_source_count",
+                        coverage.get("independent_supporting_source_count", 0),
+                    ),
+                )
+                or 0
+            )
+            contradicting = int(
+                coverage.get("proven_independent_contradicting_sources", 0) or 0
+            )
+            unknown = int(coverage.get("unknown_source_relation_count", 0) or 0)
+            dependent = int(coverage.get("dependent_supporting_sources", 0) or 0)
+            accepted = int(coverage.get("accepted_evidence_count", 0) or 0)
+            provenance_complete = bool(
+                coverage.get("realized_independence_assessment") == "PROVEN"
+                or (
+                    supporting > 0
+                    and unknown == 0
+                    and not coverage.get("unknown_dependence_artifacts")
+                )
+            )
+            source_coverage_id = (
+                coverage.get("source_coverage_id")
+                or coverage.get("epistemic_assessment_id")
+                or "SOURCE_COVERAGE_PRESENT"
+            )
+        else:
+            supporting = 0
+            contradicting = 0
+            unknown = 0
+            dependent = 0
+            accepted = 0
+            provenance_complete = False
+            source_coverage_id = (
+                "SOURCE_COVERAGE_CLAIM_MISMATCH"
+                if coverage
+                else "SOURCE_COVERAGE_ABSENT"
+            )
+
+        required = self.MINIMUM_INDEPENDENT_SOURCES
+        passed = supporting >= required
+        remaining = max(required - supporting, 0)
+        return {
+            "claim_id": claim_id,
+            "source_coverage_id": source_coverage_id,
+            "proven_independent_supporting_source_count": supporting,
+            "proven_independent_contradicting_source_count": contradicting,
+            "dependent_source_count": dependent,
+            "unknown_source_relation_count": unknown,
+            "accepted_evidence_count": accepted,
+            "provenance_complete": provenance_complete,
+            "authority": "EPISTEMIC_OBSERVATION",
+            "truth_authority": "NONE",
+            "legacy_independent_task_coverage": legacy_task_count,
+            "legacy_independent_task_metric_policy": "DIAGNOSTIC_ONLY",
+            "task_diversity_grants_independence": False,
+            "source_coverage_available": bool(coverage),
+            "source_coverage_claim_matches_truth_claim": claim_matches,
+            "required_independent_source_count": required,
+            "remaining_independent_source_deficit": remaining,
+            "independence_requirement_satisfied": passed,
+            "decision_reason": (
+                "independent_source_requirement_satisfied"
+                if passed
+                else "insufficient_independent_sources"
+            ),
+        }
+
+    def _source_coverage(self, context):
+        persisted_assessment = (
+            context.get("accepted_evidence_epistemic_assessment")
+            or context.get("accepted_evidence_assessment")
+        )
+        if isinstance(persisted_assessment, dict):
+            admission = self.admit_current_epistemic_assessment_for_truth(
+                persisted_assessment,
+                expected_claim_id=context.get("claim_id"),
+            )
+            if admission["truth_facing_assessment_admission_state"] != (
+                "ASSESSMENT_CURRENT_AND_ADMISSIBLE"
+            ):
+                return {
+                    "schema_version": "1.0",
+                    "system": "truth_facing_epistemic_assessment_gate",
+                    "source_coverage_id": (
+                        persisted_assessment.get("epistemic_assessment_id")
+                        or "SOURCE_COVERAGE_DENIED"
+                    ),
+                    "claim_id": context.get("claim_id")
+                    or persisted_assessment.get("claim_id")
+                    or "NOT_AVAILABLE",
+                    "proven_independent_supporting_sources": 0,
+                    "current_proven_independent_source_count": 0,
+                    "independent_supporting_source_count": 0,
+                    "accepted_evidence_count": 0,
+                    "supporting_evidence_count": 0,
+                    "unknown_source_relation_count": 0,
+                    "dependent_supporting_sources": 0,
+                    "truth_facing_assessment_admission": admission,
+                    "truth_authority": "NONE",
+                }
+            return dict(persisted_assessment["source_coverage"])
+
+        candidates = [
+            context.get("truth_independence_evidence"),
+            context.get("claim_source_coverage"),
+            context.get("source_coverage"),
+        ]
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            if "source_coverage" in candidate and isinstance(
+                candidate["source_coverage"],
+                dict,
+            ):
+                return dict(candidate["source_coverage"])
+            if any(
+                key in candidate
+                for key in (
+                    "proven_independent_supporting_sources",
+                    "current_proven_independent_source_count",
+                    "independent_supporting_source_count",
+                )
+            ):
+                return dict(candidate)
+        return {}
+
+    def admit_current_epistemic_assessment_for_truth(
+        self,
+        assessment,
+        *,
+        expected_claim_id=None,
+    ):
+        report = assessment if isinstance(assessment, dict) else {}
+        failures = []
+        if expected_claim_id and report.get("claim_id") != expected_claim_id:
+            failures.append("ASSESSMENT_CLAIM_IDENTITY_MISMATCH")
+        if report.get("capability_id") and expected_claim_id and (
+            report.get("claim_id") != expected_claim_id
+        ):
+            failures.append("ASSESSMENT_CAPABILITY_SCOPE_MISMATCH")
+        if not isinstance(report.get("source_coverage"), dict):
+            failures.append("ASSESSMENT_SOURCE_COVERAGE_MISSING")
+        currentness = (
+            self.accepted_evidence_assessment_engine
+            .is_epistemic_assessment_current(report)
+        )
+        if currentness["assessment_current_state"] != "CURRENT_EPISTEMIC_ASSESSMENT":
+            failures.append("STALE_EPISTEMIC_ASSESSMENT")
+        state = (
+            "ASSESSMENT_CURRENT_AND_ADMISSIBLE"
+            if not failures
+            else "TRUTH_FACING_ASSESSMENT_ADMISSION_DENIED"
+        )
+        return {
+            "schema_version": "1.0",
+            "system": "truth_facing_epistemic_assessment_ingestion_gate",
+            "epistemic_assessment_id": report.get("epistemic_assessment_id"),
+            "truth_facing_assessment_admission_state": state,
+            "current_support_available": not failures,
+            "currentness_validation": currentness,
+            "accepted_evidence_lineage": report.get("accepted_evidence_lineage", []),
+            "supporting_evidence_lineage": report.get(
+                "supporting_evidence_lineage", []
+            ),
+            "raw_evidence_ids": report.get("raw_evidence_ids", []),
+            "origin_task_execution_ids": report.get(
+                "origin_task_execution_ids", []
+            ),
+            "truth_facing_lineage_state": (
+                "TRUTH_FACING_LINEAGE_TRACEABLE"
+                if report.get("accepted_evidence_lineage")
+                else "TRUTH_FACING_LINEAGE_NOT_OBSERVED"
+            ),
+            "admission_failures": sorted(set(failures)),
+            "truth_authority": "NONE",
+            "knowledge_authority": "NONE",
+            "runtime_authority": "NONE",
+            "budget_authority": "NONE",
+            "execution_authority": "NONE",
+        }
+
     def _semantic_spine_recovery(self, context):
         semantic_spine = context.get(
             "semantic_spine_report",
@@ -920,34 +1124,49 @@ class TruthCandidateEngine:
             for specification in metric_specifications
         ]
 
-        used_task_count = generalization.get("used_task_count", 0)
-
-        if used_task_count:
-            metrics.append({
-                "concept": belief.concept,
-                "metric": "independent_task_coverage",
-                "current_value": used_task_count,
-                "threshold": {
-                    "comparator": ">=",
-                    "required": self.MINIMUM_INDEPENDENT_TASKS,
-                },
-                "gap": max(
-                    self.MINIMUM_INDEPENDENT_TASKS - used_task_count,
-                    0,
-                ),
-                "passed":
-                used_task_count >= self.MINIMUM_INDEPENDENT_TASKS,
-                "status": (
-                    "PASSED"
-                    if used_task_count >= self.MINIMUM_INDEPENDENT_TASKS
-                    else "FAILED"
-                ),
-                "required_action": (
-                    None
-                    if used_task_count >= self.MINIMUM_INDEPENDENT_TASKS
-                    else "collect_independent_cross_task_replications"
-                ),
-            })
+        truth_independence_evidence = self._truth_independence_evidence(
+            getattr(belief, "claim", belief.concept),
+            context,
+        )
+        independent_source_count = truth_independence_evidence[
+            "proven_independent_supporting_source_count"
+        ]
+        metrics.append({
+            "concept": belief.concept,
+            "metric": "proven_independent_supporting_source_count",
+            "current_value": independent_source_count,
+            "threshold": {
+                "comparator": ">=",
+                "required": self.MINIMUM_INDEPENDENT_SOURCES,
+            },
+            "gap": max(
+                self.MINIMUM_INDEPENDENT_SOURCES - independent_source_count,
+                0,
+            ),
+            "passed": (
+                independent_source_count >= self.MINIMUM_INDEPENDENT_SOURCES
+            ),
+            "status": (
+                "PASSED"
+                if independent_source_count >= self.MINIMUM_INDEPENDENT_SOURCES
+                else "FAILED"
+            ),
+            "required_action": (
+                None
+                if independent_source_count >= self.MINIMUM_INDEPENDENT_SOURCES
+                else "collect_proven_independent_supporting_sources"
+            ),
+            "decision_reason": truth_independence_evidence["decision_reason"],
+            "source_coverage_available": truth_independence_evidence[
+                "source_coverage_available"
+            ],
+            "legacy_independent_task_coverage": truth_independence_evidence[
+                "legacy_independent_task_coverage"
+            ],
+            "legacy_independent_task_metric_policy": (
+                "DIAGNOSTIC_ONLY"
+            ),
+        })
 
         blocked_metrics = [
             item["metric"]
@@ -1151,6 +1370,12 @@ class TruthCandidateEngine:
                 BeliefState.TRUTH_CANDIDATE,
                 BeliefState.TRUTH_COMMITTED,
             ]
+            else "INSUFFICIENT_INDEPENDENT_SOURCE_SUPPORT"
+            if (
+                stage_eligible
+                and "proven_independent_supporting_source_count"
+                in blocked_metrics
+            )
             else "ADVANCING_TO_TRUTH_CANDIDATE"
             if stage_eligible
             else "PRE_VALIDATION"
@@ -1261,6 +1486,21 @@ class TruthCandidateEngine:
             "contextual_truth": contextual_truth,
             "contextual_truth_authority":
             contextual_truth_authority,
+            "truth_independence_evidence": truth_independence_evidence,
+            "source_coverage": self._source_coverage(context),
+            "minimum_independent_sources":
+            self.MINIMUM_INDEPENDENT_SOURCES,
+            "legacy_independent_task_metric_policy": "DIAGNOSTIC_ONLY",
+            "legacy_independent_task_coverage":
+            truth_independence_evidence["legacy_independent_task_coverage"],
+            "independent_source_requirement_satisfied":
+            truth_independence_evidence[
+                "independence_requirement_satisfied"
+            ],
+            "remaining_independent_source_deficit":
+            truth_independence_evidence[
+                "remaining_independent_source_deficit"
+            ],
             "context_discovery":
             context.get("context_discovery", {}),
             "context_hierarchy": context_hierarchy,

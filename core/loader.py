@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 
 from core.grid import ARCGrid
+from core.arc_task_boundary import SolverTaskView
 
 
 # ============================================
@@ -32,6 +33,8 @@ class ARCJSONLoader:
         )
 
         self.task_data = {}
+
+        self.solver_task_view = None
 
         self.task_metadata = {
 
@@ -81,6 +84,13 @@ class ARCJSONLoader:
             self.task_metadata[
                 "task_profile_created"
             ] = True
+
+            self.solver_task_view = (
+                SolverTaskView.from_raw_task(
+                    self.task_data,
+                    self.json_path
+                )
+            )
 
             self.load_report = (
                 self.build_report()
@@ -268,6 +278,12 @@ class ARCJSONLoader:
 
     def get_train_examples(self):
 
+        if self.solver_task_view is not None:
+
+            return list(
+                self.solver_task_view.train_examples
+            )
+
         examples = []
 
         for example in (
@@ -318,6 +334,12 @@ class ARCJSONLoader:
     # ========================================
 
     def get_test_examples(self):
+
+        if self.solver_task_view is not None:
+
+            return list(
+                self.solver_task_view.test_examples
+            )
 
         examples = []
 

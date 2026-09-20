@@ -219,3 +219,11 @@ def test_cli_math_reasoning_flag_is_disabled_by_default():
 
     assert "--math-reasoning" in source
     assert "action=\"store_true\"" in source
+
+
+def test_cli_post_success_mode_defaults_to_fast():
+    source = open("main.py", encoding="utf-8").read()
+
+    assert "--post-success-mode" in source
+    assert "default=\"fast\"" in source
+    assert "choices=[\"fast\", \"normal\", \"deep\"]" in source

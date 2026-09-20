@@ -5,6 +5,13 @@
 from datetime import datetime
 import uuid
 
+from runtime.self_repair.anomaly_detector import anomaly_detector
+from runtime.self_repair.repair_executor import RepairExecutor
+from runtime.self_repair.repair_memory import repair_memory
+from runtime.self_repair.repair_planner import repair_planner
+from runtime.self_repair.repair_reporter import repair_reporter
+from runtime.self_repair.rollback_manager import rollback_manager
+
 
 # ============================================
 # SELF REPAIR ENGINE
@@ -76,6 +83,16 @@ class SelfRepairEngine:
 
             "runtime_corruption"
         ]
+
+        self.anomaly_detector = anomaly_detector
+        self.repair_planner = repair_planner
+        self.rollback_manager = rollback_manager
+        self.repair_memory = repair_memory
+        self.repair_executor = RepairExecutor(
+            rollback_manager=self.rollback_manager,
+            repair_memory=self.repair_memory,
+        )
+        self.repair_reporter = repair_reporter
 
     # ========================================
     # NORMALIZE RUNTIME CONTEXT
@@ -717,12 +734,18 @@ class SelfRepairEngine:
         runtime_context
     ):
 
-        runtime_context = (
+        runtime_context = self.normalize_runtime_context(runtime_context)
 
-            self.normalize_runtime_context(
-                runtime_context
-            )
+        operational_report = self.run_operational_repair_cycle(
+            runtime_context
         )
+
+        if operational_report.get("anomalies_detected"):
+            self.repair_state[
+                "repair_cycles"
+            ] += 1
+            self.repair_history.append(operational_report)
+            return operational_report
 
         # ====================================
         # REGISTER SNAPSHOT
@@ -856,6 +879,42 @@ class SelfRepairEngine:
         self.clear_active_failures()
 
         return repair_report
+
+    def run_operational_repair_cycle(
+        self,
+        runtime_context
+    ):
+
+        runtime_context = self.normalize_runtime_context(runtime_context)
+        anomalies = self.anomaly_detector.detect(runtime_context)
+        plans = self.repair_planner.plan(anomalies)
+        execution_results = []
+        repaired_context = dict(runtime_context)
+
+        for plan in plans:
+            repaired_context, result = self.repair_executor.execute(
+                repaired_context,
+                plan,
+            )
+            execution_results.append(result)
+
+        report = self.repair_reporter.build_report(
+            anomalies=anomalies,
+            plans=plans,
+            execution_results=execution_results,
+            rollback_report=self.rollback_manager.report(),
+            runtime_context=repaired_context,
+        )
+        report[
+            "runtime_context"
+        ] = repaired_context
+        report[
+            "repair_memory_report"
+        ] = self.repair_memory.report()
+        report[
+            "timestamp"
+        ] = str(datetime.utcnow())
+        return report
 
     # ========================================
     # BUILD REPORT

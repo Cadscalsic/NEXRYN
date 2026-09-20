@@ -27,7 +27,7 @@ class RuntimeSessionManager:
 
         self,
 
-        session_directory="runtime_data/sessions"
+        session_directory="runtime/artifacts/runtime_data/sessions"
     ):
 
         # ====================================

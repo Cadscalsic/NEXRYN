@@ -1,8 +1,11 @@
 # ============================================
 # NEXRYN UNIFIED GOVERNANCE KERNEL
+# OPTIMIZED / BOUNDED GOVERNANCE VERSION
 # ============================================
 
 from datetime import datetime
+import hashlib
+import json
 
 from core.epistemic_decision_engine import EpistemicDecisionEngine
 
@@ -26,13 +29,111 @@ from core.governance_compression.semantic_compression_engine import (
 class GovernanceKernel:
 
     def __init__(self):
-
         self.semantic_compression_engine = SemanticCompressionEngine()
         self.runtime_energy_budget = RuntimeEnergyBudget()
         self.identity_core_lock = IdentityCoreLock()
         self.epistemic_constitution = EpistemicConstitution()
         self.epistemic_decision_engine = EpistemicDecisionEngine()
+
         self.kernel_history = []
+        self.last_signature = None
+        self.last_report = None
+        self.cache_hits = 0
+        self.cache_misses = 0
+
+    def _stable_hash(self, payload):
+        try:
+            encoded = json.dumps(payload, sort_keys=True, default=str)
+        except Exception:
+            encoded = str(payload)
+
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _signature(self, context):
+        return self._stable_hash({
+            "episode_completed": context.get("episode_completed"),
+            "shutdown_mode": context.get("shutdown_mode"),
+            "post_success_mode": context.get("post_success_mode"),
+            "runtime_entropy": context.get("runtime_entropy"),
+            "semantic_drift": context.get("semantic_drift"),
+            "memory_pressure_score": context.get("memory_pressure_score"),
+            "freeze_new_fusions": context.get("freeze_new_fusions"),
+            "sandbox_only_mode": context.get("sandbox_only_mode"),
+            "emergency_compression_active": context.get("emergency_compression_active"),
+            "cognitive_kernel_report": context.get("cognitive_kernel_report", {}),
+            "cognitive_immune_system_v2_report": context.get("cognitive_immune_system_v2_report", {}),
+            "cognitive_physician_report": context.get("cognitive_physician_report", {}),
+            "cognitive_dna_report": context.get("cognitive_dna_report", {}),
+            "identity_lock_inputs": {
+                "identity_runtime_state": context.get("identity_runtime_state"),
+                "identity_runtime_ready": context.get("identity_runtime_ready"),
+                "identity_runtime_continuity": context.get("identity_runtime_continuity"),
+            },
+            "epistemic_cognition_available": bool(
+                context.get("epistemic_cognition_report")
+            ),
+        })
+
+    def _fast_mode(self, context):
+        return (
+            context.get("episode_completed") is True
+            or context.get("shutdown_mode") == "fast"
+            or context.get("post_success_mode") == "fast"
+            or context.get("post_success_shutdown", {}).get("enabled") is True
+        )
+
+    def _critical_change_present(self, context):
+        return (
+            context.get("cognitive_immune_system_v2_report", {}).get("immune_state")
+            == "emergency_response"
+            or context.get("freeze_new_fusions") is True
+            or context.get("sandbox_only_mode") is True
+            or context.get("emergency_compression_active") is True
+            or context.get("memory_pressure_score", 0.0) > 0.95
+            or context.get("semantic_drift", 0.0) > 0.72
+            or context.get("runtime_entropy", 0.0) > 0.82
+        )
+
+    def _cache_report(self):
+        total = self.cache_hits + self.cache_misses
+
+        return {
+            "system": "governance_kernel_cache",
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "cache_hit_rate": round(self.cache_hits / total, 4) if total else 0.0,
+            "history_size": len(self.kernel_history),
+        }
+
+    def _store_history(self, report):
+        self.kernel_history.append({
+            "kernel_state": report.get("kernel_state"),
+            "signal_count": len(report.get("signals", [])),
+            "policy_count": len(report.get("policies", [])),
+            "cache_hit": report.get("governance_kernel_cache_hit", False),
+            "timestamp": report.get("timestamp"),
+        })
+        self.kernel_history = self.kernel_history[-32:]
+
+    def _reused_report(self, signature, reason):
+        report = dict(self.last_report or {})
+        report["governance_kernel_cache_hit"] = True
+        report["governance_kernel_cache_state"] = reason
+        report["cache_signature"] = signature
+        report["governance_kernel_cache_report"] = self._cache_report()
+        report["runtime_mode"] = "bounded_governance_reuse"
+        report["timestamp"] = str(datetime.utcnow())
+        return report
+
+    def _minimal_skipped_epistemic_report(self, reason):
+        return {
+            "system": "epistemic_cognition_layer",
+            "status": "skipped",
+            "reason": reason,
+            "truth_commitments": [],
+            "reusable_truth_commitments": [],
+            "evaluations": [],
+        }
 
     def build_signals(
         self,
@@ -42,96 +143,52 @@ class GovernanceKernel:
         epistemic_report,
         cognition_report,
     ):
-
-        immune = context.get(
-            "cognitive_immune_system_v2_report",
-            {},
-        )
-
-        kernel = context.get(
-            "cognitive_kernel_report",
-            {},
-        )
+        immune = context.get("cognitive_immune_system_v2_report", {})
+        kernel = context.get("cognitive_kernel_report", {})
 
         signals = []
 
-        if immune.get(
-            "immune_state",
-        ) == "emergency_response":
-
+        if immune.get("immune_state") == "emergency_response":
             signals.append({
-                "signal":
-                "immune_emergency",
-
-                "priority":
-                "critical",
+                "signal": "immune_emergency",
+                "priority": "critical",
             })
 
-        if kernel.get(
-            "active_mode",
-        ) == "stabilization_mode":
-
+        if kernel.get("active_mode") == "stabilization_mode":
             signals.append({
-                "signal":
-                "kernel_stabilization",
-
-                "priority":
-                "high",
+                "signal": "kernel_stabilization",
+                "priority": "high",
             })
 
-        if semantic_report.get(
-            "encoded_count",
-            0,
+        if semantic_report.get("encoded_count", 0):
+            signals.append({
+                "signal": "semantic_factorization_available",
+                "priority": "medium",
+            })
+
+        if identity_lock_report.get("decision") == "blocked":
+            signals.append({
+                "signal": "identity_invariant_rewrite_blocked",
+                "priority": "critical",
+            })
+
+        judiciary = epistemic_report.get("epistemic_legitimacy_engine", {})
+
+        if judiciary.get("decision") != "epistemically_legitimate":
+            signals.append({
+                "signal": "epistemic_trial_required",
+                "priority": "critical",
+            })
+
+        evaluations = cognition_report.get("evaluations", [])
+        if isinstance(evaluations, list) and any(
+            isinstance(evaluation, dict)
+            and evaluation.get("truth_commit", {}).get("committed")
+            for evaluation in evaluations
         ):
-
             signals.append({
-                "signal":
-                "semantic_factorization_available",
-
-                "priority":
-                "medium",
-            })
-
-        if identity_lock_report.get(
-            "decision",
-        ) == "blocked":
-
-            signals.append({
-                "signal":
-                "identity_invariant_rewrite_blocked",
-
-                "priority":
-                "critical",
-            })
-
-        judiciary = epistemic_report.get(
-            "epistemic_legitimacy_engine",
-            {},
-        )
-
-        if judiciary.get(
-            "decision",
-        ) != "epistemically_legitimate":
-
-            signals.append({
-                "signal":
-                "epistemic_trial_required",
-
-                "priority":
-                "critical",
-            })
-
-        if any(
-            evaluation.get("truth_commit", {}).get("committed")
-            for evaluation in cognition_report.get("evaluations", [])
-        ):
-
-            signals.append({
-                "signal":
-                "constitutional_truth_committed",
-
-                "priority":
-                "high",
+                "signal": "constitutional_truth_committed",
+                "priority": "high",
             })
 
         drift_regulation = cognition_report.get(
@@ -139,85 +196,37 @@ class GovernanceKernel:
             {},
         )
 
-        if drift_regulation.get(
-            "regulation_mode",
-        ) == "semantic_containment":
-
+        if drift_regulation.get("regulation_mode") == "semantic_containment":
             signals.append({
-                "signal":
-                "semantic_drift_epistemic_containment",
-
-                "priority":
-                "critical",
+                "signal": "semantic_drift_epistemic_containment",
+                "priority": "critical",
             })
 
-        promotion = cognition_report.get(
-            "epistemic_promotion_engine",
-            {},
-        )
+        promotion = cognition_report.get("epistemic_promotion_engine", {})
 
-        if promotion.get(
-            "candidate_count",
-            0,
-        ) > promotion.get(
-            "promotion_count",
-            0,
-        ):
-
+        if promotion.get("candidate_count", 0) > promotion.get("promotion_count", 0):
             signals.append({
-                "signal":
-                "trait_candidates_awaiting_epistemic_promotion",
-
-                "priority":
-                "medium",
+                "signal": "trait_candidates_awaiting_epistemic_promotion",
+                "priority": "medium",
             })
 
-        ontology = epistemic_report.get(
-            "ontological_growth_constitution",
-            {},
-        )
+        ontology = epistemic_report.get("ontological_growth_constitution", {})
 
-        if ontology.get(
-            "freeze_new_fusions",
-            False,
-        ):
-
+        if ontology.get("freeze_new_fusions", False):
             signals.append({
-                "signal":
-                "ontological_growth_freeze",
-
-                "priority":
-                "high",
+                "signal": "ontological_growth_freeze",
+                "priority": "high",
             })
 
-        physician = context.get(
-            "cognitive_physician_report",
-            {},
-        )
+        physician = context.get("cognitive_physician_report", {})
+        diagnosis = physician.get("diagnosis_report", {})
 
-        diagnosis = physician.get(
-            "diagnosis_report",
-            {},
-        )
-
-        if diagnosis.get(
-            "risk_escalation",
-        ) in [
-            "elevated",
-            "critical",
-        ]:
-
+        if diagnosis.get("risk_escalation") in ["elevated", "critical"]:
             signals.append({
-                "signal":
-                "cognitive_physician_review_required",
-
-                "priority":
-                (
+                "signal": "cognitive_physician_review_required",
+                "priority": (
                     "critical"
-                    if diagnosis.get(
-                        "risk_escalation",
-                    )
-                    == "critical"
+                    if diagnosis.get("risk_escalation") == "critical"
                     else "high"
                 ),
             })
@@ -232,47 +241,12 @@ class GovernanceKernel:
         epistemic_report,
         cognition_report,
     ):
-
         policies = [
             "single_governance_kernel",
             "no_layer_proliferation",
             "legacy_governance_as_modules_only",
-        ]
-
-        if energy_report.get(
-            "budget_state",
-        ) == "governance_over_budget":
-
-            policies.append(
-                "collapse_optional_governance_modules",
-            )
-
-        if context.get(
-            "freeze_new_fusions",
-            False,
-        ):
-
-            policies.append(
-                "freeze_new_fusions",
-            )
-
-        if identity_lock_report.get(
-            "decision",
-        ) == "blocked":
-
-            policies.append(
-                "identity_core_lock_enforced",
-            )
-
-        policies.append(
             "immutable_core_invariants",
-        )
-
-        policies.append(
             "truth_precedes_survival_claims",
-        )
-
-        policies.extend([
             "truth_requires_evidence",
             "truth_requires_trials",
             "truth_requires_validation",
@@ -285,26 +259,28 @@ class GovernanceKernel:
             "truth_commit_requires_truth_candidate_state",
             "evidence_reinforcement_increases_reliability_not_truth",
             "block_truth_commit_during_fragile_semantic_spine",
-        ])
+        ]
 
-        if any(
-            evaluation.get("truth_commit", {}).get("committed")
-            for evaluation in cognition_report.get("evaluations", [])
+        if energy_report.get("budget_state") == "governance_over_budget":
+            policies.append("collapse_optional_governance_modules")
+
+        if context.get("freeze_new_fusions", False):
+            policies.append("freeze_new_fusions")
+
+        if identity_lock_report.get("decision") == "blocked":
+            policies.append("identity_core_lock_enforced")
+
+        evaluations = cognition_report.get("evaluations", [])
+        if isinstance(evaluations, list) and any(
+            isinstance(evaluation, dict)
+            and evaluation.get("truth_commit", {}).get("committed")
+            for evaluation in evaluations
         ):
+            policies.append("protect_constitutional_truth_commitments")
 
-            policies.append(
-                "protect_constitutional_truth_commitments",
-            )
+        drift_regulation = cognition_report.get("epistemic_drift_regulation", {})
 
-        drift_regulation = cognition_report.get(
-            "epistemic_drift_regulation",
-            {},
-        )
-
-        if drift_regulation.get(
-            "regulation_mode",
-        ) == "semantic_containment":
-
+        if drift_regulation.get("regulation_mode") == "semantic_containment":
             policies.extend([
                 "freeze_weak_belief_birth",
                 "archive_weak_probationary_beliefs",
@@ -312,117 +288,57 @@ class GovernanceKernel:
                 "prioritize_semantic_anchor_recovery",
             ])
 
-        elif drift_regulation.get(
-            "regulation_mode",
-        ) == "restricted_belief_formation":
+        elif drift_regulation.get("regulation_mode") == "restricted_belief_formation":
+            policies.append("cap_new_belief_birth_under_semantic_strain")
 
-            policies.append(
-                "cap_new_belief_birth_under_semantic_strain",
-            )
+        judiciary = epistemic_report.get("epistemic_legitimacy_engine", {})
 
-        judiciary = epistemic_report.get(
-            "epistemic_legitimacy_engine",
-            {},
-        )
+        if judiciary.get("decision") != "epistemically_legitimate":
+            policies.append("require_epistemic_trial_before_truth_commit")
 
-        if judiciary.get(
-            "decision",
-        ) != "epistemically_legitimate":
+        ontology = epistemic_report.get("ontological_growth_constitution", {})
 
-            policies.append(
-                "require_epistemic_trial_before_truth_commit",
-            )
+        if ontology.get("freeze_new_fusions", False):
+            policies.append("ontological_growth_law_freeze")
 
-        ontology = epistemic_report.get(
-            "ontological_growth_constitution",
-            {},
-        )
+        physician = context.get("cognitive_physician_report", {})
 
-        if ontology.get(
-            "freeze_new_fusions",
-            False,
-        ):
-
-            policies.append(
-                "ontological_growth_law_freeze",
-            )
-
-        physician = context.get(
-            "cognitive_physician_report",
-            {},
-        )
-
-        if physician.get(
-            "diagnosis_report",
-            {},
-        ).get(
-            "risk_escalation",
-        ) in [
+        if physician.get("diagnosis_report", {}).get("risk_escalation") in [
             "elevated",
             "critical",
         ]:
+            policies.append("physician_recommendations_require_governance_review")
 
-            policies.append(
-                "physician_recommendations_require_governance_review",
-            )
-
-        dna = context.get(
-            "cognitive_dna_report",
-            {},
-        )
+        dna = context.get("cognitive_dna_report", {})
 
         if dna:
-
             policies.append(
-                "constitutional_dna_informs_governance_without_authoritarian_control",
+                "constitutional_dna_informs_governance_without_authoritarian_control"
             )
 
-            if dna.get(
-                "trait_reputation_system",
-                {},
-            ).get(
-                "reputation_state",
+            if dna.get("trait_reputation_system", {}).get(
+                "reputation_state"
             ) == "genome_rehabilitation_required":
-
                 policies.append(
-                    "trait_rehabilitation_before_behavioral_inheritance",
+                    "trait_rehabilitation_before_behavioral_inheritance"
                 )
 
-        return policies
+        return sorted(set(policies))
 
     def physician_review(self, context):
-
-        physician = context.get(
-            "cognitive_physician_report",
-            {},
-        )
+        physician = context.get("cognitive_physician_report", {})
 
         if not physician:
-
             return {
-                "status":
-                "no_physician_submission",
+                "status": "no_physician_submission",
             }
 
-        ethics = physician.get(
-            "constitutional_safety_assessment",
-            {},
-        )
-
-        diagnosis = physician.get(
-            "diagnosis_report",
-            {},
-        )
+        ethics = physician.get("constitutional_safety_assessment", {})
+        diagnosis = physician.get("diagnosis_report", {})
 
         approved_for_controlled_execution = (
-            ethics.get(
-                "ethics_state",
-            )
-            == "constitutionally_safe"
-            and physician.get(
-                "governance_submission",
-                {},
-            ).get(
+            ethics.get("ethics_state") == "constitutionally_safe"
+            and physician.get("governance_submission", {}).get(
                 "physician_can_bypass_governance",
                 True,
             )
@@ -430,32 +346,13 @@ class GovernanceKernel:
         )
 
         return {
-            "system":
-            "governance_physician_review",
-
-            "physician_authority":
-            "advisor_only",
-
-            "governance_kernel_final_authority":
-            True,
-
-            "diagnosis_state":
-            diagnosis.get(
-                "state",
-                "unknown",
-            ),
-
-            "risk_escalation":
-            diagnosis.get(
-                "risk_escalation",
-                "unknown",
-            ),
-
-            "approved_for_controlled_execution":
-            approved_for_controlled_execution,
-
-            "review_policy":
-            (
+            "system": "governance_physician_review",
+            "physician_authority": "advisor_only",
+            "governance_kernel_final_authority": True,
+            "diagnosis_state": diagnosis.get("state", "unknown"),
+            "risk_escalation": diagnosis.get("risk_escalation", "unknown"),
+            "approved_for_controlled_execution": approved_for_controlled_execution,
+            "review_policy": (
                 "controlled_runtime_execution_allowed"
                 if approved_for_controlled_execution
                 else "recommendations_restricted"
@@ -463,96 +360,97 @@ class GovernanceKernel:
         }
 
     def compatibility_reports(self, kernel_report):
-
         module_stub = {
-            "status":
-            "compressed_into_governance_kernel",
-
-            "kernel":
-            "governance_kernel",
+            "status": "compressed_into_governance_kernel",
+            "kernel": "governance_kernel",
         }
 
         return {
-            "constitutional_runtime_report":
-            dict(
+            "constitutional_runtime_report": dict(
                 module_stub,
                 module="constitutional_runtime",
             ),
-
-            "semantic_court_report":
-            dict(
+            "semantic_court_report": dict(
                 module_stub,
                 module="semantic_court",
             ),
-
-            "cognitive_immune_engine_report":
-            dict(
+            "cognitive_immune_engine_report": dict(
                 module_stub,
                 module="cognitive_immune_engine",
             ),
-
-            "adaptive_permissioning_report":
-            dict(
+            "adaptive_permissioning_report": dict(
                 module_stub,
                 module="adaptive_permissioning",
             ),
-
-            "meta_constitution_report":
-            dict(
+            "meta_constitution_report": dict(
                 module_stub,
                 module="meta_constitution",
             ),
-
-            "civilization_report":
-            {
-                "status":
-                "compressed_into_governance_kernel",
-
-                "civilization_state":
-                "governance_kernel_managed",
-
-                "kernel_policies":
-                kernel_report.get(
-                    "policies",
-                    [],
-                ),
+            "civilization_report": {
+                "status": "compressed_into_governance_kernel",
+                "civilization_state": "governance_kernel_managed",
+                "kernel_policies": kernel_report.get("policies", []),
             },
         }
 
     def run_cycle(self, context):
-
-        if not isinstance(
-            context,
-            dict,
-        ):
-
+        if not isinstance(context, dict):
             context = {}
 
-        semantic_report = (
-            self.semantic_compression_engine
-            .run_cycle(context)
-        )
+        signature = self._signature(context)
+        fast_mode = self._fast_mode(context)
+        critical_change = self._critical_change_present(context)
 
-        identity_lock_report = (
-            self.identity_core_lock
-            .evaluate(context)
-        )
-
-        epistemic_constitution_report = (
-            self.epistemic_constitution
-            .run_cycle(context)
-        )
-
-        epistemic_cognition_report = context.get(
-            "epistemic_cognition_report",
-        )
-
-        if not epistemic_cognition_report:
-
-            epistemic_cognition_report = (
-                self.epistemic_decision_engine
-                .run_cycle(context)
+        if (
+            self.last_signature == signature
+            and self.last_report is not None
+            and not critical_change
+        ):
+            self.cache_hits += 1
+            report = self._reused_report(
+                signature,
+                "exact_signature_reuse",
             )
+            self._store_history(report)
+            return report
+
+        if (
+            fast_mode
+            and self.last_report is not None
+            and not critical_change
+        ):
+            self.cache_hits += 1
+            report = self._reused_report(
+                signature,
+                "fast_mode_reuse_previous_governance_kernel",
+            )
+            self._store_history(report)
+            return report
+
+        self.cache_misses += 1
+
+        semantic_report = self.semantic_compression_engine.run_cycle(context)
+
+        identity_lock_report = self.identity_core_lock.evaluate(context)
+
+        epistemic_constitution_report = self.epistemic_constitution.run_cycle(
+            context
+        )
+
+        epistemic_cognition_report = context.get("epistemic_cognition_report")
+
+        if epistemic_cognition_report:
+            epistemic_cognition_source = "context_reuse"
+        elif fast_mode and not critical_change:
+            epistemic_cognition_report = self._minimal_skipped_epistemic_report(
+                "fast_mode_without_existing_epistemic_cognition_report"
+            )
+            epistemic_cognition_source = "fast_mode_skipped"
+        else:
+            epistemic_cognition_report = self.epistemic_decision_engine.run_cycle(
+                context
+            )
+            epistemic_cognition_source = "computed"
 
         active_modules = [
             "governance_kernel",
@@ -567,17 +465,12 @@ class GovernanceKernel:
             "legacy_governance_aliases",
         ]
 
-        energy_report = (
-            self.runtime_energy_budget
-            .allocate(
-                context,
-                active_modules,
-            )
+        energy_report = self.runtime_energy_budget.allocate(
+            context,
+            active_modules,
         )
 
-        physician_review_report = self.physician_review(
-            context,
-        )
+        physician_review_report = self.physician_review(context)
 
         signals = self.build_signals(
             context,
@@ -587,94 +480,55 @@ class GovernanceKernel:
             epistemic_cognition_report,
         )
 
-        report = {
-            "system":
-            "governance_kernel",
-
-            "modules":
-            active_modules,
-
-            "policies":
-            self.build_policies(
-                context,
-                energy_report,
-                identity_lock_report,
-                epistemic_constitution_report,
-                epistemic_cognition_report,
-            ),
-
-            "signals":
-            signals,
-
-            "semantic_compression":
-            semantic_report,
-
-            "runtime_energy_budget":
+        policies = self.build_policies(
+            context,
             energy_report,
-
-            "identity_core_lock":
             identity_lock_report,
-
-            "epistemic_constitution":
             epistemic_constitution_report,
-
-            "epistemic_cognition_layer":
             epistemic_cognition_report,
+        )
 
-            "physician_review":
-            physician_review_report,
-
-            "cognitive_dna_review":
-            {
-                "status":
-                (
+        report = {
+            "system": "governance_kernel",
+            "modules": active_modules,
+            "policies": policies,
+            "signals": signals,
+            "semantic_compression": semantic_report,
+            "runtime_energy_budget": energy_report,
+            "identity_core_lock": identity_lock_report,
+            "epistemic_constitution": epistemic_constitution_report,
+            "epistemic_cognition_layer": epistemic_cognition_report,
+            "epistemic_cognition_source": epistemic_cognition_source,
+            "physician_review": physician_review_report,
+            "cognitive_dna_review": {
+                "status": (
                     "dna_report_received"
-                    if context.get(
-                        "cognitive_dna_report",
-                    )
+                    if context.get("cognitive_dna_report")
                     else "no_dna_report"
                 ),
-
-                "authority":
-                "governance_kernel_final_authority",
-
-                "dna_can_override_constitution":
-                False,
+                "authority": "governance_kernel_final_authority",
+                "dna_can_override_constitution": False,
             },
-
-            "kernel_state":
-            (
+            "kernel_state": (
                 "compressed_governance"
-                if energy_report.get(
-                    "budget_state",
-                )
-                == "within_budget"
+                if energy_report.get("budget_state") == "within_budget"
                 else "governance_budget_guarded"
             ),
-
-            "timestamp":
-            str(
-                datetime.utcnow()
-            ),
+            "governance_kernel_cache_hit": False,
+            "governance_kernel_cache_state": "computed",
+            "governance_kernel_cache_report": self._cache_report(),
+            "cache_signature": signature,
+            "timestamp": str(datetime.utcnow()),
         }
 
-        report[
-            "compatibility_reports"
-        ] = self.compatibility_reports(
-            report,
-        )
+        report["compatibility_reports"] = self.compatibility_reports(report)
 
-        self.kernel_history.append(
-            report,
-        )
+        self.last_signature = signature
+        self.last_report = dict(report)
 
-        self.kernel_history = (
-            self.kernel_history[-64:]
-        )
+        self._store_history(report)
 
         return report
 
 
-governance_kernel = (
-    GovernanceKernel()
-)
+governance_kernel = GovernanceKernel()

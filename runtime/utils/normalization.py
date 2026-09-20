@@ -5,6 +5,8 @@
 import numpy as np
 
 from datetime import datetime
+import json
+from collections.abc import Mapping
 
 
 # ============================================
@@ -411,6 +413,7 @@ def normalize_context(
     context
 ):
 
+    context = normalize_context_object(context)
     normalized = {}
 
     for key, value in context.items():
@@ -422,6 +425,64 @@ def normalize_context(
         )
 
     return normalized
+
+
+def normalize_context_object(context):
+    """Return a mapping for dicts, context objects, serialized payloads, or ids."""
+
+    if isinstance(context, Mapping):
+        return dict(context)
+
+    if isinstance(context, str):
+        text = context.strip()
+        if not text:
+            return {}
+        try:
+            decoded = json.loads(text)
+        except (TypeError, ValueError):
+            return {
+                "context_id": text,
+                "context_identifier": text,
+                "serialized_context": False,
+            }
+        if isinstance(decoded, Mapping):
+            return dict(decoded)
+        return {
+            "context_id": text,
+            "serialized_value": decoded,
+            "serialized_context": True,
+        }
+
+    if hasattr(context, "to_dict") and callable(context.to_dict):
+        try:
+            value = context.to_dict()
+        except Exception:
+            value = None
+        if isinstance(value, Mapping):
+            return dict(value)
+
+    if hasattr(context, "__dict__"):
+        return {
+            key: value
+            for key, value in vars(context).items()
+            if not key.startswith("__") and not callable(value)
+        }
+
+    if context is None:
+        return {}
+
+    return {
+        "context_id": str(context),
+        "context_identifier": str(context),
+        "unsupported_context_type": type(context).__name__,
+    }
+
+
+def safe_context_accessor(context, key=None, default=None):
+    normalized = normalize_context_object(context)
+    if key is None:
+        return normalized
+    return normalized.get(key, default)
 
 
 # ============================================

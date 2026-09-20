@@ -4,6 +4,8 @@ from runtime.world.world_model import WorldModelEngine
 from core.scene_graph import GraphReasoner
 from runtime.execution.execution_integrity_guard import ExecutionIntegrityGuard
 from runtime.execution.world_model_gate import WorldModelGate
+from runtime.transformation_localization import ExecutionReadinessCalibrator
+from runtime.transformation_localization import localization_controller
 from runtime.kernel.cognitive_blackboard import CognitiveBlackboard
 from runtime.planning.planning_engine import PlanningEngine
 
@@ -64,6 +66,247 @@ def test_world_model_anticipation_localizes_before_acceptance():
     assert prediction["prediction_accuracy"] == 1.0
     assert report["residual_difference_count"] == 0
     assert report["execution_accepted"] is True
+
+
+def test_localization_controller_calibrates_zero_confidence_with_fallback():
+    calibrated = localization_controller.calibrate(
+        {
+            "localization_ready": False,
+            "localization_confidence": 0.0,
+            "localized_step_count": 0,
+            "localization_reports": [{
+                "anchor_object": "obj_1",
+                "relative_offset": [1, 0],
+                "topology_preserved": True,
+                "spatial_constraints": [{
+                    "type": "causal_dependency",
+                    "confidence": 1.0,
+                }],
+                "causal_evidence": {"operation": "translate_down"},
+            }],
+        },
+        synthesized_program={
+            "step_count": 1,
+            "steps": [{
+                "operation": "translate_down",
+                "parameters": {"delta_row": 1, "delta_col": 0},
+            }],
+        },
+        hypothesis={
+            "primitive": "translate_down",
+            "confidence": 0.97,
+            "semantic_support": 0.95,
+            "causal_support": 0.95,
+            "geometric_grounding": {"confidence": 0.90},
+        },
+        prediction_accuracy=0.95,
+    )
+
+    assert calibrated["localization_confidence"] >= 0.70
+    assert calibrated["fallback_used"] in {
+        "object_level_fallback",
+        "global_translation_fallback",
+    }
+    assert calibrated["execution_ready"] is True
+    assert calibrated["LOCALIZATION_REPORT"]["execution_authorized"] is True
+
+
+def test_medium_localization_confidence_allows_probable_sandbox_execution():
+    readiness = ExecutionReadinessCalibrator().evaluate(
+        hypothesis_confidence=0.92,
+        localization_confidence=0.748,
+        prediction_accuracy=0.91,
+        identity_confidence=0.95,
+        dependency_support=0.94,
+        arbitration_score=0.91,
+        winning_hypothesis_stable=True,
+        dependency_evidence_exists=True,
+    )
+
+    assert readiness["localization_confidence_band"] == "MEDIUM"
+    assert readiness["readiness_class"] == "READINESS_HIGH"
+    assert readiness["execution_governance_state"] == "EXECUTION_PROBABLE"
+    assert readiness["execution_ready"] is True
+
+
+def test_residual_guided_grounding_recovers_empty_target_objects_for_probation():
+    calibrated = localization_controller.calibrate(
+        {
+            "localization_ready": False,
+            "localization_confidence": 0.1675,
+            "localized_step_count": 0,
+            "target_objects": [],
+            "localization_reports": [],
+        },
+        synthesized_program={
+            "step_count": 1,
+            "steps": [{
+                "operation": "replace_color",
+                "parameters": {},
+            }],
+        },
+        hypothesis={
+            "primitive": "replace_color",
+            "confidence": 0.92,
+        },
+        prediction_accuracy=0.92,
+        runtime_context={
+            "prediction_accuracy": 0.92,
+            "residual_locations": [(1, 2), (2, 2)],
+            "WORLD GOVERNANCE INTROSPECTION REPORT": {
+                "decision": "ALLOW_SANDBOX",
+                "trust_score": 1.0,
+                "risk_score": 0.0,
+                "learning_credit_authorized": True,
+            },
+        },
+    )
+
+    report = calibrated["LOCALIZATION_REPORT"]
+    readiness = calibrated["EXECUTION READINESS REPORT"]
+
+    assert calibrated["target_objects"]
+    assert report["object_detection"] > 0.0
+    assert report["transformation_detection"] > 0.0
+    assert report["candidate_object_regions"]
+    assert report["localization_hints"]
+    assert readiness["readiness_class"] == "EXECUTION_PROBATION"
+    assert calibrated["execution_probation"] is True
+    assert report["sandbox_execution_authorized"] is True
+
+
+def test_preserve_size_grounds_input_object_and_reaches_world_gate():
+    input_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    target_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 1, 1, 0, 0],
+        [0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    synthesized_program = {
+        "step_count": 1,
+        "steps": [{
+            "operation": "preserve_size",
+            "parameters": {},
+        }],
+    }
+
+    anticipation = WorldModelEngine().anticipate_program(
+        input_grid=input_grid,
+        target_grid=target_grid,
+        synthesized_program=synthesized_program,
+    )
+    gate_report = WorldModelGate().evaluate(anticipation)
+    localization = anticipation["transformation_localization"]
+    localization_report = localization["LOCALIZATION_REPORT"]
+
+    assert localization["target_objects"]
+    assert localization_report["target_objects"]
+    assert localization_report["candidate_object_regions"]
+    assert localization_report["OBJECT GROUNDING REPORT"]["object_detection"] > 0.0
+    assert gate_report["LOCALIZATION_REPORT"]
+    assert gate_report["WORLD GOVERNANCE INTROSPECTION REPORT"][
+        "triggered_rules"
+    ] != ["LOCALIZED_PROGRAM_INCOMPATIBLE"]
+    assert "LOCALIZED_PROGRAM_INCOMPATIBLE" not in (
+        gate_report["WORLD GOVERNANCE INTROSPECTION REPORT"]["triggered_rules"]
+    )
+
+
+def test_color_mapping_localizes_to_object_level_executable_rule():
+    input_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 2, 0, 0],
+        [0, 2, 1, 0, 0],
+        [0, 0, 0, 3, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    output_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 4, 7, 0, 0],
+        [0, 7, 4, 0, 0],
+        [0, 0, 0, 8, 0],
+        [0, 0, 0, 0, 0],
+    ]
+
+    report = TransformationLocalizationEngine().localize_program(
+        input_grid,
+        output_grid,
+        {
+            "steps": [
+                {
+                    "operation": "symbolic_remapping",
+                    "parameters": {},
+                }
+            ]
+        },
+    )
+
+    localized_program = report["localized_program"]
+    rule = report["localization_reports"][0]["localized_rules"][0]
+    execution = PrimitiveExecutor().run_execution(
+        input_grid=input_grid,
+        primitives=[
+            {
+                "primitive": localized_program["steps"][0]["operation"],
+                "parameters": localized_program["steps"][0]["parameters"],
+            }
+        ],
+    )
+
+    assert report["localization_ready"] is True
+    assert report["localized_step_count"] == 1
+    assert rule == {
+        "mapping_type": "object_color_mapping",
+        "localization_type": "color_mapping",
+        "mapping": {"1": 4, "2": 7, "3": 8},
+        "confidence": 0.95,
+    }
+    assert execution["output_grid"].tolist() == output_grid
+
+
+def test_world_model_authorizes_localized_color_program():
+    input_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 1, 2, 0, 0],
+        [0, 2, 1, 0, 0],
+        [0, 0, 0, 3, 0],
+        [0, 0, 0, 0, 0],
+    ]
+    output_grid = [
+        [0, 0, 0, 0, 0],
+        [0, 4, 7, 0, 0],
+        [0, 7, 4, 0, 0],
+        [0, 0, 0, 8, 0],
+        [0, 0, 0, 0, 0],
+    ]
+
+    anticipation = WorldModelEngine().anticipate_program(
+        input_grid=input_grid,
+        target_grid=output_grid,
+        synthesized_program={
+            "steps": [
+                {
+                    "operation": "symbolic_remapping",
+                    "parameters": {},
+                }
+            ]
+        },
+    )
+    gate_report = WorldModelGate().evaluate(anticipation)
+
+    assert anticipation["transformation_localization"]["localization_ready"] is True
+    assert anticipation["transformation_localization"]["localized_step_count"] == 1
+    assert anticipation["prediction_report"]["prediction_accuracy"] > 0.95
+    assert gate_report["execution_authorized"] is True
+    assert gate_report["execution_aborted"] is False
 
 
 def test_cognitive_blackboard_synchronizes_localization_to_execution():

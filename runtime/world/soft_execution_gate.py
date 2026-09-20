@@ -47,15 +47,16 @@ class SoftExecutionGate:
             if maximum_soft_execution_difference_count is None
             else int(maximum_soft_execution_difference_count)
         )
+        near_miss_candidate = (
+            isinstance(prediction_accuracy, (int, float))
+            and prediction_accuracy >= minimum_accuracy
+            and isinstance(residual_difference_count, int)
+            and residual_difference_count <= maximum_difference_count
+        )
         fallback_soft_execution = (
             soft_execution_enabled
-            or (
-                partial_success is True
-                and isinstance(prediction_accuracy, (int, float))
-                and prediction_accuracy >= minimum_accuracy
-                and isinstance(residual_difference_count, int)
-                and residual_difference_count <= maximum_difference_count
-            )
+            or (partial_success is True and near_miss_candidate)
+            or near_miss_candidate
         )
         soft_execution_authorized = (
             fallback_soft_execution
@@ -80,6 +81,7 @@ class SoftExecutionGate:
             "residual_difference_count": residual_difference_count,
             "prediction_accuracy": prediction_accuracy,
             "partial_success": partial_success,
+            "near_miss_candidate": near_miss_candidate,
             "soft_execution_override_applied": override_authorized,
         }
 

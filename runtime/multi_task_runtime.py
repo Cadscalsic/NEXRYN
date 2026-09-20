@@ -22,6 +22,10 @@ from runtime.adaptive_task_scheduler import (
     AdaptiveTaskScheduler
 )
 
+from runtime.reporting.compact_report_builder import (
+    compact_report_builder
+)
+
 
 # ============================================
 # MULTI TASK RUNTIME
@@ -330,7 +334,11 @@ class MultiTaskRuntime:
 
             print("TASK RESULT:\n")
 
-            print(result)
+            print(
+                compact_report_builder.compact_context(
+                    result
+                )
+            )
 
             print()
 
@@ -360,7 +368,11 @@ class MultiTaskRuntime:
 
             print("TASK FAILURE:\n")
 
-            print(failure)
+            print(
+                compact_report_builder.compact_context(
+                    failure
+                )
+            )
 
             print()
 
@@ -602,6 +614,26 @@ class MultiTaskRuntime:
     # ========================================
 
     def summary(self):
+        successful_strategies = self.shared_memory.get(
+            "successful_strategies",
+            []
+        )
+        semantic_patterns = self.shared_memory.get(
+            "semantic_patterns",
+            []
+        )
+        reasoning_history = self.shared_memory.get(
+            "reasoning_history",
+            []
+        )
+        tasks_completed = self.runtime_metrics.get(
+            "tasks_completed",
+            0
+        )
+        tasks_failed = self.runtime_metrics.get(
+            "tasks_failed",
+            0
+        )
 
         return {
 
@@ -611,14 +643,48 @@ class MultiTaskRuntime:
             "runtime_metrics":
             self.runtime_metrics,
 
-            "results":
-            self.results,
+            "selected_tasks":
+            len(self.task_paths),
 
-            "failures":
-            self.failures,
+            "tasks_completed":
+            tasks_completed,
 
-            "shared_memory":
-            self.shared_memory,
+            "tasks_failed":
+            tasks_failed,
+
+            "tasks_remaining":
+            max(
+                len(self.task_paths) - tasks_completed - tasks_failed,
+                0
+            ),
+
+            "current_batch_size":
+            len(self.task_paths),
+
+            "recent_results":
+            self.results[-5:],
+
+            "recent_failures":
+            self.failures[-5:],
+
+            "memory_report": {
+                "memory_size":
+                (
+                    len(successful_strategies)
+                    + len(semantic_patterns)
+                    + len(reasoning_history)
+                ),
+                "active_entries":
+                len(successful_strategies) + len(semantic_patterns),
+                "archived_entries":
+                0,
+                "retrieval_rate":
+                0.0,
+                "reuse_rate":
+                0.0,
+                "compression_ratio":
+                1.0,
+            },
 
             "transfer_memory":
 
@@ -679,4 +745,8 @@ if __name__ == "__main__":
     print("MULTI TASK SUMMARY")
     print("===================================\n")
 
-    print(report)
+    print(
+        compact_report_builder.compact_context(
+            report
+        )
+    )

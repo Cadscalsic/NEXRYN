@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import hashlib
+import json
 from typing import Any, Iterable, Mapping
 
 from core.epistemic_models import clamp
@@ -65,6 +67,15 @@ DEFAULT_TYPED_PROCESS_DEPENDENCIES = {
         ("directional_motion", "preserves", "object_identity", 0.88),
         ("directional_motion", "constrains", "direction_vector", 0.87),
     ],
+    "gravity": [
+        ("gravity", "requires", "support_state", 0.92),
+        ("support_state", "constrains", "falling", 0.91),
+        ("falling", "requires", "downward_motion", 0.90),
+        ("downward_motion", "derives_from", "directional_motion", 0.89),
+        ("falling", "causes", "support_collision", 0.88),
+        ("support_collision", "enables", "rest_state", 0.87),
+        ("gravity", "requires", "object_identity", 0.91),
+    ],
     "topological_growth": [
         ("topological_growth", "derives_from", "growth", 0.88),
         ("topological_growth", "requires", "identity_persistence", 0.91),
@@ -93,6 +104,69 @@ DEFAULT_TYPED_PROCESS_DEPENDENCIES = {
         ("density_ratio_tracking", "requires", "occupied_cell_count", 0.88),
         ("occupied_cell_count", "preserves", "coverage_pattern", 0.87),
         ("coverage_pattern", "enables", "density_preservation", 0.86),
+    ],
+    "object_counting": [
+        ("object_counting", "requires", "object_identity", 0.91),
+        ("object_counting", "requires", "cardinality", 0.92),
+        ("cardinality", "derives_from", "object_set_membership", 0.90),
+        ("object_set_membership", "requires", "object_segmentation", 0.89),
+        ("object_counting", "constrains", "quantity_preservation", 0.88),
+    ],
+    "cardinality": [
+        ("cardinality", "requires", "object_set_membership", 0.91),
+        ("object_set_membership", "requires", "object_identity", 0.90),
+        ("cardinality", "enables", "numerical_reasoning", 0.89),
+    ],
+    "quantity_preservation": [
+        ("quantity_preservation", "requires", "cardinality", 0.91),
+        ("quantity_preservation", "preserves", "object_count", 0.90),
+        ("object_count", "derives_from", "object_set_membership", 0.89),
+    ],
+    "quantity_transformation": [
+        ("quantity_transformation", "requires", "cardinality", 0.91),
+        ("quantity_transformation", "modifies", "object_count", 0.90),
+        ("object_count", "derives_from", "object_set_membership", 0.89),
+    ],
+    "numerical_reasoning": [
+        ("numerical_reasoning", "requires", "cardinality", 0.91),
+        ("numerical_reasoning", "requires", "quantity_comparison", 0.89),
+        ("quantity_comparison", "derives_from", "object_count", 0.88),
+    ],
+    "set_reasoning": [
+        ("set_reasoning", "requires", "object_set_membership", 0.91),
+        ("set_reasoning", "requires", "cardinality", 0.90),
+        ("object_set_membership", "requires", "object_identity", 0.89),
+    ],
+    "path_finding": [
+        ("path_finding", "requires", "goal_state", 0.93),
+        ("path_finding", "requires", "start_state", 0.92),
+        ("path_finding", "requires", "reachability_graph", 0.92),
+        ("reachability_graph", "requires", "connectivity_map", 0.91),
+        ("connectivity_map", "requires", "spatial_adjacency", 0.90),
+        ("reachability_graph", "enables", "reachable_nodes", 0.90),
+        ("reachable_nodes", "enables", "path_candidates", 0.89),
+        ("path_candidates", "enables", "best_path", 0.89),
+        ("best_path", "constrains", "route_completion", 0.88),
+    ],
+    "route_completion": [
+        ("route_completion", "requires", "partial_route", 0.92),
+        ("route_completion", "requires", "missing_segment", 0.90),
+        ("missing_segment", "requires", "path_candidates", 0.89),
+        ("path_candidates", "requires", "reachability_graph", 0.90),
+        ("route_completion", "enables", "completed_route", 0.90),
+    ],
+    "reachability": [
+        ("reachability", "requires", "start_state", 0.91),
+        ("reachability", "requires", "goal_state", 0.91),
+        ("reachability", "requires", "connectivity_map", 0.90),
+        ("connectivity_map", "enables", "reachable_nodes", 0.90),
+        ("reachable_nodes", "enables", "goal_reachable", 0.88),
+    ],
+    "path_construction": [
+        ("path_construction", "requires", "reachable_nodes", 0.91),
+        ("path_construction", "requires", "path_candidates", 0.90),
+        ("path_candidates", "enables", "connector_sequence", 0.89),
+        ("connector_sequence", "enables", "completed_path", 0.88),
     ],
 }
 
@@ -141,6 +215,8 @@ class TypedProcessDependencyMemory:
 
     def __init__(self, seed_defaults: bool = True):
         self._links: dict[str, list[TypedProcessDependency]] = {}
+        self._version = 0
+        self._signature_cache: str | None = None
         if seed_defaults:
             self.ingest(DEFAULT_TYPED_PROCESS_DEPENDENCIES)
             self._ingest_core_defaults()
@@ -163,12 +239,17 @@ class TypedProcessDependencyMemory:
                 ):
                     bucket.append(link)
                     ingested += 1
+        if ingested:
+            self._version += 1
+            self._signature_cache = None
         return {
             "system": self.system_name,
             "typed_process_dependencies": "enabled",
             "typed_process_dependencies_enabled": True,
             "process_dependency_links_ingested": ingested,
             "process_dependency_links_loaded": self.links_loaded,
+            "dependency_memory_version": self._version,
+            "dependency_memory_signature": self.dependency_signature(),
         }
 
     def links_for(
@@ -195,6 +276,23 @@ class TypedProcessDependencyMemory:
             for links in self._links.values()
             for link in links
         ]
+
+    def dependency_signature(self) -> str:
+        if self._signature_cache is not None:
+            return self._signature_cache
+        payload = [
+            {
+                "source": link.source,
+                "dependency_type": link.dependency_type,
+                "target": link.target,
+                "confidence": link.confidence,
+                "process_family": link.process_family,
+            }
+            for link in self.all_links()
+        ]
+        encoded = json.dumps(payload, sort_keys=True, default=str)
+        self._signature_cache = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return self._signature_cache
 
     def resolve(
         self,
@@ -226,6 +324,8 @@ class TypedProcessDependencyMemory:
             "process_dependency_links_loaded": self.links_loaded,
             "process_dependency_links_used": len(links),
             "relevant_process_dependency_links": len(links),
+            "dependency_memory_version": self._version,
+            "dependency_memory_signature": self.dependency_signature(),
             "dependency_type_coverage": sorted(
                 {link.dependency_type for link in links}
             ),
@@ -237,6 +337,8 @@ class TypedProcessDependencyMemory:
             "typed_process_dependencies": "enabled",
             "typed_process_dependencies_enabled": True,
             "process_dependency_links_loaded": self.links_loaded,
+            "dependency_memory_version": self._version,
+            "dependency_memory_signature": self.dependency_signature(),
             "process_families": sorted(self._links),
             "dependency_types": [
                 item.value for item in ProcessDependencyType

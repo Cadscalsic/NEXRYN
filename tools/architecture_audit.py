@@ -4,10 +4,16 @@
 
 import json
 import ast
+import importlib.util
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+if str(ROOT) not in sys.path:
+
+    sys.path.insert(0, str(ROOT))
 
 ACTIVE_STAGE_FILE = ROOT / "runtime" / "stages" / "__init__.py"
 
@@ -239,6 +245,13 @@ def find_shadowed_root_modules():
             sibling_package / "__init__.py"
         ).exists():
 
+            if is_intentional_namespace_compatibility_surface(
+                path,
+                sibling_package,
+            ):
+
+                continue
+
             shadowed.append({
                 "module_file":
                 relative(path),
@@ -251,6 +264,108 @@ def find_shadowed_root_modules():
             })
 
     return shadowed
+
+
+def pipeline_namespace_resolution():
+
+    spec = importlib.util.find_spec("runtime.pipeline")
+
+    if spec is None:
+
+        return None
+
+    origin = spec.origin
+
+    if origin is None:
+
+        return None
+
+    try:
+
+        return relative(Path(origin).resolve())
+
+    except ValueError:
+
+        return str(origin).replace("\\", "/")
+
+
+def is_intentional_namespace_compatibility_surface(path, sibling_package):
+
+    if relative(path) != "runtime/pipeline.py":
+
+        return False
+
+    package_init = sibling_package / "__init__.py"
+
+    if not package_init.exists():
+
+        return False
+
+    package_text = package_init.read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )
+    module_text = path.read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )
+
+    return all(
+        marker in package_text
+        for marker in (
+            "PIPELINE_NAMESPACE_STATE",
+            "CANONICAL_PRODUCTION_PIPELINE",
+            "runtime.pipeline.legacy_pipeline.AdaptiveCognitivePipeline",
+        )
+    ) and "_LegacyPipelineProxy" in module_text
+
+
+def find_intentional_namespace_compatibility_surfaces():
+
+    surfaces = []
+
+    runtime_root = ROOT / "runtime"
+
+    if not runtime_root.exists():
+
+        return surfaces
+
+    for path in runtime_root.glob("*.py"):
+
+        sibling_package = runtime_root / path.stem
+
+        if not (
+            sibling_package.is_dir()
+            and (sibling_package / "__init__.py").exists()
+        ):
+
+            continue
+
+        if not is_intentional_namespace_compatibility_surface(
+            path,
+            sibling_package,
+        ):
+
+            continue
+
+        surfaces.append({
+            "module_file":
+            relative(path),
+
+            "package":
+            relative(sibling_package),
+
+            "resolution":
+            pipeline_namespace_resolution(),
+
+            "status":
+            "intentional_package_namespace_with_compatibility_module",
+
+            "canonical_owner":
+            "runtime.pipeline.legacy_pipeline.AdaptiveCognitivePipeline",
+        })
+
+    return surfaces
 
 
 def find_missing_package_initializers():
@@ -411,6 +526,9 @@ def build_audit_report():
 
         "shadowed_root_modules":
         find_shadowed_root_modules(),
+
+        "intentional_namespace_compatibility_surfaces":
+        find_intentional_namespace_compatibility_surfaces(),
 
         "missing_package_initializers":
         find_missing_package_initializers(),
