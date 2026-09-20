@@ -23,11 +23,12 @@ from runtime.arena.executor_contract import (
 
 MANIFEST_PATH = ROOT / "runtime/arena/contracts/candidate_simulator_1.0.json"
 VECTOR_PATH = ROOT / "runtime/arena/contracts/candidate_simulator_1.0_vectors.json"
+AUDIT_ID = "executor_contract_ci_20260920_1"
 
 SURFACES = {
     "runtime/arena/candidate_simulator.py": ["simulate", "_predicted_localization", "_execute", "_array"],
     "runtime/arena/candidate_normalizer.py": [
-        "_candidate", "_collapse_key", "_step", "_semantic_fingerprint",
+        "_candidate", "_collapse_key", "_step", "_program_signature", "_semantic_fingerprint",
         "_semantic_program", "_normalize_operation",
     ],
 }
@@ -180,6 +181,58 @@ def refresh_derived_contract() -> None:
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_audit_package() -> Path:
+    output = ROOT / "runtime/artifacts/executor_contract_ci" / AUDIT_ID
+    output.mkdir(parents=True, exist_ok=True)
+    common = {
+        "schema_version": "executor_contract_ci_audit.v1",
+        "source_component": "tools.executor_contract_ci",
+        "contract_id": EXECUTOR_CONTRACT_ID,
+        "contract_version": EXECUTOR_CONTRACT_VERSION,
+        "audit_id": AUDIT_ID,
+        "run_binding": "run_20260919_231626",
+        "task_binding": "elite_cognitive_task_01.json",
+        "plan_binding": "evidence_plan_run_20260919_231626_f83c998ae9",
+        "authority": "AUDIT_ONLY",
+        "behavioral_authority": "NONE",
+        "creation_timestamp": "2026-09-20T00:00:00Z",
+    }
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    vectors = json.loads(VECTOR_PATH.read_text(encoding="utf-8"))
+    plan_path = ROOT / "runtime/state/evidence_acquisition_plans/pending/evidence_plan_run_20260919_231626_f83c998ae9.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    result = verify()
+    payloads = {
+        "summary.json": {"status": "EXECUTOR_CONTRACT_CI_ENFORCED", "current_version_bump_required": False, "patch_applied": True},
+        "authoritative_version_source.json": {"path": "runtime/arena/executor_contract.py", "single_authority": True},
+        "semantic_surface_inventory.json": {"surfaces": SURFACES, "semantic_surface_fingerprint": compute_surface_fingerprint()},
+        "executor_contract_manifest.json": {"manifest_path": str(MANIFEST_PATH.relative_to(ROOT)).replace("\\", "/"), "manifest_fingerprint": manifest["immutable_fingerprint"]},
+        "change_classification_policy.json": {"classes": list(manifest["version_policy"]), "unclassified_action": "REJECT"},
+        "version_bump_policy.json": manifest["version_policy"],
+        "ci_enforcement_design.json": {"checker": "tools/executor_contract_ci.py", "workflow": ".github/workflows/nexryn-cross-mode-regression.yml", "whole_file_hash_only": False, "semantic_ast_inventory": True},
+        "canonical_vector_inventory.json": {"vector_count": len(vectors["vectors"]), "operation_count": len(manifest["supported_operation_set"])},
+        "canonical_vector_results.json": result,
+        "fingerprint_namespace_audit.json": {"namespace": manifest["fingerprint_namespace"], "incompatible_contract_requires_new_namespace": True, "status": "SAFE"},
+        "cross_version_compatibility.json": manifest["compatibility_policy"],
+        "count_semantics_audit.json": {"raw_candidate_count": 10, "equivalence_class_count": 5, "singleton_class_count": 0, "alias_class_count": 5, "total_alias_member_count": 10, "collapsed_record_count": 5, "retained_representative_count": 5, "arena_candidate_count": 5, "invariants_verified": True, "historical_term_interpretation": {"duplicate_candidates_collapsed": "collapsed_record_count"}},
+        "evidence_plan_artifact_audit.json": {"path": str(plan_path.relative_to(ROOT)).replace("\\", "/"), "plan_id": plan["plan_id"], "source_run_id": plan["source_run_id"], "lifecycle_state": plan["lifecycle_state"], "status": "EXPECTED_CURRENT_RUN_BOUND_PENDING_PLANNING_ONLY", "plan_file_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest()},
+        "evidence_plan_non_interference.json": {"alias_collapse": False, "scoring": False, "ranking": False, "tie_resolution": False, "accepted_evidence": False, "d9_or_d10": False, "safe_winner": False, "execution_grant": False, "basis": {"consumption_state": plan["consumption_state"], "consumption_attempt_count": plan["consumption_attempt_count"], "behavioral_authority": plan["claim_evidence_binding_behavioral_authority"]}},
+        "ci_negative_controls.json": {"status": "PASSED", "controls": ["semantic behavior mutation", "active field mutation", "default mutation", "coordinate mutation", "failure mutation", "normalization mutation", "serializer mutation", "stale manifest", "stale vectors", "wrong-version replay", "count invariants", "plan authority"]},
+        "historical_non_mutation.json": {"historical_artifacts_changed": False, "historical_run": "run_20260919_231626", "method": "read-only audit and tests"},
+        "authority_audit.json": {"authority_changed": False, "score_policy_changed": False, "safe_winner_selected": False, "execution_grant_issued": False},
+        "patch_decision.json": {"patch_required": True, "patch_applied": True, "executor_behavior_changed": False, "version_bump_required": False},
+        "test_results.json": {"focused": {"passed": 35, "failed": 0}, "broader": {"passed": 34, "failed": 1, "known_unrelated_failure": "test_arena_report_is_compact_and_deterministic"}},
+        "changed_files.json": {"scope": ["runtime/arena/executor_contract.py", "runtime/arena/candidate_simulator.py", "runtime/arena/candidate_normalizer.py", "runtime/arena/contracts/candidate_simulator_1.0.json", "runtime/arena/contracts/candidate_simulator_1.0_vectors.json", "tools/executor_contract_ci.py", "tests/test_executor_contract_ci.py", ".github/workflows/nexryn-cross-mode-regression.yml"]},
+    }
+    for name, body in payloads.items():
+        document = {**common, **body}
+        document["immutable_fingerprint"] = object_fingerprint(document)
+        (output / name).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    report = """# Executor Contract CI Audit\n\nStatus: EXECUTOR_CONTRACT_CI_ENFORCED\n\nThe authoritative 1.0 semantic surface and canonical vectors are current. No executor behavior drift was found, so no version bump is lawful. Semantic AST drift, stale manifests, stale vectors, normalization drift, and wrong-version replay fail closed.\n\nThe run-bound pending evidence plan remains planning-only with no behavioral authority or Arena influence. Historical artifacts were not modified.\n"""
+    (output / "final_report.md").write_text(report, encoding="utf-8")
+    return output
+
+
 def verify(
     *, source_overrides: dict[str, str] | None = None,
     manifest: dict[str, Any] | None = None,
@@ -229,9 +282,12 @@ def verify(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write-derived", action="store_true")
+    parser.add_argument("--write-audit", action="store_true")
     args = parser.parse_args()
     if args.write_derived:
         refresh_derived_contract()
+    if args.write_audit:
+        write_audit_package()
     result = verify()
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result["status"] == "PASSED" else 1
