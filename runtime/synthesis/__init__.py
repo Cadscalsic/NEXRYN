@@ -25,6 +25,26 @@ from runtime.synthesis.program_synthesis_engine import (
     program_synthesis_engine
 )
 
+from runtime.synthesis.program_synthesis_intelligence_engine import (
+
+    CognitiveProgram,
+
+    ProgramRelationship,
+
+    ProgramSynthesisIntelligenceEngine,
+
+    program_synthesis_intelligence_engine
+)
+
+from runtime.synthesis.program_confidence_engine import (
+
+    ProgramConfidenceAssessment,
+
+    ProgramConfidenceEngine,
+
+    program_confidence_engine
+)
+
 # ============================================
 # SPATIAL OPERATOR ENGINE
 # ============================================
@@ -101,6 +121,20 @@ __all__ = [
     "ProgramSynthesisEngine",
 
     "program_synthesis_engine",
+
+    "CognitiveProgram",
+
+    "ProgramRelationship",
+
+    "ProgramSynthesisIntelligenceEngine",
+
+    "program_synthesis_intelligence_engine",
+
+    "ProgramConfidenceAssessment",
+
+    "ProgramConfidenceEngine",
+
+    "program_confidence_engine",
 
     # ========================================
     # SPATIAL EXECUTION

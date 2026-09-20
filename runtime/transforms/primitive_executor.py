@@ -393,6 +393,46 @@ class PrimitiveExecutor:
             copy=True
         )
 
+        parameters = parameters or {}
+
+        background_color = int(
+            parameters.get(
+                "background_color",
+                0
+            )
+        )
+
+        cells_to_clear = parameters.get(
+            "cells_to_clear",
+            []
+        ) or []
+
+        if cells_to_clear:
+
+            for row, col in cells_to_clear:
+
+                output[
+                    int(row),
+                    int(col)
+                ] = background_color
+
+            return output
+
+        remove_colors = parameters.get(
+            "remove_colors",
+            []
+        ) or []
+
+        if remove_colors:
+
+            for color in remove_colors:
+
+                output[
+                    output == int(color)
+                ] = background_color
+
+            return output
+
         non_zero = np.argwhere(
             output != 0
         )
@@ -432,6 +472,38 @@ class PrimitiveExecutor:
         width_growth = 1
 
         if parameters:
+
+            if parameters.get("scale_mode") == "cell_repeat":
+
+                row_scale = int(
+                    parameters.get(
+                        "row_scale",
+                        parameters.get(
+                            "scale_factor",
+                            1
+                        )
+                    )
+                )
+
+                col_scale = int(
+                    parameters.get(
+                        "col_scale",
+                        parameters.get(
+                            "scale_factor",
+                            1
+                        )
+                    )
+                )
+
+                return np.repeat(
+                    np.repeat(
+                        output,
+                        max(row_scale, 1),
+                        axis=0
+                    ),
+                    max(col_scale, 1),
+                    axis=1
+                )
 
             height_growth = parameters.get(
                 "height_growth",
@@ -707,6 +779,206 @@ class PrimitiveExecutor:
         return output
 
     # ========================================
+    # OBJECT LEVEL TRANSLATE
+    # ========================================
+
+    def object_level_translate(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.array(
+            grid,
+            copy=True
+        )
+
+        parameters = parameters or {}
+
+        translation_per_object = parameters.get(
+            "translation_per_object",
+            {}
+        )
+
+        if not isinstance(translation_per_object, dict):
+
+            return output
+
+        try:
+
+            extractor = ObjectExtractor()
+
+            objects = extractor.extract_objects(
+                extractor.normalize_grid(
+                    output
+                )
+            )
+
+        except Exception:
+
+            objects = []
+
+        movable_objects = set(
+            parameters.get(
+                "movable_objects",
+                []
+            )
+        )
+
+        fixed_objects = set(
+            parameters.get(
+                "fixed_objects",
+                []
+            )
+        )
+
+        for obj in objects:
+
+            object_id = obj.get(
+                "id"
+            )
+
+            if object_id in fixed_objects:
+
+                continue
+
+            if movable_objects and object_id not in movable_objects:
+
+                continue
+
+            translation = translation_per_object.get(
+                object_id,
+                (0, 0)
+            )
+
+            if tuple(translation) == (0, 0):
+
+                continue
+
+            for row, col in obj.get(
+                "cells",
+                []
+            ):
+
+                output[
+                    int(row),
+                    int(col)
+                ] = 0
+
+        for obj in objects:
+
+            object_id = obj.get(
+                "id"
+            )
+
+            if object_id in fixed_objects:
+
+                continue
+
+            if movable_objects and object_id not in movable_objects:
+
+                continue
+
+            translation = translation_per_object.get(
+                object_id,
+                (0, 0)
+            )
+
+            delta_row, delta_col = (
+                int(translation[0]),
+                int(translation[1])
+            )
+
+            for row, col in obj.get(
+                "cells",
+                []
+            ):
+
+                target_row = int(row) + delta_row
+
+                target_col = int(col) + delta_col
+
+                if (
+                    0 <= target_row < output.shape[0]
+                    and
+                    0 <= target_col < output.shape[1]
+                ):
+
+                    output[
+                        target_row,
+                        target_col
+                    ] = int(
+                        obj.get(
+                            "color",
+                            output[int(row), int(col)]
+                        )
+                    )
+
+        return output
+
+    # ========================================
+    # GENERIC TRANSLATE
+    # ========================================
+
+    def translate(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.zeros_like(
+            grid
+        )
+
+        parameters = parameters or {}
+
+        translation = parameters.get(
+            "translation",
+            [
+                parameters.get("delta_row", 0),
+                parameters.get("delta_col", 0)
+            ]
+        )
+
+        delta_row = int(
+            translation[0]
+        )
+
+        delta_col = int(
+            translation[1]
+        )
+
+        for row, col in np.argwhere(
+            grid != 0
+        ):
+
+            target_row = int(row) + delta_row
+
+            target_col = int(col) + delta_col
+
+            if (
+                0 <= target_row < output.shape[0]
+                and
+                0 <= target_col < output.shape[1]
+            ):
+
+                output[
+                    target_row,
+                    target_col
+                ] = grid[
+                    row,
+                    col
+                ]
+
+        return output
+
+    # ========================================
     # REPLACE COLOR
     # ========================================
 
@@ -724,6 +996,29 @@ class PrimitiveExecutor:
             copy=True
         )
 
+        parameters = parameters or {}
+
+        mapping = (
+            parameters.get("mapping")
+            or parameters.get("color_mapping")
+            or {}
+        )
+
+        if mapping:
+
+            original = np.array(
+                output,
+                copy=True
+            )
+
+            for old_color, new_color in mapping.items():
+
+                output[
+                    original == int(old_color)
+                ] = int(new_color)
+
+            return output
+
         removed_colors = []
 
         added_colors = []
@@ -739,6 +1034,20 @@ class PrimitiveExecutor:
                 "added_colors",
                 []
             )
+
+            source_color = parameters.get(
+                "source_color"
+            )
+
+            target_color = parameters.get(
+                "target_color"
+            )
+
+            if source_color is not None and target_color is not None:
+
+                removed_colors = [source_color]
+
+                added_colors = [target_color]
 
         if not removed_colors:
 
@@ -881,6 +1190,234 @@ class PrimitiveExecutor:
         )
 
     # ========================================
+    # MIRROR VERTICAL
+    # ========================================
+
+    def mirror_vertical(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        return np.flipud(
+            grid
+        )
+
+    # ========================================
+    # ROTATE GRID
+    # ========================================
+
+    def rotate_grid(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        parameters = parameters or {}
+
+        degrees = int(
+            parameters.get(
+                "degrees",
+                parameters.get(
+                    "rotation",
+                    90
+                )
+            )
+        )
+
+        return np.rot90(
+            grid,
+            k=(degrees // 90) % 4
+        )
+
+    # ========================================
+    # CONSTRUCT PATH
+    # ========================================
+
+    def construct_path(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.array(
+            grid,
+            copy=True
+        )
+
+        parameters = parameters or {}
+
+        path_cells = parameters.get(
+            "path_cells",
+            []
+        ) or []
+
+        if path_cells:
+
+            path_color = int(
+                parameters.get(
+                    "path_color",
+                    1
+                )
+            )
+
+            for row, col in path_cells:
+
+                output[
+                    int(row),
+                    int(col)
+                ] = path_color
+
+            return output
+
+        non_zero = np.argwhere(
+            output != 0
+        )
+
+        if len(non_zero) < 2:
+
+            return output
+
+        start = parameters.get(
+            "start",
+            non_zero[0].tolist()
+        )
+
+        end = parameters.get(
+            "end",
+            non_zero[-1].tolist()
+        )
+
+        path_color = int(
+            parameters.get(
+                "path_color",
+                output[
+                    int(start[0]),
+                    int(start[1])
+                ]
+            )
+        )
+
+        row = int(start[0])
+
+        col = int(start[1])
+
+        end_row = int(end[0])
+
+        end_col = int(end[1])
+
+        while row != end_row:
+
+            output[
+                row,
+                col
+            ] = path_color
+
+            row += 1 if end_row > row else -1
+
+        while col != end_col:
+
+            output[
+                row,
+                col
+            ] = path_color
+
+            col += 1 if end_col > col else -1
+
+        output[
+            end_row,
+            end_col
+        ] = path_color
+
+        return output
+
+    # ========================================
+    # CONNECT COMPONENTS
+    # ========================================
+
+    def connect_components(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        return self.construct_path(
+            grid,
+            parameters
+        )
+
+    # ========================================
+    # FILL REGION
+    # ========================================
+
+    def fill_region(
+
+        self,
+
+        grid,
+
+        parameters=None
+    ):
+
+        output = np.array(
+            grid,
+            copy=True
+        )
+
+        parameters = parameters or {}
+
+        fill_color = int(
+            parameters.get(
+                "fill_color",
+                parameters.get(
+                    "path_color",
+                    1
+                )
+            )
+        )
+
+        non_zero = np.argwhere(
+            output != 0
+        )
+
+        if len(non_zero) == 0:
+
+            return output
+
+        min_row = int(np.min(non_zero[:, 0]))
+        max_row = int(np.max(non_zero[:, 0]))
+        min_col = int(np.min(non_zero[:, 1]))
+        max_col = int(np.max(non_zero[:, 1]))
+
+        region = output[
+            min_row:max_row + 1,
+            min_col:max_col + 1
+        ]
+
+        region[
+            region == 0
+        ] = fill_color
+
+        output[
+            min_row:max_row + 1,
+            min_col:max_col + 1
+        ] = region
+
+        return output
+
+    # ========================================
     # PRESERVE GRID
     # ========================================
 
@@ -966,6 +1503,12 @@ class PrimitiveExecutor:
             "translate_down":
             self.translate_down,
 
+            "object_level_translate":
+            self.object_level_translate,
+
+            "translate":
+            self.translate,
+
             "replace_color":
             self.replace_color,
 
@@ -978,7 +1521,64 @@ class PrimitiveExecutor:
             "mirror_object":
             self.mirror_object,
 
+            "mirror_horizontal":
+            self.mirror_object,
+
+            "mirror_vertical":
+            self.mirror_vertical,
+
+            "rotate":
+            self.rotate_grid,
+
+            "rotate_grid":
+            self.rotate_grid,
+
+            "construct_path":
+            self.construct_path,
+
+            "connect_components":
+            self.connect_components,
+
+            "bridge_creation":
+            self.connect_components,
+
+            "topological_change":
+            self.construct_path,
+
+            "topological_reasoning":
+            self.construct_path,
+
+            "fill_region":
+            self.fill_region,
+
+            "recolor":
+            self.replace_color,
+
+            "duplicate":
+            self.duplicate_object,
+
+            "replicate":
+            self.duplicate_object,
+
+            "grow":
+            self.grow_topology,
+
+            "expand":
+            self.expand_pattern,
+
+            "scale_up":
+            self.expand_grid,
+
+            "scale_down":
+            self.shrink_grid,
+
+            "preserve_grid":
+            self.preserve_grid,
+
             "preserve_objects":
+            self.preserve_grid,
+
+            "preserve_size":
             self.preserve_grid,
 
             "preserve_shape":
@@ -986,6 +1586,12 @@ class PrimitiveExecutor:
 
             "preserve_density":
             self.preserve_grid,
+
+            "density_modulation":
+            self.expand_pattern,
+
+            "pattern_completion":
+            self.expand_pattern,
 
             "preserve_colors":
             self.preserve_grid,

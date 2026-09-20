@@ -50,9 +50,22 @@ from runtime.meta.knowledge_expansion_engine import (
     KnowledgeExpansionEngine
 )
 
+from runtime.world_governance import (
+    WorldKernel,
+    world_governance_kernel,
+)
+
 from runtime.meta.meta_controller import (
 
-    MetaControllerEngine
+    MetaControllerEngine,
+
+    MetaDecision
+)
+
+from runtime.meta.supervisor import (
+    CognitiveDirective,
+    MetaSupervisor,
+    meta_supervisor,
 )
 
 from runtime.meta.knowledge_expansion_engine import (
@@ -244,9 +257,21 @@ __all__ = [
 
     "MetaControllerEngine",
 
-    "meta_controller_engine"
+    "meta_controller_engine",
+
+    "MetaDecision",
+
+    "CognitiveDirective",
+
+    "MetaSupervisor",
+
+    "meta_supervisor",
 
     "AdaptiveStrategyInjector",
 
     "adaptive_strategy_injector",
+
+    "WorldKernel",
+
+    "world_governance_kernel",
 ]

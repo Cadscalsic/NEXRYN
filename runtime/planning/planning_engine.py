@@ -879,6 +879,17 @@ class PlanningEngine:
             "governance_safe_mode":
             governance_safe_mode,
 
+            "current_reasoning_budget":
+            runtime_context.get(
+                "current_reasoning_budget"
+            ),
+
+            "tool_selection_report":
+            runtime_context.get(
+                "tool_selection_report",
+                {}
+            ),
+
             "engine_state":
             self.engine_state,
 

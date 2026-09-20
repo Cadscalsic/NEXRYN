@@ -1,0 +1,225 @@
+{
+  "concept_family": "reachability",
+  "concept_labels": [
+    "reachability"
+  ],
+  "difficulty": "medium",
+  "train": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          2
+        ]
+      ],
+      "output": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          7,
+          0,
+          0
+        ],
+        [
+          0,
+          7,
+          5,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          2
+        ]
+      ]
+    }
+  ],
+  "test": [
+    {
+      "input": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          3
+        ]
+      ]
+    }
+  ],
+  "expected_transformations": [
+    "reachability"
+  ],
+  "nexryn_metadata": {
+    "curriculum": "arc_cognitive_curriculum_balancing_alpha_01",
+    "task_id": "arc_generated_reachability_01",
+    "concept_family": "reachability",
+    "target_concepts": [
+      "reachability"
+    ],
+    "concept_labels": [
+      "reachability"
+    ],
+    "curriculum_level": 1,
+    "multi_concept": false,
+    "metadata_is_targeting_not_runtime_observation": true,
+    "governance_constraints": {
+      "force_truth_promotion": false,
+      "lower_thresholds": false,
+      "manual_stable_truth": false,
+      "evidence_only": true
+    }
+  }
+}

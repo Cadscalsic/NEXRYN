@@ -1,8 +1,11 @@
 # ============================================
 # NEXRYN SEMANTIC COMPRESSION ENGINE
+# OPTIMIZED / CACHED VERSION
 # ============================================
 
 from datetime import datetime
+import hashlib
+import json
 
 
 class SemanticCompressionEngine:
@@ -39,45 +42,60 @@ class SemanticCompressionEngine:
         "remap",
     ]
 
-    def tokenize(self, concept):
+    MAX_CONCEPTS_NORMAL = 128
+    MAX_CONCEPTS_FAST = 32
 
+    def __init__(self):
+        self.encoding_cache = {}
+        self.last_signature = None
+        self.last_report = None
+        self.cache_hits = 0
+        self.cache_misses = 0
+
+    def _stable_hash(self, payload):
+        try:
+            encoded = json.dumps(payload, sort_keys=True, default=str)
+        except Exception:
+            encoded = str(payload)
+
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _fast_mode(self, context):
+        return (
+            context.get("episode_completed") is True
+            or context.get("shutdown_mode") == "fast"
+            or context.get("post_success_mode") == "fast"
+            or context.get("post_success_shutdown", {}).get("enabled") is True
+        )
+
+    def tokenize(self, concept):
         return [
             token
-            for token in str(
-                concept,
-            )
-            .replace(
-                "-",
-                "_",
-            )
-            .split(
-                "_",
-            )
+            for token in str(concept)
+            .replace("-", "_")
+            .split("_")
             if token
         ]
 
     def canonical_encode(self, concept):
+        key = str(concept)
+
+        if key in self.encoding_cache:
+            return self.encoding_cache[key]
 
         factors = []
 
-        for token in self.tokenize(
-            concept,
-        ):
-
+        for token in self.tokenize(concept):
             mapped = self.TOKEN_MAP.get(
                 token.lower(),
                 token.lower(),
             )
 
             if mapped is None:
-
                 continue
 
             if mapped not in factors:
-
-                factors.append(
-                    mapped,
-                )
+                factors.append(mapped)
 
         ordered = [
             factor
@@ -95,146 +113,142 @@ class SemanticCompressionEngine:
             "preservation",
             "growth",
             "topology",
-        }.issubset(
-            set(
-                ordered,
-            )
-        ):
-
+        }.issubset(set(ordered)):
             ordered = [
                 "preservation",
                 "growth",
                 "topology",
             ]
 
-        return ".".join(
-            ordered,
-        )
+        encoded = ".".join(ordered)
 
-    def collect_concepts(self, context):
+        self.encoding_cache[key] = encoded
 
-        concepts = []
-
-        for report_key in [
-            "conceptive_neurogenesis_report",
-            "concept_lifecycle_report",
-            "semantic_virtual_memory_report",
-        ]:
-
-            report = context.get(
-                report_key,
-                {},
+        if len(self.encoding_cache) > 4096:
+            self.encoding_cache = dict(
+                list(self.encoding_cache.items())[-2048:]
             )
 
-            if report_key == "conceptive_neurogenesis_report":
+        return encoded
 
-                concepts.extend([
-                    item.get(
-                        "concept",
-                    )
-                    for item in report.get(
-                        "generated_concepts",
-                        [],
-                    )
-                ])
+    def collect_concepts(self, context):
+        concepts = []
+        seen = set()
 
-            if report_key == "concept_lifecycle_report":
+        def add(value):
+            if value is None:
+                return
 
-                concepts.extend([
-                    item.get(
-                        "concept",
-                    )
-                    for item in report.get(
-                        "registry",
-                        {},
-                    ).get(
-                        "concepts",
-                        [],
-                    )
-                ])
+            concept = str(value).strip()
 
-            if report_key == "semantic_virtual_memory_report":
+            if not concept:
+                return
 
-                for key in [
-                    "active_cognition",
-                    "latent_cognition",
-                    "archived_cognition",
-                ]:
+            if concept in seen:
+                return
 
-                    for item in report.get(
-                        key,
-                        [],
-                    ):
+            seen.add(concept)
+            concepts.append(concept)
 
-                        if isinstance(
-                            item,
-                            dict,
-                        ):
+        neuro = context.get("conceptive_neurogenesis_report", {})
+        for item in neuro.get("generated_concepts", []):
+            if isinstance(item, dict):
+                add(item.get("concept"))
+            else:
+                add(item)
 
-                            concepts.append(
-                                item.get(
-                                    "concept",
-                                )
-                            )
+        lifecycle = context.get("concept_lifecycle_report", {})
+        registry = lifecycle.get("registry", {})
+        for item in registry.get("concepts", []):
+            if isinstance(item, dict):
+                add(item.get("concept"))
+            else:
+                add(item)
 
-                        else:
+        semantic_memory = context.get("semantic_virtual_memory_report", {})
+        for key in [
+            "active_cognition",
+            "latent_cognition",
+            "archived_cognition",
+        ]:
+            for item in semantic_memory.get(key, []):
+                if isinstance(item, dict):
+                    add(item.get("concept"))
+                else:
+                    add(item)
 
-                            concepts.append(
-                                item,
-                            )
+        return concepts
 
-        return [
-            concept
-            for concept in concepts
-            if concept
-        ][:128]
+    def _signature(self, concepts, fast_mode):
+        return self._stable_hash({
+            "concepts": concepts,
+            "fast_mode": fast_mode,
+        })
 
-    def run_cycle(self, context):
+    def _cache_report(self):
+        total = self.cache_hits + self.cache_misses
 
-        concepts = self.collect_concepts(
-            context,
+        return {
+            "system": "semantic_compression_cache",
+            "cache_hits": self.cache_hits,
+            "cache_misses": self.cache_misses,
+            "cache_hit_rate": round(self.cache_hits / total, 4) if total else 0.0,
+            "encoding_cache_size": len(self.encoding_cache),
+        }
+
+    def run_cycle(self, context=None):
+        context = context or {}
+
+        concepts = self.collect_concepts(context)
+        fast_mode = self._fast_mode(context)
+
+        max_concepts = (
+            self.MAX_CONCEPTS_FAST
+            if fast_mode
+            else self.MAX_CONCEPTS_NORMAL
         )
+
+        concepts = concepts[:max_concepts]
+
+        signature = self._signature(concepts, fast_mode)
+
+        if self.last_signature == signature and self.last_report is not None:
+            self.cache_hits += 1
+            report = dict(self.last_report)
+            report["semantic_compression_cache_hit"] = True
+            report["semantic_compression_cache_report"] = self._cache_report()
+            report["timestamp"] = str(datetime.utcnow())
+            return report
+
+        self.cache_misses += 1
 
         encodings = []
 
         for concept in concepts:
-
-            canonical = self.canonical_encode(
-                concept,
-            )
+            canonical = self.canonical_encode(concept)
 
             encodings.append({
-                "concept":
-                concept,
-
-                "canonical_encoding":
-                canonical,
-
-                "factor_count":
-                len(
-                    canonical.split(".")
-                )
-                if canonical
-                else 0,
+                "concept": concept,
+                "canonical_encoding": canonical,
+                "factor_count": (
+                    len(canonical.split("."))
+                    if canonical
+                    else 0
+                ),
             })
 
-        return {
-            "system":
-            "semantic_compression_engine",
-
-            "encoding_mode":
-            "symbolic_factorization",
-
-            "encodings":
-            encodings,
-
-            "encoded_count":
-            len(
-                encodings,
-            ),
-
-            "timestamp":
-            str(
-                datetime.utcnow()
-            ),
+        report = {
+            "system": "semantic_compression_engine",
+            "encoding_mode": "symbolic_factorization",
+            "encodings": encodings,
+            "encoded_count": len(encodings),
+            "fast_mode": fast_mode,
+            "semantic_compression_cache_hit": False,
+            "semantic_compression_cache_report": self._cache_report(),
+            "timestamp": str(datetime.utcnow()),
         }
+
+        self.last_signature = signature
+        self.last_report = dict(report)
+
+        return report

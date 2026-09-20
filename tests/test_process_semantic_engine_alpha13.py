@@ -14,6 +14,12 @@ PROCESS_CONCEPTS = {
     "replication",
     "directional_motion",
     "topological_growth",
+    "object_counting",
+    "cardinality",
+    "quantity_preservation",
+    "quantity_transformation",
+    "numerical_reasoning",
+    "set_reasoning",
 }
 
 

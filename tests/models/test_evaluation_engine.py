@@ -122,6 +122,24 @@ def test_evaluation_engine_classifies_near_match_as_partial_success():
     assert result["success_state"] == "PARTIAL_SUCCESS"
 
 
+def test_evaluation_engine_classifies_high_value_near_success():
+    engine = EvaluationEngine()
+    predicted = np.zeros((5, 7), dtype=int)
+    target = np.zeros((5, 7), dtype=int)
+    target[0, 0] = 1
+    target[0, 1] = 1
+
+    result = engine.evaluate(predicted, target)
+
+    assert result["accuracy"] == 0.9429
+    assert result["difference_count"] == 2
+    assert result["success"] is False
+    assert result["exact_success"] is False
+    assert result["partial_success"] is True
+    assert result["high_value_partial_success"] is True
+    assert result["success_state"] == "HIGH_VALUE_PARTIAL_SUCCESS"
+
+
 # ============================================
 # MAIN
 # ============================================

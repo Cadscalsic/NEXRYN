@@ -39,6 +39,10 @@ from runtime.context.temporal_process_context_engine import (
 from runtime.dependency.dependency_coherence_engine import (
     DependencyCoherenceEngine,
 )
+from runtime.dependency.dependency_sync_engine import (
+    PRESERVATION_CONCEPTS,
+    dependency_sync_engine,
+)
 
 
 class TruthCandidatePromotionEngine:
@@ -68,7 +72,7 @@ class TruthCandidatePromotionEngine:
         "identity_forking",
         "duplication",
         "symmetry_reasoning",
-    }
+    } | PRESERVATION_CONCEPTS
 
     def __init__(self):
         self.adaptive_contradiction_governance = (
@@ -220,6 +224,9 @@ class TruthCandidatePromotionEngine:
 
     def _dependency_promotion(self, concept, runtime):
         runtime = runtime if isinstance(runtime, dict) else {}
+        runtime = dependency_sync_engine.synchronize(concept, runtime)
+        snapshot = runtime.get("dependency_snapshot", {})
+        snapshot = snapshot if isinstance(snapshot, dict) else {}
         causal_validation = runtime.get("causal_validation", {})
         causal_validation = (
             causal_validation
@@ -238,22 +245,31 @@ class TruthCandidatePromotionEngine:
         alignment = runtime.get("dependency_chain_alignment", {})
         alignment = alignment if isinstance(alignment, dict) else {}
         confidence = self._first_clamped(
-            process_memory.get("dependency_confidence"),
-            runtime.get("dependency_confidence"),
-            causal_validation.get("dependency_confidence"),
-            evidence.get("dependency_confidence"),
+            snapshot.get("dependency_confidence"),
+            max(
+                clamp(process_memory.get("dependency_confidence", 0.0)),
+                clamp(runtime.get("dependency_confidence", 0.0)),
+                clamp(causal_validation.get("dependency_confidence", 0.0)),
+                clamp(evidence.get("dependency_confidence", 0.0)),
+            ),
         )
         coverage = self._first_clamped(
-            process_memory.get("dependency_chain_coverage"),
-            runtime.get("dependency_chain_coverage"),
-            causal_validation.get("dependency_chain_coverage"),
-            evidence.get("dependency_chain_coverage"),
+            snapshot.get("dependency_chain_coverage"),
+            max(
+                clamp(process_memory.get("dependency_chain_coverage", 0.0)),
+                clamp(runtime.get("dependency_chain_coverage", 0.0)),
+                clamp(causal_validation.get("dependency_chain_coverage", 0.0)),
+                clamp(evidence.get("dependency_chain_coverage", 0.0)),
+            ),
         )
         depth = self._first_int(
-            process_memory.get("dependency_chain_depth"),
-            runtime.get("dependency_chain_depth"),
-            causal_validation.get("dependency_chain_depth"),
-            evidence.get("dependency_chain_depth"),
+            snapshot.get("dependency_chain_depth"),
+            max(
+                self._first_int(process_memory.get("dependency_chain_depth")),
+                self._first_int(runtime.get("dependency_chain_depth")),
+                self._first_int(causal_validation.get("dependency_chain_depth")),
+                self._first_int(evidence.get("dependency_chain_depth")),
+            ),
         )
         missing_dependencies = self._first_list(
             process_memory.get("missing_dependencies"),
@@ -304,6 +320,11 @@ class TruthCandidatePromotionEngine:
             alignment.get("alignment_ready", False),
             "dependency_alignment_confidence":
             clamp(alignment.get("alignment_confidence", 0.0)),
+            "dependency_snapshot": snapshot,
+            "dependency_source": snapshot.get("dependency_source"),
+            "dependency_block_reason": snapshot.get("dependency_block_reason"),
+            "adaptive_dependency_budget":
+            snapshot.get("adaptive_dependency_budget", {}),
             "process_dependency_memory": process_memory,
             "typed_process_dependencies_enabled": bool(
                 process_memory.get("typed_dependency_relations")

@@ -34,7 +34,7 @@ class ARCVisualizer:
     # SAVE GRID
     # =====================================================
 
-    def save_grid(self, grid_object, path="outputs/grid.png"):
+    def save_grid(self, grid_object, path="runtime/artifacts/outputs/grid.png"):
 
         plt.figure(figsize=(5, 5))
 
@@ -48,6 +48,9 @@ class ARCVisualizer:
 
         plt.yticks([])
 
+        from pathlib import Path
+
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(path)
 
         plt.close()

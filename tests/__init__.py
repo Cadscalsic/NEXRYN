@@ -1,5 +1,5 @@
 # ============================================
-# NEXRYN / AMIS MODEL TESTS
+# NEXRYN MODEL TESTS
 # ============================================
 
 """
@@ -23,5 +23,5 @@ __version__ = "0.1.0"
 # ============================================
 
 PACKAGE_NAME = (
-    "NEXRYN-AMIS Model Tests"
+    "NEXRYN Model Tests"
 )

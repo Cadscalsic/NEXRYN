@@ -1,33 +1,119 @@
 import json
+import math
+import random
+import uuid
 from datetime import datetime
 from pathlib import Path
 
+from runtime.evidence_generation.evidence_generation_engine import (
+    EvidenceGenerationEngine,
+)
+from runtime.learning.general_task_evidence_profile import (
+    GeneralTaskEvidenceProfileError,
+    GeneralTaskEvidenceProfiler,
+    IndependentSourcePotentialEvaluator,
+    MultiAxisEpistemicSelectionShadow,
+    TaskEvidenceMatcher,
+)
 from runtime.training.curriculum_manager import CurriculumManager
+from runtime.training.elite_curriculum_validator import (
+    ELITE_CURRICULUM_NAME,
+    ELITE_VALIDATION_ACADEMY_PATH,
+    validate_elite_curriculum,
+)
+from runtime.training.validation_curriculum_registry import (
+    ValidationCurriculumRegistry,
+)
 
 
 class TrainingAssistant:
     SCHEMA_VERSION = 1
+    DOMAIN_OPERATIONALIZATION_ORDER = {
+        "Spatial": 0,
+        "Identity": 1,
+        "Transformation": 2,
+        "Color": 3,
+        "Geometry": 4,
+        "Topology": 5,
+        "Growth": 6,
+    }
+    TASK_COOLDOWN_RUNS = 20
+    UNSEEN_TASK_BOOST = 3.0
+    RECENT_TASK_PENALTY = 0.1
+    TARGET_EXPERIENCE_PER_CAPABILITY = 3
+    ADAPTIVE_SELECTION_RECENCY_WINDOW = 5
+    MAX_EXPOSURE_PENALTY = 600.0
+    MAX_RECENCY_PENALTY = 320.0
+    MAX_NOVELTY_BONUS = 120.0
+    MAX_INFORMATION_GAIN_BONUS = 180.0
+    MAX_COVERAGE_BONUS = 90.0
+    MAX_REMEDIATION_ADJUSTMENT = 260.0
+    SELECTION_MODES = {"random", "weighted_random", "curriculum"}
 
     def __init__(
         self,
-        state_path="runtime_data/training_assistant_state.json",
-        batch_size=5,
+        state_path="runtime/artifacts/runtime_data/training_assistant_state.json",
+        batch_size=3,
         curriculum_manager=None,
+        selection_memory_path="runtime/cache/task_selection_memory.json",
+        selection_mode="weighted_random",
+        random_seed=None,
+        task_cooldown_runs=TASK_COOLDOWN_RUNS,
+        survival_store_path="runtime/artifacts/runtime_data/operational_capability_survival.json",
+        operational_economy_path="runtime/artifacts/runtime_data/operational_economy_report.json",
+        validation_academy_path=ELITE_VALIDATION_ACADEMY_PATH,
+        evidence_generation_path="runtime/evidence_generation/generated_curriculum",
+        evidence_generation_engine=None,
+        validation_curriculum_registry=None,
     ):
         self.state_path = Path(state_path)
         self.batch_size = max(int(batch_size), 1)
         self.curriculum_manager = curriculum_manager or CurriculumManager()
+        self.selection_memory_path = Path(selection_memory_path)
+        self.selection_mode = self._selection_mode(selection_mode)
+        self.random_seed = random_seed
+        self.task_cooldown_runs = max(int(task_cooldown_runs), 0)
+        self.survival_store_path = Path(survival_store_path)
+        self.operational_economy_path = Path(operational_economy_path)
+        self.validation_academy_path = Path(validation_academy_path)
+        self.evidence_generation_engine = (
+            evidence_generation_engine
+            or EvidenceGenerationEngine(evidence_generation_path)
+        )
+        self.validation_curriculum_registry = (
+            validation_curriculum_registry or ValidationCurriculumRegistry()
+        )
+        self.general_task_evidence_profiler = GeneralTaskEvidenceProfiler()
+        self.task_evidence_matcher = TaskEvidenceMatcher()
+        self.independent_source_potential_evaluator = (
+            IndependentSourcePotentialEvaluator()
+        )
+        self.multi_axis_epistemic_selection_shadow = (
+            MultiAxisEpistemicSelectionShadow()
+        )
+        if validation_curriculum_registry is None:
+            self.validation_curriculum_registry.register_default_academy(
+                self.validation_academy_path
+            )
         self.state = self._load()
+        self.selection_memory = self._load_selection_memory()
 
     def _default_state(self):
         return {
             "schema_version": self.SCHEMA_VERSION,
             "next_task_index": 0,
+            "next_elite_task_index": 0,
             "completed_cycles": 0,
             "active_batch": [],
             "pending_next_task_index": None,
+            "pending_next_elite_task_index": None,
             "prioritized_concepts": [],
+            "selected_concepts": [],
             "curriculum_report": {},
+            "selection_diversity_report": {},
+            "elite_selection_report": {},
+            "training_economy_alignment_report": {},
+            "evidence_generation_report": {},
             "history": [],
         }
 
@@ -60,9 +146,61 @@ class TrainingAssistant:
             )
         temporary_path.replace(self.state_path)
 
+    def _default_selection_memory(self):
+        return {
+            "schema_version": 1,
+            "run_counter": 0,
+            "previous_batch": [],
+            "recent_runs": [],
+            "tasks": {},
+            "last_evidence_remediation": {},
+        }
+
+    def _load_selection_memory(self):
+        if not self.selection_memory_path.exists():
+            return self._default_selection_memory()
+        try:
+            with self.selection_memory_path.open("r", encoding="utf-8") as file:
+                memory = json.load(file)
+            if not isinstance(memory, dict):
+                return self._default_selection_memory()
+            return {
+                **self._default_selection_memory(),
+                **memory,
+                "previous_batch": list(memory.get("previous_batch", [])),
+                "recent_runs": list(memory.get("recent_runs", [])),
+                "tasks": dict(memory.get("tasks", {})),
+                "last_evidence_remediation": dict(
+                    memory.get("last_evidence_remediation", {})
+                ),
+            }
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return self._default_selection_memory()
+
+    def _persist_selection_memory(self):
+        temporary_path = self.selection_memory_path.with_suffix(
+            f"{self.selection_memory_path.suffix}.tmp"
+        )
+        self.selection_memory_path.parent.mkdir(parents=True, exist_ok=True)
+        with temporary_path.open("w", encoding="utf-8") as file:
+            json.dump(
+                self.selection_memory,
+                file,
+                indent=2,
+                ensure_ascii=True,
+            )
+        temporary_path.replace(self.selection_memory_path)
+
     def reset(self):
         self.state = self._default_state()
+        self.selection_memory = self._default_selection_memory()
         self._persist()
+        self._persist_selection_memory()
+        return self.report()
+
+    def reset_selection_memory(self):
+        self.selection_memory = self._default_selection_memory()
+        self._persist_selection_memory()
         return self.report()
 
     def _normalized_tasks(self, task_files):
@@ -72,12 +210,2634 @@ class TrainingAssistant:
             if str(task_file).endswith(".json")
         })
 
+    def _selection_mode(self, selection_mode):
+        selection_mode = str(selection_mode or "weighted_random")
+        if selection_mode not in self.SELECTION_MODES:
+            raise ValueError(
+                "selection_mode must be one of: "
+                f"{', '.join(sorted(self.SELECTION_MODES))}"
+            )
+        return selection_mode
+
     def _active_batch_is_valid(self, task_files):
         active_batch = self.state.get("active_batch", [])
-        return bool(active_batch) and all(
+        return (
+            bool(active_batch)
+            and len(active_batch) == min(self.batch_size, len(task_files))
+            and all(
             task_file in task_files
             for task_file in active_batch
+            )
         )
+
+    def _task_metadata(self, task_file, task_directory=None):
+        return self.curriculum_manager._task_metadata(
+            task_file,
+            task_directory,
+        )
+
+    def _load_operational_economy_report(self):
+        if not self.operational_economy_path.exists():
+            return {}
+        try:
+            with self.operational_economy_path.open("r", encoding="utf-8") as file:
+                report = json.load(file)
+            return report if isinstance(report, dict) else {}
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    def _load_validation_academy_tasks(self):
+        if not self.validation_academy_path.exists():
+            return []
+        try:
+            with self.validation_academy_path.open("r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return []
+        tasks = payload.get("tasks") or []
+        return [task for task in tasks if isinstance(task, dict)]
+
+    def _term(self, value):
+        return str(value or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+    def _metadata_terms(self, metadata):
+        terms = set()
+
+        def visit(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    visit(key)
+                    visit(item)
+            elif isinstance(value, (list, tuple, set)):
+                for item in value:
+                    visit(item)
+            elif value is not None:
+                term = self._term(value)
+                if term:
+                    terms.add(term)
+                    terms.update(part for part in term.split("_") if part)
+
+        for key in (
+            "target_concepts",
+            "target_domains",
+            "deficiency_targets",
+            "required_operational_capabilities",
+            "composite_capabilities",
+            "capability_graduation_targets",
+            "domain_expansion_targets",
+            "adaptive_reuse_opportunities",
+            "curriculum_diagnostics_tags",
+            "independent_validation_opportunities",
+            "required_evidence",
+            "evidence_targets",
+            "validation_evidence",
+            "task_properties",
+            "transformation_contract",
+            "operation_contract",
+            "primary_operation",
+            "ground_truth_type",
+            "required_task_property",
+            "required_ground_truth",
+            "target_capability",
+            "target_cluster",
+            "target_domain",
+            "validation_objective",
+            "trust_objective",
+            "graduation_objective",
+            "operationalization_objective",
+            "responsibility_targets",
+            "candidate_source_targets",
+            "source_diversity_targets",
+            "arena_source_targets",
+            "composition_opportunity_targets",
+            "missing_composite_capabilities",
+        ):
+            visit(metadata.get(key))
+        return terms
+
+    def _operational_economy_context(self, report):
+        report = report if isinstance(report, dict) else {}
+        investment_rows = [
+            row for row in report.get("capability_investment_priorities", []) or []
+            if isinstance(row, dict)
+        ]
+        clusters = [
+            row for row in report.get("operational_capability_clusters", []) or []
+            if isinstance(row, dict)
+        ]
+        roadmap = [
+            row for row in report.get("operational_economy_roadmap", []) or []
+            if isinstance(row, dict)
+        ]
+        grounding_rows = [
+            row for row in report.get("grounding_requirement_rows", []) or []
+            if isinstance(row, dict)
+        ]
+        for cluster in clusters:
+            grounding_rows.extend([
+                row for row in cluster.get("required_grounding", []) or []
+                if isinstance(row, dict)
+            ])
+        capability_targets = []
+        for row in investment_rows[:8]:
+            operation = row.get("operation")
+            if operation:
+                capability_targets.append(self._term(operation))
+        cluster_targets = []
+        for row in clusters[:8]:
+            cluster_targets.append(self._term(row.get("cluster_name")))
+            for capability in row.get("member_capabilities") or []:
+                cluster_targets.append(self._term(capability))
+            for capability in row.get("missing_capabilities") or []:
+                cluster_targets.append(self._term(capability))
+        roadmap_targets = []
+        for row in roadmap[:7]:
+            roadmap_targets.extend([
+                self._term(row.get("priority")),
+                self._term(row.get("target")),
+                self._term(row.get("action")),
+            ])
+        grounding_targets = []
+        grounding_properties = []
+        for row in grounding_rows[:12]:
+            grounding_targets.append(self._term(row.get("operation")))
+            grounding_properties.extend([
+                self._term(row.get("required_task_property")),
+                self._term(row.get("required_evidence")),
+            ])
+        composition_rows = [
+            row for row in report.get("capability_composition_opportunities", []) or []
+            if isinstance(row, dict)
+        ]
+        composition_targets = []
+        missing_composition_targets = []
+        for row in composition_rows[:8]:
+            composition_targets.append(self._term(row.get("composite_name")))
+            composition_targets.append(self._term(row.get("composition_name")))
+            for capability in row.get("required_capabilities") or []:
+                composition_targets.append(self._term(capability))
+            for capability in row.get("missing_capabilities") or []:
+                missing_composition_targets.append(self._term(capability))
+            for blocker in row.get("composition_blockers") or []:
+                missing_composition_targets.append(self._term(blocker))
+        source_materialization_rows = [
+            row for row in report.get("candidate_source_materialization_rows", []) or []
+            if isinstance(row, dict)
+        ]
+        source_targets = [
+            self._term(source)
+            for source in report.get("missing_candidate_sources", []) or []
+            if source
+        ]
+        source_targets.extend(
+            self._term(source)
+            for source in report.get("target_candidate_sources", []) or []
+            if source
+        )
+        for row in source_materialization_rows[:8]:
+            if row.get("source_materialization_state") != "ENTERED_ARENA":
+                source_targets.append(self._term(row.get("source")))
+        return {
+            "source_available": bool(report),
+            "operational_economy_health": report.get("operational_economy_health"),
+            "capability_economy_crisis_state": report.get(
+                "capability_economy_crisis_state"
+            ),
+            "operational_economy_bottleneck": report.get(
+                "operational_economy_bottleneck"
+            ),
+            "governed_validation_bottleneck_state": report.get(
+                "governed_validation_bottleneck_state"
+            ),
+            "governed_validation_action": report.get(
+                "governed_validation_action"
+            ),
+            "governed_validation_required_evidence": report.get(
+                "governed_validation_required_evidence"
+            ),
+            "knowledge_operationalization_choke_point": report.get(
+                "knowledge_operationalization_choke_point"
+            ),
+            "knowledge_operationalization_choke_action": report.get(
+                "knowledge_operationalization_choke_action"
+            ),
+            "knowledge_operationalization_choke_cause": report.get(
+                "knowledge_operationalization_choke_cause"
+            ),
+            "knowledge_operationalization_evidence_responsibility": report.get(
+                "knowledge_operationalization_evidence_responsibility"
+            ),
+            "knowledge_operationalization_required_evidence": report.get(
+                "knowledge_operationalization_required_evidence"
+            ),
+            "evidence_acquisition_state": report.get(
+                "evidence_acquisition_state"
+            ),
+            "evidence_acquisition_required_evidence": report.get(
+                "evidence_acquisition_required_evidence"
+            ),
+            "evidence_acquisition_required_category": report.get(
+                "evidence_acquisition_required_category"
+            ),
+            "evidence_acquisition_validation_task": report.get(
+                "evidence_acquisition_validation_task"
+            ),
+            "evidence_acquisition_tie_break_strategy": report.get(
+                "evidence_acquisition_tie_break_strategy"
+            ),
+            "evidence_acquisition_target_operation": report.get(
+                "evidence_acquisition_target_operation"
+            ),
+            "evidence_acquisition_target_candidate": report.get(
+                "evidence_acquisition_target_candidate"
+            ),
+            "evidence_acquisition_expected_tie_break_impact": report.get(
+                "evidence_acquisition_expected_tie_break_impact"
+            ),
+            "pending_evidence_acquisition_plans": (
+                report.get("pending_evidence_acquisition_plans") or []
+            ),
+            "pending_evidence_plan_count": (
+                report.get("pending_evidence_plan_count") or 0
+            ),
+            "highest_priority_pending_evidence_plan": (
+                report.get("highest_priority_pending_evidence_plan") or {}
+            ),
+            "evidence_plan_store_state": report.get("evidence_plan_store_state"),
+            "evidence_plan_boot_load_state": report.get(
+                "evidence_plan_boot_load_state"
+            ),
+            "arena_source_diversity_state": report.get(
+                "arena_source_diversity_state"
+            ),
+            "arena_source_diversity_action": report.get(
+                "arena_source_diversity_action"
+            ),
+            "investment_targets": sorted(set(filter(None, capability_targets))),
+            "cluster_targets": sorted(set(filter(None, cluster_targets))),
+            "composition_targets": sorted(set(filter(None, composition_targets))),
+            "missing_composition_targets": sorted(set(filter(None, missing_composition_targets))),
+            "source_diversity_targets": sorted(set(filter(None, source_targets))),
+            "roadmap_targets": sorted(set(filter(None, roadmap_targets))),
+            "grounding_targets": sorted(set(filter(None, grounding_targets))),
+            "grounding_properties": sorted(set(filter(None, grounding_properties))),
+            "investment_rows": investment_rows[:8],
+            "cluster_rows": clusters[:8],
+            "composition_opportunity_rows": composition_rows[:8],
+            "source_materialization_rows": source_materialization_rows[:8],
+            "roadmap_rows": roadmap[:7],
+            "grounding_requirement_rows": grounding_rows[:12],
+        }
+
+    def _training_economy_priority(self, metadata, economy_context):
+        if not economy_context or not economy_context.get("source_available"):
+            return 0.0, [], []
+        terms = self._metadata_terms(metadata)
+        matches = []
+        priority = 0.0
+        reasons = []
+
+        def matched_targets(targets):
+            found = []
+            for target in targets:
+                if not target:
+                    continue
+                target_parts = set(target.split("_"))
+                if target in terms or target_parts.intersection(terms):
+                    found.append(target)
+            return sorted(set(found))
+
+        def matched_grounding_targets(targets):
+            found = []
+            for target in targets:
+                if not target:
+                    continue
+                if target in terms:
+                    found.append(target)
+            return sorted(set(found))
+
+        investment_matches = matched_targets(
+            economy_context.get("investment_targets", [])
+        )
+        if investment_matches:
+            priority += 45 + min(len(investment_matches), 4) * 8
+            reasons.append("capability_economy_investment_alignment")
+            matches.extend(
+                {
+                    "match_type": "investment_priority",
+                    "target": target,
+                }
+                for target in investment_matches[:6]
+            )
+
+        cluster_matches = matched_targets(economy_context.get("cluster_targets", []))
+        if cluster_matches:
+            priority += 35 + min(len(cluster_matches), 5) * 6
+            reasons.append("operational_cluster_training_alignment")
+            matches.extend(
+                {
+                    "match_type": "operational_cluster",
+                    "target": target,
+                }
+                for target in cluster_matches[:6]
+            )
+
+        composition_matches = matched_targets(
+            economy_context.get("composition_targets", [])
+        )
+        missing_composition_matches = matched_targets(
+            economy_context.get("missing_composition_targets", [])
+        )
+        if composition_matches or missing_composition_matches:
+            priority += (
+                38
+                + min(len(composition_matches), 4) * 5
+                + min(len(missing_composition_matches), 4) * 12
+            )
+            reasons.append("composition_opportunity_alignment")
+            matches.extend(
+                {
+                    "match_type": "composition_opportunity",
+                    "target": target,
+                }
+                for target in composition_matches[:6]
+            )
+            matches.extend(
+                {
+                    "match_type": "missing_composite_capability",
+                    "target": target,
+                }
+                for target in missing_composition_matches[:6]
+            )
+
+        source_matches = matched_targets(
+            economy_context.get("source_diversity_targets", [])
+        )
+        source_action = economy_context.get("arena_source_diversity_action")
+        if source_matches or source_action == "SOURCE_DIVERSITY_SPRINT_REQUIRED":
+            priority += 32 + min(len(source_matches), 4) * 8
+            reasons.append("arena_source_diversity_alignment")
+            matches.extend(
+                {
+                    "match_type": "arena_source_diversity",
+                    "target": target,
+                }
+                for target in source_matches[:6]
+            )
+
+        roadmap_matches = matched_targets(economy_context.get("roadmap_targets", []))
+        if roadmap_matches:
+            priority += 30 + min(len(roadmap_matches), 4) * 5
+            reasons.append("operational_economy_roadmap_alignment")
+            matches.extend(
+                {
+                    "match_type": "economy_roadmap",
+                    "target": target,
+                }
+                for target in roadmap_matches[:6]
+            )
+
+        grounding_matches = matched_grounding_targets(
+            economy_context.get("grounding_targets", [])
+        )
+        grounding_property_matches = matched_grounding_targets(
+            economy_context.get("grounding_properties", [])
+        )
+        if grounding_matches or grounding_property_matches:
+            priority += (
+                40
+                + min(len(grounding_matches), 4) * 6
+                + min(len(grounding_property_matches), 3) * 10
+            )
+            reasons.append("grounding_economy_alignment")
+            matches.extend(
+                {
+                    "match_type": "grounding_requirement",
+                    "target": target,
+                }
+                for target in grounding_matches[:6]
+            )
+            matches.extend(
+                {
+                    "match_type": "grounding_required_task_property",
+                    "target": target,
+                }
+                for target in grounding_property_matches[:6]
+            )
+
+        governed_evidence = self._term(
+            economy_context.get("governed_validation_required_evidence")
+        )
+        governed_action = self._term(economy_context.get("governed_validation_action"))
+        governed_evidence_match = bool(governed_evidence and governed_evidence in terms)
+        governed_action_match = bool(
+            governed_action
+            and any(part in terms for part in governed_action.split("_"))
+        )
+        if governed_evidence_match or governed_action_match:
+            priority += 35
+            reasons.append("governed_validation_evidence_alignment")
+            matches.append({
+                "match_type": "governed_validation_required_evidence",
+                "target": governed_evidence or governed_action,
+            })
+
+        bottleneck = self._term(economy_context.get("operational_economy_bottleneck"))
+        if bottleneck and any(part in terms for part in bottleneck.split("_")):
+            priority += 25
+            reasons.append("operational_economy_bottleneck_probe")
+            matches.append({
+                "match_type": "economy_bottleneck",
+                "target": bottleneck,
+            })
+
+        choke_action = self._term(
+            economy_context.get("knowledge_operationalization_choke_action")
+        )
+        required_evidence = self._term(
+            economy_context.get("knowledge_operationalization_required_evidence")
+        )
+        responsibility = self._term(
+            economy_context.get(
+                "knowledge_operationalization_evidence_responsibility"
+            )
+        )
+        choke_point = self._term(
+            economy_context.get("knowledge_operationalization_choke_point")
+        )
+        evidence_task_match = bool(
+            required_evidence and required_evidence in terms
+        )
+        action_task_match = bool(
+            choke_action and any(part in terms for part in choke_action.split("_"))
+        )
+        responsibility_match = bool(
+            responsibility
+            and any(part in terms for part in responsibility.split("_"))
+        )
+        if evidence_task_match or action_task_match or responsibility_match:
+            priority += 45
+            reasons.append("evidence_responsibility_alignment")
+            matches.append({
+                "match_type": "evidence_responsibility",
+                "target": responsibility or choke_point,
+            })
+            matches.append({
+                "match_type": "required_evidence",
+                "target": required_evidence or choke_action,
+            })
+
+        acquisition_task = self._term(
+            economy_context.get("evidence_acquisition_validation_task")
+        )
+        acquisition_evidence = self._term(
+            economy_context.get("evidence_acquisition_required_evidence")
+        )
+        acquisition_strategy = self._term(
+            economy_context.get("evidence_acquisition_tie_break_strategy")
+        )
+        acquisition_operation = self._term(
+            economy_context.get("evidence_acquisition_target_operation")
+        )
+        acquisition_task_match = bool(
+            acquisition_task
+            and (
+                acquisition_task in terms
+                or any(part in terms for part in acquisition_task.split("_"))
+            )
+        )
+        acquisition_evidence_match = bool(
+            acquisition_evidence and acquisition_evidence in terms
+        )
+        acquisition_strategy_match = bool(
+            acquisition_strategy
+            and any(part in terms for part in acquisition_strategy.split("_"))
+        )
+        acquisition_operation_match = bool(
+            acquisition_operation and acquisition_operation in terms
+        )
+        if (
+            acquisition_task_match
+            or acquisition_evidence_match
+            or acquisition_strategy_match
+            or acquisition_operation_match
+        ):
+            priority += 90
+            reasons.append("evidence_acquisition_plan_alignment")
+            matches.append({
+                "match_type": "evidence_acquisition_plan",
+                "target": acquisition_task or acquisition_evidence,
+                "required_evidence": acquisition_evidence,
+                "tie_break_strategy": acquisition_strategy,
+                "target_operation": acquisition_operation,
+            })
+
+        return round(priority, 4), reasons, matches[:12]
+
+    def _evidence_remediation_progress(
+        self,
+        *,
+        previous: dict,
+        economy_context: dict,
+    ) -> dict:
+        previous = previous if isinstance(previous, dict) else {}
+        current_deficit = economy_context.get(
+            "knowledge_operationalization_required_evidence"
+        )
+        current_cause = economy_context.get("knowledge_operationalization_choke_cause")
+        current_responsibility = economy_context.get(
+            "knowledge_operationalization_evidence_responsibility"
+        )
+        if not previous:
+            return {
+                "evidence_remediation_progress_state": (
+                    "NO_PRIOR_REMEDIATION_BASELINE"
+                ),
+                "required_evidence_produced": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+                "insufficiency_cause_before": current_cause,
+                "insufficiency_cause_after": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+                "evidence_acceptance_before": (
+                    "INSUFFICIENT" if current_deficit else "Not Available"
+                ),
+                "evidence_acceptance_after": (
+                    "PENDING_NEXT_RUN_EVIDENCE_MEASUREMENT"
+                ),
+                "previous_remediation_task": "Not Available",
+                "previous_evidence_deficit": "Not Available",
+                "current_evidence_deficit": current_deficit,
+            }
+        previous_deficit = previous.get("evidence_remediation_deficit")
+        previous_cause = previous.get("insufficiency_cause_before")
+        previous_task = previous.get("evidence_remediation_task")
+        if not current_deficit or str(current_deficit) == "Not Available":
+            progress_state = "EVIDENCE_DEFICIT_CLEARED"
+            produced = True
+            acceptance_after = "ACCEPTED_OR_NO_ACTIVE_DEFICIT"
+            outcome = "REMEDIATION_IMPROVED"
+        elif current_deficit != previous_deficit:
+            progress_state = "EVIDENCE_DEFICIT_SHIFTED"
+            produced = "PARTIAL_OR_DIFFERENT_EVIDENCE_PRODUCED"
+            acceptance_after = "INSUFFICIENT_DIFFERENT_DEFICIT"
+            outcome = "REMEDIATION_SHIFTED_DEFICIT"
+        elif current_cause != previous_cause:
+            progress_state = "INSUFFICIENCY_CAUSE_SHIFTED"
+            produced = "PARTIAL_OR_DIFFERENT_EVIDENCE_PRODUCED"
+            acceptance_after = "INSUFFICIENT_DIFFERENT_CAUSE"
+            outcome = "REMEDIATION_SHIFTED_CAUSE"
+        else:
+            progress_state = "EVIDENCE_DEFICIT_UNCHANGED"
+            produced = False
+            acceptance_after = "INSUFFICIENT"
+            outcome = "REMEDIATION_UNCHANGED"
+        return {
+            "evidence_remediation_progress_state": progress_state,
+            "required_evidence_produced": produced,
+            "insufficiency_cause_before": previous_cause,
+            "insufficiency_cause_after": current_cause,
+            "evidence_acceptance_before": previous.get(
+                "evidence_acceptance_before",
+                "INSUFFICIENT",
+            ),
+            "evidence_acceptance_after": acceptance_after,
+            "previous_remediation_task": previous_task,
+            "previous_evidence_deficit": previous_deficit,
+            "current_evidence_deficit": current_deficit,
+            "previous_responsible_area": previous.get(
+                "evidence_remediation_responsible_area"
+            ),
+            "current_responsible_area": current_responsibility,
+            "remediation_progress_outcome": outcome,
+        }
+
+    def _validation_academy_priority(
+        self,
+        metadata,
+        *,
+        validation_academy_tasks,
+        survival_targets,
+        operational_economy_context,
+    ):
+        if not validation_academy_tasks:
+            return 0.0, [], []
+        terms = self._metadata_terms(metadata) | self._task_evidence_terms(metadata)
+        survival_targets = [
+            target for target in (survival_targets or [])
+            if isinstance(target, dict)
+        ]
+        target_operations = {
+            self._term(target.get("operation"))
+            for target in survival_targets
+            if target.get("operation")
+        }
+        target_operations.update(
+            self._term(target)
+            for target in (
+                operational_economy_context or {}
+            ).get("grounding_targets", [])
+            if target
+        )
+        required_properties = {
+            self._term(target.get("required_task_property"))
+            for target in survival_targets
+            if target.get("required_task_property")
+        }
+        required_properties.update(
+            self._term(prop)
+            for prop in (
+                operational_economy_context or {}
+            ).get("grounding_properties", [])
+            if prop
+        )
+        governed_evidence = self._term(
+            (operational_economy_context or {}).get(
+                "governed_validation_required_evidence"
+            )
+        )
+        if governed_evidence:
+            required_properties.add(governed_evidence)
+        priority = 0.0
+        matches = []
+        for academy_task in validation_academy_tasks:
+            capability = self._term(academy_task.get("target_capability"))
+            required_property = self._term(
+                academy_task.get("required_task_property")
+            )
+            required_evidence = self._term(
+                academy_task.get("required_validation_evidence")
+            )
+            cluster = self._term(academy_task.get("target_cluster"))
+            domain = self._term(academy_task.get("target_domain"))
+            overlap = sorted(
+                item for item in {
+                    capability,
+                    required_property,
+                    required_evidence,
+                    cluster,
+                    domain,
+                }
+                if item and item in terms
+            )
+            if not overlap:
+                continue
+            contribution = 0.0
+            if capability and capability in target_operations:
+                contribution += 65
+            if required_property and required_property in required_properties:
+                contribution += 80
+            if required_evidence and required_evidence in required_properties:
+                contribution += 40
+            if cluster and cluster in terms:
+                contribution += 25
+            if domain and domain in terms:
+                contribution += 10
+            if required_property and required_property in terms:
+                contribution += 35
+            if contribution <= 0:
+                continue
+            contribution *= float(academy_task.get("promotion_weight") or 1.0)
+            priority += contribution
+            matches.append({
+                "match_type": "elite_validation_opportunity",
+                "academy_task_id": academy_task.get("task_id"),
+                "elite_group": academy_task.get("elite_group"),
+                "target_capability": academy_task.get("target_capability"),
+                "target_cluster": academy_task.get("target_cluster"),
+                "required_task_property": academy_task.get(
+                    "required_task_property"
+                ),
+                "required_validation_evidence": academy_task.get(
+                    "required_validation_evidence"
+                ),
+                "matched_terms": overlap,
+                "priority": round(contribution, 4),
+            })
+        matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
+        reasons = ["elite_validation_task_selection_intelligence"] if matches else []
+        if any(
+            self._term(match.get("required_task_property")) in required_properties
+            for match in matches
+        ):
+            reasons.append("validation_task_property_match")
+        if any(
+            self._term(match.get("target_capability")) in target_operations
+            for match in matches
+        ):
+            reasons.append("capability_directed_validation")
+        return round(priority, 4), reasons, matches[:5]
+
+    def _training_economy_alignment_report(
+        self,
+        selected,
+        elite_selection_report,
+        economy_context,
+    ):
+        priorities = elite_selection_report.get("elite_task_priorities", [])
+        priorities = priorities if isinstance(priorities, list) else []
+        selected_set = set(selected or [])
+        selected_rows = [
+            row for row in priorities
+            if isinstance(row, dict) and row.get("task_file") in selected_set
+        ]
+        match_rows = [
+            match
+            for row in selected_rows
+            for match in row.get("training_economy_matches", []) or []
+            if isinstance(match, dict)
+        ]
+        academy_match_rows = [
+            match
+            for row in selected_rows
+            for match in row.get("validation_academy_matches", []) or []
+            if isinstance(match, dict)
+        ]
+        matched_targets = sorted({
+            str(match.get("target"))
+            for match in match_rows
+            if match.get("target")
+        })
+        grounding_match_rows = [
+            match for match in match_rows
+            if str(match.get("match_type", "")).startswith("grounding")
+        ]
+        evidence_remediation_rows = [
+            match for match in match_rows
+            if match.get("match_type") in {
+                "evidence_responsibility",
+                "required_evidence",
+            }
+        ]
+        evidence_acquisition_rows = [
+            match for match in match_rows
+            if match.get("match_type") == "evidence_acquisition_plan"
+        ]
+        evidence_acquisition_task = (
+            selected_rows[0].get("task_file")
+            if evidence_acquisition_rows and selected_rows
+            else "Not Available"
+        )
+        composition_match_rows = [
+            match for match in match_rows
+            if match.get("match_type") in {
+                "composition_opportunity",
+                "missing_composite_capability",
+            }
+        ]
+        source_diversity_match_rows = [
+            match for match in match_rows
+            if match.get("match_type") == "arena_source_diversity"
+        ]
+        selected_grounding_aligned_tasks = [
+            row.get("task_file")
+            for row in selected_rows
+            if any(
+                isinstance(match, dict)
+                and str(match.get("match_type", "")).startswith("grounding")
+                for match in row.get("training_economy_matches", []) or []
+            )
+        ]
+        selected_with_matches = [
+            row.get("task_file")
+            for row in selected_rows
+            if row.get("training_economy_matches")
+        ]
+        remediation_progress = self._evidence_remediation_progress(
+            previous=self.selection_memory.get("last_evidence_remediation", {}),
+            economy_context=economy_context,
+        )
+        remediation_outcome = (
+            remediation_progress.get("remediation_progress_outcome")
+            if remediation_progress.get("evidence_remediation_progress_state")
+            != "NO_PRIOR_REMEDIATION_BASELINE"
+            else "REMEDIATION_ATTEMPT_QUEUED"
+            if evidence_remediation_rows
+            else "REMEDIATION_NOT_ATTEMPTED"
+        )
+        return {
+            "system": "training_economy_alignment",
+            "operational_economy_source_available": bool(
+                economy_context.get("source_available")
+            ),
+            "alignment_state": (
+                "ECONOMY_ALIGNED_TRAINING"
+                if selected_with_matches
+                else "ECONOMY_SIGNAL_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("source_available")
+                else "NO_OPERATIONAL_ECONOMY_SIGNAL"
+            ),
+            "operational_economy_health": economy_context.get(
+                "operational_economy_health"
+            ),
+            "capability_economy_crisis_state": economy_context.get(
+                "capability_economy_crisis_state"
+            ),
+            "operational_economy_bottleneck": economy_context.get(
+                "operational_economy_bottleneck"
+            ),
+            "governed_validation_bottleneck_state": economy_context.get(
+                "governed_validation_bottleneck_state"
+            ),
+            "governed_validation_action": economy_context.get(
+                "governed_validation_action"
+            ),
+            "governed_validation_required_evidence": economy_context.get(
+                "governed_validation_required_evidence"
+            ),
+            "investment_targets": economy_context.get("investment_targets", []),
+            "cluster_targets": economy_context.get("cluster_targets", []),
+            "roadmap_targets": economy_context.get("roadmap_targets", []),
+            "grounding_targets": economy_context.get("grounding_targets", []),
+            "grounding_properties": economy_context.get("grounding_properties", []),
+            "composition_targets": economy_context.get("composition_targets", []),
+            "missing_composition_targets": economy_context.get(
+                "missing_composition_targets",
+                [],
+            ),
+            "source_diversity_targets": economy_context.get(
+                "source_diversity_targets",
+                [],
+            ),
+            "arena_source_diversity_state": economy_context.get(
+                "arena_source_diversity_state"
+            ),
+            "arena_source_diversity_action": economy_context.get(
+                "arena_source_diversity_action"
+            ),
+            "selected_economy_aligned_tasks": selected_with_matches,
+            "selected_grounding_aligned_tasks": selected_grounding_aligned_tasks,
+            "selected_composition_aligned_tasks": sorted({
+                row.get("task_file")
+                for row in selected_rows
+                if any(
+                    isinstance(match, dict)
+                    and match.get("match_type") in {
+                        "composition_opportunity",
+                        "missing_composite_capability",
+                    }
+                    for match in row.get("training_economy_matches", []) or []
+                )
+            }),
+            "selected_source_diversity_aligned_tasks": sorted({
+                row.get("task_file")
+                for row in selected_rows
+                if any(
+                    isinstance(match, dict)
+                    and match.get("match_type") == "arena_source_diversity"
+                    for match in row.get("training_economy_matches", []) or []
+                )
+            }),
+            "matched_economy_targets": matched_targets[:12],
+            "matched_grounding_targets": [
+                match.get("target")
+                for match in grounding_match_rows[:12]
+                if match.get("target")
+            ],
+            "matched_composition_targets": [
+                match.get("target")
+                for match in composition_match_rows[:12]
+                if match.get("target")
+            ],
+            "matched_source_diversity_targets": [
+                match.get("target")
+                for match in source_diversity_match_rows[:12]
+                if match.get("target")
+            ],
+            "grounding_economy_alignment": (
+                "GROUNDING_ECONOMY_ALIGNED"
+                if selected_grounding_aligned_tasks
+                else "GROUNDING_SIGNAL_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("grounding_requirement_rows")
+                else "NO_GROUNDING_ECONOMY_SIGNAL"
+            ),
+            "grounding_alignment_trace": [
+                {
+                    "selected_task": row.get("task_file"),
+                    "matched_operation_or_property": match.get("target"),
+                    "match_type": match.get("match_type"),
+                    "evidence_collection_attempted": (
+                        str(match.get("match_type", "")).startswith("grounding")
+                    ),
+                }
+                for row in selected_rows
+                for match in row.get("training_economy_matches", []) or []
+                if isinstance(match, dict)
+                and str(match.get("match_type", "")).startswith("grounding")
+            ][:12],
+            "composition_opportunity_alignment": (
+                "COMPOSITION_OPPORTUNITY_ALIGNED"
+                if composition_match_rows
+                else "COMPOSITION_OPPORTUNITY_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("composition_opportunity_rows")
+                else "NO_COMPOSITION_OPPORTUNITY_SIGNAL"
+            ),
+            "arena_source_diversity_alignment": (
+                "SOURCE_DIVERSITY_ALIGNED"
+                if source_diversity_match_rows
+                else "SOURCE_DIVERSITY_SIGNAL_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if economy_context.get("arena_source_diversity_action")
+                == "SOURCE_DIVERSITY_SPRINT_REQUIRED"
+                else "NO_SOURCE_DIVERSITY_SIGNAL"
+            ),
+            "evidence_driven_task_selection_state": (
+                "ALIGNED_TASK_SELECTED"
+                if evidence_remediation_rows
+                or evidence_acquisition_rows
+                else "EVIDENCE_DEFICIT_AVAILABLE_WITHOUT_ALIGNED_TASK"
+                if economy_context.get("knowledge_operationalization_required_evidence")
+                or economy_context.get(
+                    "knowledge_operationalization_evidence_responsibility"
+                )
+                or economy_context.get(
+                    "evidence_acquisition_required_evidence"
+                )
+                else "NO_EVIDENCE_DEFICIT_SIGNAL"
+            ),
+            "decision_orchestration_state": (
+                "PENDING_PLAN_DELIVERED_TO_TRAINING_ASSISTANT"
+                if economy_context.get("pending_evidence_plan_count")
+                else
+                "PLAN_CONSUMED_AND_TASK_SCHEDULED"
+                if evidence_acquisition_rows
+                else "PLAN_FORWARDED_WITHOUT_MATCHING_TASK"
+                if economy_context.get("evidence_acquisition_state")
+                == "EVIDENCE_ACQUISITION_PLAN_READY"
+                else "NO_DECISION_ORCHESTRATION_PLAN"
+            ),
+            "evidence_acquisition_plan_forwarded": (
+                economy_context.get("evidence_acquisition_state")
+                == "EVIDENCE_ACQUISITION_PLAN_READY"
+                or bool(economy_context.get("pending_evidence_plan_count"))
+            ),
+            "evidence_acquisition_plan_consumed": bool(
+                economy_context.get("evidence_acquisition_state")
+                and not economy_context.get("pending_evidence_plan_count")
+            ),
+            "evidence_acquisition_task_scheduled": bool(
+                evidence_acquisition_rows
+            ),
+            "evidence_acquisition_selected_task": evidence_acquisition_task,
+            "evidence_acquisition_required_evidence": (
+                economy_context.get("evidence_acquisition_required_evidence")
+            ),
+            "evidence_acquisition_validation_task": (
+                economy_context.get("evidence_acquisition_validation_task")
+            ),
+            "evidence_acquisition_tie_break_strategy": (
+                economy_context.get("evidence_acquisition_tie_break_strategy")
+            ),
+            "evidence_acquisition_expected_tie_break_impact": (
+                economy_context.get("evidence_acquisition_expected_tie_break_impact")
+            ),
+            "evidence_generation_report": (
+                economy_context.get("evidence_generation_report") or {}
+            ),
+            "pending_evidence_plan_count": (
+                economy_context.get("pending_evidence_plan_count") or 0
+            ),
+            "training_assistant_plan_available": bool(
+                economy_context.get("pending_evidence_plan_count")
+            ),
+            "pending_evidence_plan_id": (
+                (
+                    economy_context.get("highest_priority_pending_evidence_plan")
+                    or {}
+                ).get("plan_id")
+            ),
+            "current_run_consumption_expected": True
+            if economy_context.get("pending_evidence_plan_count")
+            else None,
+            "next_run_consumption_required": False
+            if economy_context.get("pending_evidence_plan_count")
+            else None,
+            "evidence_acquisition_alignment_trace": [
+                {
+                    "selected_task": row.get("task_file"),
+                    "match_type": match.get("match_type"),
+                    "required_evidence": match.get("required_evidence"),
+                    "tie_break_strategy": match.get("tie_break_strategy"),
+                    "target_operation": match.get("target_operation"),
+                    "generated_validation_opportunity": bool(
+                        match.get("generated_validation_opportunity")
+                    ),
+                    "governance_state": match.get("governance_state"),
+                }
+                for row in selected_rows
+                for match in row.get("training_economy_matches", []) or []
+                if isinstance(match, dict)
+                and match.get("match_type") == "evidence_acquisition_plan"
+            ][:12],
+            "evidence_remediation_attempted": bool(evidence_remediation_rows),
+            "evidence_remediation_task": (
+                selected_rows[0].get("task_file")
+                if evidence_remediation_rows and selected_rows
+                else "Not Available"
+            ),
+            "evidence_remediation_alignment": (
+                1.0 if evidence_remediation_rows else 0.0
+            ),
+            "evidence_remediation_deficit": economy_context.get(
+                "knowledge_operationalization_required_evidence"
+            ),
+            "evidence_remediation_responsible_area": economy_context.get(
+                "knowledge_operationalization_evidence_responsibility"
+            ),
+            "evidence_remediation_selection_reason": (
+                "validation_probe_evidence_remediation"
+                if evidence_remediation_rows
+                else "Not Available"
+            ),
+            **remediation_progress,
+            "remediation_outcome": remediation_outcome,
+            "validation_academy_alignment": (
+                "VALIDATION_ACADEMY_ALIGNED"
+                if academy_match_rows
+                else "VALIDATION_ACADEMY_AVAILABLE_WITHOUT_SELECTED_MATCH"
+                if elite_selection_report.get("elite_task_priorities")
+                else "NO_VALIDATION_ACADEMY_SIGNAL"
+            ),
+            "validation_academy_alignment_trace": [
+                {
+                    "selected_task": row.get("task_file"),
+                    "academy_task_id": match.get("academy_task_id"),
+                    "target_capability": match.get("target_capability"),
+                    "target_cluster": match.get("target_cluster"),
+                    "required_task_property": match.get(
+                        "required_task_property"
+                    ),
+                    "required_validation_evidence": match.get(
+                        "required_validation_evidence"
+                    ),
+                    "evidence_collection_attempted": True,
+                }
+                for row in selected_rows
+                for match in row.get("validation_academy_matches", []) or []
+                if isinstance(match, dict)
+            ][:12],
+            "validation_academy_match_count": len(academy_match_rows),
+            "alignment_match_count": len(match_rows),
+            "training_economy_alignment_score": round(
+                len(selected_with_matches) / max(len(selected or []), 1),
+                4,
+            ),
+        }
+
+    def _validate_evidence_plan_payload(self, plan):
+        failures = []
+        if not isinstance(plan, dict):
+            return ["plan_payload_not_mapping"]
+        for field in (
+            "plan_id",
+            "required_evidence",
+            "required_validation_task",
+            "tie_break_strategy",
+            "target_operation",
+        ):
+            if not plan.get(field):
+                failures.append(f"missing_{field}")
+        authority = plan.get("authority") or {}
+        if not isinstance(authority, dict):
+            failures.append("authority_not_mapping")
+        else:
+            for field in ("truth", "trust", "graduation", "execution"):
+                if authority.get(field) != "NONE":
+                    failures.append(f"invalid_authority_{field}")
+        return failures
+
+    def _consume_delivered_evidence_plans(self, plans):
+        plans = [plan for plan in plans or [] if isinstance(plan, dict)]
+        report = {
+            "system": "training_assistant_evidence_plan_consumer",
+            "responsible_component": "TRAINING_ASSISTANT_EVIDENCE_PLAN_CONSUMER",
+            "plans_delivered": len(plans),
+            "plans_consumed": 0,
+            "current_plan_id": "Not Available",
+            "lifecycle_state": "NO_DELIVERED_PLAN",
+            "consumption_state": "NOT_STARTED",
+            "current_required_evidence": "Not Available",
+            "current_required_validation_task": "Not Available",
+            "current_target_operation": "Not Available",
+            "current_tie_break_strategy": "Not Available",
+            "curriculum_search_state": "NOT_STARTED",
+            "matching_validation_tasks": 0,
+            "best_matching_task": "Not Available",
+            "best_matching_curriculum": "Not Available",
+            "matching_score": 0.0,
+            "matching_explanation": "no_delivered_plan",
+            "selection_authority": "TRAINING_ASSISTANT",
+            "selection_state": "NOT_STARTED",
+            "waiting_execution": False,
+            "generation_eligible": False,
+            "generation_invoked": False,
+            "waiting_generator": False,
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "execution_authority": "NONE",
+            "consumed_plan_reports": [],
+        }
+        if not plans:
+            return report
+
+        consumed_reports = []
+        for plan in plans:
+            failures = self._validate_evidence_plan_payload(plan)
+            plan_report = {
+                "plan_id": plan.get("plan_id", "Not Available"),
+                "lifecycle": ["CONSUMPTION_PENDING"],
+                "validation_failures": failures,
+                "consumption_state": (
+                    "PLAN_REJECTED_INVALID" if failures else "PLAN_PARSED"
+                ),
+            }
+            if failures:
+                consumed_reports.append(plan_report)
+                continue
+            search_report = self.validation_curriculum_registry.search(plan)
+            plan_report.update(search_report)
+            plan_report["lifecycle"] = [
+                "CONSUMPTION_PENDING",
+                *search_report.get("consumption_lifecycle", []),
+            ]
+            plan_report["consumption_state"] = (
+                "MATCHING_COMPLETED"
+                if search_report.get("selection_state") in {
+                    "WAITING_EXECUTION",
+                    "NO_MATCH",
+                }
+                else search_report.get("selection_state", "MATCHING_COMPLETED")
+            )
+            consumed_reports.append(plan_report)
+
+        valid_reports = [
+            item for item in consumed_reports
+            if not item.get("validation_failures")
+        ]
+        current = valid_reports[0] if valid_reports else consumed_reports[0]
+        selected = current.get("selection_state") == "WAITING_EXECUTION"
+        no_match = current.get("selection_state") == "NO_MATCH"
+        report.update({
+            "plans_consumed": len(valid_reports),
+            "current_plan_id": current.get("plan_id", "Not Available"),
+            "lifecycle_state": (
+                "WAITING_EXECUTION"
+                if selected else "MATCHING_COMPLETED"
+                if no_match else current.get("consumption_state", "INVALID")
+            ),
+            "consumption_state": current.get("consumption_state"),
+            "current_required_evidence": current.get(
+                "plan_required_evidence",
+                plans[0].get("required_evidence"),
+            ),
+            "current_required_validation_task": plans[0].get(
+                "required_validation_task",
+                "Not Available",
+            ),
+            "current_target_operation": plans[0].get(
+                "target_operation",
+                "Not Available",
+            ),
+            "current_tie_break_strategy": plans[0].get(
+                "tie_break_strategy",
+                "Not Available",
+            ),
+            "registered_curricula": current.get("registered_curricula", 0),
+            "loaded_curricula": current.get("loaded_curricula", 0),
+            "enabled_curricula": current.get("enabled_curricula", 0),
+            "disabled_curricula": current.get("disabled_curricula", 0),
+            "curricula_searched": current.get("curricula_searched", 0),
+            "total_validation_tasks": current.get("total_validation_tasks", 0),
+            "curriculum_search_state": (
+                "COMPLETED" if valid_reports else "NOT_STARTED"
+            ),
+            "matching_validation_tasks": current.get("matching_tasks", 0),
+            "best_matching_task": current.get(
+                "best_matching_task",
+                "Not Available",
+            ),
+            "best_matching_curriculum": current.get(
+                "best_matching_curriculum",
+                "Not Available",
+            ),
+            "matching_score": current.get("matching_score", 0.0),
+            "matching_explanation": current.get(
+                "matching_explanation",
+                "Not Available",
+            ),
+            "selected_validation_task": current.get(
+                "selected_validation_task",
+                "Not Available",
+            ),
+            "selected_validation_task_metadata": current.get(
+                "selected_validation_task_metadata",
+                {},
+            ),
+            "selection_state": (
+                "WAITING_EXECUTION" if selected else "NO_MATCH"
+                if no_match else "INVALID"
+            ),
+            "waiting_execution": selected,
+            "generation_eligible": no_match,
+            "generation_invoked": False,
+            "waiting_generator": no_match,
+            "consumed_plan_reports": consumed_reports,
+        })
+        return report
+
+    def _apply_plan_consumption_report(self, alignment_report, consumption_report):
+        alignment_report = dict(alignment_report or {})
+        consumption_report = dict(consumption_report or {})
+        if not consumption_report.get("plans_delivered"):
+            return alignment_report
+        selected = consumption_report.get("selection_state") == "WAITING_EXECUTION"
+        no_match = consumption_report.get("selection_state") == "NO_MATCH"
+        alignment_report.update({
+            "evidence_plan_consumption_report": consumption_report,
+            "training_assistant_plan_available": True,
+            "evidence_acquisition_plan_forwarded": True,
+            "evidence_acquisition_plan_consumed": (
+                consumption_report.get("plans_consumed", 0) > 0
+            ),
+            "training_assistant_consumed_plan": (
+                consumption_report.get("plans_consumed", 0) > 0
+            ),
+            "evidence_acquisition_task_selected": selected,
+            "evidence_acquisition_task_scheduled": False,
+            "task_selection_consumed_plan": selected,
+            "tie_break_task_scheduled": False,
+            "evidence_acquisition_selected_task": (
+                consumption_report.get("selected_validation_task")
+            ),
+            "selected_tie_break_task": (
+                consumption_report.get("selected_validation_task")
+            ),
+            "decision_orchestration_state": (
+                "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+                if selected else "PLAN_CONSUMED_WAITING_EVIDENCE_GENERATOR"
+                if no_match else "PLAN_CONSUMPTION_FAILED"
+            ),
+            "evidence_driven_task_selection_state": (
+                "VALIDATION_TASK_SELECTED_AWAITING_EXECUTION"
+                if selected else "NO_MATCH_GENERATION_ELIGIBLE"
+                if no_match else "PLAN_CONSUMPTION_FAILED"
+            ),
+            "current_run_consumption_expected": True,
+            "next_run_consumption_required": False,
+            "consumption_state": consumption_report.get("consumption_state"),
+            "curriculum_search_state": consumption_report.get(
+                "curriculum_search_state"
+            ),
+            "matching_validation_tasks": consumption_report.get(
+                "matching_validation_tasks"
+            ),
+            "best_matching_task": consumption_report.get("best_matching_task"),
+            "best_matching_curriculum": consumption_report.get(
+                "best_matching_curriculum"
+            ),
+            "matching_score": consumption_report.get("matching_score"),
+            "matching_explanation": consumption_report.get(
+                "matching_explanation"
+            ),
+            "selection_authority": "TRAINING_ASSISTANT",
+            "selection_state": consumption_report.get("selection_state"),
+            "waiting_execution": consumption_report.get("waiting_execution"),
+            "generation_eligible": consumption_report.get("generation_eligible"),
+            "generation_invoked": False,
+            "waiting_generator": consumption_report.get("waiting_generator"),
+        })
+        return alignment_report
+
+    def _generated_evidence_priority_row(self, task_file, economy_context):
+        task = self._term(economy_context.get("evidence_acquisition_validation_task"))
+        evidence = self._term(
+            economy_context.get("evidence_acquisition_required_evidence")
+        )
+        strategy = self._term(
+            economy_context.get("evidence_acquisition_tie_break_strategy")
+        )
+        operation = self._term(
+            economy_context.get("evidence_acquisition_target_operation")
+        )
+        metadata = self._task_metadata(task_file)
+        return {
+            "task_file": str(task_file),
+            "original_order": -1,
+            "target_concepts": metadata.get("target_concepts", []),
+            "deficiency_targets": [],
+            "required_operational_capabilities": [],
+            "evidence_terms": sorted(set(metadata.get("required_evidence", []))),
+            "priority": 1000.0,
+            "priority_reasons": [
+                "generated_evidence_acquisition_opportunity",
+                "evidence_acquisition_plan_alignment",
+            ],
+            "survival_reappearance_matches": [],
+            "domain_citizenship_matches": [],
+            "training_economy_matches": [
+                {
+                    "match_type": "evidence_acquisition_plan",
+                    "target": task or evidence,
+                    "required_evidence": evidence,
+                    "tie_break_strategy": strategy,
+                    "target_operation": operation,
+                    "generated_validation_opportunity": True,
+                    "governance_state": (
+                        "POTENTIAL_VALIDATION_OPPORTUNITY_ONLY"
+                    ),
+                }
+            ],
+            "validation_academy_matches": [],
+        }
+
+    def _maybe_generate_evidence_task(
+        self,
+        *,
+        selected,
+        elite_selection_report,
+        selection_report,
+        training_economy_alignment_report,
+        economy_context,
+    ):
+        selected = list(selected or [])
+        elite_selection_report = dict(elite_selection_report or {})
+        selection_report = dict(selection_report or {})
+        training_economy_alignment_report = dict(
+            training_economy_alignment_report or {}
+        )
+        plan_ready = (
+            economy_context.get("evidence_acquisition_state")
+            == "EVIDENCE_ACQUISITION_PLAN_READY"
+        )
+        existing_task_found = bool(
+            training_economy_alignment_report.get(
+                "evidence_acquisition_task_scheduled"
+            )
+        )
+        report = self.evidence_generation_engine.generate_for_plan(
+            economy_context,
+            existing_tasks_found=existing_task_found,
+        )
+        if not plan_ready or existing_task_found:
+            return selected, elite_selection_report, selection_report, report
+        generated_files = report.get("generated_task_files") or []
+        if not generated_files:
+            return selected, elite_selection_report, selection_report, report
+
+        generated_task = str(generated_files[0])
+        selected = [
+            generated_task,
+            *[task_file for task_file in selected if task_file != generated_task],
+        ][: self.batch_size]
+        selection_report["selected_tasks"] = list(selected)
+        selection_report["generated_validation_task_selected"] = True
+        selection_report["evidence_generation_status"] = report.get(
+            "generation_status"
+        )
+        priorities = list(elite_selection_report.get("elite_task_priorities") or [])
+        priorities = [
+            self._generated_evidence_priority_row(
+                generated_task,
+                economy_context,
+            ),
+            *[
+                row for row in priorities
+                if isinstance(row, dict) and row.get("task_file") != generated_task
+            ],
+        ]
+        elite_selection_report["elite_task_priorities"] = priorities
+        elite_selection_report["generated_validation_task_file"] = generated_task
+        elite_selection_report["generated_validation_task_selected"] = True
+        elite_selection_report["priority_reasons"] = list(dict.fromkeys([
+            "generated_evidence_acquisition_opportunity",
+            *list(elite_selection_report.get("priority_reasons") or []),
+        ]))
+        return selected, elite_selection_report, selection_report, report
+
+    def _is_elite_task(self, task_file, task_directory=None):
+        if str(task_file).startswith("elite_cognitive_task_"):
+            return True
+        metadata = self._task_metadata(task_file, task_directory)
+        return bool(
+            metadata.get("elite_cognitive_task")
+            or str(metadata.get("curriculum", "")).startswith(
+                "nexryn_elite_cognitive_training"
+            )
+        )
+
+    def _partition_elite_tasks(self, task_files, task_directory=None):
+        elite = []
+        normal = []
+        for task_file in task_files:
+            if self._is_elite_task(task_file, task_directory):
+                elite.append(task_file)
+            else:
+                normal.append(task_file)
+        return elite, normal
+
+    def _elite_operationalization_policy_active(
+        self,
+        elite_task_files,
+        task_directory=None,
+    ):
+        if len(elite_task_files) < self.batch_size:
+            return False
+        for task_file in elite_task_files[: min(len(elite_task_files), 20)]:
+            metadata = self._task_metadata(task_file, task_directory)
+            if (
+                metadata.get("curriculum") == ELITE_CURRICULUM_NAME
+                and metadata.get("operationalization_phase_curriculum")
+            ):
+                return True
+        return False
+
+    def _active_batch_matches_elite_policy(
+        self,
+        task_files,
+        elite_task_files,
+        task_directory=None,
+    ):
+        if not elite_task_files:
+            return True
+        active_batch = list(self.state.get("active_batch", []))
+        elite_set = set(elite_task_files)
+        if self._elite_operationalization_policy_active(
+            elite_task_files,
+            task_directory,
+        ):
+            return active_batch and all(
+                task_file in elite_set for task_file in active_batch
+            )
+        return sum(1 for task_file in active_batch if task_file in elite_set) == 1
+
+    def _core_knowledge_concepts(self, core_knowledge=None):
+        concepts = set()
+        for item in core_knowledge or []:
+            if not isinstance(item, dict):
+                continue
+            concept = item.get("concept")
+            if concept:
+                concepts.add(str(concept))
+        return concepts
+
+    def _load_survival_store(self):
+        if not self.survival_store_path.exists():
+            return {}
+        try:
+            with self.survival_store_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            return data if isinstance(data, dict) else {}
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    def _survival_reappearance_targets(self):
+        rows = [
+            row for row in self._load_survival_store().values()
+            if isinstance(row, dict)
+        ]
+        population_policy = self._capability_population_evolution_policy(rows)
+        targets = []
+        for row in rows:
+            lifecycle_state = str(row.get("lifecycle_state") or "")
+            next_evidence = str(row.get("next_required_evidence") or "")
+            if lifecycle_state not in {
+                "ARENA_SIMULATED",
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }:
+                continue
+            if next_evidence not in {
+                "independent_task_reappearance",
+                "repeatable_validation_across_independent_task",
+                "prediction_quality_improvement",
+                "validator_acceptance",
+                "stability_recovery_evidence",
+                "exact_or_governed_validation_success",
+            }:
+                continue
+            improvement_trend = str(row.get("improvement_trend") or "")
+            try:
+                best_accuracy = float(row.get("best_accuracy"))
+            except (TypeError, ValueError):
+                best_accuracy = 0.0
+            try:
+                average_accuracy = float(row.get("average_accuracy"))
+            except (TypeError, ValueError):
+                average_accuracy = 0.0
+            arena_quality_count = int(row.get("arena_quality_count", 0) or 0)
+            distinct_task_count = int(row.get("distinct_task_count", 0) or 0)
+            crystallization_candidate = (
+                lifecycle_state in {
+                    "INCUBATING_VALIDATION_GAP",
+                    "SURVIVING_CAPABILITY",
+                }
+                and arena_quality_count >= 3
+                and distinct_task_count >= 3
+                and best_accuracy >= 0.90
+                and average_accuracy >= 0.75
+                and improvement_trend not in {"DECLINING", "DECLINING_CRITICAL"}
+            )
+            if (
+                distinct_task_count >= 3
+                and improvement_trend not in {"DECLINING", "DECLINING_CRITICAL"}
+                and not crystallization_candidate
+            ):
+                continue
+            priority = (
+                100
+                + int(row.get("validation_attempts", 0) or 0) * 8
+                + int(row.get("arena_simulated_count", 0) or 0) * 5
+                + best_accuracy * 40
+            )
+            if lifecycle_state == "INCUBATING_VALIDATION_GAP":
+                priority += 35
+            elif lifecycle_state == "SURVIVING_CAPABILITY":
+                priority += 20
+            if improvement_trend in {"DECLINING", "DECLINING_CRITICAL"}:
+                priority += 90
+            if crystallization_candidate:
+                priority += 120
+            if population_policy.get("policy_state") in {
+                "POPULATION_EVOLUTION_SPRINT",
+                "SEVERE_POPULATION_EVOLUTION_SPRINT",
+            }:
+                if lifecycle_state == "SURVIVING_CAPABILITY":
+                    priority += 160
+                elif crystallization_candidate:
+                    priority += 110
+                elif lifecycle_state == "INCUBATING_VALIDATION_GAP":
+                    priority += 50
+            targets.append({
+                "capability_id": row.get("capability_id"),
+                "operation": str(row.get("operation") or ""),
+                "domain": str(row.get("domain") or ""),
+                "semantic_intent": str(row.get("semantic_intent") or ""),
+                "lifecycle_state": lifecycle_state,
+                "next_required_evidence": next_evidence,
+                "improvement_trend": improvement_trend,
+                "best_accuracy": best_accuracy,
+                "average_accuracy": average_accuracy,
+                "arena_quality_count": arena_quality_count,
+                "distinct_task_count": distinct_task_count,
+                "crystallization_candidate": crystallization_candidate,
+                "maturation_no_progress": (
+                    lifecycle_state == "SURVIVING_CAPABILITY"
+                    and next_evidence == "exact_or_governed_validation_success"
+                    and distinct_task_count >= 8
+                    and int(row.get("validation_attempts", 0) or 0) >= 6
+                    and average_accuracy < 0.80
+                ),
+                "required_task_property": self._required_task_property_for_evidence(
+                    row,
+                    next_evidence,
+                ),
+                "population_evolution_target": bool(
+                    row.get("capability_id") in set(
+                        population_policy.get("target_capability_ids", [])
+                    )
+                ),
+                "priority": round(priority, 4),
+            })
+        targets.sort(
+            key=lambda item: (
+                -float(item.get("priority") or 0.0),
+                str(item.get("capability_id") or ""),
+            )
+        )
+        return targets[:10]
+
+    def _capability_population_evolution_policy(self, rows=None):
+        rows = [
+            row for row in (rows if rows is not None else self._load_survival_store().values())
+            if isinstance(row, dict)
+        ]
+        citizen_rows = [
+            row for row in rows
+            if row.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+        ]
+        maturation_rows = []
+        graduation_rows = []
+        operational_experience_count = 0
+        for row in rows:
+            experience_count = self._row_int(
+                row,
+                "operational_experience_count",
+                "experience_count",
+                "reuse_count",
+            )
+            if experience_count <= 0:
+                experience_count = max(
+                    self._row_int(row, "arena_simulated_count"),
+                    self._row_int(row, "distinct_task_count"),
+                )
+            operational_experience_count += experience_count
+            lifecycle_state = str(row.get("lifecycle_state") or "")
+            if lifecycle_state not in {
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }:
+                continue
+            best_accuracy = self._row_float(row, "best_accuracy")
+            average_accuracy = self._row_float(row, "average_accuracy")
+            distinct_task_count = self._row_int(row, "distinct_task_count")
+            arena_quality_count = self._row_int(row, "arena_quality_count")
+            arena_simulated_count = self._row_int(row, "arena_simulated_count")
+            trend = str(row.get("improvement_trend") or "")
+            if (
+                distinct_task_count >= 3
+                and max(arena_quality_count, arena_simulated_count) >= 3
+                and best_accuracy >= 0.85
+                and average_accuracy >= 0.70
+                and trend not in {"DECLINING_CRITICAL"}
+            ):
+                maturation_rows.append(row)
+            if (
+                lifecycle_state == "SURVIVING_CAPABILITY"
+                and distinct_task_count >= 15
+                and max(arena_quality_count, arena_simulated_count) >= 15
+                and best_accuracy >= 0.90
+                and average_accuracy >= 0.70
+                and trend in {
+                    "IMPROVING",
+                    "STABLE",
+                    "STABLE_HIGH_PERFORMANCE",
+                    "DECLINING_MINOR",
+                }
+            ):
+                graduation_rows.append(row)
+        citizen_count = len(citizen_rows)
+        expected_population = max(
+            citizen_count + len(maturation_rows),
+            int(
+                (operational_experience_count + self.TARGET_EXPERIENCE_PER_CAPABILITY - 1)
+                / self.TARGET_EXPERIENCE_PER_CAPABILITY
+            )
+            if operational_experience_count > 0
+            else 0,
+        )
+        evolution_gap = max(expected_population - citizen_count, 0)
+        evolution_lag = (
+            round(evolution_gap / expected_population, 4)
+            if expected_population > 0
+            else None
+        )
+        experience_per_citizen = (
+            round(operational_experience_count / citizen_count, 4)
+            if citizen_count > 0
+            else None
+        )
+        policy_state = (
+            "NOT_MEASURABLE"
+            if expected_population <= 0
+            else "SEVERE_POPULATION_EVOLUTION_SPRINT"
+            if evolution_lag is not None and evolution_lag >= 0.60
+            else "POPULATION_EVOLUTION_SPRINT"
+            if evolution_lag is not None and evolution_lag >= 0.30
+            else "POPULATION_EVOLVING"
+        )
+        maturation_rows.sort(
+            key=lambda row: (
+                str(row.get("lifecycle_state") or "") != "SURVIVING_CAPABILITY",
+                -self._row_float(row, "best_accuracy"),
+                -self._row_float(row, "average_accuracy"),
+                str(row.get("capability_id") or ""),
+            )
+        )
+        return {
+            "system": "capability_population_evolution_policy",
+            "policy_state": policy_state,
+            "target_experience_per_capability": self.TARGET_EXPERIENCE_PER_CAPABILITY,
+            "operational_experience_count": operational_experience_count,
+            "operational_citizen_count": citizen_count,
+            "maturation_backlog_count": len(maturation_rows),
+            "graduation_queue_count": len(graduation_rows),
+            "expected_operational_population": expected_population,
+            "capability_population_evolution_gap": evolution_gap,
+            "capability_population_evolution_lag": evolution_lag,
+            "operational_experience_per_citizen": experience_per_citizen,
+            "target_capability_ids": [
+                str(row.get("capability_id"))
+                for row in maturation_rows[:10]
+                if row.get("capability_id")
+            ],
+            "target_operations": list(dict.fromkeys(
+                str(row.get("operation"))
+                for row in maturation_rows[:10]
+                if row.get("operation")
+            )),
+            "graduation_target_operations": list(dict.fromkeys(
+                str(row.get("operation"))
+                for row in graduation_rows[:10]
+                if row.get("operation")
+            )),
+            "governance_action": (
+                "graduation_sprint_required"
+                if graduation_rows
+                else
+                "prioritize_maturation_reappearance"
+                if policy_state in {
+                    "POPULATION_EVOLUTION_SPRINT",
+                    "SEVERE_POPULATION_EVOLUTION_SPRINT",
+                }
+                else "monitor_population_evolution"
+            ),
+        }
+
+    def _row_int(self, row, *keys):
+        for key in keys:
+            try:
+                value = row.get(key)
+                if value is not None:
+                    return int(value or 0)
+            except (TypeError, ValueError):
+                continue
+        return 0
+
+    def _row_float(self, row, key):
+        try:
+            return float(row.get(key) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _survival_terms_for(self, target):
+        operation = str(target.get("operation") or "").lower()
+        domain = str(target.get("domain") or "").lower()
+        semantic_intent = str(target.get("semantic_intent") or "").lower()
+        terms = {
+            operation,
+            domain,
+            semantic_intent,
+            operation.replace("preserve_", ""),
+            semantic_intent.replace("_preservation", ""),
+        }
+        if "topolog" in operation or "topolog" in domain or "topolog" in semantic_intent:
+            terms.update({"topology", "topological_reasoning", "topological_growth"})
+        if "color" in operation or "color" in domain or "color" in semantic_intent:
+            terms.update({"color", "color_transformation", "color_mapping"})
+        if "growth" in operation or "growth" in domain or operation == "duplicate_object":
+            terms.update({"growth", "topological_growth", "object_evolution"})
+        if "spatial" in domain or "grid" in operation or "translate" in operation:
+            terms.update({"spatial", "spatial_reasoning", "translation"})
+        if "identity" in operation or "identity" in domain or "identity" in semantic_intent:
+            terms.update({"identity", "identity_preservation"})
+        return {term for term in terms if term}
+
+    def _required_task_property_for_evidence(self, row, next_evidence):
+        operation = str(row.get("operation") or "").lower()
+        if next_evidence == "exact_or_governed_validation_success":
+            if operation == "translate":
+                return "unambiguous_directional_translation_ground_truth"
+            return "exact_or_governed_validation_ground_truth"
+        if next_evidence == "stability_recovery_evidence":
+            return "stability_recovery_probe"
+        if next_evidence in {
+            "independent_task_reappearance",
+            "repeatable_validation_across_independent_task",
+        }:
+            return "independent_task_signature"
+        if next_evidence == "prediction_quality_improvement":
+            return "quality_improvement_probe"
+        if next_evidence == "validator_acceptance":
+            return "validator_acceptance_probe"
+        return "independent_task_signature"
+
+    def _task_evidence_terms(self, metadata):
+        values = []
+        for key in (
+            "required_evidence",
+            "evidence_targets",
+            "validation_evidence",
+            "task_properties",
+            "transformation_contract",
+            "operation_contract",
+            "primary_operation",
+            "ground_truth_type",
+            "required_task_property",
+            "required_ground_truth",
+            "target_capability",
+            "target_cluster",
+            "target_domain",
+            "validation_objective",
+            "trust_objective",
+            "graduation_objective",
+            "operationalization_objective",
+        ):
+            values.extend(self._flatten_metadata_values(metadata.get(key)))
+        normalized = {
+            str(value).strip().lower()
+            for value in values
+            if str(value).strip()
+        }
+        if "translate" in normalized or "translation" in normalized:
+            normalized.add("directional_translation")
+        if "directional_translation" in normalized:
+            normalized.add("unambiguous_directional_translation_ground_truth")
+        if "exact_validation" in normalized or "exact_match" in normalized:
+            normalized.add("exact_or_governed_validation_success")
+        if "governed_validation" in normalized:
+            normalized.add("exact_or_governed_validation_success")
+        return normalized
+
+    def _flatten_metadata_values(self, value):
+        if value is None:
+            return []
+        if isinstance(value, dict):
+            flattened = []
+            for item in value.values():
+                flattened.extend(self._flatten_metadata_values(item))
+            return flattened
+        if isinstance(value, (list, tuple, set)):
+            flattened = []
+            for item in value:
+                flattened.extend(self._flatten_metadata_values(item))
+            return flattened
+        return [value]
+
+    def _domain_label(self, domain):
+        label = str(domain or "").strip()
+        for suffix in (" Cognitive Domain", " Domain"):
+            if label.endswith(suffix):
+                label = label[: -len(suffix)]
+        return label.strip().title()
+
+    def _domain_citizenship_gaps(self):
+        expected_domains = {
+            "Color",
+            "Geometry",
+            "Growth",
+            "Identity",
+            "Spatial",
+            "Topology",
+            "Transformation",
+        }
+        rows = [
+            row for row in self._load_survival_store().values()
+            if isinstance(row, dict)
+        ]
+        citizen_domains = {
+            self._domain_label(row.get("domain"))
+            for row in rows
+            if row.get("lifecycle_state") == "OPERATIONAL_CITIZEN"
+            and row.get("domain")
+        }
+        candidate_domains = {
+            self._domain_label(row.get("domain"))
+            for row in rows
+            if row.get("domain")
+            and row.get("lifecycle_state") in {
+                "ARENA_SIMULATED",
+                "INCUBATING_VALIDATION_GAP",
+                "SURVIVING_CAPABILITY",
+            }
+        }
+        regression_domains = {
+            self._domain_label(row.get("domain"))
+            for row in rows
+            if row.get("domain")
+            and row.get("improvement_trend") in {"DECLINING", "DECLINING_CRITICAL"}
+        }
+        missing = sorted(expected_domains - citizen_domains)
+        active_missing = sorted(candidate_domains - citizen_domains)
+        return {
+            "expected_domains": sorted(expected_domains),
+            "citizen_domains": sorted(citizen_domains),
+            "missing_citizen_domains": missing,
+            "active_missing_citizen_domains": active_missing,
+            "regression_domains": sorted(regression_domains),
+        }
+
+    def _domain_terms_for(self, domain):
+        domain = self._domain_label(domain).lower()
+        terms = {domain}
+        if domain == "spatial":
+            terms.update({"spatial_reasoning", "translation", "path_finding"})
+        elif domain == "identity":
+            terms.update({"identity_preservation", "preserve_grid", "preserve_shape"})
+        elif domain == "transformation":
+            terms.update({"transformation", "program_composition", "unknown_transformation"})
+        elif domain == "topology":
+            terms.update({"topological_reasoning", "topological_change", "bridge_creation"})
+        elif domain == "geometry":
+            terms.update({"geometry", "symmetry", "reflection", "rotation"})
+        elif domain == "growth":
+            terms.update({"growth", "object_evolution", "duplicate_object"})
+        elif domain == "color":
+            terms.update({"color", "color_transformation", "preserve_colors"})
+        return terms
+
+    def _domain_citizenship_priority(self, task_terms, domain_gaps):
+        task_terms = {str(term).lower() for term in task_terms if term}
+        active_missing = domain_gaps.get("active_missing_citizen_domains") or []
+        missing = domain_gaps.get("missing_citizen_domains") or []
+        priority = 0.0
+        matches = []
+        for domain in missing:
+            domain_terms = self._domain_terms_for(domain)
+            overlap = task_terms & domain_terms
+            if not overlap:
+                continue
+            rank_bonus = max(
+                0,
+                6 - self.DOMAIN_OPERATIONALIZATION_ORDER.get(domain, 6),
+            ) * 12.0
+            contribution = (110.0 if domain in active_missing else 55.0) + rank_bonus
+            priority += contribution
+            matches.append({
+                "domain": domain,
+                "matched_terms": sorted(overlap),
+                "priority": contribution,
+                "gap_type": (
+                    "active_capability_without_citizen"
+                    if domain in active_missing
+                    else "missing_domain_citizen"
+                ),
+            })
+        matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
+        return round(priority, 4), matches[:3]
+
+    def _survival_reappearance_priority(
+        self,
+        task_terms,
+        evidence_terms,
+        targets,
+        population_policy=None,
+    ):
+        task_terms = {str(term).lower() for term in task_terms if term}
+        evidence_terms = {str(term).lower() for term in evidence_terms if term}
+        population_policy = population_policy or {}
+        sprint_active = population_policy.get("policy_state") in {
+            "POPULATION_EVOLUTION_SPRINT",
+            "SEVERE_POPULATION_EVOLUTION_SPRINT",
+        }
+        matches = []
+        priority = 0.0
+        for target in targets:
+            survival_terms = self._survival_terms_for(target)
+            overlap = task_terms & survival_terms
+            if not overlap:
+                continue
+            contribution = float(target.get("priority") or 0.0) * (
+                len(overlap) / max(len(survival_terms), 1)
+            )
+            evidence_aligned = self._evidence_gap_aligned(
+                target,
+                evidence_terms,
+            )
+            if evidence_aligned:
+                contribution += 220.0
+            if sprint_active and target.get("population_evolution_target"):
+                contribution += 90.0 if evidence_aligned else 15.0
+            priority += contribution
+            matches.append({
+                "capability_id": target.get("capability_id"),
+                "operation": target.get("operation"),
+                "lifecycle_state": target.get("lifecycle_state"),
+                "next_required_evidence": target.get("next_required_evidence"),
+                "crystallization_candidate": bool(
+                    target.get("crystallization_candidate")
+                ),
+                "population_evolution_target": bool(
+                    target.get("population_evolution_target")
+                ),
+                "maturation_no_progress": bool(
+                    target.get("maturation_no_progress")
+                ),
+                "required_task_property": target.get("required_task_property"),
+                "evidence_gap_aligned": bool(evidence_aligned),
+                "matched_terms": sorted(overlap),
+                "priority": round(contribution, 4),
+            })
+        matches.sort(key=lambda item: -float(item.get("priority") or 0.0))
+        return round(priority, 4), matches[:3]
+
+    def _evidence_gap_aligned(self, target, evidence_terms):
+        next_evidence = str(target.get("next_required_evidence") or "")
+        required = str(target.get("required_task_property") or "").lower()
+        operation = str(target.get("operation") or "").lower()
+        if next_evidence == "exact_or_governed_validation_success":
+            if required and required in evidence_terms:
+                return True
+            if operation == "translate":
+                return (
+                    "directional_translation" in evidence_terms
+                    and (
+                        "exact_or_governed_validation_success" in evidence_terms
+                        or "exact_validation" in evidence_terms
+                        or "governed_validation" in evidence_terms
+                        or "unambiguous_ground_truth" in evidence_terms
+                    )
+                )
+            return (
+                "exact_or_governed_validation_success" in evidence_terms
+                or "exact_validation" in evidence_terms
+                or "governed_validation" in evidence_terms
+            )
+        if next_evidence == "stability_recovery_evidence":
+            return "stability_recovery_probe" in evidence_terms
+        return False
+
+    def _bounded_score(self, value, lower=0.0, upper=1.0):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            numeric = lower
+        if not math.isfinite(numeric):
+            numeric = lower
+        return max(float(lower), min(float(upper), numeric))
+
+    def _recent_selection_positions(self, task_file, window=None):
+        window = (
+            self.ADAPTIVE_SELECTION_RECENCY_WINDOW
+            if window is None else max(int(window), 1)
+        )
+        recent_runs = list(self.selection_memory.get("recent_runs", []) or [])
+        positions = []
+        for age, run in enumerate(reversed(recent_runs[-window:]), start=1):
+            if not isinstance(run, dict):
+                continue
+            task_ids = [str(item) for item in run.get("task_ids", []) or []]
+            if str(task_file) in task_ids:
+                positions.append(age)
+        return positions
+
+    def _recent_selection_term_counts(self, task_directory=None, window=None):
+        window = (
+            self.ADAPTIVE_SELECTION_RECENCY_WINDOW
+            if window is None else max(int(window), 1)
+        )
+        recent_runs = list(self.selection_memory.get("recent_runs", []) or [])
+        counts = {}
+        selected_task_ids = set()
+        for run in recent_runs[-window:]:
+            if not isinstance(run, dict):
+                continue
+            for task_file in run.get("task_ids", []) or []:
+                task_file = str(task_file)
+                selected_task_ids.add(task_file)
+                metadata = self._task_metadata(task_file, task_directory)
+                for term in self._metadata_terms(metadata):
+                    counts[term] = counts.get(term, 0) + 1
+        return counts, selected_task_ids
+
+    def _adaptive_selection_score(
+        self,
+        task_file,
+        base_priority,
+        task_terms,
+        concepts,
+        capabilities,
+        priority_reasons,
+        survival_matches=None,
+        domain_matches=None,
+        economy_matches=None,
+        academy_matches=None,
+        task_directory=None,
+    ):
+        record = self._task_record(task_file)
+        times_selected = self._bounded_score(
+            record.get("times_selected"),
+            lower=0.0,
+            upper=10_000.0,
+        )
+        recent_selection_count = self._bounded_score(
+            record.get("recent_selection_count"),
+            lower=0.0,
+            upper=10_000.0,
+        )
+        recent_positions = self._recent_selection_positions(task_file)
+        recent_term_counts, recent_task_ids = self._recent_selection_term_counts(
+            task_directory=task_directory,
+        )
+        previous_batch = {
+            str(item)
+            for item in self.selection_memory.get("previous_batch", []) or []
+        }
+        task_terms = {
+            self._term(term)
+            for term in task_terms
+            if self._term(term)
+        }
+        repeated_recently = bool(recent_positions) or str(task_file) in previous_batch
+        exposure_penalty = min(
+            self.MAX_EXPOSURE_PENALTY,
+            max(0.0, times_selected - 2.0) * 18.0
+            + max(0.0, recent_selection_count - 1.0) * 28.0,
+        )
+        recency_penalty = 0.0
+        for age in recent_positions:
+            recency_penalty += max(0.0, 7.0 - float(age)) * 28.0
+        if str(task_file) in previous_batch:
+            recency_penalty += 130.0
+        recency_penalty = min(self.MAX_RECENCY_PENALTY, recency_penalty)
+
+        if times_selected <= 0:
+            novelty_seed = 95.0
+        elif times_selected <= 2:
+            novelty_seed = 45.0
+        else:
+            novelty_seed = 0.0
+        overlap = sum(1 for term in task_terms if recent_term_counts.get(term, 0) > 0)
+        overlap_ratio = overlap / max(len(task_terms), 1)
+        novelty_bonus = min(
+            self.MAX_NOVELTY_BONUS,
+            novelty_seed * max(0.25, 1.0 - overlap_ratio),
+        )
+
+        unobserved_signals = sum(
+            1
+            for reason in priority_reasons
+            if str(reason).startswith("unobserved_target:")
+            or str(reason).startswith("low_target_coverage:")
+            or str(reason).startswith("active_lifecycle_gap:")
+        )
+        independent_value_signals = (
+            len(survival_matches or [])
+            + len(domain_matches or [])
+            + len(economy_matches or [])
+            + len(academy_matches or [])
+        )
+        information_gain_bonus = min(
+            self.MAX_INFORMATION_GAIN_BONUS,
+            unobserved_signals * 18.0 + independent_value_signals * 14.0,
+        )
+        if times_selected > 0 and not independent_value_signals:
+            information_gain_bonus *= 0.55
+
+        coverage_terms = [
+            self._term(term)
+            for term in list(concepts or []) + list(capabilities or [])
+            if self._term(term)
+        ]
+        undercovered_terms = [
+            term
+            for term in coverage_terms
+            if recent_term_counts.get(term, 0) <= 0
+        ]
+        coverage_bonus = min(
+            self.MAX_COVERAGE_BONUS,
+            len(set(undercovered_terms)) * 12.0,
+        )
+        if str(task_file) in recent_task_ids:
+            coverage_bonus *= 0.35
+
+        remediation_adjustment = 0.0
+        remediation = self.selection_memory.get("last_evidence_remediation", {})
+        if isinstance(remediation, dict):
+            remediation_task = remediation.get("evidence_remediation_task")
+            remediation_terms = {
+                self._term(remediation.get("evidence_remediation_deficit")),
+                self._term(remediation.get("evidence_remediation_responsible_area")),
+            }
+            remediation_terms.discard("")
+            if remediation_task == task_file:
+                remediation_adjustment += 180.0
+            elif remediation_terms and task_terms.intersection(remediation_terms):
+                remediation_adjustment += 90.0
+        remediation_adjustment = min(
+            self.MAX_REMEDIATION_ADJUSTMENT,
+            remediation_adjustment,
+        )
+
+        final_score = (
+            self._bounded_score(base_priority, lower=-100_000.0, upper=100_000.0)
+            - exposure_penalty
+            - recency_penalty
+            + novelty_bonus
+            + information_gain_bonus
+            + coverage_bonus
+            + remediation_adjustment
+        )
+        reasons = ["adaptive_selection_score_applied"]
+        if exposure_penalty:
+            reasons.append("exposure_penalty_applied")
+        if recency_penalty:
+            reasons.append("recency_penalty_applied")
+        if novelty_bonus:
+            reasons.append("novelty_bonus_applied")
+        if information_gain_bonus:
+            reasons.append("information_gain_bonus_applied")
+        if coverage_bonus:
+            reasons.append("coverage_bonus_applied")
+        if remediation_adjustment:
+            reasons.append("remediation_adjustment_preserved")
+        if repeated_recently and final_score > 0:
+            reasons.append("repeated_task_retained_when_value_exceeds_penalty")
+        return {
+            "base_priority": round(float(base_priority), 4),
+            "exposure_penalty": round(exposure_penalty, 4),
+            "recency_penalty": round(recency_penalty, 4),
+            "novelty_bonus": round(novelty_bonus, 4),
+            "information_gain_bonus": round(information_gain_bonus, 4),
+            "coverage_bonus": round(coverage_bonus, 4),
+            "remediation_adjustment": round(remediation_adjustment, 4),
+            "final_selection_score": round(final_score, 4),
+            "times_selected": int(times_selected),
+            "recent_selection_count": int(recent_selection_count),
+            "recent_selection_positions": recent_positions,
+            "selection_reason": reasons,
+            "authority": "TrainingAssistant",
+            "dataset_expansion_authority": "NONE",
+            "runtime_budget_authority": "NONE",
+        }
+
+    def _elite_priority_for(
+        self,
+        task_file,
+        order,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+        survival_targets=None,
+        domain_gaps=None,
+        population_policy=None,
+        operational_economy_context=None,
+        validation_academy_tasks=None,
+    ):
+        metadata = self._task_metadata(task_file, task_directory)
+        concepts = [
+            str(concept)
+            for concept in metadata.get("target_concepts", [])
+            if concept
+        ]
+        deficiencies = [
+            str(item)
+            for item in metadata.get("deficiency_targets", [])
+            if item
+        ]
+        capabilities = [
+            str(item)
+            for item in metadata.get("required_operational_capabilities", [])
+            if item
+        ]
+        task_terms = set(concepts) | set(deficiencies) | set(capabilities)
+        evidence_terms = self._task_evidence_terms(metadata)
+        concept_counts = concept_counts or {}
+        concept_states = self.curriculum_manager._concept_states(
+            concept_states
+        )
+        priority = 0
+        reasons = []
+        for concept in concepts:
+            count = int(concept_counts.get(concept, 0))
+            if count <= 0:
+                priority += 60
+                reasons.append(f"unobserved_target:{concept}")
+            elif count < 5:
+                priority += (5 - count) * 10
+                reasons.append(f"low_target_coverage:{concept}")
+            state = concept_states.get(concept)
+            if state in {"DISCOVERING", "BOUNDARY_REFINEMENT", "UNKNOWN"}:
+                priority += 15
+                reasons.append(f"active_lifecycle_gap:{concept}")
+        core_concepts = self._core_knowledge_concepts(core_knowledge)
+        if "replace_color" in core_concepts and not any(
+            "color" in concept for concept in concepts
+        ):
+            priority += 80
+            reasons.append("capability_monopoly_pressure:replace_color")
+        if "topological_reasoning" in concepts or "topological_change" in concepts:
+            priority += 25
+            reasons.append("topology_domain_operationalization_pressure")
+        if any("composition" in concept for concept in concepts + capabilities):
+            priority += 20
+            reasons.append("low_operational_yield_composition_probe")
+        if any("unknown" in concept for concept in concepts + capabilities):
+            priority += 20
+            reasons.append("novel_capability_discovery_probe")
+        survival_priority, survival_matches = (
+            self._survival_reappearance_priority(
+                task_terms,
+                evidence_terms,
+                survival_targets or [],
+                population_policy=population_policy,
+            )
+        )
+        if survival_priority:
+            priority += survival_priority
+            reasons.append("survival_store_independent_reappearance_probe")
+            if any(
+                match.get("crystallization_candidate")
+                for match in survival_matches
+            ):
+                reasons.append("capability_crystallization_probe")
+            if (
+                population_policy
+                and population_policy.get("policy_state") in {
+                    "POPULATION_EVOLUTION_SPRINT",
+                    "SEVERE_POPULATION_EVOLUTION_SPRINT",
+                }
+                and any(
+                    match.get("population_evolution_target")
+                    for match in survival_matches
+                )
+            ):
+                reasons.append("capability_population_evolution_sprint")
+            if population_policy and any(
+                match.get("operation")
+                in set(population_policy.get("graduation_target_operations", []))
+                for match in survival_matches
+            ):
+                reasons.append("capability_graduation_sprint_required")
+            if any(
+                match.get("evidence_gap_aligned")
+                for match in survival_matches
+            ):
+                reasons.append("evidence_gap_aligned_maturation_probe")
+            if any(
+                match.get("maturation_no_progress")
+                for match in survival_matches
+            ):
+                reasons.append("maturation_no_progress_repair_probe")
+        domain_priority, domain_matches = self._domain_citizenship_priority(
+            task_terms,
+            domain_gaps or {},
+        )
+        if domain_priority:
+            priority += domain_priority
+            reasons.append("domain_citizenship_gap_probe")
+        economy_priority, economy_reasons, economy_matches = (
+            self._training_economy_priority(
+                metadata,
+                operational_economy_context or {},
+            )
+        )
+        if economy_priority:
+            priority += economy_priority
+            reasons.extend(economy_reasons)
+        academy_priority, academy_reasons, academy_matches = (
+            self._validation_academy_priority(
+                metadata,
+                validation_academy_tasks=validation_academy_tasks or [],
+                survival_targets=survival_targets or [],
+                operational_economy_context=operational_economy_context or {},
+            )
+        )
+        if academy_priority:
+            priority += academy_priority
+            reasons.extend(academy_reasons)
+        priority += max(0, 20 - order) * 0.01
+        base_priority = round(priority, 4)
+        adaptive_score = self._adaptive_selection_score(
+            task_file,
+            base_priority,
+            task_terms,
+            concepts,
+            capabilities,
+            reasons,
+            survival_matches=survival_matches,
+            domain_matches=domain_matches,
+            economy_matches=economy_matches,
+            academy_matches=academy_matches,
+            task_directory=task_directory,
+        )
+        priority = adaptive_score["final_selection_score"]
+        reasons = list(dict.fromkeys([
+            *reasons,
+            *adaptive_score.get("selection_reason", []),
+        ]))
+        return {
+            "task_file": task_file,
+            "original_order": order,
+            "target_concepts": concepts,
+            "deficiency_targets": deficiencies,
+            "required_operational_capabilities": capabilities,
+            "evidence_terms": sorted(evidence_terms),
+            "priority": round(priority, 4),
+            "base_priority": base_priority,
+            "adaptive_selection_score": adaptive_score,
+            "exposure_penalty": adaptive_score["exposure_penalty"],
+            "recency_penalty": adaptive_score["recency_penalty"],
+            "novelty_bonus": adaptive_score["novelty_bonus"],
+            "information_gain_bonus": adaptive_score[
+                "information_gain_bonus"
+            ],
+            "coverage_bonus": adaptive_score["coverage_bonus"],
+            "remediation_adjustment": adaptive_score[
+                "remediation_adjustment"
+            ],
+            "final_selection_score": adaptive_score[
+                "final_selection_score"
+            ],
+            "times_selected": adaptive_score["times_selected"],
+            "recent_selection_count": adaptive_score[
+                "recent_selection_count"
+            ],
+            "recent_selection_positions": adaptive_score[
+                "recent_selection_positions"
+            ],
+            "priority_reasons": reasons,
+            "survival_reappearance_matches": survival_matches,
+            "domain_citizenship_matches": domain_matches,
+            "training_economy_matches": economy_matches,
+            "validation_academy_matches": academy_matches,
+        }
+
+    def _elite_priorities(
+        self,
+        elite_task_files,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+        operational_economy_context=None,
+    ):
+        if not elite_task_files:
+            return [], [], {}, {}, {}
+        start = int(self.state.get("next_elite_task_index", 0))
+        start %= len(elite_task_files)
+        rotated = [
+            elite_task_files[(start + offset) % len(elite_task_files)]
+            for offset in range(len(elite_task_files))
+        ]
+        survival_targets = self._survival_reappearance_targets()
+        domain_gaps = self._domain_citizenship_gaps()
+        population_policy = self._capability_population_evolution_policy()
+        validation_academy_tasks = self._load_validation_academy_tasks()
+        priorities = [
+            self._elite_priority_for(
+                task_file,
+                order,
+                concept_counts=concept_counts,
+                concept_states=concept_states,
+                task_directory=task_directory,
+                core_knowledge=core_knowledge,
+                survival_targets=survival_targets,
+                domain_gaps=domain_gaps,
+                population_policy=population_policy,
+                operational_economy_context=operational_economy_context,
+                validation_academy_tasks=validation_academy_tasks,
+            )
+            for order, task_file in enumerate(rotated)
+        ]
+        priorities.sort(
+            key=lambda item: (
+                -item["priority"],
+                item.get("recent_selection_count", 0),
+                item.get("times_selected", 0),
+                item["original_order"],
+            )
+        )
+        for rank, item in enumerate(priorities, start=1):
+            item["selection_rank"] = rank
+            item["tie_breaking_policy"] = (
+                "final_selection_score_then_lowest_recent_exposure_then_order"
+            )
+        return rotated, priorities, survival_targets, domain_gaps, population_policy
+
+    def _select_elite_task(
+        self,
+        elite_task_files,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+        operational_economy_context=None,
+    ):
+        if not elite_task_files:
+            return None, {
+                "system": "elite_task_selection",
+                "elite_task_available": False,
+            }
+        rotated, priorities, survival_targets, domain_gaps, population_policy = (
+            self._elite_priorities(
+                elite_task_files,
+                concept_counts=concept_counts,
+                concept_states=concept_states,
+                task_directory=task_directory,
+                core_knowledge=core_knowledge,
+                operational_economy_context=operational_economy_context,
+            )
+        )
+        selected = priorities[0]["task_file"]
+        selected_rotated_index = rotated.index(selected)
+        start = int(self.state.get("next_elite_task_index", 0))
+        return selected, {
+            "system": "elite_task_selection",
+            "elite_task_available": True,
+            "policy": "exactly_one_elite_task_per_cycle",
+            "selected_elite_task_file": selected,
+            "elite_task_count": len(elite_task_files),
+            "normal_task_slots": max(self.batch_size - 1, 0),
+            "prioritized_deficiencies": priorities[0].get(
+                "deficiency_targets",
+                [],
+            ),
+            "priority_reasons": priorities[0].get("priority_reasons", []),
+            "survival_reappearance_targets": survival_targets,
+            "survival_reappearance_matches": priorities[0].get(
+                "survival_reappearance_matches",
+                [],
+            ),
+            "domain_citizenship_gaps": domain_gaps,
+            "domain_citizenship_matches": priorities[0].get(
+                "domain_citizenship_matches",
+                [],
+            ),
+            "training_economy_matches": priorities[0].get(
+                "training_economy_matches",
+                [],
+            ),
+            "validation_academy_matches": priorities[0].get(
+                "validation_academy_matches",
+                [],
+            ),
+            "capability_population_evolution_policy": population_policy,
+            "adaptive_task_selection_contract": {
+                "formula": (
+                    "base_priority - exposure_penalty - recency_penalty "
+                    "+ novelty_bonus + information_gain_bonus "
+                    "+ coverage_bonus + remediation_adjustment"
+                ),
+                "selector_decision_owner": "TrainingAssistant",
+                "dataset_expansion_authority": "NONE",
+                "runtime_budget_authority": "NONE",
+                "elite_pool_expansion_authority": "NONE",
+            },
+            "elite_task_priorities": priorities,
+            "next_elite_task_index_after_completion": (
+                start + selected_rotated_index + 1
+            ) % len(elite_task_files),
+        }
+
+    def _select_elite_task_batch(
+        self,
+        elite_task_files,
+        concept_counts=None,
+        concept_states=None,
+        task_directory=None,
+        core_knowledge=None,
+        operational_economy_context=None,
+    ):
+        if not elite_task_files:
+            return [], {
+                "system": "elite_task_selection",
+                "elite_task_available": False,
+            }
+        rotated, priorities, survival_targets, domain_gaps, population_policy = (
+            self._elite_priorities(
+                elite_task_files,
+                concept_counts=concept_counts,
+                concept_states=concept_states,
+                task_directory=task_directory,
+                core_knowledge=core_knowledge,
+                operational_economy_context=operational_economy_context,
+            )
+        )
+        selected = [row["task_file"] for row in priorities[: self.batch_size]]
+        last_selected = selected[-1]
+        selected_rotated_index = rotated.index(last_selected)
+        return selected, {
+            "system": "elite_task_selection",
+            "elite_task_available": True,
+            "policy": "elite_tasks_only_operationalization_phase",
+            "selected_elite_task_file": selected[0],
+            "selected_elite_task_files": selected,
+            "elite_task_count": len(elite_task_files),
+            "normal_task_slots": 0,
+            "prioritized_deficiencies": priorities[0].get(
+                "deficiency_targets",
+                [],
+            ),
+            "priority_reasons": priorities[0].get("priority_reasons", []),
+            "survival_reappearance_targets": survival_targets,
+            "survival_reappearance_matches": priorities[0].get(
+                "survival_reappearance_matches",
+                [],
+            ),
+            "domain_citizenship_gaps": domain_gaps,
+            "domain_citizenship_matches": priorities[0].get(
+                "domain_citizenship_matches",
+                [],
+            ),
+            "training_economy_matches": priorities[0].get(
+                "training_economy_matches",
+                [],
+            ),
+            "validation_academy_matches": priorities[0].get(
+                "validation_academy_matches",
+                [],
+            ),
+            "capability_population_evolution_policy": population_policy,
+            "adaptive_task_selection_contract": {
+                "formula": (
+                    "base_priority - exposure_penalty - recency_penalty "
+                    "+ novelty_bonus + information_gain_bonus "
+                    "+ coverage_bonus + remediation_adjustment"
+                ),
+                "selector_decision_owner": "TrainingAssistant",
+                "dataset_expansion_authority": "NONE",
+                "runtime_budget_authority": "NONE",
+                "elite_pool_expansion_authority": "NONE",
+            },
+            "elite_task_priorities": priorities,
+            "next_elite_task_index_after_completion": (
+                int(self.state.get("next_elite_task_index", 0))
+                + selected_rotated_index
+                + 1
+            ) % len(elite_task_files),
+        }
 
     def _prioritized_tasks(
         self,
@@ -87,6 +2847,8 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         observed_task_ids=None,
+        history=None,
+        core_knowledge=None,
     ):
         rotated = [
             task_files[(start + offset) % len(task_files)]
@@ -98,11 +2860,629 @@ class TrainingAssistant:
             concept_states=concept_states,
             task_directory=task_directory,
             observed_task_ids=observed_task_ids,
+            history=history,
+            core_knowledge=core_knowledge,
         )
         return (
             curriculum_report["ranked_task_files"],
             curriculum_report,
         )
+
+    def _active_epistemic_requirement(self, active_epistemic_requirements):
+        if not active_epistemic_requirements:
+            return None, {
+                "requirement_state": "NO_ACTIVE_REQUIREMENT",
+                "reason": "no_active_epistemic_requirement",
+            }
+        if isinstance(active_epistemic_requirements, dict):
+            requirements = [active_epistemic_requirements]
+        else:
+            requirements = [
+                item for item in active_epistemic_requirements
+                if isinstance(item, dict)
+            ]
+        if len(requirements) != 1:
+            return None, {
+                "requirement_state": "MULTI_REQUIREMENT_ARBITRATION_REQUIRED",
+                "reason": "exactly_one_active_requirement_required_for_shadow_probe",
+                "requirement_count": len(requirements),
+            }
+        requirement = dict(requirements[0])
+        evidence_type = (
+            requirement.get("evidence_type")
+            or requirement.get("required_evidence")
+        )
+        if not evidence_type:
+            return None, {
+                "requirement_state": "INVALID_REQUIREMENT",
+                "reason": "required_evidence_type_missing",
+            }
+        if requirement.get("foreign_requirement") is True:
+            return None, {
+                "requirement_state": "FOREIGN_REQUIREMENT_REJECTED",
+                "reason": "foreign_requirement_cannot_influence_selector",
+            }
+        if str(evidence_type) not in (
+            self.general_task_evidence_profiler.EVIDENCE_TYPE_BY_TERM
+        ):
+            return None, {
+                "requirement_state": "UNKNOWN_EVIDENCE_TYPE",
+                "reason": "unknown_evidence_type_cannot_influence_selector",
+                "evidence_type": str(evidence_type),
+            }
+        if str(requirement.get("authority") or "").upper() in {
+            "TRUTH_COMMITMENT",
+            "SELECTION_AUTHORITY",
+        }:
+            return None, {
+                "requirement_state": "INVALID_REQUIREMENT_AUTHORITY",
+                "reason": "requirement_authority_not_advisory",
+            }
+        requirement.setdefault("requirement_id", str(evidence_type))
+        requirement.setdefault("evidence_type", str(evidence_type))
+        return requirement, {
+            "requirement_state": "ACTIVE_REQUIREMENT_AVAILABLE",
+            "reason": "one_active_requirement_selected_explicitly",
+            "requirement_id": requirement.get("requirement_id"),
+            "evidence_type": requirement.get("evidence_type"),
+        }
+
+    def _epistemic_adjustment_for(self, match):
+        strength = match.get("match_strength")
+        return {
+            "EXACT_MATCH": 1.0,
+            "STRONG_MATCH": 0.5,
+            "PARTIAL_MATCH": 0.1,
+            "NO_MATCH": 0.0,
+            "UNKNOWN": 0.0,
+        }.get(strength, 0.0)
+
+    def _base_rank_rows(
+        self,
+        task_files,
+        *,
+        curriculum_report=None,
+        elite_selection_report=None,
+        selected=None,
+    ):
+        selected = set(selected or [])
+        rows_by_file = {}
+        for row in (curriculum_report or {}).get("task_priorities", []) or []:
+            if not isinstance(row, dict):
+                continue
+            task_file = row.get("task_file")
+            if not task_file:
+                continue
+            rows_by_file[str(task_file)] = {
+                "task_file": str(task_file),
+                "base_score": float(row.get("priority") or 0.0),
+                "base_score_components": {
+                    "priority_reasons": row.get("priority_reasons", []),
+                    "concept_priorities": row.get("concept_priorities", []),
+                    "target_coverage_gap": row.get("target_coverage_gap"),
+                    "unobserved_task": row.get("unobserved_task"),
+                },
+                "base_policy_surface": "curriculum_manager",
+                "original_order": int(row.get("original_order", 0) or 0),
+            }
+        for row in (elite_selection_report or {}).get("elite_task_priorities", []) or []:
+            if not isinstance(row, dict):
+                continue
+            task_file = row.get("task_file")
+            if not task_file:
+                continue
+            rows_by_file[str(task_file)] = {
+                "task_file": str(task_file),
+                "base_score": float(row.get("priority") or 0.0),
+                "base_score_components": {
+                    "priority_reasons": row.get("priority_reasons", []),
+                    "survival_reappearance_matches": row.get(
+                        "survival_reappearance_matches",
+                        [],
+                    ),
+                    "domain_citizenship_matches": row.get(
+                        "domain_citizenship_matches",
+                        [],
+                    ),
+                    "training_economy_matches": row.get(
+                        "training_economy_matches",
+                        [],
+                    ),
+                    "validation_academy_matches": row.get(
+                        "validation_academy_matches",
+                        [],
+                    ),
+                },
+                "base_policy_surface": "elite_task_selection",
+                "original_order": int(row.get("original_order", 0) or 0),
+            }
+        for order, task_file in enumerate(task_files):
+            rows_by_file.setdefault(
+                str(task_file),
+                {
+                    "task_file": str(task_file),
+                    "base_score": 0.0,
+                    "base_score_components": {
+                        "priority_reasons": ["not_scored_on_current_base_surface"],
+                    },
+                    "base_policy_surface": "not_scored_current_policy",
+                    "original_order": order,
+                },
+            )
+        rows = sorted(
+            rows_by_file.values(),
+            key=lambda item: (
+                -item["base_score"],
+                item["original_order"],
+                item["task_file"],
+            ),
+        )
+        for rank, row in enumerate(rows, start=1):
+            row["base_rank"] = rank
+            row["selected_in_base"] = row["task_file"] in selected
+        return rows
+
+    def _epistemic_shadow_rank_report(
+        self,
+        task_files,
+        *,
+        task_directory=None,
+        active_epistemic_requirements=None,
+        claim_source_coverage=None,
+        curriculum_report=None,
+        elite_selection_report=None,
+        selected=None,
+    ):
+        requirement, requirement_state = self._active_epistemic_requirement(
+            active_epistemic_requirements
+        )
+        base_rows = self._base_rank_rows(
+            task_files,
+            curriculum_report=curriculum_report,
+            elite_selection_report=elite_selection_report,
+            selected=selected,
+        )
+        if requirement is None:
+            return {
+                "system": "general_selector_epistemic_shadow_rank",
+                "shadow_mode_active": False,
+                "multi_axis_shadow_active": False,
+                **requirement_state,
+                "active_requirement_id": "Not Available",
+                "evidence_type": "Not Available",
+                "epistemic_signal_available": False,
+                "epistemic_signal_authority": "OBSERVATION_ONLY",
+                "selector_decision_owner": "TrainingAssistant",
+                "behavioral_integration_applied": False,
+                "selection_changed_by_epistemic_signal": False,
+                "production_selector_changed": False,
+                "policy_matrix": {},
+                "distributions": {},
+                "rows": [],
+            }
+        shadow_rows = []
+        for row in base_rows:
+            try:
+                profile = self.general_task_evidence_profiler.profile_task(
+                    row["task_file"],
+                    task_directory=task_directory,
+                    selection_memory=self.selection_memory,
+                )
+                match = self.task_evidence_matcher.match(requirement, profile)
+                failure = None
+            except (GeneralTaskEvidenceProfileError, OSError, ValueError) as exc:
+                profile = {"profile_confidence": "UNKNOWN"}
+                match = {
+                    "task_id": row["task_file"],
+                    "requirement_id": requirement.get("requirement_id"),
+                    "required_evidence": requirement.get("evidence_type"),
+                    "eligible": False,
+                    "compatibility_score": 0.0,
+                    "match_strength": "UNKNOWN",
+                    "matched_requirements": [],
+                    "unmet_requirements": [requirement.get("evidence_type")],
+                    "mapping_confidence": "UNKNOWN",
+                    "match_provenance": {
+                        "matcher": "task_evidence_matcher",
+                        "failure": str(exc),
+                        "advisory_only": True,
+                    },
+                    "authority": "OBSERVATION_ONLY",
+                    "behavioral_authority": "NONE",
+                    "selection_authority": "NONE",
+                    "truth_authority": "NONE",
+                    "execution_authority": "NONE",
+                }
+                failure = str(exc)
+            adjustment = self._epistemic_adjustment_for(match)
+            source_potential = (
+                self.independent_source_potential_evaluator.evaluate(
+                    requirement,
+                    profile,
+                    match,
+                    claim_source_coverage,
+                )
+            )
+            shadow_rows.append({
+                "task_id": profile.get("task_id", row["task_file"]),
+                "task_file": row["task_file"],
+                "base_score": row["base_score"],
+                "base_score_components": row["base_score_components"],
+                "base_rank": row["base_rank"],
+                "operational_score": row["base_score"],
+                "evidence_match_class": match.get("match_strength"),
+                "evidence_compatibility": match.get("compatibility_score", 0.0),
+                "epistemic_score": match.get("compatibility_score", 0.0),
+                "epistemic_adjustment": adjustment,
+                "epistemic_adjustment_bound": 1.0,
+                "independent_source_potential": source_potential[
+                    "potential_class"
+                ],
+                "independent_source_potential_score": source_potential[
+                    "potential_score"
+                ],
+                "expected_marginal_contribution": source_potential[
+                    "expected_marginal_contribution"
+                ],
+                "provenance_confidence": profile.get(
+                    "profile_confidence",
+                    "UNKNOWN",
+                ),
+                "shadow_final_score": round(row["base_score"] + adjustment, 4),
+                "selected_in_base": row["selected_in_base"],
+                "would_select_in_shadow": False,
+                "selection_reason": [
+                    row["base_policy_surface"],
+                    "epistemic_shadow_signal_observed"
+                    if adjustment else "base_policy_only_or_unknown_epistemic_match",
+                ],
+                "active_requirement_id": requirement.get("requirement_id"),
+                "evidence_type": requirement.get("evidence_type"),
+                "match_projection": match,
+                "source_potential_projection": source_potential,
+                "profile_confidence": profile.get("profile_confidence", "UNKNOWN"),
+                "expected_source_descriptor": profile.get(
+                    "expected_source_descriptor",
+                    {},
+                ),
+                "source_descriptor_owner": profile.get(
+                    "source_descriptor_owner",
+                    {},
+                ),
+                "source_descriptor_confidence": profile.get(
+                    "source_descriptor_confidence",
+                    "UNKNOWN",
+                ),
+                "pre_selection_observability": profile.get(
+                    "pre_selection_observability",
+                    {},
+                ),
+                "provenance": {
+                    "base_policy_surface": row["base_policy_surface"],
+                    "matcher": "task_evidence_matcher",
+                    "source_potential_evaluator": (
+                        "independent_source_potential_evaluator"
+                    ),
+                    "shadow_mode": True,
+                    "profile_failure": failure,
+                },
+                "authority": "OBSERVATION_ONLY",
+                "behavioral_authority": "NONE",
+                "selection_authority": "NONE",
+                "truth_authority": "NONE",
+                "execution_authority": "NONE",
+            })
+        shadow_rows.sort(
+            key=lambda item: (
+                -item["shadow_final_score"],
+                item["base_rank"],
+                item["task_file"],
+            )
+        )
+        selected_count = len(selected or [])
+        shadow_selected = {
+            row["task_file"] for row in shadow_rows[:selected_count]
+        }
+        for rank, row in enumerate(shadow_rows, start=1):
+            row["shadow_rank"] = rank
+            row["rank_delta"] = row["base_rank"] - rank
+            row["would_select_in_shadow"] = row["task_file"] in shadow_selected
+        base_selected = set(selected or [])
+        changed = base_selected != shadow_selected
+        rank_effect_count = sum(1 for row in shadow_rows if row["rank_delta"] != 0)
+        policy_matrix = self.multi_axis_epistemic_selection_shadow.policy_matrix(
+            shadow_rows,
+            selected_count=selected_count,
+            base_selected_tasks=base_selected,
+        )
+        distributions = (
+            self.multi_axis_epistemic_selection_shadow.distribution_report(
+                shadow_rows
+            )
+        )
+        return {
+            "system": "general_selector_epistemic_shadow_rank",
+            "shadow_mode_active": True,
+            "multi_axis_shadow_active": True,
+            **requirement_state,
+            "active_requirement_id": requirement.get("requirement_id"),
+            "evidence_type": requirement.get("evidence_type"),
+            "epistemic_signal_available": True,
+            "epistemic_signal_authority": "OBSERVATION_ONLY",
+            "selector_decision_owner": "TrainingAssistant",
+            "behavioral_integration_applied": False,
+            "selection_changed_by_epistemic_signal": False,
+            "production_selector_changed": False,
+            "shadow_selection_would_change": changed,
+            "counterfactual_rank_effect": (
+                "SELECTION_CHANGED"
+                if changed
+                else "LOCAL_RANK_EFFECT"
+                if rank_effect_count
+                else "NO_RANK_EFFECT"
+            ),
+            "epistemic_adjustment_bound": 1.0,
+            "base_selected_tasks": sorted(base_selected),
+            "shadow_selected_tasks": sorted(shadow_selected),
+            "policy_matrix": policy_matrix,
+            "distributions": distributions,
+            "current_claim_source_coverage": claim_source_coverage or {},
+            "rank_effect_count": rank_effect_count,
+            "rows": shadow_rows,
+        }
+
+    def _rng_for_run(self):
+        if self.random_seed is not None:
+            seed = int(self.random_seed)
+        else:
+            seed = random.SystemRandom().randrange(1, 2 ** 63)
+        return random.Random(seed), seed
+
+    def _recent_task_ids(self):
+        if self.task_cooldown_runs <= 0:
+            return set()
+        recent_runs = list(self.selection_memory.get("recent_runs", []))
+        recent = recent_runs[-self.task_cooldown_runs:]
+        return {
+            str(task_file)
+            for run in recent
+            if isinstance(run, dict)
+            for task_file in run.get("task_ids", [])
+        }
+
+    def _task_record(self, task_file):
+        record = self.selection_memory.setdefault("tasks", {}).get(
+            task_file,
+            {},
+        )
+        return {
+            "task_id": task_file,
+            "times_selected": int(record.get("times_selected", 0)),
+            "last_selected_at": record.get("last_selected_at"),
+            "last_run_id": record.get("last_run_id"),
+            "recent_selection_count": int(
+                record.get("recent_selection_count", 0)
+            ),
+        }
+
+    def _selection_weight(self, task_file, recent_task_ids, rng):
+        record = self._task_record(task_file)
+        unseen_boost = (
+            self.UNSEEN_TASK_BOOST
+            if record["times_selected"] <= 0
+            else 1.0
+        )
+        cooldown_factor = (
+            self.RECENT_TASK_PENALTY
+            if task_file in recent_task_ids
+            else 1.0
+        )
+        inverse_frequency_factor = 1.0 / (
+            1.0 + record["times_selected"]
+        )
+        random_jitter = rng.uniform(0.85, 1.15)
+        return (
+            1.0
+            * unseen_boost
+            * cooldown_factor
+            * inverse_frequency_factor
+            * random_jitter
+        )
+
+    def _weighted_choice_without_replacement(
+        self,
+        candidates,
+        weights,
+        rng,
+        count,
+    ):
+        remaining = list(zip(candidates, weights))
+        selected = []
+        while remaining and len(selected) < count:
+            total_weight = sum(max(weight, 0.0) for _, weight in remaining)
+            if total_weight <= 0.0:
+                rng.shuffle(remaining)
+                selected.extend(
+                    task_file
+                    for task_file, _ in remaining[:count - len(selected)]
+                )
+                break
+            threshold = rng.random() * total_weight
+            cumulative = 0.0
+            selected_index = 0
+            for index, (_, weight) in enumerate(remaining):
+                cumulative += max(weight, 0.0)
+                if cumulative >= threshold:
+                    selected_index = index
+                    break
+            task_file, _ = remaining.pop(selected_index)
+            selected.append(task_file)
+        return selected
+
+    def _selection_diversity_score(
+        self,
+        selected,
+        previous_overlap,
+        unseen_selected,
+        average_frequency,
+    ):
+        if not selected:
+            return 0.0
+        unique_score = len(set(selected)) / len(selected)
+        no_overlap_score = 1.0 - previous_overlap / len(selected)
+        unseen_score = unseen_selected / len(selected)
+        frequency_score = 1.0 / (1.0 + average_frequency)
+        return round(
+            max(
+                0.0,
+                min(
+                    1.0,
+                    unique_score * 0.35
+                    + no_overlap_score * 0.30
+                    + unseen_score * 0.20
+                    + frequency_score * 0.15,
+                ),
+            ),
+            4,
+        )
+
+    def _randomized_select(self, task_files, batch_size, selection_mode, rng):
+        previous_batch = set(self.selection_memory.get("previous_batch", []))
+        recent_task_ids = self._recent_task_ids()
+        dataset_large = len(task_files) > batch_size * 5
+        shuffled_tasks = list(task_files)
+        rng.shuffle(shuffled_tasks)
+
+        excluded = set(recent_task_ids)
+        if dataset_large:
+            excluded.update(previous_batch)
+        available = [
+            task_file
+            for task_file in shuffled_tasks
+            if task_file not in excluded
+        ]
+        cooldown_relaxed = False
+        if len(available) < batch_size:
+            cooldown_relaxed = True
+            available = [
+                task_file
+                for task_file in shuffled_tasks
+                if not (dataset_large and task_file in previous_batch)
+            ]
+        if len(available) < batch_size:
+            available = list(shuffled_tasks)
+
+        if selection_mode == "random":
+            selected = available[:batch_size]
+        else:
+            weights = [
+                self._selection_weight(task_file, recent_task_ids, rng)
+                for task_file in available
+            ]
+            selected = self._weighted_choice_without_replacement(
+                available,
+                weights,
+                rng,
+                batch_size,
+            )
+
+        selected = list(dict.fromkeys(selected))[:batch_size]
+        selected_set = set(selected)
+        selected_records = [self._task_record(task_file) for task_file in selected]
+        unseen_selected = sum(
+            1 for record in selected_records if record["times_selected"] <= 0
+        )
+        average_frequency = (
+            sum(record["times_selected"] for record in selected_records)
+            / len(selected_records)
+            if selected_records
+            else 0.0
+        )
+        previous_overlap = len(selected_set & previous_batch)
+        cooldown_filtered = sorted(
+            task_file
+            for task_file in shuffled_tasks
+            if task_file in recent_task_ids and task_file not in selected_set
+        )
+        repeated_penalty = any(
+            self._task_record(task_file)["times_selected"] > 0
+            or task_file in recent_task_ids
+            for task_file in selected
+        )
+        return selected, {
+            "system": "training_selection_diversity",
+            "total_available_tasks": len(task_files),
+            "selected_tasks": list(selected),
+            "selection_mode": selection_mode,
+            "previous_batch_overlap_count": previous_overlap,
+            "unseen_tasks_selected": unseen_selected,
+            "cooldown_filtered_tasks": len(cooldown_filtered),
+            "cooldown_filtered_task_ids": cooldown_filtered[:10],
+            "average_task_selection_frequency": round(average_frequency, 4),
+            "repeated_task_penalty_applied": repeated_penalty,
+            "diversity_score": self._selection_diversity_score(
+                selected,
+                previous_overlap,
+                unseen_selected,
+                average_frequency,
+            ),
+            "cooldown_window_runs": self.task_cooldown_runs,
+            "cooldown_relaxed": cooldown_relaxed,
+            "dataset_large": dataset_large,
+        }
+
+    def _record_selection(self, selected, run_id, alignment_report=None):
+        now = datetime.utcnow().isoformat()
+        recent_runs = list(self.selection_memory.get("recent_runs", []))
+        recent_task_ids = self._recent_task_ids()
+        tasks = self.selection_memory.setdefault("tasks", {})
+        for task_file in selected:
+            record = self._task_record(task_file)
+            record["times_selected"] += 1
+            record["last_selected_at"] = now
+            record["last_run_id"] = run_id
+            record["recent_selection_count"] = (
+                record["recent_selection_count"] + 1
+                if task_file in recent_task_ids
+                else 1
+            )
+            tasks[task_file] = record
+        self.selection_memory["run_counter"] = int(
+            self.selection_memory.get("run_counter", 0)
+        ) + 1
+        self.selection_memory["previous_batch"] = list(selected)
+        self.selection_memory["recent_runs"] = [
+            *recent_runs[-max(self.task_cooldown_runs * 2, 1):],
+            {
+                "run_id": run_id,
+                "task_ids": list(selected),
+                "selected_at": now,
+            },
+        ]
+        alignment_report = (
+            alignment_report if isinstance(alignment_report, dict) else {}
+        )
+        if alignment_report.get("evidence_remediation_attempted"):
+            self.selection_memory["last_evidence_remediation"] = {
+                "run_id": run_id,
+                "selected_at": now,
+                "evidence_remediation_task": alignment_report.get(
+                    "evidence_remediation_task"
+                ),
+                "evidence_remediation_deficit": alignment_report.get(
+                    "evidence_remediation_deficit"
+                ),
+                "evidence_remediation_responsible_area": alignment_report.get(
+                    "evidence_remediation_responsible_area"
+                ),
+                "insufficiency_cause_before": alignment_report.get(
+                    "insufficiency_cause_before"
+                ),
+                "evidence_acceptance_before": alignment_report.get(
+                    "evidence_acceptance_before"
+                ),
+            }
+        self._persist_selection_memory()
 
     def select_batch(
         self,
@@ -111,66 +3491,730 @@ class TrainingAssistant:
         concept_states=None,
         task_directory=None,
         observed_task_ids=None,
+        core_knowledge=None,
+        selection_mode=None,
+        random_seed=None,
+        operational_economy_report=None,
+        pending_evidence_acquisition_plans=None,
+        active_epistemic_requirements=None,
+        claim_source_coverage=None,
     ):
         task_files = self._normalized_tasks(task_files)
         if not task_files:
             raise ValueError("at least one JSON training task is required")
+        elite_task_files, normal_task_files = self._partition_elite_tasks(
+            task_files,
+            task_directory,
+        )
+        elite_only_policy_active = self._elite_operationalization_policy_active(
+            elite_task_files,
+            task_directory,
+        )
+        if operational_economy_report is None:
+            operational_economy_report = self._load_operational_economy_report()
+        if pending_evidence_acquisition_plans:
+            pending_plans = list(pending_evidence_acquisition_plans)
+            operational_economy_report = {
+                **(operational_economy_report or {}),
+                "pending_evidence_acquisition_plans": pending_plans,
+                "pending_evidence_plan_count": len(pending_plans),
+                "highest_priority_pending_evidence_plan": pending_plans[0],
+                "evidence_plan_store_state": "READY",
+                "evidence_plan_boot_load_state": "PENDING_PLANS_LOADED",
+            }
+        operational_economy_context = self._operational_economy_context(
+            operational_economy_report,
+        )
+        evidence_plan_consumption_report = (
+            self._consume_delivered_evidence_plans(
+                pending_evidence_acquisition_plans or []
+            )
+        )
+        if evidence_plan_consumption_report.get("plans_delivered"):
+            operational_economy_context = {
+                **operational_economy_context,
+                "evidence_plan_consumption_report": (
+                    evidence_plan_consumption_report
+                ),
+            }
+        normal_selection_files = (
+            []
+            if elite_only_policy_active
+            else normal_task_files
+            if elite_task_files
+            else task_files
+        )
+        selection_mode = self._selection_mode(
+            selection_mode or self.selection_mode
+        )
+        original_random_seed = self.random_seed
+        if random_seed is not None:
+            self.random_seed = random_seed
 
-        resumed = self._active_batch_is_valid(task_files)
+        resumed = (
+            selection_mode == "curriculum"
+            and
+            self._active_batch_is_valid(task_files)
+            and
+            self._active_batch_matches_elite_policy(
+                task_files,
+                elite_task_files,
+                task_directory,
+            )
+            and (
+                task_directory is None
+                or
+                self.state.get("curriculum_report", {})
+                .get("training_diversity_report", {})
+                .get("knowledge_expansion_score", 0.0)
+                > 0.0
+            )
+        )
+        run_id = f"selection-{uuid.uuid4()}"
+        rng, effective_seed = self._rng_for_run()
+        selection_report = dict(
+            self.state.get("selection_diversity_report", {})
+        )
+        elite_selection_report = dict(
+            self.state.get("elite_selection_report", {})
+        )
         if resumed:
             selected = list(self.state["active_batch"])
             prioritized_concepts = list(
                 self.state.get("prioritized_concepts", [])
             )
+            selected_concepts = list(
+                self.state.get("selected_concepts", [])
+            )
             curriculum_report = dict(
                 self.state.get("curriculum_report", {})
             )
+            elite_selection_report = dict(
+                self.state.get("elite_selection_report", {})
+            )
         else:
             start = int(self.state.get("next_task_index", 0))
-            start %= len(task_files)
-            ranked_tasks, curriculum_report = self._prioritized_tasks(
-                task_files,
-                start,
-                concept_counts=concept_counts,
-                concept_states=concept_states,
-                task_directory=task_directory,
-                observed_task_ids=observed_task_ids,
+            if normal_selection_files:
+                start %= len(normal_selection_files)
+            else:
+                start = 0
+            if elite_only_policy_active:
+                elite_batch, elite_selection_report = self._select_elite_task_batch(
+                    elite_task_files,
+                    concept_counts=concept_counts,
+                    concept_states=concept_states,
+                    task_directory=task_directory,
+                    core_knowledge=core_knowledge,
+                    operational_economy_context=operational_economy_context,
+                )
+                elite_task = elite_batch[0] if elite_batch else None
+            else:
+                elite_task, elite_selection_report = self._select_elite_task(
+                    elite_task_files,
+                    concept_counts=concept_counts,
+                    concept_states=concept_states,
+                    task_directory=task_directory,
+                    core_knowledge=core_knowledge,
+                    operational_economy_context=operational_economy_context,
+                )
+                elite_batch = [elite_task] if elite_task else []
+            normal_batch_size = min(
+                0
+                if elite_only_policy_active
+                else self.batch_size - (1 if elite_task else 0),
+                len(normal_selection_files),
             )
+            if normal_selection_files:
+                ranked_tasks, curriculum_report = self._prioritized_tasks(
+                    normal_selection_files,
+                    start,
+                    concept_counts=concept_counts,
+                    concept_states=concept_states,
+                    task_directory=task_directory,
+                    observed_task_ids=observed_task_ids,
+                    history=self.state.get("history", []),
+                    core_knowledge=core_knowledge,
+                )
+            else:
+                ranked_tasks = []
+                curriculum_report = {
+                    "system": "training_curriculum_manager",
+                    "training_mode": "elite_only_batch",
+                    "prioritized_concepts": [],
+                    "ranked_task_files": [],
+                    "task_priorities": [],
+                    "training_diversity_report": {},
+                }
             prioritized_concepts = curriculum_report[
                 "prioritized_concepts"
             ]
-            selected = self.curriculum_manager.select_batch_tasks(
-                curriculum_report,
-                min(self.batch_size, len(task_files)),
-            )
+            if normal_batch_size <= 0:
+                selected = []
+                selection_report = {
+                    "system": "training_selection_diversity",
+                    "total_available_tasks": len(normal_selection_files),
+                    "selected_tasks": [],
+                    "selection_mode": selection_mode,
+                    "random_seed": effective_seed,
+                    "run_id": run_id,
+                    "previous_batch_overlap_count": 0,
+                    "unseen_tasks_selected": 0,
+                    "cooldown_filtered_tasks": 0,
+                    "cooldown_filtered_task_ids": [],
+                    "average_task_selection_frequency": 0.0,
+                    "repeated_task_penalty_applied": False,
+                    "diversity_score": 0.0,
+                    "cooldown_window_runs": self.task_cooldown_runs,
+                    "cooldown_relaxed": False,
+                    "dataset_large": False,
+                }
+            elif selection_mode == "curriculum":
+                selected = self.curriculum_manager.select_batch_tasks(
+                    curriculum_report,
+                    normal_batch_size,
+                )
+                previous_batch = set(
+                    self.selection_memory.get("previous_batch", [])
+                )
+                selected_records = [
+                    self._task_record(task_file)
+                    for task_file in selected
+                ]
+                unseen_selected = sum(
+                    1
+                    for record in selected_records
+                    if record["times_selected"] <= 0
+                )
+                average_frequency = (
+                    sum(
+                        record["times_selected"]
+                        for record in selected_records
+                    )
+                    / len(selected_records)
+                    if selected_records
+                    else 0.0
+                )
+                previous_overlap = len(set(selected) & previous_batch)
+                selection_report = {
+                    "system": "training_selection_diversity",
+                    "total_available_tasks": len(task_files),
+                    "selected_tasks": list(selected),
+                    "selection_mode": selection_mode,
+                    "random_seed": effective_seed,
+                    "run_id": run_id,
+                    "previous_batch_overlap_count": previous_overlap,
+                    "unseen_tasks_selected": unseen_selected,
+                    "cooldown_filtered_tasks": 0,
+                    "cooldown_filtered_task_ids": [],
+                    "average_task_selection_frequency": round(
+                        average_frequency,
+                        4,
+                    ),
+                    "repeated_task_penalty_applied": False,
+                    "diversity_score": self._selection_diversity_score(
+                        selected,
+                        previous_overlap,
+                        unseen_selected,
+                        average_frequency,
+                    ),
+                    "cooldown_window_runs": self.task_cooldown_runs,
+                    "cooldown_relaxed": False,
+                    "dataset_large": len(task_files)
+                    > normal_batch_size * 5,
+                }
+            else:
+                selected, selection_report = self._randomized_select(
+                    list(ranked_tasks or task_files),
+                    normal_batch_size,
+                    selection_mode,
+                    rng,
+                )
+                selection_report["random_seed"] = effective_seed
+                selection_report["run_id"] = run_id
+            if elite_only_policy_active:
+                selected = list(elite_batch)
+            elif elite_task:
+                selected = [elite_task, *[
+                    task_file
+                    for task_file in selected
+                    if task_file != elite_task
+                ]]
+            if elite_only_policy_active:
+                previous_batch = set(
+                    self.selection_memory.get("previous_batch", [])
+                )
+                selected_records = [
+                    self._task_record(task_file)
+                    for task_file in selected
+                ]
+                unseen_selected = sum(
+                    1
+                    for record in selected_records
+                    if record["times_selected"] <= 0
+                )
+                average_frequency = (
+                    sum(
+                        record["times_selected"]
+                        for record in selected_records
+                    )
+                    / len(selected_records)
+                    if selected_records
+                    else 0.0
+                )
+                previous_overlap = len(set(selected) & previous_batch)
+                selection_report = {
+                    "system": "training_selection_diversity",
+                    "total_available_tasks": len(elite_task_files),
+                    "selected_tasks": list(selected),
+                    "selection_mode": "elite_only_operationalization",
+                    "random_seed": effective_seed,
+                    "run_id": run_id,
+                    "previous_batch_overlap_count": previous_overlap,
+                    "unseen_tasks_selected": unseen_selected,
+                    "cooldown_filtered_tasks": 0,
+                    "cooldown_filtered_task_ids": [],
+                    "average_task_selection_frequency": round(
+                        average_frequency,
+                        4,
+                    ),
+                    "repeated_task_penalty_applied": previous_overlap > 0,
+                    "diversity_score": self._selection_diversity_score(
+                        selected,
+                        previous_overlap,
+                        unseen_selected,
+                        average_frequency,
+                    ),
+                    "cooldown_window_runs": self.task_cooldown_runs,
+                    "cooldown_relaxed": False,
+                    "dataset_large": len(elite_task_files) > self.batch_size * 5,
+                    "elite_only_policy_active": True,
+                }
+            selected_concepts = sorted({
+                concept
+                for report in curriculum_report.get("task_priorities", [])
+                if report.get("task_file") in selected
+                for concept in report.get("target_concepts", [])
+            })
+            if elite_task:
+                elite_metadata = self._task_metadata(
+                    elite_task,
+                    task_directory,
+                )
+                selected_concepts = sorted(set(selected_concepts) | {
+                    str(concept)
+                    for concept in elite_metadata.get("target_concepts", [])
+                    if concept
+                })
             self.state["active_batch"] = selected
             self.state["prioritized_concepts"] = prioritized_concepts
+            self.state["selected_concepts"] = selected_concepts
             self.state["curriculum_report"] = curriculum_report
+            self.state["selection_diversity_report"] = selection_report
+            self.state["elite_selection_report"] = elite_selection_report
+            training_economy_alignment_report = (
+                self._training_economy_alignment_report(
+                    selected,
+                    elite_selection_report,
+                    operational_economy_context,
+                )
+            )
+            training_economy_alignment_report = (
+                self._apply_plan_consumption_report(
+                    training_economy_alignment_report,
+                    evidence_plan_consumption_report,
+                )
+            )
+            selected, elite_selection_report, selection_report, evidence_generation_report = (
+                self._maybe_generate_evidence_task(
+                    selected=selected,
+                    elite_selection_report=elite_selection_report,
+                    selection_report=selection_report,
+                    training_economy_alignment_report=(
+                        training_economy_alignment_report
+                    ),
+                    economy_context=operational_economy_context,
+                )
+            )
+            if evidence_generation_report.get("training_assistant_queue_updated"):
+                generated_metadata = self._task_metadata(selected[0])
+                selected_concepts = sorted(set(selected_concepts) | {
+                    str(concept)
+                    for concept in generated_metadata.get("target_concepts", [])
+                    if concept
+                })
+                training_economy_alignment_report = (
+                    self._training_economy_alignment_report(
+                        selected,
+                        elite_selection_report,
+                        {
+                            **operational_economy_context,
+                            "evidence_generation_report": (
+                                evidence_generation_report
+                            ),
+                        },
+                    )
+                )
+            else:
+                training_economy_alignment_report[
+                    "evidence_generation_report"
+                ] = evidence_generation_report
+            self.state["training_economy_alignment_report"] = (
+                training_economy_alignment_report
+            )
+            self.state["evidence_generation_report"] = evidence_generation_report
+            self.state["active_batch"] = selected
+            self.state["selected_concepts"] = selected_concepts
+            self.state["selection_diversity_report"] = selection_report
+            self.state["elite_selection_report"] = elite_selection_report
             self.state["pending_next_task_index"] = (
-                start + len(selected)
-            ) % len(task_files)
+                (start + len([
+                    task_file
+                    for task_file in selected
+                    if task_file not in set(elite_task_files)
+                ])) % len(normal_selection_files)
+                if normal_selection_files
+                else 0
+            )
+            self.state["pending_next_elite_task_index"] = (
+                elite_selection_report.get(
+                    "next_elite_task_index_after_completion"
+                )
+            )
             self._persist()
+            self._record_selection(
+                selected,
+                run_id,
+                training_economy_alignment_report,
+            )
+
+        if random_seed is not None:
+            self.random_seed = original_random_seed
+
+        training_diversity_report = dict(
+            curriculum_report.get("training_diversity_report")
+            or self.state.get("curriculum_report", {}).get(
+                "training_diversity_report",
+                {},
+            )
+            or {}
+        )
+        if selection_report:
+            training_diversity_report["selection_diversity_score"] = (
+                selection_report.get("diversity_score", 0.0)
+            )
+        training_economy_alignment_report = dict(
+            self.state.get("training_economy_alignment_report", {})
+        )
+        evidence_generation_report = dict(
+            self.state.get("evidence_generation_report", {})
+        )
+        if not training_economy_alignment_report:
+            training_economy_alignment_report = (
+                self._training_economy_alignment_report(
+                    self.state.get("active_batch", []),
+                    elite_selection_report,
+                    operational_economy_context,
+                )
+            )
+        training_economy_alignment_report = self._apply_plan_consumption_report(
+            training_economy_alignment_report,
+            evidence_plan_consumption_report,
+        )
+        if evidence_plan_consumption_report.get("plans_delivered"):
+            self.state["training_economy_alignment_report"] = (
+                training_economy_alignment_report
+            )
+            self._persist()
+        if training_economy_alignment_report:
+            training_diversity_report.update({
+                "training_economy_alignment_state": (
+                    training_economy_alignment_report.get("alignment_state")
+                ),
+                "training_economy_alignment_score": (
+                    training_economy_alignment_report.get(
+                        "training_economy_alignment_score"
+                    )
+                ),
+                "training_economy_match_count": (
+                    training_economy_alignment_report.get("alignment_match_count")
+                ),
+                "training_economy_bottleneck": (
+                    training_economy_alignment_report.get(
+                        "operational_economy_bottleneck"
+                    )
+                ),
+                "grounding_economy_alignment": (
+                    training_economy_alignment_report.get(
+                        "grounding_economy_alignment"
+                    )
+                ),
+                "composition_opportunity_alignment": (
+                    training_economy_alignment_report.get(
+                        "composition_opportunity_alignment"
+                    )
+                ),
+                "arena_source_diversity_alignment": (
+                    training_economy_alignment_report.get(
+                        "arena_source_diversity_alignment"
+                    )
+                ),
+                "selected_composition_aligned_tasks": (
+                    training_economy_alignment_report.get(
+                        "selected_composition_aligned_tasks"
+                    )
+                ),
+                "selected_source_diversity_aligned_tasks": (
+                    training_economy_alignment_report.get(
+                        "selected_source_diversity_aligned_tasks"
+                    )
+                ),
+                "evidence_driven_task_selection_state": (
+                    training_economy_alignment_report.get(
+                        "evidence_driven_task_selection_state"
+                    )
+                ),
+                "decision_orchestration_state": (
+                    training_economy_alignment_report.get(
+                        "decision_orchestration_state"
+                    )
+                ),
+                "evidence_acquisition_plan_forwarded": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_plan_forwarded"
+                    )
+                ),
+                "evidence_acquisition_plan_consumed": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_plan_consumed"
+                    )
+                ),
+                "evidence_acquisition_task_scheduled": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_task_scheduled"
+                    )
+                ),
+                "evidence_acquisition_selected_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_selected_task"
+                    )
+                ),
+                "evidence_acquisition_validation_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_validation_task"
+                    )
+                ),
+                "training_assistant_consumed_plan": (
+                    training_economy_alignment_report.get(
+                        "training_assistant_consumed_plan"
+                    )
+                ),
+                "consumption_state": (
+                    training_economy_alignment_report.get("consumption_state")
+                ),
+                "curriculum_search_state": (
+                    training_economy_alignment_report.get(
+                        "curriculum_search_state"
+                    )
+                ),
+                "matching_validation_tasks": (
+                    training_economy_alignment_report.get(
+                        "matching_validation_tasks"
+                    )
+                ),
+                "best_matching_task": (
+                    training_economy_alignment_report.get("best_matching_task")
+                ),
+                "best_matching_curriculum": (
+                    training_economy_alignment_report.get(
+                        "best_matching_curriculum"
+                    )
+                ),
+                "selected_validation_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_acquisition_selected_task"
+                    )
+                ),
+                "selection_state": (
+                    training_economy_alignment_report.get("selection_state")
+                ),
+                "waiting_execution": (
+                    training_economy_alignment_report.get("waiting_execution")
+                ),
+                "generation_eligible": (
+                    training_economy_alignment_report.get("generation_eligible")
+                ),
+                "generation_invoked": (
+                    training_economy_alignment_report.get("generation_invoked")
+                ),
+                "waiting_generator": (
+                    training_economy_alignment_report.get("waiting_generator")
+                ),
+                "evidence_remediation_attempted": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_attempted"
+                    )
+                ),
+                "evidence_remediation_task": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_task"
+                    )
+                ),
+                "evidence_remediation_deficit": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_deficit"
+                    )
+                ),
+                "evidence_remediation_responsible_area": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_responsible_area"
+                    )
+                ),
+                "remediation_outcome": (
+                    training_economy_alignment_report.get("remediation_outcome")
+                ),
+                "evidence_remediation_progress_state": (
+                    training_economy_alignment_report.get(
+                        "evidence_remediation_progress_state"
+                    )
+                ),
+                "previous_remediation_task": (
+                    training_economy_alignment_report.get(
+                        "previous_remediation_task"
+                    )
+                ),
+                "previous_evidence_deficit": (
+                    training_economy_alignment_report.get(
+                        "previous_evidence_deficit"
+                    )
+                ),
+                "current_evidence_deficit": (
+                    training_economy_alignment_report.get(
+                        "current_evidence_deficit"
+                    )
+                ),
+                "required_evidence_produced": (
+                    training_economy_alignment_report.get(
+                        "required_evidence_produced"
+                    )
+                ),
+                "evidence_generation_required": (
+                    evidence_generation_report.get("generation_required")
+                ),
+                "evidence_generation_status": (
+                    evidence_generation_report.get("generation_status")
+                ),
+                "generated_validation_tasks": (
+                    evidence_generation_report.get("generated_task_files")
+                ),
+                "generated_curriculum_size": (
+                    evidence_generation_report.get("generated_curriculum_size")
+                ),
+                "training_assistant_queue_updated": (
+                    evidence_generation_report.get(
+                        "training_assistant_queue_updated"
+                    )
+                ),
+                "future_execution_ready": (
+                    evidence_generation_report.get("future_execution_ready")
+                ),
+            })
+        epistemic_shadow_rank_report = self._epistemic_shadow_rank_report(
+            task_files,
+            task_directory=task_directory,
+            active_epistemic_requirements=active_epistemic_requirements,
+            claim_source_coverage=claim_source_coverage,
+            curriculum_report=curriculum_report,
+            elite_selection_report=elite_selection_report,
+            selected=self.state.get("active_batch", []),
+        )
+        elite_curriculum_report = {}
+        if elite_task_files:
+            try:
+                elite_curriculum_report = validate_elite_curriculum(
+                    task_directory or "data/training",
+                )
+            except (OSError, TypeError, ValueError):
+                elite_curriculum_report = {}
+        if elite_curriculum_report:
+            training_diversity_report.update({
+                "elite_curriculum_health": elite_curriculum_report.get(
+                    "elite_curriculum_health",
+                ),
+                "elite_task_difficulty": elite_curriculum_report.get(
+                    "elite_task_difficulty",
+                ),
+                "capability_graduation_coverage": elite_curriculum_report.get(
+                    "capability_graduation_coverage",
+                ),
+                "domain_expansion_coverage": elite_curriculum_report.get(
+                    "domain_expansion_coverage",
+                ),
+                "composite_capability_coverage": elite_curriculum_report.get(
+                    "composite_capability_coverage",
+                ),
+                "adaptive_reuse_coverage": elite_curriculum_report.get(
+                    "adaptive_reuse_coverage",
+                ),
+                "operationalization_coverage": elite_curriculum_report.get(
+                    "operationalization_coverage",
+                ),
+                "curriculum_diversity_score": elite_curriculum_report.get(
+                    "curriculum_diversity_score",
+                ),
+                "elite_task_utilization": elite_curriculum_report.get(
+                    "elite_task_utilization",
+                ),
+                "training_value_score": elite_curriculum_report.get(
+                    "training_value_score",
+                ),
+            })
 
         return {
             "system": "training_assistant",
             "training_mode":
-            curriculum_report.get(
-                "training_mode",
-                "bounded_round_robin_batch",
+            (
+                selection_mode
+                if selection_mode != "curriculum"
+                else curriculum_report.get(
+                    "training_mode",
+                    "bounded_round_robin_batch",
+                )
             ),
             "prioritized_concepts": prioritized_concepts,
+            "selected_concepts": selected_concepts,
             "curriculum_report": curriculum_report,
+            "elite_curriculum_report": elite_curriculum_report,
+            "training_economy_alignment_report": training_economy_alignment_report,
+            "evidence_plan_consumption_report": evidence_plan_consumption_report,
+            "evidence_generation_report": evidence_generation_report,
+            "training_diversity_report": training_diversity_report,
+            "selection_diversity_report": selection_report,
+            "elite_selection_report": elite_selection_report,
+            "epistemic_shadow_rank_report": epistemic_shadow_rank_report,
             "batch_size": self.batch_size,
             "available_task_count": len(task_files),
+            "available_elite_task_count": len(elite_task_files),
+            "available_normal_task_count": len(normal_task_files),
+            "elite_only_policy_active": elite_only_policy_active,
             "selected_task_count": len(selected),
             "selected_task_files": selected,
+            "selected_elite_task_files": [
+                task_file
+                for task_file in selected
+                if task_file in set(elite_task_files)
+            ],
             "resumed_active_batch": resumed,
             "completed_cycles": self.state.get("completed_cycles", 0),
             "next_task_index_after_completion":
             self.state.get("pending_next_task_index"),
         }
 
-    def complete_cycle(self, successful_tasks=0, failed_tasks=0):
+    def complete_cycle(
+        self,
+        successful_tasks=0,
+        failed_tasks=0,
+        incomplete_tasks=0,
+    ):
         active_batch = list(self.state.get("active_batch", []))
         if not active_batch:
             return {
@@ -182,18 +4226,30 @@ class TrainingAssistant:
         self.state["next_task_index"] = int(
             self.state.get("pending_next_task_index", 0)
         )
+        pending_elite_index = self.state.get("pending_next_elite_task_index")
+        if pending_elite_index is not None:
+            self.state["next_elite_task_index"] = int(pending_elite_index)
         self.state["completed_cycles"] = completed_cycles
         self.state["active_batch"] = []
         self.state["pending_next_task_index"] = None
+        self.state["pending_next_elite_task_index"] = None
         self.state["prioritized_concepts"] = []
+        selected_concepts = list(self.state.get("selected_concepts", []))
+        self.state["selected_concepts"] = []
         self.state["curriculum_report"] = {}
+        self.state["selection_diversity_report"] = {}
+        self.state["elite_selection_report"] = {}
+        self.state["training_economy_alignment_report"] = {}
+        self.state["evidence_generation_report"] = {}
         self.state["history"] = [
             *list(self.state.get("history", []))[-31:],
             {
                 "cycle": completed_cycles,
                 "task_files": active_batch,
+                "concepts": selected_concepts,
                 "successful_tasks": int(successful_tasks),
                 "failed_tasks": int(failed_tasks),
+                "incomplete_tasks": int(incomplete_tasks),
                 "timestamp": datetime.utcnow().isoformat(),
             },
         ]
@@ -210,10 +4266,25 @@ class TrainingAssistant:
             "training_mode": "bounded_round_robin_batch",
             "batch_size": self.batch_size,
             "next_task_index": self.state.get("next_task_index", 0),
+            "next_elite_task_index": self.state.get(
+                "next_elite_task_index",
+                0,
+            ),
             "completed_cycles": self.state.get("completed_cycles", 0),
             "active_batch": list(self.state.get("active_batch", [])),
             "prioritized_concepts":
             list(self.state.get("prioritized_concepts", [])),
+            "selected_concepts":
+            list(self.state.get("selected_concepts", [])),
+            "selection_diversity_report": dict(
+                self.state.get("selection_diversity_report", {})
+            ),
+            "elite_selection_report": dict(
+                self.state.get("elite_selection_report", {})
+            ),
+            "selection_memory_path": str(self.selection_memory_path),
+            "selection_mode": self.selection_mode,
+            "survival_store_path": str(self.survival_store_path),
             "history_size": len(self.state.get("history", [])),
             "state_path": str(self.state_path),
         }

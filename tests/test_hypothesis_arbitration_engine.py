@@ -51,9 +51,9 @@ def test_execution_arbitration_prefers_world_model_fit_for_close_candidates():
     assert report["winner"]["hypothesis"]["primitive"] == "expand_object"
     assert report["winner"]["hypothesis"]["world_model_fit"] == 0.96
     assert report["selection_factors"] == [
-        "search_final_score",
+        "explanatory_power",
+        "residual_reduction",
+        "transformation_salience",
         "causal_support",
-        "semantic_support",
-        "world_model_fit",
-        "historical_success",
+        "invariant_penalty",
     ]

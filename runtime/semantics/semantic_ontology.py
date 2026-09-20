@@ -49,6 +49,14 @@ SEMANTIC_ONTOLOGY = {
         "semantic_class": "diffusive"
     },
 
+    "reduce_pattern": {
+        "semantic_concept": "contraction",
+        "category": "spatial_causality",
+        "causal_effect": "decrease_density",
+        "spatial_effect": "reduce",
+        "semantic_class": "subtractive"
+    },
+
     "grow_topology": {
         "semantic_concept": "topological_growth",
         "category": "topology_causality",
@@ -111,6 +119,38 @@ SEMANTIC_ONTOLOGY = {
         "causal_effect": "enclosure_completion",
         "spatial_effect": "fill",
         "semantic_class": "topological"
+    },
+
+    "shrink_object": {
+        "semantic_concept": "contraction",
+        "category": "object_causality",
+        "causal_effect": "decrease_area",
+        "spatial_effect": "shrink",
+        "semantic_class": "subtractive"
+    },
+
+    "merge_objects": {
+        "semantic_concept": "fusion",
+        "category": "object_causality",
+        "causal_effect": "decrease_object_count",
+        "spatial_effect": "merge",
+        "semantic_class": "compositional"
+    },
+
+    "split_object": {
+        "semantic_concept": "fragmentation",
+        "category": "object_causality",
+        "causal_effect": "increase_object_count",
+        "spatial_effect": "split",
+        "semantic_class": "decompositional"
+    },
+
+    "remove_object": {
+        "semantic_concept": "object_elimination",
+        "category": "object_causality",
+        "causal_effect": "decrease_object_count",
+        "spatial_effect": "remove",
+        "semantic_class": "subtractive"
     },
 
     "preserve_objects": {
@@ -269,6 +309,36 @@ SEMANTIC_CONSTRAINTS = {
         "topological_growth",
         "topology_causality",
         "structural"
+    },
+
+    "reduce_pattern": {
+        "contraction",
+        "spatial_causality",
+        "subtractive"
+    },
+
+    "shrink_object": {
+        "contraction",
+        "object_causality",
+        "subtractive"
+    },
+
+    "merge_objects": {
+        "fusion",
+        "object_causality",
+        "compositional"
+    },
+
+    "split_object": {
+        "fragmentation",
+        "object_causality",
+        "decompositional"
+    },
+
+    "remove_object": {
+        "object_elimination",
+        "object_causality",
+        "subtractive"
     }
 }
 
@@ -380,6 +450,42 @@ SEMANTIC_COMPRESSION_LEVELS = {
         causal_identity="position_shift",
         archetypal_identity="kinematic_translation",
         topology_signature="motion"
+    ),
+
+    "contraction":
+    SemanticCompressionLevel(
+        local_identity="spatial_contraction",
+        structural_identity="reduced_extent",
+        causal_identity="decrease_extent",
+        archetypal_identity="subtractive_contraction",
+        topology_signature="reduction"
+    ),
+
+    "fusion":
+    SemanticCompressionLevel(
+        local_identity="object_fusion",
+        structural_identity="object_count_reduction",
+        causal_identity="decrease_object_count",
+        archetypal_identity="compositional_merge",
+        topology_signature="merge"
+    ),
+
+    "fragmentation":
+    SemanticCompressionLevel(
+        local_identity="object_fragmentation",
+        structural_identity="object_count_expansion",
+        causal_identity="increase_object_count",
+        archetypal_identity="decompositional_split",
+        topology_signature="split"
+    ),
+
+    "object_elimination":
+    SemanticCompressionLevel(
+        local_identity="object_elimination",
+        structural_identity="object_count_reduction",
+        causal_identity="decrease_object_count",
+        archetypal_identity="subtractive_removal",
+        topology_signature="removal"
     ),
 
     "symbolic_remapping":

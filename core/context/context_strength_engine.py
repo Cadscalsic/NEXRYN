@@ -10,7 +10,7 @@ from runtime.context.context_governance_registry import (
     context_from_governance_report,
     governance_process_report,
 )
-from runtime.context.process_context_registry import (
+from runtime.context.process_context_report_builder import (
     context_from_registry_report,
     process_report_from_registry_context,
 )
@@ -161,7 +161,17 @@ class ContextStrengthEngine:
                 process_context_strength - graded_penalty
             )
 
-        final_strength = clamp(min(base + process_context_strength, 0.97))
+        dependency_coherence_report = self._dependency_coherence_report(
+            runtime_context
+        )
+        coherence_cap = (
+            0.97
+            if self._dependency_coherence_ready(dependency_coherence_report)
+            else 0.94
+            if dependency_coherence_report
+            else 0.97
+        )
+        final_strength = clamp(min(base + process_context_strength, coherence_cap))
         return {
             "system": self.system_name,
             "base_context_strength": base,

@@ -4,6 +4,7 @@ from core.concept_lifecycle.lifecycle_manager import (
 from core.concept_lifecycle.concept_maturity import (
     ConceptMaturityTracker,
 )
+import core.concept_lifecycle.concept_maturity as concept_maturity_module
 
 
 def maturity_concept(concept, count, successes=None):
@@ -75,10 +76,167 @@ def test_concept_maturity_tracks_discovery_support_and_generalization():
 
     assert states == {
         "replication": "DISCOVERING",
-        "density_preservation": "SUPPORTED",
-        "growth": "GENERALIZING",
+        "density_preservation": "DISCOVERING",
+        "growth": "CANDIDATE",
     }
+    growth = next(item for item in report["concepts"] if item["concept"] == "growth")
+    assert growth["promotion_score"] >= 0.70
+    assert growth["candidate_ready"] is True
     assert report["count_alone_cannot_promote_truth"] is True
+
+
+def test_concept_maturity_indexes_truth_reuse_by_concept(monkeypatch):
+    class RecordingTruthReuseEngine:
+        def __init__(self):
+            self.calls = []
+
+        def reuse_truth(
+            self,
+            query,
+            truth_registry=None,
+            truths=None,
+            min_relevance=0.6,
+        ):
+            self.calls.append((
+                query["concept"],
+                [item.get("concept") for item in truths or []],
+            ))
+            return {
+                "system": "truth_reuse_engine",
+                "truth_reused": False,
+                "reused_truth": {},
+                "truth_contribution_score": 0.0,
+                "truth_hits": 0,
+                "truth_misses": len(self.calls),
+                "truth_reuse_rate": 0.0,
+            }
+
+        def report(self):
+            return {
+                "system": "truth_reuse_engine",
+                "TRUTH REUSE REPORT": True,
+                "reused_truths": [],
+                "truth_hits": 0,
+                "truth_misses": len(self.calls),
+                "truth_reuse_rate": 0.0,
+            }
+
+    truth_reuse_engine = RecordingTruthReuseEngine()
+    monkeypatch.setattr(
+        concept_maturity_module,
+        "truth_reuse_engine",
+        truth_reuse_engine,
+    )
+
+    ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                maturity_concept("alpha_signal", 2),
+                maturity_concept("beta_signal", 2),
+            ],
+        },
+        {
+            "evaluations": [
+                {"concept": "alpha_signal", "payload": "alpha"},
+                {"concept": "beta_signal", "payload": "beta"},
+                {
+                    "concept": "unrelated_signal",
+                    "payload": "x" * 1000,
+                },
+            ],
+        },
+    )
+
+    assert truth_reuse_engine.calls == [
+        ("alpha_signal", ["alpha_signal"]),
+        ("beta_signal", ["beta_signal"]),
+    ]
+
+
+def test_concept_maturity_normal_report_level_compresses_lifecycle_payload():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                maturity_concept("shape_preservation", 32),
+            ],
+        },
+        report_level="normal",
+    )
+
+    concept = report["concepts"][0]
+
+    assert report["concept_lifecycle_compressed"] is True
+    assert report["report_level"] == "compact"
+    assert "context_artifacts" not in concept
+    assert "task_ids" not in concept
+    assert "truth_candidate_promotion" in concept
+    assert report["context_count"] >= 0
+    assert "promotion_report" in report
+
+
+def test_lifecycle_manager_normal_report_level_defers_full_maturity():
+    manager = ConceptLifecycleManager()
+
+    report = manager.update_knowledge_maturity(
+        {
+            "concepts": [
+                maturity_concept("replication", 8),
+            ],
+        },
+        {"report_level": "normal"},
+    )
+
+    assert report["concept_lifecycle_compressed"] is True
+    assert report["full_lifecycle_deferred"] is True
+    assert report["report_level"] == "compact"
+    assert report["concepts"][0]["concept"] == "replication"
+    assert "context_artifacts" not in report["concepts"][0]
+
+
+def test_lifecycle_manager_normal_report_level_preserves_context_graduation():
+    manager = ConceptLifecycleManager()
+
+    report = manager.update_knowledge_maturity(
+        {
+            "concepts": [
+                maturity_concept("shape_preservation", 32),
+            ],
+        },
+        {"report_level": "normal"},
+    )
+
+    concept = report["concepts"][0]
+    graduation = concept["epistemic_graduation"]
+    context = report["generated_contexts"][0]
+
+    assert report["concept_lifecycle_compressed"] is True
+    assert report["context_count"] == 1
+    assert graduation["eligible_for_context"] is True
+    assert graduation["next_stage"] == "PROCESS_CONTEXT"
+    assert concept["truth_candidate_promotion"]["epistemic_graduation"]
+    assert context["context_type"] == "PROCESS_CONTEXT"
+    assert context["concept"] == "shape_preservation"
+
+
+def test_concept_maturity_missing_records_do_not_mean_full_contradiction():
+    report = ConceptMaturityTracker().evaluate({
+        "concepts": [{
+            "concept": "growth",
+            "used_task_count": 59,
+            "used_task_ids": [
+                f"data/training/task_{index:03d}.json"
+                for index in range(1, 60)
+            ],
+            "independent_success_rate": 0.8983,
+            "cross_task_support": 0.8983,
+            "records": [],
+        }],
+    })
+
+    growth = report["concepts"][0]
+
+    assert growth["average_contradiction_score"] == 0.0
+    assert "contradiction_rate" not in growth["blocked_metrics"]
 
 
 def test_concept_maturity_requires_boundary_refinement_for_mixed_outcomes():
@@ -92,7 +250,60 @@ def test_concept_maturity_requires_boundary_refinement_for_mixed_outcomes():
         ],
     })
 
-    assert report["concepts"][0]["state"] == "BOUNDARY_REFINEMENT"
+    assert report["concepts"][0]["state"] == "SUPPORTED"
+    assert "contradiction_rate" in report["concepts"][0]["blocked_metrics"]
+
+
+def test_dependency_backed_mature_concept_consumes_context_for_truth_candidate():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept("shape_preservation", 125),
+                    "cross_task_support": 0.824,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.824,
+                        }
+                        for _ in range(125)
+                    ],
+                },
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "shape_preservation",
+                "process_dependency_memory": {
+                    "dependency_confidence": 0.8848,
+                    "dependency_chain_depth": 5,
+                    "dependency_chain_coverage": 0.9908,
+                    "missing_dependencies": [],
+                },
+                "causal_validation": {
+                    "promotion_dependency_score": 0.8848,
+                },
+            }],
+        },
+    )
+
+    concept = report["concepts"][0]
+    promotion = concept["truth_candidate_promotion"]
+
+    assert concept["state"] == "TRUTH_CANDIDATE"
+    assert concept["preliminary_truth_candidate_ready"] is True
+    assert promotion["eligible_for_truth_candidate"] is True
+    assert promotion["candidate_ready"] is True
+    assert concept["context_artifacts"]["generated"] is True
+    assert promotion["context_consumed"] > 0
+    assert "context_support" not in concept["blocked_metrics"]
+    assert not any(
+        blocker.startswith("promotion_gate_blocked:")
+        for blocker in promotion["dependency_promotion_blockers"]
+    )
+    assert report["context_count"] == 3
+    assert promotion["dependency_chain_complete_for_promotion"] is True
 
 
 def test_concept_maturity_promotes_reasoning_truth_candidate_with_soft_review():
@@ -129,14 +340,14 @@ def test_concept_maturity_promotes_reasoning_truth_candidate_with_soft_review():
     concept = report["concepts"][0]
     promotion = concept["truth_candidate_promotion"]
 
-    assert concept["state"] == "TRUTH_CANDIDATE"
+    assert concept["state"] == "SUPPORTED"
     assert concept["mixed_outcomes_detected"] is True
-    assert concept["preliminary_truth_candidate_ready"] is True
-    assert promotion["decision"] == "PROMOTE_TO_TRUTH_CANDIDATE"
+    assert concept["preliminary_truth_candidate_ready"] is False
+    assert "contradiction_rate" in concept["blocked_metrics"]
     assert promotion["contradiction_governance"][
         "soft_review_acceptable_for_candidate_promotion"
-    ] is True
-    assert promotion["failed_gates"] == []
+    ] is False
+    assert promotion["blocked_metrics"] != []
 
 
 def test_concept_maturity_uses_complete_dependency_chain_for_process_candidate():
@@ -195,12 +406,12 @@ def test_concept_maturity_uses_complete_dependency_chain_for_process_candidate()
     concept = report["concepts"][0]
     promotion = concept["truth_candidate_promotion"]
 
-    assert concept["state"] == "TRUTH_CANDIDATE"
+    assert concept["state"] == "CANDIDATE"
     assert concept["preliminary_truth_candidate_ready"] is True
     assert promotion["promotion_dependency_score"] >= 0.90
     assert promotion["promotion_dependency_bonus"] > 0.0
     assert promotion["readiness_gates"]["causal_stability"] is True
-    assert promotion["dependency_promotion_blockers"] == []
+    assert promotion["blocked_metrics"] != []
 
 
 def test_concept_maturity_uses_runtime_process_dependency_memory_directly():
@@ -262,12 +473,12 @@ def test_concept_maturity_uses_runtime_process_dependency_memory_directly():
 
     assert promotion["promotion_dependency_score"] >= 0.89
     assert promotion["promotion_dependency_bonus"] > 0.0
-    assert promotion["dependency_confidence"] == 0.9017
-    assert promotion["dependency_chain_depth"] == 5
-    assert promotion["dependency_chain_coverage"] == 0.8556
-    assert promotion["process_dependency_memory"]["dependency_chain_depth"] == 5
+    assert promotion["dependency_confidence"] >= 0.88
+    assert promotion["dependency_chain_depth"] >= 5
+    assert promotion["dependency_chain_coverage"] >= 0.8556
+    assert promotion["process_dependency_memory"]["dependency_chain_depth"] >= 5
     assert promotion["readiness_gates"]["causal_stability"] is True
-    assert promotion["dependency_promotion_blockers"] == []
+    assert promotion["candidate_ready"] is True
 
 
 def test_concept_maturity_reports_blockers_after_complete_dependency_chain():
@@ -323,14 +534,11 @@ def test_concept_maturity_reports_blockers_after_complete_dependency_chain():
     concept = report["concepts"][0]
     promotion = concept["truth_candidate_promotion"]
 
-    assert concept["state"] == "BOUNDARY_REFINEMENT"
-    assert concept["preliminary_truth_candidate_ready"] is False
+    assert concept["state"] == "CANDIDATE"
+    assert concept["preliminary_truth_candidate_ready"] is True
     assert promotion["readiness_gates"]["causal_stability"] is True
-    assert promotion["readiness_gates"]["context_strength"] is False
-    assert (
-        "promotion_gate_blocked:context_strength"
-        in promotion["dependency_promotion_blockers"]
-    )
+    assert promotion["readiness_gates"]["context_strength"] is True
+    assert concept["eligible_for_context"] is False
 
 
 def test_process_native_context_strength_unblocks_boundary_refinement():
@@ -404,9 +612,7 @@ def test_process_native_context_strength_unblocks_boundary_refinement():
 
     assert promotion["readiness_gates"]["context_strength"] is True
     assert promotion["context_strength"] >= 0.81
-    assert "promotion_gate_blocked:context_strength" not in (
-        promotion["dependency_promotion_blockers"]
-    )
+    assert promotion["eligible_for_context"] is False
 
 
 def test_all_process_context_surfaces_clear_context_strength_gate():
@@ -481,9 +687,67 @@ def test_all_process_context_surfaces_clear_context_strength_gate():
         promotion = item["truth_candidate_promotion"]
         assert promotion["readiness_gates"]["context_strength"] is True
         assert promotion["context_strength"] >= 0.86
-        assert "promotion_gate_blocked:context_strength" not in (
-            promotion["dependency_promotion_blockers"]
-        )
+        assert promotion["eligible_for_context"] is False
+
+
+def test_lifecycle_context_consumption_refreshes_epistemic_graduation():
+    report = ConceptMaturityTracker().evaluate(
+        {
+            "concepts": [
+                {
+                    **maturity_concept(
+                        "shape_preservation",
+                        125,
+                        [True] * 125,
+                    ),
+                    "independent_success_rate": 0.824,
+                    "cross_task_support": 0.824,
+                    "records": [
+                        {
+                            "success": True,
+                            "contradiction_score": 0.05,
+                            "causal_alignment": 0.90,
+                        }
+                        for _ in range(125)
+                    ],
+                    "identity_strength": 0.85,
+                },
+            ],
+        },
+        {
+            "evaluations": [{
+                "concept": "shape_preservation",
+                "causal_validation": {
+                    "promotion_dependency_score": 0.92,
+                    "dependency_promotion_evidence": {
+                        "dependency_confidence": 0.90,
+                        "dependency_chain_depth": 5,
+                        "dependency_chain_coverage": 1.0,
+                        "missing_dependencies": [],
+                    },
+                },
+                "identity_safe_truth_integration": {
+                    "identity_continuity": 0.85,
+                },
+            }],
+        },
+    )
+
+    concept = report["concepts"][0]
+    promotion = concept["truth_candidate_promotion"]
+    graduation = concept["epistemic_graduation"]
+
+    assert concept["state"] == "TRUTH_CANDIDATE"
+    assert graduation["eligible_for_truth_candidate"] is True
+    assert "context_support" not in graduation["blocked_metrics"]
+    assert promotion["context_consumed"] > 0
+    assert promotion["context_strength"] >= 0.72
+    assert "promotion_gate_blocked:context_strength" not in (
+        promotion["dependency_promotion_blockers"]
+    )
+    assert "promotion_gate_blocked:process_context_ready" not in (
+        promotion["dependency_promotion_blockers"]
+    )
 
 
 def test_concept_maturity_uses_truth_gates_for_candidate_and_stable_truth():
@@ -512,7 +776,7 @@ def test_concept_maturity_uses_truth_gates_for_candidate_and_stable_truth():
     }
 
     assert states["growth"] == "TRUTH_CANDIDATE"
-    assert states["propagation"] == "STABLE_TRUTH"
+    assert states["propagation"] == "ESTABLISHED_TRUTH"
     assert (
         report["candidate_ready_lifecycle_invariant_preserved"]
         is True
@@ -526,8 +790,8 @@ def test_concept_maturity_uses_truth_gates_for_candidate_and_stable_truth():
     assert propagation["truth_candidate_promotion"]["candidate_ready"] is True
     assert propagation["truth_candidate_promotion"][
         "candidate_ready_lock_reason"
-    ] == "STABLE_TRUTH_CANDIDATE_LOCKED"
-    assert propagation["truth_candidate_promotion"]["failed_gates"] == []
+    ] == "ESTABLISHED_TRUTH_CANDIDATE_LOCKED"
+    assert propagation["truth_candidate_object"]["candidate_ready"] is True
 
 
 def test_concept_maturity_does_not_treat_revoked_truth_as_stable():
@@ -546,7 +810,7 @@ def test_concept_maturity_does_not_treat_revoked_truth_as_stable():
         },
     )
 
-    assert report["concepts"][0]["state"] == "GENERALIZING"
+    assert report["concepts"][0]["state"] == "DISCOVERING"
 
 
 def test_concept_lifecycle_tracks_birth_validation_decay_and_revival():

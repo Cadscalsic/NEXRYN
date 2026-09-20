@@ -19,7 +19,7 @@ class LongTermMemory:
 
         self,
 
-        storage_path="runtime_data/long_term_memory"
+        storage_path="runtime/artifacts/runtime_data/long_term_memory"
     ):
 
         self.storage_path = Path(

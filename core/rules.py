@@ -157,7 +157,7 @@ class ARCRuleEngine:
 
     def print_report(self):
 
-        print("\n========== AMIS RULE ENGINE ==========\n")
+        print("\n========== NEXRYN RULE ENGINE ==========\n")
 
         for rule in self.rules:
 

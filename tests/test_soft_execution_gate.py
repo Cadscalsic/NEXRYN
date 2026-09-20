@@ -64,3 +64,22 @@ def test_soft_execution_gate_authorizes_success_state_partial_success():
     assert report["soft_execution_authorized"] is True
     assert report["soft_execution_enabled"] is True
     assert report["soft_execution_override_applied"] is True
+
+
+def test_soft_execution_gate_authorizes_low_residual_near_miss():
+    report = SoftExecutionGate().evaluate({
+        "sandbox_execution_accepted": False,
+        "acceptance_state": "SEARCH_CANDIDATE_ONLY",
+        "prediction_report": {
+            "prediction_accuracy": 0.92,
+            "partial_success": False,
+            "success_state": "FAILURE",
+        },
+        "residual_difference_count": 2,
+    })
+
+    assert report["soft_execution_authorized"] is True
+    assert report["soft_execution_enabled"] is True
+    assert report["near_miss_candidate"] is True
+    assert report["partial_success"] is False
+    assert report["soft_execution_override_applied"] is True

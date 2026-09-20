@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from core.epistemic_models import clamp
+from core.identity.identity_replication_detector import identity_replication_detector
 from core.perception.object_tracker import ObjectTracker
 
 
@@ -24,7 +25,14 @@ class IdentityTracker:
         source: str = "object_identity_preservation",
     ) -> dict[str, Any]:
         tracking = self.object_tracker.track(input_grid, output_grid)
+        replication = identity_replication_detector.detect(tracking)
         split_events = self._split_events(tracking)
+        if replication.get("identity_transition") == "IDENTITY_REPLICATION":
+            split_events = [
+                event
+                for event in split_events
+                if event.get("input_object") != replication.get("source_object")
+            ]
         identity_state = self._identity_state(tracking, split_events)
         continuity = clamp(tracking.get("identity_continuity", 0.0))
         lineage_continuity = self._lineage_continuity(tracking, split_events)
@@ -40,6 +48,8 @@ class IdentityTracker:
                 "IDENTITY_CONTINUITY_WEAK",
             ),
             "lineage_mappings": self._lineage_mappings(tracking),
+            "identity_replication": replication,
+            "replication_events": replication.get("replication_events", []),
             "split_events": split_events,
             "added_objects": tracking.get("added_objects", []),
             "removed_objects": tracking.get("removed_objects", []),
@@ -65,6 +75,11 @@ class IdentityTracker:
             return "IDENTITY_SPLIT"
         if tracking.get("removed_objects"):
             return "IDENTITY_INTERRUPTED"
+        if (
+            identity_replication_detector.detect(tracking).get("identity_transition")
+            == "IDENTITY_REPLICATION"
+        ):
+            return "IDENTITY_REPLICATION"
         if tracking.get("identity_continuity_state") == "IDENTITY_CONTINUITY_STABLE":
             return "IDENTITY_STABLE"
         if tracking.get("matches"):
@@ -74,6 +89,8 @@ class IdentityTracker:
     def _identity_behavior(self, identity_state: str) -> str:
         if identity_state == "IDENTITY_SPLIT":
             return "identity_split"
+        if identity_state == "IDENTITY_REPLICATION":
+            return "identity_replication"
         if identity_state in {
             "IDENTITY_STABLE",
             "IDENTITY_CONTINUITY_PROVISIONAL",
@@ -232,6 +249,17 @@ class IdentityTracker:
                     ),
                     "identity_dependency",
                     {"split_events": report.get("split_events", [])},
+                )
+            )
+        replication = report.get("identity_replication", {})
+        if replication.get("identity_transition") == "IDENTITY_REPLICATION":
+            dependencies.append(
+                self._dependency(
+                    source,
+                    "identity_replication",
+                    replication.get("replication_confidence", 0.0),
+                    "identity_dependency",
+                    {"identity_replication": replication},
                 )
             )
         return dependencies

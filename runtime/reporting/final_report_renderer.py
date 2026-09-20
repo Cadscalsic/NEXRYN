@@ -1,0 +1,11358 @@
+from __future__ import annotations
+
+import json
+import os
+import re
+import tempfile
+import hashlib
+import unicodedata
+from pathlib import Path
+from typing import Any, Callable
+
+from runtime.reporting.canonical_report_binding_engine import (
+    canonical_report_binding_engine,
+)
+from runtime.reporting.compact_report_compression_engine import (
+    compact_report_compression_engine,
+)
+from runtime.reporting.pre_final_report_diagnostics import (
+    pre_final_report_diagnostics,
+)
+from runtime.reporting.active_runtime_reachability_audit import (
+    mark_active_runtime_audit_bound_to_canonical_report,
+)
+from runtime.reporting.engineering_conclusion_integrity import (
+    engineering_conclusion_integrity_evaluator,
+)
+from runtime.validation.raw_result_lifecycle_applicability import (
+    raw_result_lifecycle_applicability_evaluator,
+)
+
+
+REPORT_SCHEMA_VERSION = "1.0"
+REPORT_BEGIN_MARKER = "<<< NEXRYN_REPORT_START >>>"
+REPORT_END_MARKER = "<<< NEXRYN_REPORT_END >>>"
+
+HUMAN_ABSENCE_DISPLAY = {
+    "NOT_APPLICABLE": "Not applicable in this run",
+    "NOT_PRODUCED": "Not produced in this run",
+    "NOT_EXPECTED_AT_CURRENT_STATE": "Not expected at current lifecycle state",
+    "EXPECTED_BUT_MISSING": "Expected artifact missing",
+    "SOURCE_NOT_ATTACHED": "Canonical source not attached",
+    "SOURCE_UNBOUND": "Canonical source unbound",
+    "SOURCE_CONFLICT": "Canonical source conflict",
+    "LEGACY_FALLBACK_USED": "Legacy compatibility fallback used",
+}
+
+SECTION_ORDER = [
+    "REPORT HEADER",
+    "EXECUTION SUMMARY",
+    "CONSTITUTIONAL CONTRACTS",
+    "COGNITIVE OUTPUTS",
+    "PROGRAM QUALITY",
+    "UNIFIED CONCEPT LIFECYCLE REPORT",
+    "PROGRAM GENERATION REPORT",
+    "PROGRAM BLUEPRINT INTELLIGENCE REPORT",
+    "COGNITIVE PROGRAM LIFECYCLE REPORT",
+    "COGNITIVE KNOWLEDGE DOMAINS REPORT",
+    "COGNITIVE DOMAIN INTELLIGENCE REPORT",
+    "COGNITIVE DOMAIN LIFECYCLE REPORT",
+    "COGNITIVE DOMAIN INTERACTION REPORT",
+    "COGNITIVE DOMAIN GOVERNANCE REPORT",
+    "COGNITIVE DOMAIN ECOSYSTEM REPORT",
+    "COGNITIVE DOMAIN CONSTITUTION REPORT",
+    "SEMANTIC COMPILATION",
+    "EXECUTABLE SEMANTIC COVERAGE",
+    "COGNITIVE CAPABILITY COVERAGE",
+    "TRANSFORMATION DECISION",
+    "MULTI HYPOTHESIS REPORT",
+    "CANDIDATE PROPOSAL PHASE",
+    "COGNITIVE CANDIDATE ARENA",
+    "EVIDENCE GENERATION REPORT",
+    "COUNTERFACTUAL REASONING REPORT",
+    "EXECUTABLE INTELLIGENCE REPORT",
+    "SEARCH QUALITY",
+    "KNOWLEDGE PIPELINE",
+    "SYSTEM HEALTH",
+    "TIMING SUMMARY",
+    "COGNITIVE STAGE TIMING",
+    "COGNITIVE RESOURCE SUMMARY",
+    "WARNINGS AND GAPS",
+    "RUNTIME METADATA",
+    "OPTIONAL TECHNICAL APPENDIX",
+    "FINAL STATUS",
+]
+
+EXECUTIVE_SECTION_ORDER = [
+    "REPORT HEADER",
+    "EXECUTIVE RUNTIME SUMMARY",
+    "CANDIDATE PIPELINE",
+    "RUNTIME CHOKE POINT",
+    "SOURCE COMPETITION SUMMARY",
+    "EVIDENCE GENERATION REPORT",
+    "SEMANTIC COMPILATION",
+    "KNOWLEDGE OPERATIONALIZATION",
+    "VALIDATION SUMMARY",
+    "EXECUTION SUMMARY DASHBOARD",
+    "RUNTIME HEALTH",
+    "CONSTITUTIONAL CONTRACTS",
+    "TIMING SUMMARY",
+    "WARNINGS AND GAPS",
+    "CRITICAL EXECUTION TRACE",
+    "ENGINEERING CONCLUSION",
+    "OPTIONAL TECHNICAL APPENDIX",
+    "FINAL STATUS",
+]
+
+HUMAN_SECTION_ORDER = [
+    "NEXRYN HUMAN RUN SUMMARY",
+    "RUN OVERVIEW",
+    "TIMING AND PERFORMANCE",
+    "COGNITIVE QUALITY",
+    "COGNITIVE OUTCOME",
+    "EVIDENCE LIFECYCLE",
+    "EXECUTION PLAN REPORT",
+    "ACTIVE RUNTIME REACHABILITY",
+    "ENGINEERING CONCLUSION",
+    "CONSTITUTIONAL BOUNDARY",
+    "CRITICAL OBSERVABILITY NOTES",
+    "REPORT INTEGRITY",
+]
+
+HUMAN_REPORT_CHARACTER_LIMIT = None
+HUMAN_REPORT_TRUNCATION_ENABLED = False
+HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION = "1.0"
+HUMAN_PROJECTION_UNIVERSE_CONTRACT_VERSION = "1.0"
+
+HUMAN_PROJECTION_UNIVERSE = (
+    {
+        "section_id": "nexryn_human_run_summary",
+        "section_title": "NEXRYN HUMAN RUN SUMMARY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "run_overview",
+        "section_title": "RUN OVERVIEW",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "timing_and_performance",
+        "section_title": "TIMING AND PERFORMANCE",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "cognitive_quality",
+        "section_title": "COGNITIVE QUALITY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "cognitive_outcome",
+        "section_title": "COGNITIVE OUTCOME",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "evidence_lifecycle",
+        "section_title": "EVIDENCE LIFECYCLE",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "execution_plan_report",
+        "section_title": "EXECUTION PLAN REPORT",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "active_runtime_reachability",
+        "section_title": "ACTIVE RUNTIME REACHABILITY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "natural_production_authority_handoff",
+        "section_title": "NATURAL PRODUCTION AUTHORITY HANDOFF",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "LEVEL_VISIBILITY_CONDITIONAL",
+    },
+    {
+        "section_id": "engineering_conclusion",
+        "section_title": "ENGINEERING CONCLUSION",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "constitutional_boundary",
+        "section_title": "CONSTITUTIONAL BOUNDARY",
+        "membership_semantics": "STATIC",
+        "visibility_semantics": "STATIC_VISIBLE",
+    },
+    {
+        "section_id": "critical_observability_notes",
+        "section_title": "CRITICAL OBSERVABILITY NOTES",
+        "membership_semantics": "CONDITIONAL",
+        "visibility_semantics": "SELECTED_WHEN_CRITICAL_NOTES_EXIST",
+    },
+    {
+        "section_id": "report_integrity",
+        "section_title": "REPORT INTEGRITY",
+        "membership_semantics": "APPENDED",
+        "visibility_semantics": "APPENDED_AFTER_PROVISIONAL_INTEGRITY",
+    },
+)
+
+HUMAN_REPORT_MEASUREMENT_CONTRACT = {
+    "schema_version": "1.1",
+    "canonical_encoding": "UTF-8",
+    "canonical_bom_policy": "UTF-8_WITHOUT_BOM",
+    "canonical_line_ending": "LF",
+    "unicode_normalization": "NFC",
+    "character_count_unit": "UNICODE_CODE_POINTS",
+    "byte_count_unit": "UTF8_OCTETS",
+    "trailing_newline_policy": "INCLUDED_EXACTLY_ONCE",
+    "leading_whitespace_policy": "PRESERVED_AFTER_CANONICAL_RENDER",
+    "trailing_whitespace_policy": "TRIMMED_PER_LINE_BY_CANONICAL_RENDER",
+    "lifecycle_marker_inclusion_policy": "START_AND_END_MARKERS_INCLUDED_IN_CANONICAL_BODY",
+    "section_separator_policy": "LF_SEPARATED_SECTIONS",
+    "attestation_field_exclusion_policy": "LINE_PREFIX_REDACTION_WITH_VERSIONED_PLACEHOLDER",
+    "fingerprint_algorithm": "SHA-256",
+    "hexadecimal_case": "lowercase",
+    "canonical_body_fingerprint_scope": "HUMAN_REPORT_ENVELOPE_WITH_MEASUREMENT_ATTESTATION_LINES_REDACTED",
+    "persistence_measurement_boundary": "DURABLE_ARTIFACT_REMEASURED_WHEN_ARTIFACT_WRITTEN",
+    "emission_measurement_boundary": "TEXT_STREAM_WRITE_STRING_AFTER_WRITE_RETURN",
+    "detached_receipt_format": "JSON_METRICS_OR_SIDECAR_OUTSIDE_HUMAN_REPORT_ENVELOPE",
+    "comparison_rules": "COMPARE_BYTE_COUNT_AND_SHA256_ONLY_WHEN_ENCODING_LINE_ENDING_AND_SCOPE_MATCH",
+    "verification_limitations": "EXTERNAL_TERMINAL_TRANSPORT_NOT_VERIFIED",
+}
+
+HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES = [
+    "Human Report Measurement Contract Version:",
+    "Canonical Body Fingerprint Scope:",
+    "Canonical Line Ending:",
+    "Canonical Encoding:",
+    "Canonical Body Character Count:",
+    "Canonical Body Byte Count:",
+    "Canonical Body Fingerprint:",
+    "Detached Emission Receipt:",
+    "Human Report Canonical Body Integrity:",
+    "Human Report Persistence Integrity:",
+    "Human Report Emission Integrity:",
+    "Human Report Persistence-Emission Equivalence:",
+    "Human Report Receipt Integrity:",
+]
+
+HUMAN_REPORT_REDACTION_TOKEN = "<EXCLUDED_BY_HUMAN_REPORT_MEASUREMENT_CONTRACT_V1>"
+
+RAW_STRUCTURE_PATTERN = re.compile(
+    r"(^|\s)(\{'.*':|\['.*'\]|\{'[^'\n]+':|\[[{]\s*')",
+    re.DOTALL,
+)
+
+
+class DeterministicFinalReportRenderer:
+    """Single owner for final human-readable NEXRYN reports."""
+
+    def __init__(self, console_budget_chars: int = 160000):
+        self.console_budget_chars = int(console_budget_chars or 160000)
+        self.metrics = self._empty_metrics()
+        self._last_render_measurement: dict[str, Any] = {}
+        self._last_render_completeness: dict[str, Any] = {}
+        self._last_persistence_measurement: dict[str, Any] = {}
+        self._last_emission_measurement: dict[str, Any] = {}
+        self._last_detached_receipt: dict[str, Any] = {}
+        self._last_human_report_artifact_path: Path | None = None
+        self._persistence_requested_for_current_render = False
+        self._current_local_reductions: list[dict[str, Any]] = []
+        self._last_local_reduction_summary: dict[str, Any] = {}
+        self._last_human_selected_sections: list[str] = []
+        self._last_human_report_level = "normal"
+
+    def render(
+        self,
+        report_state: dict[str, Any] | None,
+        *,
+        runtime_metadata: dict[str, Any] | None = None,
+        report_level: str = "normal",
+        artifact_directory: str | os.PathLike[str] | None = None,
+        write_artifact: bool = False,
+        write_diagnostic_artifact: bool = False,
+        console_budget_chars: int | None = None,
+    ) -> str:
+        report_state = report_state if isinstance(report_state, dict) else {}
+        runtime_metadata = (
+            runtime_metadata if isinstance(runtime_metadata, dict) else {}
+        )
+        report_level = self._normalize_report_level(report_level)
+        deprecated_budget = (
+            self.console_budget_chars
+            if console_budget_chars is None
+            else int(console_budget_chars)
+        )
+        self._persistence_requested_for_current_render = bool(
+            write_artifact and artifact_directory
+        )
+        if report_level == "minimal":
+            pre_final_report_diagnostics.phase_enter(
+                "REPORT_PROJECTION",
+                input_keys=len(report_state),
+                multi_task_results=len(report_state.get("multi_task_results", []) or []),
+            )
+            report_state = self._minimal_report_projection(report_state)
+            pre_final_report_diagnostics.phase_exit(
+                "REPORT_PROJECTION",
+                output_keys=len(report_state),
+                projected_tasks=len(report_state.get("multi_task_results", []) or []),
+            )
+        if self._first_dict(
+            report_state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        ):
+            report_state = (
+                engineering_conclusion_integrity_evaluator
+                .ensure_authoritative_conclusion(
+                    report_state,
+                    runtime_metadata=runtime_metadata,
+                )
+            )
+        pre_final_report_diagnostics.phase_enter(
+            "CANONICAL_BIND",
+            report_keys=len(report_state),
+            report_level=report_level,
+        )
+        binding_result = canonical_report_binding_engine.bind(
+            report_state,
+            runtime_metadata=runtime_metadata,
+            report_level=report_level,
+        )
+        pre_final_report_diagnostics.phase_exit(
+            "CANONICAL_BIND",
+            source_count=len(binding_result.get("canonical_source_registry", {}) or {}),
+            field_count=len(binding_result.get("report_field_registry", {}) or {}),
+        )
+        bound_report_state = dict(report_state)
+        bound_report_state["CANONICAL_REPORT_BINDING"] = binding_result
+        bound_report_state["report_field_registry"] = (
+            binding_result["report_field_registry"]
+        )
+        bound_report_state["canonical_source_registry"] = (
+            binding_result["canonical_source_registry"]
+        )
+        bound_report_state["binding_diagnostics"] = (
+            binding_result["binding_diagnostics"]
+        )
+        raw_applicability = self._first_dict(
+            bound_report_state,
+            "RAW_RESULT_APPLICABILITY_REPORT",
+            "raw_result_applicability_report",
+        )
+        if raw_applicability:
+            raw_applicability = (
+                raw_result_lifecycle_applicability_evaluator
+                .bind_to_canonical_report(raw_applicability)
+            )
+            bound_report_state["RAW_RESULT_APPLICABILITY_REPORT"] = (
+                raw_applicability
+            )
+            bound_report_state["raw_result_applicability_report"] = dict(
+                raw_applicability
+            )
+        validation_execution = self._first_dict(
+            bound_report_state,
+            "VALIDATION_TASK_EXECUTION_REPORT",
+            "validation_task_execution_report",
+        )
+        raw_result_id = (
+            validation_execution.get("canonical_raw_result_id")
+            or validation_execution.get("raw_validation_result_id")
+            or validation_execution.get("raw_result_id")
+        )
+        identity_transitions = list(
+            validation_execution.get("raw_result_identity_lifecycle_transitions")
+            or []
+        )
+        if raw_result_id and str(raw_result_id).lower() not in {
+            "not available",
+            "none",
+            "null",
+        }:
+            if not any(
+                isinstance(row, dict)
+                and row.get("transition_name")
+                == "RAW_RESULT_IDENTITY_BOUND_TO_CANONICAL_REPORT"
+                for row in identity_transitions
+            ):
+                identity_transitions.append({
+                    "transition_name": (
+                        "RAW_RESULT_IDENTITY_BOUND_TO_CANONICAL_REPORT"
+                    ),
+                    "sequence_index": len(identity_transitions) + 1,
+                    "run_id": validation_execution.get("run_id"),
+                    "execution_plan_id": validation_execution.get(
+                        "execution_plan_id",
+                    ),
+                    "task_id": validation_execution.get("task_id"),
+                    "producer_operation_id": validation_execution.get(
+                        "producer_operation_id",
+                    )
+                    or validation_execution.get("executor_invocation_id")
+                    or validation_execution.get("execution_id"),
+                    "validation_attempt_id": validation_execution.get(
+                        "validation_attempt_id",
+                    ),
+                    "raw_result_id": raw_result_id,
+                    "source_stage": "final_report_renderer",
+                    "source_timestamp": runtime_metadata.get(
+                        "timestamp",
+                        "Not Available",
+                    ),
+                    "is_current_run": True,
+                })
+                validation_execution[
+                    "raw_result_identity_lifecycle_transitions"
+                ] = identity_transitions
+                bound_report_state[
+                    "VALIDATION_TASK_EXECUTION_REPORT"
+                ] = validation_execution
+                bound_report_state[
+                    "validation_task_execution_report"
+                ] = dict(validation_execution)
+
+        pre_final_report_diagnostics.phase_enter(
+            "REPORT_RENDER_PREP",
+            bound_keys=len(bound_report_state),
+        )
+        if report_level in {"minimal", "normal"}:
+            compression_result = {
+                "compressed_report": bound_report_state,
+                "compression_report": {
+                    "compression_status": "NOT_REQUIRED",
+                    "report_level": report_level,
+                    "reason": "interactive_final_report_projection",
+                },
+                "compression_statistics": {
+                    "original_size": 0,
+                    "compressed_size": 0,
+                    "compression_ratio": 1.0,
+                    "heavy_keys_removed": 0,
+                    "arrays_summarized": 0,
+                    "repeated_reports_collapsed": 0,
+                },
+            }
+            bound_report_state["compression_report"] = compression_result[
+                "compression_report"
+            ]
+            compressed_report_state = bound_report_state
+        else:
+            compression_result = compact_report_compression_engine.compress(
+                bound_report_state,
+                profile=report_level,
+                artifact_directory=artifact_directory,
+                write_appendix=write_diagnostic_artifact,
+            )
+            compressed_report_state = compression_result["compressed_report"]
+        pre_final_report_diagnostics.collection_snapshot(
+            "COMPRESSED_REPORT_STATE",
+            compressed_report_state,
+        )
+
+        existing_conclusion = self._first_dict(
+            compressed_report_state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        )
+        if existing_conclusion:
+            bound_conclusion = (
+                engineering_conclusion_integrity_evaluator.bind_to_canonical_report(
+                    existing_conclusion,
+                    report_state=compressed_report_state,
+                    runtime_metadata=runtime_metadata,
+                )
+            )
+            compressed_report_state["ENGINEERING_CONCLUSION"] = bound_conclusion
+            compressed_report_state["engineering_conclusion"] = dict(bound_conclusion)
+        canonical = self._canonical_state(
+            compressed_report_state,
+            runtime_metadata=runtime_metadata,
+            report_level=report_level,
+            binding_result=binding_result,
+        )
+        pre_final_report_diagnostics.collection_snapshot(
+            "CANONICAL_RENDER_STATE",
+            canonical,
+        )
+        self._last_render_completeness = {}
+        self._last_persistence_measurement = self._not_verified_persistence_measurement()
+        self._last_emission_measurement = self._not_verified_emission_measurement()
+        self._last_detached_receipt = {}
+        self._last_human_report_artifact_path = None
+        full_report = self._render_human_report(canonical)
+        self._last_render_measurement = self._measure_report_payload(full_report)
+        pre_final_report_diagnostics.mark(
+            "REPORT_FULL_STRING_CONSTRUCTED",
+            full_report_chars=len(full_report),
+            full_report_bytes=len(full_report.encode("utf-8")),
+        )
+        rendered_report = full_report
+        validation_errors = self.validate(rendered_report)
+        pre_final_report_diagnostics.phase_exit(
+            "REPORT_RENDER_PREP",
+            rendered_chars=len(rendered_report),
+            validation_errors=len(validation_errors),
+            deprecated_console_budget_chars=deprecated_budget,
+            deprecated_console_budget_applied_to_human_report=False,
+            human_report_character_limit="NONE",
+            human_report_truncation_enabled=False,
+        )
+
+        artifact_written = False
+        diagnostic_artifact_written = False
+        if write_artifact and artifact_directory:
+            artifact_path = Path(artifact_directory) / "runtime_report.txt"
+            self._last_persistence_measurement = self.write_text_artifact(
+                rendered_report,
+                artifact_path,
+            )
+            self._last_human_report_artifact_path = artifact_path
+            self.write_operational_economy_artifact(
+                binding_result,
+                Path(artifact_directory)
+                / "runtime_data"
+                / "operational_economy_report.json",
+            )
+            artifact_written = True
+        if write_diagnostic_artifact and artifact_directory:
+            self.write_diagnostic_artifact(
+                {
+                    "canonical_report": bound_report_state,
+                    "compressed_report": compressed_report_state,
+                    "compression_statistics": (
+                        compression_result["compression_statistics"]
+                    ),
+                },
+                Path(artifact_directory) / "runtime_diagnostic_report.json",
+            )
+            diagnostic_artifact_written = True
+
+        self.metrics = self._build_metrics(
+            rendered_report,
+            validation_errors,
+            artifact_written=artifact_written,
+            diagnostic_artifact_written=diagnostic_artifact_written,
+            render_measurement=self._last_render_measurement,
+            persistence_measurement=self._last_persistence_measurement,
+            emission_measurement=self._last_emission_measurement,
+            receipt=self._last_detached_receipt,
+        )
+        if identity_transitions:
+            self.metrics["raw_result_identity_lifecycle_transitions"] = (
+                identity_transitions
+            )
+        if report_level == "minimal" and rendered_report.startswith(
+            REPORT_BEGIN_MARKER
+        ):
+            rendered_report = (
+                "==================================================\n"
+                + rendered_report
+            )
+        return rendered_report
+
+    def emit(self, rendered_report: str, stream: Any | None = None) -> None:
+        stream = stream or os.sys.stdout
+        payload_text = rendered_report if rendered_report.endswith("\n") else rendered_report + "\n"
+        payload_bytes = self._encode_canonical_text(payload_text)
+        pre_final_report_diagnostics.mark(
+            "FINAL_REPORT_FIRST_BYTE_WRITTEN",
+            rendered_chars=len(payload_text),
+            rendered_bytes=len(payload_bytes),
+        )
+        try:
+            stream.write(payload_text)
+            stream.flush()
+        except Exception:
+            self._last_emission_measurement = self._measure_emitted_payload(
+                payload_text,
+                write_completed=False,
+            )
+            self.metrics.update({
+                **self._measurement_metrics(
+                    self._last_render_measurement,
+                    self._last_persistence_measurement,
+                    self._last_emission_measurement,
+                    self._last_detached_receipt,
+                ),
+            })
+            raise
+        self._last_emission_measurement = self._measure_emitted_payload(
+            payload_text,
+            write_completed=True,
+        )
+        self._last_detached_receipt = self._build_detached_emission_receipt()
+        if self._last_human_report_artifact_path is not None:
+            receipt_path = self._last_human_report_artifact_path.with_name(
+                self._last_human_report_artifact_path.name + ".receipt.json"
+            )
+            self._atomic_write_text(
+                json.dumps(
+                    self._last_detached_receipt,
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ),
+                receipt_path,
+            )
+        self.metrics.update({
+            "console_emission_completed": True,
+            **self._measurement_metrics(
+                self._last_render_measurement,
+                self._last_persistence_measurement,
+                self._last_emission_measurement,
+                self._last_detached_receipt,
+            ),
+        })
+        pre_final_report_diagnostics.mark(
+            "FINAL_REPORT_LAST_BYTE_WRITTEN",
+            rendered_chars=len(payload_text),
+        )
+
+    def validate(self, rendered_report: str) -> list[str]:
+        errors: list[str] = []
+        if not rendered_report.startswith(REPORT_BEGIN_MARKER):
+            errors.append("missing_report_begin_marker")
+        if not rendered_report.rstrip().endswith(REPORT_END_MARKER):
+            errors.append("missing_report_end_marker")
+        if rendered_report.count(REPORT_BEGIN_MARKER) != 1:
+            errors.append("report_begin_marker_count_not_one")
+        if rendered_report.count(REPORT_END_MARKER) != 1:
+            errors.append("report_end_marker_count_not_one")
+        if "Report Schema Version: " not in rendered_report:
+            errors.append("missing_report_schema_version")
+        if "Console Emission Started: TRUE" not in rendered_report:
+            errors.append("missing_console_emission_started")
+        section_positions = []
+        for section in HUMAN_SECTION_ORDER:
+            marker = self._section_title(section)
+            count = rendered_report.count(marker)
+            if count == 0 and section != "CRITICAL OBSERVABILITY NOTES":
+                errors.append(f"missing_section:{section}")
+            if count > 1:
+                errors.append(f"duplicate_section:{section}")
+            position = rendered_report.find(marker)
+            if position >= 0:
+                section_positions.append(position)
+        if section_positions != sorted(section_positions):
+            errors.append("section_order_invalid")
+
+        first_content = rendered_report[len(REPORT_BEGIN_MARKER):].lstrip()
+        if first_content.startswith((",", "}", "]", ":", "'")):
+            errors.append("partial_beginning_detected")
+        if self._ends_inside_structure(rendered_report):
+            errors.append("incomplete_ending_detected")
+        if RAW_STRUCTURE_PATTERN.search(rendered_report):
+            errors.append("raw_python_structure_detected")
+        if "UNKNOWN" in rendered_report:
+            errors.append("unknown_value_detected")
+        integrity = self._human_report_integrity(
+            rendered_report,
+            selected_sections=[
+                section
+                for section in HUMAN_SECTION_ORDER
+                if section == "CRITICAL OBSERVABILITY NOTES"
+                and self._section_title(section) in rendered_report
+                or section != "CRITICAL OBSERVABILITY NOTES"
+            ],
+            emitted_text=rendered_report,
+        )
+        if integrity["Human Report Integrity State"] != "COMPLETE":
+            errors.append(
+                "human_report_integrity_incomplete:"
+                + str(integrity["Human Report Integrity Reason"])
+            )
+        return errors
+
+    def write_text_artifact(self, text: str, path: Path) -> dict[str, Any]:
+        self._atomic_write_text(text, path)
+        return self._measure_persisted_artifact(path)
+
+    def write_operational_economy_artifact(
+        self,
+        binding_result: dict[str, Any],
+        path: Path,
+    ) -> None:
+        field = (
+            binding_result.get("field_bindings", {})
+            .get("cognitive_capability_coverage_summary", {})
+        )
+        summary = field.get("value") if isinstance(field, dict) else {}
+        if not isinstance(summary, dict):
+            return
+        economy = summary.get("operational_economy_report")
+        if not isinstance(economy, dict) or not economy:
+            return
+        payload = {
+            **economy,
+            "capability_investment_priorities": (
+                summary.get("capability_investment_priorities") or []
+            ),
+            "capability_economy_health": summary.get("capability_economy_health"),
+            "capability_ecology_health": summary.get("capability_ecology_health"),
+            "composite_capability_candidates": (
+                summary.get("composite_capability_candidates") or []
+            ),
+        }
+        self._atomic_write_text(
+            json.dumps(payload, indent=2, ensure_ascii=True, default=str),
+            path,
+        )
+
+    def write_diagnostic_artifact(self, payload: Any, path: Path) -> None:
+        diagnostic_text = json.dumps(
+            self._json_safe(payload),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        self._atomic_write_text(diagnostic_text, path)
+
+    def report(self) -> dict[str, Any]:
+        return dict(self.metrics)
+
+    def _minimal_report_projection(
+        self,
+        report_state: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not isinstance(report_state, dict):
+            return {}
+        training = report_state.get("training_report", {})
+        training = training if isinstance(training, dict) else {}
+        performance = report_state.get("performance_report", {})
+        performance = performance if isinstance(performance, dict) else {}
+        task_results = [
+            {
+                "task": item.get("task"),
+                "status": item.get("status"),
+                **({"error": item.get("error")} if item.get("error") else {}),
+            }
+            for item in list(report_state.get("multi_task_results", []) or [])[:20]
+            if isinstance(item, dict)
+        ]
+        training_task_results = [
+            {
+                "task": item.get("task"),
+                "status": item.get("status"),
+                **({"error": item.get("error")} if item.get("error") else {}),
+            }
+            for item in list(training.get("multi_task_results", []) or [])[:20]
+            if isinstance(item, dict)
+        ]
+        execution_plan_report = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=("EXECUTION_PLAN_REPORT", "execution_plan_report"),
+            usable=self._usable_execution_plan_report,
+        )
+        canonical_execution_plan = self._first_available_report_dict(
+            report_state,
+            training,
+            execution_plan_report,
+            keys=(
+                "CANONICAL_EXECUTION_PLAN_REPORT",
+                "canonical_execution_plan",
+            ),
+            usable=self._usable_execution_plan_report,
+        )
+        budget_report = self._first_available_report_dict(
+            report_state,
+            training,
+            execution_plan_report,
+            canonical_execution_plan,
+            keys=(
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                "runtime_budget_enforcement_report",
+            ),
+            usable=self._usable_budget_report,
+        )
+        reachability_audit = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=(
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                "active_runtime_reachability_audit",
+            ),
+            usable=self._usable_active_runtime_audit,
+        )
+        raw_applicability = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=(
+                "RAW_RESULT_APPLICABILITY_REPORT",
+                "raw_result_applicability_report",
+            ),
+            usable=self._usable_raw_result_applicability_report,
+        )
+        engineering_conclusion = self._first_available_report_dict(
+            report_state,
+            training,
+            keys=("ENGINEERING_CONCLUSION", "engineering_conclusion"),
+            usable=lambda value: bool(value),
+        )
+        projected_training_report = {
+            "system": training.get("system", "training_report"),
+            "training_batch_size": self._first_meaningful(
+                training.get("training_batch_size"),
+                training.get("tasks_selected"),
+                default=None,
+            ),
+            "tasks_selected": training.get("tasks_selected"),
+            "tasks_executed": training.get("tasks_executed"),
+            "successful_tasks": training.get("successful_tasks"),
+            "failed_tasks": training.get("failed_tasks"),
+            "incomplete_tasks": training.get("incomplete_tasks"),
+            "multi_task_results": training_task_results,
+            "concepts_discovered": dict(
+                list((training.get("concepts_discovered", {}) or {}).items())[:24]
+            ) if isinstance(training.get("concepts_discovered"), dict) else {},
+            "training_report_projection_guard": {
+                **dict(training.get("training_report_projection_guard", {}) or {}),
+                "final_renderer_minimal_projection": True,
+            },
+            "performance_report": self._compact_metric_map(
+                training.get("performance_report", {})
+            ),
+            "EXECUTION_PLAN_REPORT": execution_plan_report,
+            "execution_plan_report": execution_plan_report,
+            "CANONICAL_EXECUTION_PLAN_REPORT": canonical_execution_plan,
+            "canonical_execution_plan": canonical_execution_plan,
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_report,
+            "runtime_budget_enforcement_report": budget_report,
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": reachability_audit,
+            "active_runtime_reachability_audit": reachability_audit,
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_applicability,
+            "raw_result_applicability_report": raw_applicability,
+            "ENGINEERING_CONCLUSION": engineering_conclusion,
+            "engineering_conclusion": engineering_conclusion,
+        }
+        return {
+            "system": report_state.get("system", "nexryn_runtime"),
+            "runtime_status": report_state.get("runtime_status"),
+            "operation": report_state.get("operation"),
+            "target_operation": report_state.get("target_operation"),
+            "training_batch_size": self._first_meaningful(
+                report_state.get("training_batch_size"),
+                training.get("training_batch_size"),
+                training.get("tasks_selected"),
+                default=None,
+            ),
+            "tasks_executed": report_state.get("tasks_executed"),
+            "successful_tasks": report_state.get("successful_tasks"),
+            "failed_tasks": report_state.get("failed_tasks"),
+            "incomplete_tasks": report_state.get("incomplete_tasks"),
+            "multi_task_results": task_results,
+            "training_report": projected_training_report,
+            "performance_report": self._compact_metric_map(performance),
+            "validation_task_execution_report": report_state.get(
+                "validation_task_execution_report",
+                report_state.get("VALIDATION_TASK_EXECUTION_REPORT", {}),
+            ),
+            "VALIDATION_TASK_EXECUTION_REPORT": report_state.get(
+                "VALIDATION_TASK_EXECUTION_REPORT",
+                report_state.get("validation_task_execution_report", {}),
+            ),
+            "EXECUTION_PLAN_REPORT": execution_plan_report,
+            "execution_plan_report": execution_plan_report,
+            "CANONICAL_EXECUTION_PLAN_REPORT": canonical_execution_plan,
+            "canonical_execution_plan": canonical_execution_plan,
+            "RUNTIME_BUDGET_ENFORCEMENT_REPORT": budget_report,
+            "runtime_budget_enforcement_report": budget_report,
+            "ACTIVE_RUNTIME_REACHABILITY_AUDIT": reachability_audit,
+            "active_runtime_reachability_audit": reachability_audit,
+            "RAW_RESULT_APPLICABILITY_REPORT": raw_applicability,
+            "raw_result_applicability_report": raw_applicability,
+            "ENGINEERING_CONCLUSION": engineering_conclusion,
+            "engineering_conclusion": engineering_conclusion,
+            "execution_timing": self._compact_metric_map(
+                report_state.get("execution_timing", {})
+            ),
+            "report_projection_guard": {
+                "report_level": "minimal",
+                "raw_runtime_state_omitted": True,
+                "final_renderer_minimal_projection": True,
+                "projected_task_result_count": len(task_results),
+                "projected_training_task_result_count": len(training_task_results),
+            },
+        }
+
+    def _compact_metric_map(self, value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            return {}
+        allowed = {}
+        for key in (
+            "system",
+            "total_runtime_seconds",
+            "active_compute_time_seconds",
+            "untracked_runtime_seconds",
+            "execution_time",
+            "runtime_summary",
+            "cognitive_efficiency",
+            "memory_efficiency",
+            "shutdown_efficiency",
+            "top_expensive_modules",
+            "stage_metrics",
+            "execution_timing_state",
+            "timing_records",
+            "runtime_attribution_report",
+        ):
+            item = value.get(key)
+            if isinstance(item, list):
+                allowed[key] = item[:8]
+            elif isinstance(item, dict):
+                allowed[key] = {
+                    sub_key: sub_value
+                    for sub_key, sub_value in item.items()
+                    if isinstance(sub_value, (str, int, float, bool, type(None)))
+                }
+            elif item is not None:
+                allowed[key] = item
+        return allowed
+
+    def _canonical_state(
+        self,
+        report_state: dict[str, Any],
+        *,
+        runtime_metadata: dict[str, Any],
+        report_level: str,
+        binding_result: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        performance = self._first_dict(
+            report_state,
+            "performance_report",
+            "PERFORMANCE_REPORT",
+        )
+        cognitive_runtime = self._first_dict(
+            report_state,
+            "COGNITIVE_RUNTIME_REPORT",
+            "cognitive_runtime_report",
+        )
+        lifecycle = self._first_dict(
+            report_state,
+            "RUNTIME_LIFECYCLE_REPORT",
+            "runtime_lifecycle_report",
+            source=performance,
+        )
+        observability = self._first_dict(
+            report_state,
+            "RUNTIME_OBSERVABILITY_REPORT",
+            "runtime_observability_report",
+            source=performance,
+        )
+        binding = self._first_dict(
+            report_state,
+            "EXECUTION_BINDING_REPORT",
+            "execution_binding_report",
+            source=performance,
+        )
+        search = self._first_dict(
+            report_state,
+            "COGNITIVE_SEARCH_REPORT",
+            "ADAPTIVE_SEARCH_INTELLIGENCE_REPORT",
+            "COGNITIVE_ROUTE_INTELLIGENCE_REPORT",
+            source=performance,
+        )
+        program = self._first_dict(
+            report_state,
+            "PROGRAM_SYNTHESIS_REPORT",
+            "program_synthesis_report",
+            source=performance,
+        )
+        knowledge = self._first_dict(
+            report_state,
+            "COGNITIVE_KNOWLEDGE_INTEGRATION_REPORT",
+            "KNOWLEDGE_PROPAGATION_REPORT",
+            "knowledge_propagation_report",
+            source=performance,
+        )
+        metric_sync = self._first_dict(
+            report_state,
+            "RUNTIME_METRIC_SYNCHRONIZATION_REPORT",
+            "runtime_metric_synchronization_report",
+            source=performance,
+        )
+
+        return {
+            "report_state": report_state,
+            "runtime_metadata": runtime_metadata,
+            "report_level": report_level,
+            "performance": performance,
+            "cognitive_runtime": cognitive_runtime,
+            "lifecycle": lifecycle,
+            "observability": observability,
+            "binding": binding,
+            "search": search,
+            "program": program,
+            "knowledge": knowledge,
+            "metric_sync": metric_sync,
+            "report_binding": binding_result or {},
+        }
+
+    def _render_human_report(self, canonical: dict[str, Any]) -> str:
+        binding = self._build_human_report_binding(canonical)
+        canonical = {**canonical, "human_report_binding": binding}
+        sections = self._select_human_sections(canonical)
+        self._last_human_report_level = canonical["report_level"]
+        self._last_human_selected_sections = [
+            name for name, _ in sections
+        ] + ["REPORT INTEGRITY"]
+        critical_note_count = len(self._human_observability_notes(canonical))
+        provisional_sections = [
+            self._render_lifecycle_start("COMPLETE"),
+            *[renderer(canonical) for _, renderer in sections],
+        ]
+        provisional_text = self._normalize_text(
+            "\n".join([*provisional_sections, self._render_lifecycle_end()])
+        )
+        integrity = self._human_report_integrity(
+            provisional_text,
+            selected_sections=[name for name, _ in sections],
+            emitted_text=provisional_text,
+            critical_note_count=critical_note_count,
+            binding=binding,
+            report_level=canonical["report_level"],
+        )
+        final_sections = [
+            self._render_lifecycle_start(integrity["Human Report Integrity State"]),
+            *[renderer(canonical) for _, renderer in sections],
+            self._render_lifecycle_end(),
+        ]
+        self._current_local_reductions = []
+        self._normalize_text("\n".join(final_sections))
+        self._current_local_reductions = []
+        final_sections = [
+            self._render_lifecycle_start(integrity["Human Report Integrity State"]),
+            *[renderer(canonical) for _, renderer in sections],
+            self._render_human_report_integrity({
+                **integrity,
+                **self._human_report_local_reduction_integrity(),
+            }),
+            self._render_lifecycle_end(),
+        ]
+        final_text = self._normalize_text("\n".join(final_sections))
+        integrity = self._human_report_integrity(
+            final_text,
+            selected_sections=[name for name, _ in sections] + ["REPORT INTEGRITY"],
+            emitted_text=final_text,
+            critical_note_count=critical_note_count,
+            binding=binding,
+            report_level=canonical["report_level"],
+        )
+        for _ in range(4):
+            final_sections[0] = self._render_lifecycle_start(
+                integrity["Human Report Integrity State"]
+            )
+            self._current_local_reductions = []
+            _ = self._normalize_text("\n".join([
+                final_sections[0],
+                *[renderer(canonical) for _, renderer in sections],
+                final_sections[-1],
+            ]))
+            local_reduction_integrity = self._human_report_local_reduction_integrity()
+            final_sections[-2] = self._render_human_report_integrity({
+                **integrity,
+                **local_reduction_integrity,
+            })
+            stabilized_text = self._normalize_text("\n".join(final_sections))
+            next_integrity = self._human_report_integrity(
+                stabilized_text,
+                selected_sections=[name for name, _ in sections] + ["REPORT INTEGRITY"],
+                emitted_text=stabilized_text,
+                critical_note_count=critical_note_count,
+                binding=binding,
+                report_level=canonical["report_level"],
+            )
+            if next_integrity == integrity:
+                return stabilized_text
+            integrity = next_integrity
+        return self._normalize_text("\n".join(final_sections))
+
+    def _select_human_sections(
+        self,
+        canonical: dict[str, Any],
+    ) -> list[tuple[str, Any]]:
+        sections: list[tuple[str, Any]] = [
+            ("NEXRYN HUMAN RUN SUMMARY", self._render_human_summary_title),
+            ("RUN OVERVIEW", self._render_human_run_overview),
+            ("TIMING AND PERFORMANCE", self._render_human_timing_performance),
+            ("COGNITIVE QUALITY", self._render_human_cognitive_quality),
+            ("COGNITIVE OUTCOME", self._render_human_cognitive_outcome),
+            ("EVIDENCE LIFECYCLE", self._render_human_evidence_lifecycle),
+            ("EXECUTION PLAN REPORT", self._render_human_execution_plan_report),
+            ("ACTIVE RUNTIME REACHABILITY", self._render_human_active_runtime_reachability),
+            ("NATURAL PRODUCTION AUTHORITY HANDOFF", self._render_natural_production_handoff),
+            ("ENGINEERING CONCLUSION", self._render_human_engineering_conclusion),
+            ("CONSTITUTIONAL BOUNDARY", self._render_human_constitutional_boundary),
+        ]
+        notes = self._human_observability_notes(canonical)
+        if notes:
+            sections.append(
+                ("CRITICAL OBSERVABILITY NOTES", self._render_human_observability_notes)
+            )
+        return sections
+
+    def _human_section_accounting(
+        self,
+        selected_sections: list[str],
+        *,
+        rendered_report: str = "",
+        report_level: str = "normal",
+    ) -> dict[str, Any]:
+        universe_records = list(HUMAN_PROJECTION_UNIVERSE)
+        universe_titles = [str(row["section_title"]) for row in universe_records]
+        universe_title_set = set(universe_titles)
+        universe_ids = [str(row["section_id"]) for row in universe_records]
+        selected_titles = list(dict.fromkeys(selected_sections))
+        selected = set(selected_titles)
+        visible = {
+            title
+            for title in universe_titles
+            if self._section_title(title) in rendered_report
+        }
+        selected_outside_universe = sorted(selected - universe_title_set)
+        visible_outside_selected = sorted(visible - selected)
+        duplicate_universe_identity_count = len(universe_ids) - len(set(universe_ids))
+        unknown_human_section_identity_count = len(selected_outside_universe)
+        contradictory_membership_count = 0
+        selected_but_empty = [
+            title
+            for title in universe_titles
+            if title in selected and title not in visible
+        ]
+        records = []
+        for index, row in enumerate(universe_records, start=1):
+            section = str(row["section_title"])
+            is_selected = section in selected
+            is_visible = section in visible
+            if is_visible:
+                render_state = "SELECTED_VISIBLE"
+            elif (
+                is_selected
+                and section == "NATURAL PRODUCTION AUTHORITY HANDOFF"
+                and report_level == "minimal"
+            ):
+                render_state = "SELECTED_RENDERED_EMPTY_BY_REPORT_LEVEL"
+            elif is_selected:
+                render_state = "SELECTED_RENDERED_EMPTY"
+            else:
+                render_state = "UNSELECTED_NOT_RENDER_ATTEMPTED"
+            records.append({
+                "section_id": row["section_id"],
+                "section_title": section,
+                "human_projection_universe_index": index,
+                "membership_semantics": row["membership_semantics"],
+                "visibility_semantics": row["visibility_semantics"],
+                "selected": is_selected,
+                "render_attempted": is_selected,
+                "visible_rendering": is_visible,
+                "selection_state": (
+                    "SELECTED"
+                    if is_selected
+                    else "UNSELECTED_BY_HUMAN_PROJECTION_POLICY"
+                ),
+                "render_state": render_state,
+                "selection_reason_if_known": (
+                    "section title present in selected human projection"
+                    if is_selected
+                    else "not selected by the current human projection selector"
+                ),
+            })
+        selected_count = len([title for title in universe_titles if title in selected])
+        unselected_count = len(universe_records) - selected_count
+        visible_count = len([title for title in universe_titles if title in visible])
+        selected_but_empty_count = len(selected_but_empty)
+        selection_subset_integrity = (
+            "VERIFIED" if not selected_outside_universe else "FAILED"
+        )
+        visible_subset_integrity = (
+            "VERIFIED" if not visible_outside_selected else "FAILED"
+        )
+        count_arithmetic_integrity = (
+            "VERIFIED"
+            if selected_count + unselected_count == len(universe_records)
+            else "FAILED"
+        )
+        membership_validation_state = (
+            "VERIFIED"
+            if (
+                duplicate_universe_identity_count == 0
+                and not selected_outside_universe
+                and not visible_outside_selected
+                and unknown_human_section_identity_count == 0
+                and contradictory_membership_count == 0
+            )
+            else "FAILED_CLOSED"
+        )
+        membership_validation_failure = (
+            "SELECTED_SECTION_OUTSIDE_HUMAN_PROJECTION_UNIVERSE"
+            if selected_outside_universe
+            else "NONE"
+        )
+        legacy_denominator_overcount = len(SECTION_ORDER) - len(universe_records)
+        return {
+            "Human Projection Universe Contract Version": (
+                HUMAN_PROJECTION_UNIVERSE_CONTRACT_VERSION
+            ),
+            "Human Projection Universe Count": len(universe_records),
+            "Human Projection Selected Section Count": selected_count,
+            "Human Projection Unselected Section Count": unselected_count,
+            "Human Projection Visible Section Count": visible_count,
+            "Human Projection Selected But Empty Count": selected_but_empty_count,
+            "Human Projection Selected Outside Universe Count": (
+                len(selected_outside_universe)
+            ),
+            "Human Projection Visible Outside Selected Count": (
+                len(visible_outside_selected)
+            ),
+            "Human Projection Duplicate Universe Identity Count": (
+                duplicate_universe_identity_count
+            ),
+            "Human Projection Unknown Human Section Identity Count": (
+                unknown_human_section_identity_count
+            ),
+            "Human Projection Contradictory Membership Count": (
+                contradictory_membership_count
+            ),
+            "Human Projection Selection Subset Integrity": selection_subset_integrity,
+            "Human Projection Visible Subset Integrity": visible_subset_integrity,
+            "Human Projection Count Arithmetic Integrity": count_arithmetic_integrity,
+            "Human Projection Membership Validation State": (
+                membership_validation_state
+            ),
+            "Human Projection Membership Validation Failure": (
+                membership_validation_failure
+            ),
+            "Human Projection Accounting State": (
+                "OBSERVATIONAL_HUMAN_PROJECTION_UNIVERSE"
+            ),
+            "Human Projection Selected Outside Universe": selected_outside_universe,
+            "Human Projection Visible Outside Selected": visible_outside_selected,
+            "Human Projection Selected But Empty": selected_but_empty,
+            "Human Projection Section Accounting": records,
+            "Human Report Legacy Section Order Count": len(SECTION_ORDER),
+            "Human Report Legacy Section Order Role": (
+                "LEGACY_FULL_REPORT_DENOMINATOR"
+            ),
+            "Human Report Legacy Denominator Overcount": legacy_denominator_overcount,
+        }
+
+    def _build_human_report_binding(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        fields: dict[str, dict[str, Any]] = {}
+
+        def bind(
+            key: str,
+            label: str,
+            paths: list[str],
+            *,
+            required: bool = True,
+            fallback_paths: list[str] | None = None,
+            absence: str = "SOURCE_UNBOUND",
+        ) -> None:
+            fields[key] = self._bind_human_field(
+                canonical,
+                key,
+                label,
+                paths,
+                required=required,
+                fallback_paths=fallback_paths or [],
+                absence=absence,
+            )
+
+        highest = self._highest_exclusive_consumer(canonical)
+        state = canonical.get("report_state", {})
+        validation = self._first_dict(
+            state,
+            "VALIDATION_TASK_EXECUTION_REPORT",
+            "validation_task_execution_report",
+        )
+        evaluation = self._first_dict(
+            state,
+            "VALIDATION_EVIDENCE_EVALUATION_REPORT",
+            "validation_evidence_evaluation_report",
+        )
+        raw_applicability = self._first_dict(
+            state,
+            "RAW_RESULT_APPLICABILITY_REPORT",
+            "raw_result_applicability_report",
+        )
+        raw_applicability_state = str(
+            raw_applicability.get("raw_result_applicability_state") or ""
+        ).upper()
+        raw_envelope = self._first_dict(
+            validation,
+            "RAW_VALIDATION_RESULT_ENVELOPE",
+            "raw_validation_result_envelope",
+        )
+        raw_result_id = self._first_meaningful(
+            raw_envelope.get("raw_validation_result_id"),
+            validation.get("raw_validation_result_id"),
+            validation.get("raw_result_id"),
+            state.get("raw_validation_result_id"),
+            default=None,
+        )
+        raw_result_id_state = str(raw_result_id).strip().upper()
+        raw_result_id_missing = raw_result_id is None or raw_result_id_state in {
+            "",
+            "NOT_ISSUED",
+            "NOT AVAILABLE",
+            "NOT_AVAILABLE",
+            "NOT_PRODUCED",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+        }
+        validation_execution_state = self._first_meaningful(
+            raw_envelope.get("raw_validation_result_state"),
+            validation.get("execution_state"),
+            validation.get("validation_execution_lifecycle_state"),
+            default=None,
+        )
+        raw_result_captured = str(validation_execution_state).upper() in {
+            "RAW_RESULT_CAPTURED",
+            "RAW_RESULT_EMPTY_VALID_OUTPUT_CAPTURED",
+        }
+        raw_result_identity_missing = raw_result_captured and raw_result_id_missing
+        raw_result_not_applicable = (
+            raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE"
+        )
+        temporal = self._validation_activity_temporal_state(
+            canonical,
+            validation,
+            evaluation,
+        )
+        validation_target_required = bool(validation) and not raw_result_not_applicable and (
+            raw_result_captured
+            or self._meaningful_token(validation.get("scheduled_validation_task"))
+            or self._meaningful_token(validation.get("target_operation"))
+        )
+        evaluation_target_required = bool(evaluation) and not raw_result_not_applicable
+        arena = self._first_dict(
+            state,
+            "ARENA_EVIDENCE_ADMISSION_REPORT",
+            "arena_evidence_admission_report",
+        )
+        arena_target_required = self._arena_target_operation_required(arena)
+        target_operation_required = bool(
+            self._meaningful_token(state.get("target_operation"))
+            or self._first_dict(state, "leading_candidate")
+            or validation_target_required
+            or evaluation_target_required
+            or arena_target_required
+        )
+
+        bind(
+            "run_id",
+            "Run Id",
+            ["runtime_metadata.execution_id", "report_state.run_id", "report_binding.field_values.execution_identifier"],
+            fallback_paths=[
+                "report_state.ENGINEERING_CONCLUSION.conclusion_run_id",
+                "report_state.engineering_conclusion.conclusion_run_id",
+            ],
+        )
+        bind("timestamp", "Timestamp", ["runtime_metadata.timestamp", "report_state.timestamp", "report_binding.field_values.timestamp"])
+        bind("mode", "Mode", ["runtime_metadata.mode", "report_binding.field_values.execution_mode"])
+        bind("report_level", "Report Level", ["report_level"])
+        bind("training_batch_size", "Training Batch Size", ["runtime_metadata.training_batch_size", "report_state.training_batch_size"])
+        bind("runtime_status", "Status", ["runtime_metadata.runtime_status", "report_state.runtime_status", "report_binding.field_values.runtime_status"])
+        bind("warning_count", "Warnings", ["report_state.warning_count", "runtime_metadata.warning_count"], required=False, absence="NOT_PRODUCED")
+        bind("error_count", "Errors", ["report_state.error_count", "runtime_metadata.error_count"], required=False, absence="NOT_PRODUCED")
+
+        bind("total_wall_time", "Total Wall Time", ["report_state.execution_timing_state.total_wall_time", "performance.total_wall_time", "performance.total_runtime_seconds"], absence="NOT_PRODUCED")
+        bind("aggregate_active_compute_time", "Aggregate Active Compute Time", ["performance.active_compute_time_seconds", "report_state.execution_timing_state.aggregate_active_compute_time", "report_state.aggregate_active_compute_time"], absence="NOT_PRODUCED")
+        bind("timing_coverage", "Timing Coverage", ["report_state.execution_timing_state.timing_coverage", "performance.timing_coverage"], absence="NOT_PRODUCED")
+        bind("untracked_time", "Untracked Time", ["performance.untracked_runtime_seconds", "report_state.execution_timing_state.untracked_time"], required=False, absence="NOT_PRODUCED")
+        bind("report_lifecycle_time", "Report Lifecycle Time", ["report_state.execution_timing_state.report_lifecycle_total_time", "report_state.execution_timing_state.report_generation_time", "performance.report_lifecycle_time"], required=False, absence="NOT_PRODUCED")
+        fields["highest_exclusive_consumer"] = self._resolved_human_field("highest_exclusive_consumer", "Highest Exclusive-Time Consumer", highest.get("name"), "computed.highest_exclusive_consumer")
+        fields["highest_consumer_duration"] = self._resolved_human_field("highest_consumer_duration", "Highest-Consumer Duration", highest.get("duration"), "computed.highest_exclusive_consumer.duration")
+        fields["highest_consumer_share"] = self._resolved_human_field("highest_consumer_share", "Highest-Consumer Share", highest.get("share"), "computed.highest_exclusive_consumer.share")
+        bind("task_selection_cost_state", "Task-Selection Cost State", ["performance.task_selection_cost_state", "report_state.task_selection_cost_state"], required=False, absence="NOT_PRODUCED")
+        bind("performance_action", "Performance Action", ["performance.performance_action", "report_state.performance_action"], required=False, absence="NOT_PRODUCED")
+        bind("governance_budget_exceeded", "Governance Budget Exceeded", ["performance.governance_budget_exceeded", "runtime_metadata.governance_budget_exceeded"], required=False, absence="NOT_PRODUCED")
+        bind("report_timing_status", "Report Timing Status", ["report_state.report_timing_status", "performance.report_timing_status"], required=False, absence="NOT_PRODUCED")
+        bind("report_timing_semantics_valid", "Report Timing Semantics Valid", ["report_state.report_timing_semantics_valid", "performance.report_timing_semantics_valid"], required=False, absence="NOT_PRODUCED")
+
+        bind("overall_search_quality", "Overall Search Quality", ["search.overall_search_quality", "report_binding.field_values.overall_search_quality"], required=False, absence="NOT_PRODUCED")
+        bind("search_efficiency", "Search Efficiency", ["search.search_efficiency", "report_binding.field_values.search_efficiency"], required=False, absence="NOT_PRODUCED")
+        bind("search_coverage", "Search Coverage", ["search.search_coverage", "report_binding.field_values.search_coverage"], required=False, absence="NOT_PRODUCED")
+        bind("average_route_quality", "Average Route Quality", ["search.average_route_quality", "report_binding.field_values.average_route_quality"], required=False, absence="NOT_PRODUCED")
+        bind(
+            "program_type_lifecycle_entry_count",
+            "Program Type Lifecycle Entries",
+            [
+                "report_binding.field_values.program_type_lifecycle_entry_count",
+                "report_state.program_type_lifecycle_entry_count",
+                "report_state.COGNITIVE_PROGRAM_LIFECYCLE_REPORT.total_program_blueprints",
+                "report_state.cognitive_program_lifecycle_report.total_program_blueprints",
+            ],
+            required=False,
+            absence="NOT_PRODUCED",
+        )
+        bind(
+            "program_blueprint_generation_success_count",
+            "Successful Blueprint Generations",
+            [
+                "report_binding.field_values.program_blueprint_generation_success_count",
+                "report_state.program_blueprint_generation_success_count",
+                "report_state.PROGRAM_GENERATION_REPORT.program_blueprint_generation_success_count",
+                "report_state.program_generation_report.program_blueprint_generation_success_count",
+            ],
+            required=False,
+            absence="NOT_PRODUCED",
+        )
+        bind(
+            "synthesized_program_persisted_count",
+            "Synthesized Programs Persisted",
+            [
+                "report_binding.field_values.synthesized_program_persisted_count",
+                "report_state.synthesized_program_persisted_count",
+                "program.generated_programs",
+            ],
+            required=False,
+            absence="NOT_PRODUCED",
+        )
+
+        bind(
+            "target_operation",
+            "Target Operation",
+            [
+                "report_state.target_operation",
+                "report_state.operation",
+                "report_state.leading_candidate.operation",
+            ],
+            required=target_operation_required,
+            absence=(
+                "EXPECTED_BUT_MISSING"
+                if target_operation_required
+                else "NOT_EXPECTED_AT_CURRENT_STATE"
+            ),
+        )
+        bind("relevant_candidate", "Relevant Candidate", ["report_state.leading_candidate.candidate_id", "report_state.leading_candidate.name", "report_state.leading_candidate.candidate"], required=False, absence="NOT_PRODUCED")
+        bind("candidate_source", "Candidate Source", ["report_state.leading_candidate.source", "report_state.leading_candidate.candidate_source"], required=False, absence="NOT_PRODUCED")
+        bind("candidate_entered_arena", "Candidate Entered Arena", ["report_state.leading_candidate.entered_arena", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.candidate_entered_arena", "report_state.cognitive_candidate_arena_report.candidate_entered_arena"], required=False, absence="NOT_PRODUCED")
+        bind("validation_probe_state", "Validation Probe State", ["report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.validation_probe_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.validation_probe_outcome", "report_state.cognitive_candidate_arena_report.validation_probe_state", "report_state.leading_candidate.validation_probe"], required=False, absence="NOT_PRODUCED")
+        bind("arena_decision", "Arena Decision", ["report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.arena_decision", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.decision_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.selection_state", "report_state.cognitive_candidate_arena_report.arena_decision"], required=False, absence="NOT_PRODUCED")
+        bind("winner_selected", "Winner Selected", ["report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.winner_selected", "report_state.cognitive_candidate_arena_report.winner_selected"], required=False, absence="NOT_PRODUCED")
+        bind("current_unresolved_cognitive_state", "Current Unresolved Cognitive State", ["report_state.current_unresolved_cognitive_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.unresolved_state", "report_state.COGNITIVE_CANDIDATE_ARENA_REPORT.selection_state"], required=False, absence="NOT_PRODUCED")
+
+        bind("evidence_plan_state", "Evidence Plan State", ["report_state.EVIDENCE_GENERATION_REPORT.evidence_plan_state", "report_state.EVIDENCE_GENERATION_REPORT.plan_state", "report_state.EVIDENCE_GENERATION_REPORT.existing_evidence_plan_reused"], required=False, absence="NOT_PRODUCED")
+        bind("evidence_plan_id", "Evidence Plan Id", ["report_state.EVIDENCE_GENERATION_REPORT.evidence_plan_id", "report_state.EVIDENCE_GENERATION_REPORT.plan_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.evidence_plan_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_plan_id"], required=False, absence="NOT_PRODUCED")
+        bind("scheduled_validation_task", "Scheduled Validation Task", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_validation_task", "report_state.VALIDATION_TASK_EXECUTION_REPORT.scheduled_task", "report_state.EVIDENCE_GENERATION_REPORT.scheduled_validation_task"], required=False, absence="NOT_PRODUCED")
+        bind("validation_schedule_id", "Validation Schedule Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_schedule_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.schedule_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_schedule_id"], required=False, absence="NOT_PRODUCED")
+        fields["validation_activity_temporal_state"] = self._resolved_human_field("validation_activity_temporal_state", "Validation Activity Temporal State", temporal["state"], "computed.validation_activity_temporal_state")
+        fields["validation_schedule_origin_run_id"] = self._resolved_human_field("validation_schedule_origin_run_id", "Validation Schedule Origin Run Id", temporal["schedule_origin_run_id"], "computed.validation_activity_temporal_state.schedule_origin_run_id")
+        fields["validation_execution_origin_run_id"] = self._resolved_human_field("validation_execution_origin_run_id", "Validation Execution Origin Run Id", temporal["execution_origin_run_id"], "computed.validation_activity_temporal_state.execution_origin_run_id")
+        fields["validation_activity_run_id"] = self._resolved_human_field("validation_activity_run_id", "Validation Activity Run Id", temporal["current_activity_run_id"], "computed.validation_activity_temporal_state.current_activity_run_id")
+        fields["validation_activity_current_run"] = self._resolved_human_field("validation_activity_current_run", "Validation Activity Current Run", temporal["current_run_activity"], "computed.validation_activity_temporal_state.current_run_activity")
+        bind("execution_admission", "Execution Admission", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_admission", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_admission_state"], required=False, absence="NOT_PRODUCED")
+        bind("validation_execution_state", "Validation Execution State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_lifecycle_state"], required=False, absence="NOT_PRODUCED")
+        bind("validation_execution_id", "Validation Execution Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_execution_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.validation_execution_id"], required=False, absence="NOT_PRODUCED")
+        bind("raw_result_applicability_state", "Raw Result Applicability State", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_state", "report_state.raw_result_applicability_report.raw_result_applicability_state"], required=False, absence="RAW_RESULT_APPLICABILITY_UNDETERMINED")
+        bind("raw_result_applicability_reason", "Raw Result Applicability Reason", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_reason", "report_state.raw_result_applicability_report.raw_result_applicability_reason"], required=False, absence="RAW_RESULT_PRODUCER_PROVENANCE_UNDETERMINED")
+        bind("raw_result_producer_obligation_count", "Raw Result Producer Obligation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_producer_obligation_count", "report_state.raw_result_applicability_report.raw_result_producer_obligation_count"], required=False, absence="0")
+        bind("qualifying_producer_count", "Qualifying Producer Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.qualifying_producer_count", "report_state.raw_result_applicability_report.qualifying_producer_count"], required=False, absence="0")
+        bind("applicable_operation_count", "Applicable Operation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicable_operation_count", "report_state.raw_result_applicability_report.applicable_operation_count"], required=False, absence="0")
+        bind("non_applicable_operation_count", "Non-Applicable Operation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.non_applicable_operation_count", "report_state.raw_result_applicability_report.non_applicable_operation_count"], required=False, absence="0")
+        bind("undetermined_operation_count", "Undetermined Operation Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.undetermined_operation_count", "report_state.raw_result_applicability_report.undetermined_operation_count"], required=False, absence="0")
+        bind("raw_result_required_count", "Raw Result Required Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_required_count", "report_state.raw_result_applicability_report.raw_result_required_count"], required=False, absence="0")
+        bind("applicable_raw_result_present_count", "Applicable Raw Result Present Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicable_raw_result_present_count", "report_state.raw_result_applicability_report.applicable_raw_result_present_count"], required=False, absence="0")
+        bind("applicable_raw_result_missing_count", "Applicable Raw Result Missing Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicable_raw_result_missing_count", "report_state.raw_result_applicability_report.applicable_raw_result_missing_count"], required=False, absence="0")
+        bind("pre_obligation_deferred_count", "Pre-Obligation Deferred Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.pre_obligation_deferred_count", "report_state.raw_result_applicability_report.pre_obligation_deferred_count"], required=False, absence="0")
+        bind("pre_obligation_blocked_count", "Pre-Obligation Blocked Count", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.pre_obligation_blocked_count", "report_state.raw_result_applicability_report.pre_obligation_blocked_count"], required=False, absence="0")
+        bind("raw_result_current_run_binding_state", "Current Run Binding State", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.current_run_binding_state", "report_state.raw_result_applicability_report.current_run_binding_state"], required=False, absence="RAW_RESULT_APPLICABILITY_UNDETERMINED")
+        bind("raw_result_authoritative_execution_plan_id", "Authoritative Execution Plan Id", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.authoritative_execution_plan_id", "report_state.raw_result_applicability_report.authoritative_execution_plan_id"], required=False, absence="EXECUTION_PLAN_ID_UNBOUND")
+        bind("raw_result_applicability_evaluation_source", "Applicability Evaluation Source", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.applicability_evaluation_source", "report_state.raw_result_applicability_report.applicability_evaluation_source"], required=False, absence="NOT_PRODUCED")
+        bind("raw_result_lifecycle_completeness", "Raw Result Lifecycle Completeness", ["report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_lifecycle_completeness_state", "report_state.raw_result_applicability_report.raw_result_lifecycle_completeness_state"], required=False, absence="NOT_EVALUATED_APPLICABILITY_UNDETERMINED")
+        if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
+            identity_absence = {
+                "raw_result_identity_state": ("Raw Result Identity State", "NOT_EVALUATED_NOT_APPLICABLE"),
+                "raw_result_identity_reason": ("Raw Result Identity Reason", "RAW_RESULT_IDENTITY_NOT_EXPECTED"),
+                "canonical_raw_result_id": ("Canonical Raw Result Id", "Not expected at current lifecycle state"),
+                "raw_result_identity_issuance_count": ("Raw Result Identity Issuance Count", 0),
+                "raw_result_identity_binding_state": ("Raw Result Identity Binding State", "NOT_EVALUATED_NOT_APPLICABLE"),
+                "raw_result_identity_integrity_state": ("Raw Result Identity Integrity State", "NOT_EVALUATED_NOT_APPLICABLE"),
+                "raw_result_identity_conflict_count": ("Raw Result Identity Conflict Count", 0),
+                "applicable_present_result_missing_identity_count": ("Applicable Present Result Missing Identity Count", 0),
+                "foreign_raw_result_ignored_count": ("Foreign Raw Result Ignored Count", 0),
+                "previous_run_raw_result_ignored_count": ("Previous-Run Raw Result Ignored Count", 0),
+                "authoritative_run_id": ("Authoritative Run Id", raw_applicability.get("run_id") or "RUN_ID_UNBOUND"),
+                "producer_operation_id": ("Producer Operation Id", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "validation_attempt_id": ("Validation Attempt Id", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "identity_schema_version": ("Identity Schema Version", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "immutable_identity_fingerprint": ("Immutable Identity Fingerprint", "NOT_EXPECTED_AT_CURRENT_STATE"),
+                "identity_evaluation_source": ("Identity Evaluation Source", "raw_result_lifecycle_applicability_evaluator"),
+            }
+            for field_name, (label, value) in identity_absence.items():
+                fields[field_name] = self._resolved_human_field(
+                    field_name,
+                    label,
+                    value,
+                    "report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_state",
+                )
+        else:
+            bind("raw_result_identity_state", "Raw Result Identity State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_state", "report_state.validation_task_execution_report.raw_result_identity_state"], required=False, absence="IDENTITY_EVALUATION_UNDETERMINED")
+            bind("raw_result_identity_reason", "Raw Result Identity Reason", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_reason", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_reason", "report_state.validation_task_execution_report.raw_result_identity_reason"], required=False, absence="RAW_RESULT_IDENTITY_PROVENANCE_UNDETERMINED")
+            bind("canonical_raw_result_id", "Canonical Raw Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.canonical_raw_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.validation_task_execution_report.canonical_raw_result_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("raw_result_identity_issuance_count", "Raw Result Identity Issuance Count", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_issuance_count", "report_state.validation_task_execution_report.raw_result_identity_issuance_count"], required=False, absence="0")
+            bind("raw_result_identity_binding_state", "Raw Result Identity Binding State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_binding_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_binding_state", "report_state.validation_task_execution_report.raw_result_identity_binding_state"], required=False, absence="IDENTITY_EVALUATION_UNDETERMINED")
+            bind("raw_result_identity_integrity_state", "Raw Result Identity Integrity State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_integrity_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_integrity_state", "report_state.validation_task_execution_report.raw_result_identity_integrity_state"], required=False, absence="IDENTITY_EVALUATION_UNDETERMINED")
+            bind("raw_result_identity_conflict_count", "Raw Result Identity Conflict Count", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_conflict_count", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_result_identity_conflict_count", "report_state.validation_task_execution_report.raw_result_identity_conflict_count"], required=False, absence="0")
+            bind("applicable_present_result_missing_identity_count", "Applicable Present Result Missing Identity Count", ["report_state.RAW_RESULT_IDENTITY_REPORT.applicable_present_result_missing_identity_count", "report_state.VALIDATION_TASK_EXECUTION_REPORT.applicable_present_result_missing_identity_count"], required=False, absence="0")
+            bind("foreign_raw_result_ignored_count", "Foreign Raw Result Ignored Count", ["report_state.RAW_RESULT_IDENTITY_REPORT.foreign_raw_result_ignored_count"], required=False, absence="0")
+            bind("previous_run_raw_result_ignored_count", "Previous-Run Raw Result Ignored Count", ["report_state.RAW_RESULT_IDENTITY_REPORT.previous_run_raw_result_ignored_count"], required=False, absence="0")
+            bind("authoritative_run_id", "Authoritative Run Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.run_id", "report_state.RAW_RESULT_APPLICABILITY_REPORT.run_id"], required=False, absence="RUN_ID_UNBOUND")
+            bind("producer_operation_id", "Producer Operation Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.producer_operation_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.executor_invocation_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("validation_attempt_id", "Validation Attempt Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.validation_attempt_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.validation_attempt_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("identity_schema_version", "Identity Schema Version", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.identity_schema_version", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_identity_schema_version", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.identity_schema_version"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("immutable_identity_fingerprint", "Immutable Identity Fingerprint", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.immutable_identity_fingerprint", "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.immutable_identity_fingerprint"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+            bind("identity_evaluation_source", "Identity Evaluation Source", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.identity_evaluation_source"], required=False, absence="NOT_PRODUCED")
+        if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                "RAW_RESULT_NOT_APPLICABLE",
+                "report_state.RAW_RESULT_APPLICABILITY_REPORT.raw_result_applicability_state",
+            )
+        elif raw_envelope and not raw_result_identity_missing:
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                raw_envelope.get("raw_validation_result_state"),
+                "report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_state",
+            )
+        elif raw_result_identity_missing:
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                "RAW_RESULT_ENVELOPE_INCOMPLETE",
+                "compatibility.raw_result_identity_missing",
+            )
+        elif raw_result_id is not None and not raw_result_id_missing:
+            fields["raw_result_state"] = self._resolved_human_field("raw_result_state", "Raw Result State", "RAW_RESULT_CAPTURED" if raw_result_captured else "RAW_RESULT_ATTACHED", "compatibility.raw_result_id")
+        elif str(validation_execution_state).upper().startswith("RAW_RESULT"):
+            fields["raw_result_state"] = self._resolved_human_field(
+                "raw_result_state",
+                "Raw Result State",
+                validation_execution_state,
+                "report_state.VALIDATION_TASK_EXECUTION_REPORT.execution_state",
+            )
+        else:
+            bind("raw_result_state", "Raw Result State", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_state", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_lifecycle_state"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+        if raw_applicability_state == "RAW_RESULT_NOT_APPLICABLE":
+            fields["raw_validation_result_id"] = self._absent_human_field(
+                "raw_validation_result_id",
+                "Raw Validation Result Id",
+                "NOT_EXPECTED_AT_CURRENT_STATE",
+                False,
+            )
+        else:
+            bind("raw_validation_result_id", "Raw Validation Result Id", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.RAW_VALIDATION_RESULT_ENVELOPE.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_envelope.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_validation_result_id", "report_state.VALIDATION_TASK_EXECUTION_REPORT.raw_result_id", "report_state.raw_validation_result_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.raw_validation_result_id"], required=raw_result_captured, absence="RAW_VALIDATION_RESULT_ID_NOT_ISSUED" if raw_result_captured else "NOT_EXPECTED_AT_CURRENT_STATE")
+        if evaluation:
+            bind("evidence_evaluation_state", "Evidence Evaluation State", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evaluation_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.decision_state", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_acceptance_state"], required=False, absence="NOT_PRODUCED")
+        else:
+            fields["evidence_evaluation_state"] = self._absent_human_field("evidence_evaluation_state", "Evidence Evaluation State", "NOT_PRODUCED", False)
+        bind("evidence_decision_id", "Evidence Evaluation Decision Id", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.evidence_decision_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.decision_id"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+        accepted_required = str(evaluation.get("evidence_acceptance_state", "")).upper() == "EVIDENCE_ACCEPTED" or self._boolish(evaluation.get("accepted_evidence_artifact_created")) is True
+        bind("accepted_evidence_id", "Accepted Evidence Artifact Id", ["report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.accepted_evidence_id", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.accepted_evidence_artifact_id"], required=accepted_required, absence="EXPECTED_BUT_MISSING" if accepted_required else "NOT_EXPECTED_AT_CURRENT_STATE")
+        bind("target_reference_forwarded_to_solver", "Target Reference Forwarded To Solver", ["report_state.VALIDATION_TASK_EXECUTION_REPORT.target_reference_forwarded_to_solver", "report_state.EVIDENCE_GENERATION_REPORT.target_reference_forwarded_to_solver", "report_state.VALIDATION_EVIDENCE_EVALUATION_REPORT.target_reference_forwarded_to_solver"], required=False, absence="NOT_PRODUCED")
+        bind("arena_evidence_admission", "Arena Evidence Admission", ["report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_evidence_admission", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.admission_state", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_evidence_admission_invoked"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+        bind("arena_reentry", "Arena Re-entry", ["report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_reentry", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_re_entry", "report_state.ARENA_EVIDENCE_ADMISSION_REPORT.arena_reentry_invoked"], required=False, absence="NOT_EXPECTED_AT_CURRENT_STATE")
+
+        bind("largest_success", "Largest Success", ["report_state.ENGINEERING_CONCLUSION.largest_success", "report_state.engineering_conclusion.largest_success"], required=False, absence="NOT_PRODUCED")
+        bind("largest_regression", "Largest Regression", ["report_state.ENGINEERING_CONCLUSION.largest_regression", "report_state.engineering_conclusion.largest_regression"], required=False, absence="NOT_PRODUCED")
+        bind("current_open_decision", "Current Open Decision", ["report_state.ENGINEERING_CONCLUSION.current_open_decision", "report_state.engineering_conclusion.current_open_decision"], required=False, absence="NOT_PRODUCED")
+        bind("next_decision_gate", "Next Decision Gate", ["report_state.ENGINEERING_CONCLUSION.next_decision_gate", "report_state.engineering_conclusion.next_decision_gate"], required=False, absence="NOT_PRODUCED")
+        bind("current_bottleneck", "Current Bottleneck", ["report_state.ENGINEERING_CONCLUSION.current_bottleneck", "report_state.engineering_conclusion.current_bottleneck"], required=False, absence="NOT_PRODUCED")
+        bind("root_cause", "Root Cause", ["report_state.ENGINEERING_CONCLUSION.root_cause", "report_state.engineering_conclusion.root_cause"], required=False, absence="NOT_PRODUCED")
+        bind("failure_reason", "Failure Reason", ["report_state.ENGINEERING_CONCLUSION.failure_reason", "report_state.engineering_conclusion.failure_reason"], required=False, absence="NOT_PRODUCED")
+        bind("recommended_action", "Recommended Action", ["report_state.ENGINEERING_CONCLUSION.recommended_action", "report_state.ENGINEERING_CONCLUSION.next_task", "report_state.engineering_conclusion.recommended_action"], required=False, absence="NOT_PRODUCED")
+        bind("responsible_area", "Responsible Area", ["report_state.ENGINEERING_CONCLUSION.responsible_area", "report_state.ENGINEERING_CONCLUSION.responsible_component", "report_state.engineering_conclusion.responsible_area"], required=False, absence="NOT_PRODUCED")
+        bind("next_gate", "Next Gate", ["report_state.ENGINEERING_CONCLUSION.next_gate", "report_state.ENGINEERING_CONCLUSION.next_decision_gate", "report_state.engineering_conclusion.next_gate"], required=False, absence="NOT_PRODUCED")
+        bind("responsible_component", "Responsible Component", ["report_state.ENGINEERING_CONCLUSION.responsible_component", "report_state.ENGINEERING_CONCLUSION.exact_responsible_component", "report_state.engineering_conclusion.responsible_component"], required=False, absence="NOT_PRODUCED")
+        bind("immediate_next_development_task", "Immediate Next Development Task", ["report_state.ENGINEERING_CONCLUSION.immediate_next_development_task", "report_state.engineering_conclusion.immediate_next_development_task"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_priority", "Engineering Priority", ["report_state.ENGINEERING_CONCLUSION.engineering_priority", "report_state.engineering_conclusion.engineering_priority"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_conclusion_state", "Engineering Conclusion State", ["report_state.ENGINEERING_CONCLUSION.engineering_conclusion_state", "report_state.engineering_conclusion.engineering_conclusion_state"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_conclusion_integrity_state", "Engineering Conclusion Integrity State", ["report_state.ENGINEERING_CONCLUSION.engineering_conclusion_integrity_state", "report_state.engineering_conclusion.engineering_conclusion_integrity_state"], required=False, absence="NOT_PRODUCED")
+        bind("engineering_conclusion_integrity_reason", "Engineering Conclusion Integrity Reason", ["report_state.ENGINEERING_CONCLUSION.engineering_conclusion_integrity_reason", "report_state.engineering_conclusion.engineering_conclusion_integrity_reason"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_source", "Conclusion Source", ["report_state.ENGINEERING_CONCLUSION.conclusion_source", "report_state.ENGINEERING_CONCLUSION.conclusion_source_stage", "report_state.engineering_conclusion.conclusion_source"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_evaluation_source", "Conclusion Evaluation Source", ["report_state.ENGINEERING_CONCLUSION.conclusion_evaluation_source", "report_state.engineering_conclusion.conclusion_evaluation_source"], required=False, absence="NOT_PRODUCED")
+        bind("current_run_binding_state", "Current Run Binding State", ["report_state.ENGINEERING_CONCLUSION.current_run_binding_state", "report_state.engineering_conclusion.current_run_binding_state"], required=False, absence="NOT_PRODUCED")
+        bind("authoritative_run_id", "Authoritative Run Id", ["report_state.ENGINEERING_CONCLUSION.authoritative_run_id", "report_state.ENGINEERING_CONCLUSION.conclusion_run_id", "report_state.engineering_conclusion.authoritative_run_id"], required=False, absence="NOT_PRODUCED")
+        bind("authoritative_execution_plan_id", "Authoritative Execution Plan Id", ["report_state.ENGINEERING_CONCLUSION.authoritative_execution_plan_id", "report_state.engineering_conclusion.authoritative_execution_plan_id"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_persistence_applicability", "Conclusion Persistence Applicability", ["report_state.ENGINEERING_CONCLUSION.persistence_applicability", "report_state.engineering_conclusion.persistence_applicability"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_persistence_integrity", "Conclusion Persistence Integrity", ["report_state.ENGINEERING_CONCLUSION.persistence_integrity", "report_state.engineering_conclusion.persistence_integrity"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_emission_integrity", "Conclusion Emission Integrity", ["report_state.ENGINEERING_CONCLUSION.emission_integrity", "report_state.engineering_conclusion.emission_integrity"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_persistence_matches_emission", "Conclusion Persistence Matches Emission", ["report_state.ENGINEERING_CONCLUSION.persistence_matches_emission", "report_state.engineering_conclusion.persistence_matches_emission"], required=False, absence="NOT_PRODUCED")
+        bind("conclusion_conflict_count", "Conclusion Conflict Count", ["report_state.ENGINEERING_CONCLUSION.conclusion_conflict_count", "report_state.engineering_conclusion.conclusion_conflict_count"], required=False, absence="0")
+
+        required_fields = [field for field in fields.values() if field.get("required")]
+        conflict_count = sum(1 for field in fields.values() if field.get("state") == "SOURCE_CONFLICT")
+        unbound_required = sum(1 for field in required_fields if field.get("state") in {"SOURCE_UNBOUND", "SOURCE_NOT_ATTACHED"})
+        expected_missing = sum(1 for field in fields.values() if field.get("state") == "EXPECTED_BUT_MISSING")
+        generic_not_available = sum(1 for field in fields.values() if field.get("display_value") == "Not Available")
+        conflict_attribution = self._human_report_conflict_attribution(
+            fields,
+            canonical,
+        )
+        engineering_conflicts = [
+            row for row in conflict_attribution
+            if row.get("engineering_conclusion_related") is True
+        ]
+        binding_integrity = "CONFLICTED" if conflict_count else ("INCOMPLETE" if unbound_required or expected_missing else "COMPLETE")
+        semantic_complete = binding_integrity == "COMPLETE"
+        return {
+            "field_bindings": fields,
+            "manifest": [
+                {
+                    "field": key,
+                    "label": field.get("label"),
+                    "state": field.get("state"),
+                    "source_path": field.get("source_path"),
+                    "required": field.get("required"),
+                }
+                for key, field in fields.items()
+            ],
+            "Human Report Canonical Binding Integrity": binding_integrity,
+            "Human Report Semantic Completeness": "COMPLETE" if semantic_complete else "INCOMPLETE",
+            "Human Report Bound Field Count": len(fields),
+            "Human Report Resolved Required Field Count": sum(1 for field in required_fields if field.get("state") in {"VALUE_AVAILABLE", "LEGACY_FALLBACK_USED"}),
+            "Human Report Unbound Required Field Count": unbound_required,
+            "Human Report Expected Missing Count": expected_missing,
+            "Human Report Binding Conflict Count": conflict_count,
+            "Human Report Conflict Attribution": conflict_attribution,
+            "Engineering Conclusion Binding Conflict Count": len(engineering_conflicts),
+            "Engineering Conclusion Projection Divergence Count": len(engineering_conflicts),
+            "Human Report Generic Unavailable Value Count": generic_not_available,
+        }
+
+    def _validation_activity_temporal_state(
+        self,
+        canonical: dict[str, Any],
+        validation: dict[str, Any],
+        evaluation: dict[str, Any],
+    ) -> dict[str, Any]:
+        state = canonical.get("report_state", {})
+        metadata = canonical.get("runtime_metadata", {})
+        current_run_id = self._first_meaningful(
+            metadata.get("execution_id"),
+            state.get("run_id"),
+            default=None,
+        )
+        envelope = self._first_dict(
+            validation,
+            "RAW_VALIDATION_RESULT_ENVELOPE",
+            "raw_validation_result_envelope",
+        )
+        schedule_origin = self._first_meaningful(
+            validation.get("schedule_source_run_id"),
+            validation.get("schedule_origin_run_id"),
+            validation.get("source_run_id"),
+            validation.get("run_id"),
+            evaluation.get("schedule_source_run_id"),
+            default=None,
+        )
+        execution_origin = self._first_meaningful(
+            validation.get("execution_source_run_id"),
+            validation.get("origin_run_id"),
+            envelope.get("origin_run_id"),
+            envelope.get("run_id"),
+            validation.get("run_id"),
+            default=None,
+        )
+        current_activity = any(
+            validation.get(key) is True
+            for key in (
+                "current_run_execution",
+                "current_run_activity",
+                "runner_invoked_in_current_run",
+                "execution_invoked_in_current_run",
+            )
+        )
+        if not current_activity and current_run_id == execution_origin:
+            current_activity = any(
+                validation.get(key) is True
+                for key in (
+                    "execution_invoked",
+                    "execution_started",
+                    "raw_result_captured",
+                )
+            )
+        has_activity = bool(validation or evaluation)
+        if current_activity and current_run_id != execution_origin:
+            temporal_state = "CROSS_RUN_CONTINUATION"
+        elif current_activity:
+            temporal_state = "CURRENT_RUN_ACTIVITY"
+        elif has_activity:
+            temporal_state = "HISTORICAL_PERSISTED_ACTIVITY"
+        else:
+            temporal_state = "NOT_AVAILABLE"
+        return {
+            "state": temporal_state,
+            "schedule_origin_run_id": schedule_origin or "NOT_AVAILABLE",
+            "execution_origin_run_id": execution_origin or "NOT_AVAILABLE",
+            "current_activity_run_id": current_run_id if current_activity else "NOT_AVAILABLE",
+            "current_run_activity": current_activity,
+        }
+
+    def _human_report_conflict_attribution(
+        self,
+        fields: dict[str, dict[str, Any]],
+        canonical: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        state = canonical.get("report_state", {})
+        state = state if isinstance(state, dict) else {}
+        conclusion = self._first_dict(
+            state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        )
+        run_id = self._first_meaningful(
+            conclusion.get("authoritative_run_id"),
+            conclusion.get("conclusion_run_id"),
+            state.get("run_id"),
+            canonical.get("runtime_metadata", {}).get("execution_id")
+            if isinstance(canonical.get("runtime_metadata"), dict)
+            else None,
+            default="RUN_ID_UNBOUND",
+        )
+        execution_plan_id = self._first_meaningful(
+            conclusion.get("authoritative_execution_plan_id"),
+            default="EXECUTION_PLAN_ID_UNBOUND",
+        )
+        rows: list[dict[str, Any]] = []
+        for key, field in fields.items():
+            if field.get("state") != "SOURCE_CONFLICT":
+                continue
+            source_path = str(field.get("source_path") or "")
+            conflicts = field.get("conflicts")
+            conflicts = conflicts if isinstance(conflicts, list) else []
+            expected_value = self._value(field.get("value"))
+            for conflict in conflicts or [{}]:
+                observed_path = str(conflict.get("source_path") or "")
+                engineering_related = (
+                    "ENGINEERING_CONCLUSION" in source_path
+                    or "engineering_conclusion" in source_path
+                    or "ENGINEERING_CONCLUSION" in observed_path
+                    or "engineering_conclusion" in observed_path
+                    or key.startswith("conclusion_")
+                    or key.startswith("engineering_conclusion")
+                    or key in {
+                        "failure_reason",
+                        "root_cause",
+                        "recommended_action",
+                        "responsible_area",
+                        "next_gate",
+                        "authoritative_run_id",
+                        "authoritative_execution_plan_id",
+                    }
+                )
+                rows.append({
+                    "field": key,
+                    "conflict_type": "SOURCE_CONFLICT",
+                    "source_component": observed_path.split(".")[1]
+                    if "." in observed_path
+                    else observed_path or "SOURCE_UNBOUND",
+                    "authoritative_source": source_path,
+                    "expected_value": expected_value,
+                    "observed_value": self._value(conflict.get("value")),
+                    "engineering_conclusion_related": engineering_related,
+                    "run_id": run_id,
+                    "execution_plan_id": execution_plan_id,
+                })
+        return rows
+
+    def _bind_human_field(
+        self,
+        canonical: dict[str, Any],
+        key: str,
+        label: str,
+        paths: list[str],
+        *,
+        required: bool,
+        fallback_paths: list[str],
+        absence: str,
+    ) -> dict[str, Any]:
+        resolved: list[tuple[str, Any]] = []
+        for path in paths:
+            found, value = self._path_value(canonical, path)
+            if found and self._is_human_value_present(value):
+                resolved.append((path, value))
+        if resolved:
+            primary_value = resolved[0][1]
+            conflicts = [
+                {"source_path": path, "value": self._value(value)}
+                for path, value in resolved[1:]
+                if self._semantic_value(value) != self._semantic_value(primary_value)
+            ]
+            if conflicts:
+                return {
+                    "key": key,
+                    "label": label,
+                    "required": required,
+                    "state": "SOURCE_CONFLICT",
+                    "display_value": HUMAN_ABSENCE_DISPLAY["SOURCE_CONFLICT"],
+                    "value": primary_value,
+                    "source_path": resolved[0][0],
+                    "conflicts": conflicts,
+                }
+            return self._resolved_human_field(key, label, primary_value, resolved[0][0], required=required)
+        for path in fallback_paths:
+            found, value = self._path_value(canonical, path)
+            if found and self._is_human_value_present(value):
+                field = self._resolved_human_field(key, label, value, path, required=required)
+                field["state"] = "LEGACY_FALLBACK_USED"
+                field["fallback_used"] = True
+                return field
+        return self._absent_human_field(key, label, absence, required)
+
+    def _resolved_human_field(
+        self,
+        key: str,
+        label: str,
+        value: Any,
+        source_path: str,
+        *,
+        required: bool = False,
+    ) -> dict[str, Any]:
+        return {
+            "key": key,
+            "label": label,
+            "required": required,
+            "state": "VALUE_AVAILABLE",
+            "display_value": self._value(value),
+            "value": value,
+            "source_path": source_path,
+            "fallback_used": False,
+        }
+
+    def _absent_human_field(
+        self,
+        key: str,
+        label: str,
+        state: str,
+        required: bool,
+    ) -> dict[str, Any]:
+        return {
+            "key": key,
+            "label": label,
+            "required": required,
+            "state": state,
+            "display_value": HUMAN_ABSENCE_DISPLAY.get(state, state),
+            "value": None,
+            "source_path": None,
+            "fallback_used": False,
+        }
+
+    def _human_value(self, canonical: dict[str, Any], key: str, *, seconds: bool = False, percent: bool = False, already_percent: bool = False, upper: bool = False) -> str:
+        binding = canonical.get("human_report_binding", {})
+        fields = binding.get("field_bindings", {}) if isinstance(binding, dict) else {}
+        field = fields.get(key) if isinstance(fields, dict) else None
+        if not isinstance(field, dict):
+            return HUMAN_ABSENCE_DISPLAY["SOURCE_UNBOUND"]
+        if field.get("state") == "VALUE_AVAILABLE" or field.get("state") == "LEGACY_FALLBACK_USED":
+            value = field.get("value")
+            if seconds:
+                rendered = self._seconds(value)
+            elif percent:
+                rendered = self._percent(value, already_percent=already_percent)
+            else:
+                rendered = self._value(value)
+        else:
+            rendered = self._value(field.get("display_value"))
+        return rendered.upper() if upper else rendered
+
+    def _human_raw(self, canonical: dict[str, Any], key: str) -> Any:
+        binding = canonical.get("human_report_binding", {})
+        fields = binding.get("field_bindings", {}) if isinstance(binding, dict) else {}
+        field = fields.get(key) if isinstance(fields, dict) else None
+        if isinstance(field, dict):
+            return field.get("value")
+        return None
+
+    def _path_value(self, source: Any, path: str) -> tuple[bool, Any]:
+        current = source
+        for part in path.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+                continue
+            return False, None
+        return True, current
+
+    def _is_human_value_present(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip()) and value.strip().upper() not in {"UNKNOWN", "NOT AVAILABLE"}
+        return True
+
+    def _semantic_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            s = value.strip()
+            # Conservative numeric normalization: convert purely numeric strings
+            # (integers or floats, including scientific notation) to numeric types.
+            # Leave non-numeric and boolean-like strings alone (lowercased) to
+            # avoid changing semantics for textual tokens.
+            if s:
+                # integer pattern
+                if re.fullmatch(r"[+-]?\d+", s):
+                    try:
+                        return int(s)
+                    except Exception:
+                        pass
+                # float pattern (allows decimals and scientific notation)
+                if re.fullmatch(r"[+-]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:[eE][+-]?\d+)?", s):
+                    try:
+                        return float(s)
+                    except Exception:
+                        pass
+            return s.lower()
+        if isinstance(value, (bool, int, float)) or value is None:
+            return value
+        return self._value(value)
+
+    def _measurement_contract_summary(self) -> dict[str, Any]:
+        return dict(HUMAN_REPORT_MEASUREMENT_CONTRACT)
+
+    def _canonical_measurement_text(self, text: str) -> str:
+        normalized = unicodedata.normalize("NFC", text)
+        normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized.endswith("\n"):
+            normalized += "\n"
+        while normalized.endswith("\n\n"):
+            normalized = normalized[:-1]
+        return normalized
+
+    def _encode_canonical_text(self, text: str) -> bytes:
+        return self._canonical_measurement_text(text).encode("utf-8")
+
+    def _canonical_body_text(self, rendered_report: str) -> str:
+        canonical = self._canonical_measurement_text(rendered_report)
+        redacted_lines: list[str] = []
+        for line in canonical.split("\n"):
+            replaced = False
+            for prefix in HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES:
+                if line.startswith(prefix):
+                    redacted_lines.append(f"{prefix} {HUMAN_REPORT_REDACTION_TOKEN}")
+                    replaced = True
+                    break
+            if not replaced:
+                redacted_lines.append(line)
+        return self._canonical_measurement_text("\n".join(redacted_lines))
+
+    def _sha256_bytes(self, payload: bytes) -> str:
+        return hashlib.sha256(payload).hexdigest()
+
+    def _measure_text_scope(self, text: str, *, scope: str) -> dict[str, Any]:
+        canonical_text = self._canonical_measurement_text(text)
+        payload = canonical_text.encode("utf-8")
+        return {
+            "measurement_state": "VERIFIED",
+            "scope": scope,
+            "encoding": "UTF-8",
+            "bom_policy": "UTF-8_WITHOUT_BOM",
+            "line_ending_policy": "LF",
+            "unicode_normalization": "NFC",
+            "includes_start_marker": REPORT_BEGIN_MARKER in canonical_text,
+            "includes_end_marker": REPORT_END_MARKER in canonical_text,
+            "includes_final_newline": canonical_text.endswith("\n"),
+            "character_count": len(canonical_text),
+            "byte_count": len(payload),
+            "line_count": len(canonical_text.splitlines()),
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": self._sha256_bytes(payload),
+        }
+
+    def _measure_report_payload(self, rendered_report: str) -> dict[str, Any]:
+        canonical_body = self._canonical_body_text(rendered_report)
+        body = self._measure_text_scope(
+            canonical_body,
+            scope=HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_body_fingerprint_scope"],
+        )
+        envelope = self._measure_text_scope(
+            rendered_report,
+            scope="FINAL_REPORT_ENVELOPE_TEXT_CANONICAL_LF",
+        )
+        return {
+            "contract": self._measurement_contract_summary(),
+            "canonical_body": body,
+            "final_envelope": envelope,
+            "canonical_body_excluded_field_count": len(HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES),
+            "canonical_body_excluded_fields": list(HUMAN_REPORT_MEASUREMENT_EXCLUDED_PREFIXES),
+            "redaction_method": HUMAN_REPORT_MEASUREMENT_CONTRACT["attestation_field_exclusion_policy"],
+            "redaction_token": HUMAN_REPORT_REDACTION_TOKEN,
+            "self_reference_state": "CANONICAL_BODY_NON_SELF_REFERENTIAL",
+        }
+
+    def _measure_bytes_scope(
+        self,
+        payload: bytes,
+        *,
+        scope: str,
+        boundary: str,
+        readback_performed: bool | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "measurement_state": "VERIFIED",
+            "scope": scope,
+            "encoding": "UTF-8",
+            "line_ending_policy": "LF",
+            "byte_count": len(payload),
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": self._sha256_bytes(payload),
+            "measurement_boundary": boundary,
+            "readback_performed": readback_performed,
+            "includes_start_marker": REPORT_BEGIN_MARKER.encode("utf-8") in payload,
+            "includes_end_marker": REPORT_END_MARKER.encode("utf-8") in payload,
+            "includes_final_newline": payload.endswith(b"\n"),
+        }
+
+    def _measure_persisted_artifact(self, path: Path) -> dict[str, Any]:
+        try:
+            payload = path.read_bytes()
+        except OSError as exc:
+            result = self._not_verified_persistence_measurement()
+            result["verification_limitation"] = f"DURABLE_ARTIFACT_READBACK_FAILED:{exc.__class__.__name__}"
+            return result
+        result = self._measure_bytes_scope(
+            payload,
+            scope="FINAL_PERSISTED_REPORT_ARTIFACT_BYTES",
+            boundary="DURABLE_ARTIFACT_REMEASURED",
+            readback_performed=True,
+        )
+        result["storage_path"] = str(path)
+        result["readback_match"] = True
+        result["integrity_state"] = "VERIFIED"
+        return result
+
+    def _measure_emitted_payload(
+        self,
+        text: str,
+        *,
+        write_completed: bool,
+    ) -> dict[str, Any]:
+        payload = self._encode_canonical_text(text)
+        result = self._measure_bytes_scope(
+            payload,
+            scope="FINAL_EMITTED_REPORT_PAYLOAD_BYTES",
+            boundary="TEXT_STREAM_WRITE_STRING_AFTER_WRITE_RETURN",
+            readback_performed=None,
+        )
+        result.update({
+            "write_attempted": True,
+            "write_completed": bool(write_completed),
+            "write_result": "WRITE_RETURNED" if write_completed else "WRITE_NOT_COMPLETED",
+            "payload_independently_measured": True,
+            "external_transport_verification": "NOT_VERIFIED",
+            "verification_limitation": "External terminal transport is outside the application-controlled boundary.",
+            "integrity_state": "VERIFIED" if write_completed else "FAILED",
+        })
+        return result
+
+    def _not_verified_persistence_measurement(self) -> dict[str, Any]:
+        return {
+            "measurement_state": "NOT_VERIFIED",
+            "integrity_state": "NOT_VERIFIED",
+            "scope": "FINAL_PERSISTED_REPORT_ARTIFACT_BYTES",
+            "encoding": "UTF-8",
+            "line_ending_policy": "LF",
+            "byte_count": None,
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": None,
+            "measurement_boundary": "NO_ARTIFACT_WRITTEN",
+            "readback_performed": False,
+            "readback_match": None,
+            "verification_limitation": "Human report artifact was not requested for this render.",
+        }
+
+    def _not_verified_emission_measurement(self) -> dict[str, Any]:
+        return {
+            "measurement_state": "NOT_VERIFIED",
+            "integrity_state": "NOT_VERIFIED",
+            "scope": "FINAL_EMITTED_REPORT_PAYLOAD_BYTES",
+            "encoding": "UTF-8",
+            "line_ending_policy": "LF",
+            "byte_count": None,
+            "fingerprint_algorithm": "SHA-256",
+            "fingerprint": None,
+            "measurement_boundary": "EMISSION_NOT_ATTEMPTED",
+            "write_attempted": False,
+            "write_completed": False,
+            "payload_independently_measured": False,
+            "external_transport_verification": "NOT_VERIFIED",
+            "verification_limitation": "Emission receipt cannot exist before emit() completes.",
+        }
+
+    def _compare_persisted_emitted(
+        self,
+        persisted: dict[str, Any],
+        emitted: dict[str, Any],
+    ) -> dict[str, Any]:
+        if persisted.get("measurement_state") != "VERIFIED" or emitted.get("measurement_state") != "VERIFIED":
+            return {
+                "state": "NOT_VERIFIED",
+                "reason": "one_or_both_measurements_not_verified",
+            }
+        comparable_keys = ("encoding", "line_ending_policy", "fingerprint_algorithm")
+        if any(persisted.get(key) != emitted.get(key) for key in comparable_keys):
+            return {
+                "state": "NOT_COMPARABLE",
+                "reason": "measurement_contract_mismatch",
+            }
+        if persisted.get("byte_count") != emitted.get("byte_count"):
+            return {"state": "MISMATCHED", "reason": "BYTE_COUNT_MISMATCH"}
+        if persisted.get("fingerprint") != emitted.get("fingerprint"):
+            return {"state": "MISMATCHED", "reason": "FINGERPRINT_MISMATCH"}
+        return {"state": "MATCHED", "reason": "byte_count_and_sha256_match"}
+
+    def _build_detached_emission_receipt(self) -> dict[str, Any]:
+        comparison = self._compare_persisted_emitted(
+            self._last_persistence_measurement,
+            self._last_emission_measurement,
+        )
+        completeness = {
+            **self._last_render_completeness,
+            **self._transport_completeness_states(
+                self._last_persistence_measurement,
+                self._last_emission_measurement,
+            ),
+        }
+        receipt = {
+            "receipt_schema_version": "1.0",
+            "measurement_contract_version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "completeness_contract_version": HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
+            "receipt_scope": "DETACHED_OUTSIDE_HUMAN_REPORT_ENVELOPE",
+            "receipt_created_after_emission": self._last_emission_measurement.get("write_completed") is True,
+            "canonical_completeness_state": completeness["Canonical Completeness State"],
+            "human_projection_completeness_state": completeness["Human Projection Completeness State"],
+            "render_completeness_state": completeness["Render Completeness State"],
+            "persistence_completeness_state": completeness["Persistence Completeness State"],
+            "emission_completeness_state": completeness["Emission Completeness State"],
+            "delivery_completeness_state": completeness["Delivery Completeness State"],
+            "canonical_body": self._last_render_measurement.get("canonical_body"),
+            "persisted_artifact": self._last_persistence_measurement,
+            "emitted_payload": self._last_emission_measurement,
+            "persistence_emission_equivalence": comparison,
+            "receipt_integrity": "VERIFIED" if self._last_emission_measurement.get("write_completed") else "FAILED",
+            "external_transport_verification": "NOT_VERIFIED",
+            "constitutional_boundary": "REPORT_MEASUREMENT_RECEIPT_DOES_NOT_GRANT_TRUTH_TRUST_GRADUATION_COMPILATION_EXECUTION_OR_DEPLOYMENT_AUTHORITY",
+        }
+        serialized = json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        receipt["receipt_fingerprint_algorithm"] = "SHA-256"
+        receipt["receipt_fingerprint"] = self._sha256_bytes(serialized)
+        return receipt
+
+    def verify_detached_receipt(
+        self,
+        receipt: dict[str, Any],
+        *,
+        artifact_path: str | os.PathLike[str] | None = None,
+        emitted_payload: str | bytes | None = None,
+    ) -> dict[str, Any]:
+        persisted_state = "NOT_VERIFIED"
+        emitted_state = "NOT_VERIFIED"
+        if artifact_path is not None:
+            try:
+                payload = Path(artifact_path).read_bytes()
+                expected = (receipt.get("persisted_artifact") or {}).get("fingerprint")
+                persisted_state = (
+                    "VERIFIED"
+                    if expected and self._sha256_bytes(payload) == expected
+                    else "FAILED"
+                )
+            except OSError:
+                persisted_state = "NOT_VERIFIED"
+        if emitted_payload is not None:
+            if isinstance(emitted_payload, bytes):
+                payload = emitted_payload
+            else:
+                payload = self._encode_canonical_text(emitted_payload)
+            expected = (receipt.get("emitted_payload") or {}).get("fingerprint")
+            emitted_state = (
+                "VERIFIED"
+                if expected and self._sha256_bytes(payload) == expected
+                else "FAILED"
+            )
+        return {
+            "receipt_schema_version": receipt.get("receipt_schema_version"),
+            "persisted_artifact_integrity": persisted_state,
+            "emitted_payload_integrity": emitted_state,
+            "receipt_integrity": "VERIFIED"
+            if persisted_state in {"VERIFIED", "NOT_VERIFIED"}
+            and emitted_state in {"VERIFIED", "NOT_VERIFIED"}
+            and "FAILED" not in {persisted_state, emitted_state}
+            else "FAILED",
+        }
+
+    def _measurement_metrics(
+        self,
+        render_measurement: dict[str, Any],
+        persistence_measurement: dict[str, Any],
+        emission_measurement: dict[str, Any],
+        receipt: dict[str, Any],
+    ) -> dict[str, Any]:
+        canonical_body = render_measurement.get("canonical_body", {})
+        comparison = self._compare_persisted_emitted(
+            persistence_measurement,
+            emission_measurement,
+        )
+        receipt_integrity = receipt.get("receipt_integrity") if receipt else "NOT_AVAILABLE"
+        completeness = {
+            **self._last_render_completeness,
+            **self._transport_completeness_states(
+                persistence_measurement,
+                emission_measurement,
+            ),
+        }
+        return {
+            "human_report_measurement_contract_version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "human_report_completeness_contract_version": HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
+            "human_report_canonical_completeness_state": completeness["Canonical Completeness State"],
+            "human_report_projection_completeness_state": completeness["Human Projection Completeness State"],
+            "human_report_render_completeness_state": completeness["Render Completeness State"],
+            "human_report_persistence_completeness_state": completeness["Persistence Completeness State"],
+            "human_report_emission_completeness_state": completeness["Emission Completeness State"],
+            "human_report_delivery_completeness_state": completeness["Delivery Completeness State"],
+            "human_report_canonical_encoding": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_encoding"],
+            "human_report_canonical_line_ending": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_line_ending"],
+            "human_report_unicode_normalization": HUMAN_REPORT_MEASUREMENT_CONTRACT["unicode_normalization"],
+            "human_report_character_count_unit": HUMAN_REPORT_MEASUREMENT_CONTRACT["character_count_unit"],
+            "human_report_byte_count_unit": HUMAN_REPORT_MEASUREMENT_CONTRACT["byte_count_unit"],
+            "human_report_canonical_body_integrity": canonical_body.get("measurement_state", "NOT_VERIFIED"),
+            "human_report_canonical_body_character_count": canonical_body.get("character_count"),
+            "human_report_canonical_body_byte_count": canonical_body.get("byte_count"),
+            "human_report_canonical_body_fingerprint_algorithm": canonical_body.get("fingerprint_algorithm", "SHA-256"),
+            "human_report_canonical_body_fingerprint": canonical_body.get("fingerprint"),
+            "human_report_canonical_body_fingerprint_scope": canonical_body.get("scope"),
+            "human_report_canonical_body_excluded_fields": render_measurement.get("canonical_body_excluded_fields", []),
+            "human_report_canonical_body_excluded_field_count": render_measurement.get("canonical_body_excluded_field_count", 0),
+            "human_report_persistence_integrity": persistence_measurement.get("integrity_state", "NOT_VERIFIED"),
+            "human_report_persisted_artifact_byte_count": persistence_measurement.get("byte_count"),
+            "human_report_persisted_artifact_fingerprint_algorithm": persistence_measurement.get("fingerprint_algorithm", "SHA-256"),
+            "human_report_persisted_artifact_fingerprint": persistence_measurement.get("fingerprint"),
+            "human_report_persisted_artifact_measurement_boundary": persistence_measurement.get("measurement_boundary"),
+            "human_report_persisted_artifact_readback_performed": persistence_measurement.get("readback_performed"),
+            "human_report_emission_integrity": emission_measurement.get("integrity_state", "NOT_VERIFIED"),
+            "human_report_emitted_payload_byte_count": emission_measurement.get("byte_count"),
+            "human_report_emitted_payload_fingerprint_algorithm": emission_measurement.get("fingerprint_algorithm", "SHA-256"),
+            "human_report_emitted_payload_fingerprint": emission_measurement.get("fingerprint"),
+            "human_report_emission_measurement_boundary": emission_measurement.get("measurement_boundary"),
+            "human_report_emission_payload_independently_measured": emission_measurement.get("payload_independently_measured"),
+            "human_report_external_transport_verification": emission_measurement.get("external_transport_verification", "NOT_VERIFIED"),
+            "human_report_persistence_emission_equivalence": comparison.get("state"),
+            "human_report_persistence_emission_equivalence_reason": comparison.get("reason"),
+            "human_report_receipt_integrity": receipt_integrity,
+            "human_report_detached_receipt": receipt,
+            "legacy_attestation_interpretation": "LEGACY_UNDECLARED",
+            # Compatibility metric names retained but scoped to the new contract.
+            "human_report_persisted_character_count": None,
+            "human_report_emitted_character_count": None,
+            "human_report_persisted_fingerprint": persistence_measurement.get("fingerprint"),
+            "human_report_emitted_fingerprint": emission_measurement.get("fingerprint"),
+            "human_report_persistence_matches_emission": comparison.get("state") == "MATCHED",
+        }
+
+    def _render_human_summary_title(self, canonical: dict[str, Any]) -> str:
+        return self._section("NEXRYN HUMAN RUN SUMMARY", [
+            "Human Report Generated: TRUE",
+            "Human Report Character Limit: NONE",
+            "Human Report Truncation Enabled: FALSE",
+            "Human Report Truncated: FALSE",
+            "Human summary is selected semantically before rendering.",
+        ])
+
+    def _render_human_run_overview(self, canonical: dict[str, Any]) -> str:
+        return self._section("RUN OVERVIEW", [
+            f"Run Id: {self._human_value(canonical, 'run_id')}",
+            f"Timestamp: {self._human_value(canonical, 'timestamp')}",
+            f"Mode: {self._human_value(canonical, 'mode')}",
+            f"Report Level: {self._human_value(canonical, 'report_level')}",
+            f"Training Batch Size: {self._human_value(canonical, 'training_batch_size')}",
+            f"Status: {self._human_value(canonical, 'runtime_status', upper=True)}",
+            f"Warnings: {self._human_value(canonical, 'warning_count')}",
+            f"Errors: {self._human_value(canonical, 'error_count')}",
+        ])
+
+    def _render_human_timing_performance(self, canonical: dict[str, Any]) -> str:
+        timing_semantics = self._human_raw(canonical, "report_timing_semantics_valid")
+        lines = [
+            f"Total Wall Time: {self._human_value(canonical, 'total_wall_time', seconds=True)}",
+            f"Aggregate Active Compute Time: {self._human_value(canonical, 'aggregate_active_compute_time', seconds=True)}",
+            "Active Compute Interpretation: Active Compute Time is aggregate measured work and is not directly comparable to elapsed wall time.",
+            f"Timing Coverage: {self._human_value(canonical, 'timing_coverage', percent=True)}",
+            f"Untracked Time: {self._human_value(canonical, 'untracked_time', seconds=True)}",
+            f"Report Lifecycle Time: {self._human_value(canonical, 'report_lifecycle_time', seconds=True)}",
+            f"Highest Exclusive-Time Consumer: {self._human_value(canonical, 'highest_exclusive_consumer')}",
+            f"Highest-Consumer Duration: {self._human_value(canonical, 'highest_consumer_duration', seconds=True)}",
+            f"Highest-Consumer Share: {self._human_value(canonical, 'highest_consumer_share', percent=True, already_percent=True)}",
+            f"Task-Selection Cost State: {self._human_value(canonical, 'task_selection_cost_state')}",
+            f"Performance Action: {self._human_value(canonical, 'performance_action')}",
+            f"Governance Budget Exceeded: {self._human_value(canonical, 'governance_budget_exceeded')}",
+            f"Report Timing Status: {self._human_value(canonical, 'report_timing_status')}",
+            f"Report Timing Semantics Valid: {self._human_value(canonical, 'report_timing_semantics_valid')}",
+        ]
+        if str(timing_semantics).upper() in {"FALSE", "INVALID"}:
+            lines.append(
+                "Observability Warning: Report Timing Semantics Valid is FALSE and remains visible even when timing status is VALID."
+            )
+        return self._section("TIMING AND PERFORMANCE", lines)
+
+    def _render_human_cognitive_quality(self, canonical: dict[str, Any]) -> str:
+        return self._section("COGNITIVE QUALITY", [
+            f"Overall Search Quality: {self._human_value(canonical, 'overall_search_quality')}",
+            f"Search Efficiency: {self._human_value(canonical, 'search_efficiency')}",
+            f"Search Coverage: {self._human_value(canonical, 'search_coverage')}",
+            f"Average Route Quality: {self._human_value(canonical, 'average_route_quality')}",
+            f"Program Type Lifecycle Entries: {self._human_value(canonical, 'program_type_lifecycle_entry_count')}",
+            f"Successful Blueprint Generations: {self._human_value(canonical, 'program_blueprint_generation_success_count')}",
+            f"Synthesized Programs Persisted: {self._human_value(canonical, 'synthesized_program_persisted_count')}",
+        ])
+
+    def _render_human_cognitive_outcome(self, canonical: dict[str, Any]) -> str:
+        return self._section("COGNITIVE OUTCOME", [
+            f"Target Operation: {self._human_value(canonical, 'target_operation')}",
+            f"Relevant Candidate: {self._human_value(canonical, 'relevant_candidate')}",
+            f"Candidate Source: {self._human_value(canonical, 'candidate_source')}",
+            f"Candidate Entered Arena: {self._human_value(canonical, 'candidate_entered_arena')}",
+            f"Validation Probe State: {self._human_value(canonical, 'validation_probe_state')}",
+            f"Arena Decision: {self._human_value(canonical, 'arena_decision')}",
+            f"Winner Selected: {self._human_value(canonical, 'winner_selected')}",
+            f"Current Unresolved Cognitive State: {self._human_value(canonical, 'current_unresolved_cognitive_state')}",
+        ])
+
+    def _render_human_evidence_lifecycle(self, canonical: dict[str, Any]) -> str:
+        raw_state = self._human_value(canonical, "raw_result_state")
+        raw_id = self._human_value(canonical, "raw_validation_result_id")
+        raw_id_missing = str(raw_id).strip().upper() in {
+            "",
+            "NOT_ISSUED",
+            "NOT PRODUCED IN THIS RUN",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+            "NOT AVAILABLE",
+        }
+        if str(raw_state).strip().upper() == "RAW_RESULT_CAPTURED" and raw_id_missing:
+            raw_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
+        return self._section("EVIDENCE LIFECYCLE", [
+            f"Evidence Plan State: {self._human_value(canonical, 'evidence_plan_state')}",
+            f"Evidence Plan Id: {self._human_value(canonical, 'evidence_plan_id')}",
+            f"Scheduled Validation Task: {self._human_value(canonical, 'scheduled_validation_task')}",
+            f"Validation Schedule Id: {self._human_value(canonical, 'validation_schedule_id')}",
+            f"Validation Activity Temporal State: {self._human_value(canonical, 'validation_activity_temporal_state')}",
+            f"Validation Schedule Origin Run Id: {self._human_value(canonical, 'validation_schedule_origin_run_id')}",
+            f"Execution Admission: {self._human_value(canonical, 'execution_admission')}",
+            f"Validation Execution State: {self._human_value(canonical, 'validation_execution_state')}",
+            f"Validation Execution Id: {self._human_value(canonical, 'validation_execution_id')}",
+            f"Validation Execution Origin Run Id: {self._human_value(canonical, 'validation_execution_origin_run_id')}",
+            f"Validation Activity Run Id: {self._human_value(canonical, 'validation_activity_run_id')}",
+            f"Validation Activity Current Run: {self._human_value(canonical, 'validation_activity_current_run')}",
+            f"Raw Result Applicability State: {self._human_value(canonical, 'raw_result_applicability_state')}",
+            f"Raw Result Applicability Reason: {self._human_value(canonical, 'raw_result_applicability_reason')}",
+            f"Raw Result Producer Obligation Count: {self._human_value(canonical, 'raw_result_producer_obligation_count')}",
+            f"Qualifying Producer Count: {self._human_value(canonical, 'qualifying_producer_count')}",
+            f"Applicable Operation Count: {self._human_value(canonical, 'applicable_operation_count')}",
+            f"Non-Applicable Operation Count: {self._human_value(canonical, 'non_applicable_operation_count')}",
+            f"Undetermined Operation Count: {self._human_value(canonical, 'undetermined_operation_count')}",
+            f"Raw Result Required Count: {self._human_value(canonical, 'raw_result_required_count')}",
+            f"Applicable Raw Result Present Count: {self._human_value(canonical, 'applicable_raw_result_present_count')}",
+            f"Applicable Raw Result Missing Count: {self._human_value(canonical, 'applicable_raw_result_missing_count')}",
+            f"Pre-Obligation Deferred Count: {self._human_value(canonical, 'pre_obligation_deferred_count')}",
+            f"Pre-Obligation Blocked Count: {self._human_value(canonical, 'pre_obligation_blocked_count')}",
+            f"Current Run Binding State: {self._human_value(canonical, 'raw_result_current_run_binding_state')}",
+            f"Authoritative Execution Plan Id: {self._human_value(canonical, 'raw_result_authoritative_execution_plan_id')}",
+            f"Applicability Evaluation Source: {self._human_value(canonical, 'raw_result_applicability_evaluation_source')}",
+            f"Raw Result Lifecycle Completeness: {self._human_value(canonical, 'raw_result_lifecycle_completeness')}",
+            f"Raw Result Identity State: {self._human_value(canonical, 'raw_result_identity_state')}",
+            f"Raw Result Identity Reason: {self._human_value(canonical, 'raw_result_identity_reason')}",
+            f"Canonical Raw Result Id: {self._human_value(canonical, 'canonical_raw_result_id')}",
+            f"Raw Result Identity Issuance Count: {self._human_value(canonical, 'raw_result_identity_issuance_count')}",
+            f"Raw Result Identity Binding State: {self._human_value(canonical, 'raw_result_identity_binding_state')}",
+            f"Raw Result Identity Integrity State: {self._human_value(canonical, 'raw_result_identity_integrity_state')}",
+            f"Raw Result Identity Conflict Count: {self._human_value(canonical, 'raw_result_identity_conflict_count')}",
+            f"Applicable Present Result Missing Identity Count: {self._human_value(canonical, 'applicable_present_result_missing_identity_count')}",
+            f"Foreign Raw Result Ignored Count: {self._human_value(canonical, 'foreign_raw_result_ignored_count')}",
+            f"Previous-Run Raw Result Ignored Count: {self._human_value(canonical, 'previous_run_raw_result_ignored_count')}",
+            f"Authoritative Run Id: {self._human_value(canonical, 'authoritative_run_id')}",
+            f"Producer Operation Id: {self._human_value(canonical, 'producer_operation_id')}",
+            f"Validation Attempt Id: {self._human_value(canonical, 'validation_attempt_id')}",
+            f"Identity Schema Version: {self._human_value(canonical, 'identity_schema_version')}",
+            f"Immutable Identity Fingerprint: {self._human_value(canonical, 'immutable_identity_fingerprint')}",
+            f"Identity Evaluation Source: {self._human_value(canonical, 'identity_evaluation_source')}",
+            f"Raw Result State: {raw_state}",
+            f"Raw Validation Result Id: {raw_id}",
+            f"Evidence Evaluation State: {self._human_value(canonical, 'evidence_evaluation_state')}",
+            f"Evidence Evaluation Decision Id: {self._human_value(canonical, 'evidence_decision_id')}",
+            f"Accepted Evidence Artifact Id: {self._human_value(canonical, 'accepted_evidence_id')}",
+            f"Target Reference Forwarded To Solver: {self._human_value(canonical, 'target_reference_forwarded_to_solver')}",
+            f"Arena Evidence Admission: {self._human_value(canonical, 'arena_evidence_admission')}",
+            f"Arena Re-entry: {self._human_value(canonical, 'arena_reentry')}",
+        ])
+
+    def _render_human_execution_plan_report(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        training_report = self._first_dict(
+            state,
+            "training_report",
+            "TRAINING_REPORT",
+        )
+        report = self._first_available_report_dict(
+            state,
+            training_report,
+            keys=(
+                "CANONICAL_EXECUTION_PLAN_REPORT",
+                "canonical_execution_plan",
+                "EXECUTION_PLAN_REPORT",
+                "execution_plan_report",
+            ),
+            usable=self._usable_execution_plan_report,
+        )
+        wrapper_report = self._first_available_report_dict(
+            state,
+            training_report,
+            keys=(
+                "EXECUTION_PLAN_REPORT",
+                "execution_plan_report",
+            ),
+            usable=self._usable_execution_plan_report,
+        )
+        canonical_plan = report.get("canonical_execution_plan")
+        if isinstance(canonical_plan, dict):
+            source = {**wrapper_report, **report, **canonical_plan}
+        else:
+            source = report
+        authoritative_plan_id = self._first_meaningful(
+            source.get("execution_plan_id"),
+            self._human_value(
+                canonical,
+                "raw_result_authoritative_execution_plan_id",
+            ),
+            default=None,
+        )
+        if authoritative_plan_id:
+            source = {
+                **source,
+                "execution_plan_id": authoritative_plan_id,
+            }
+        selected_tools = self._number(
+            self._first_meaningful(
+                source.get("selected_tools_count"),
+                source.get("selected_tool_count"),
+                default=None,
+            )
+        )
+        reconciled_tools = self._number(
+            self._first_meaningful(
+                source.get("reconciled_tools_count"),
+                source.get("reconciled_tool_count"),
+                default=None,
+            )
+        )
+        if reconciled_tools is None:
+            reconciled_tools = len(source.get("tool_reconciliation", []) or [])
+        selected_layers = self._number(
+            self._first_meaningful(
+                source.get("selected_layers_count"),
+                source.get("selected_layer_count"),
+                default=None,
+            )
+        )
+        reconciled_layers = self._number(
+            self._first_meaningful(
+                source.get("reconciled_layers_count"),
+                source.get("reconciled_layer_count"),
+                default=None,
+            )
+        )
+        if reconciled_layers is None:
+            reconciled_layers = len(source.get("layer_reconciliation", []) or [])
+        active_routes = self._number(
+            self._first_meaningful(
+                source.get("selected_routes_count"),
+                source.get("selected_route_count"),
+                source.get("active_route_count"),
+                default=None,
+            )
+        )
+        reconciled_routes = self._number(
+            self._first_meaningful(
+                source.get("reconciled_routes_count"),
+                source.get("reconciled_route_count"),
+                default=None,
+            )
+        )
+        if reconciled_routes is None:
+            reconciled_routes = len(source.get("route_reconciliation", []) or [])
+        dependency_execution = self._first_dict(
+            state,
+            "DEPENDENCY_EXECUTION_RECEIPT",
+            "dependency_execution_receipt",
+        )
+        budget_report = self._first_available_report_dict(
+            state,
+            training_report,
+            source,
+            keys=(
+                "RUNTIME_BUDGET_ENFORCEMENT_REPORT",
+                "runtime_budget_enforcement_report",
+            ),
+            usable=self._usable_budget_report,
+        )
+        budget_report = budget_report if isinstance(budget_report, dict) else {}
+        route_contribution_summary = self._first_available_report_dict(
+            state,
+            training_report,
+            source,
+            keys=(
+                "ROUTE_CONTRIBUTION_SUMMARY",
+                "route_contribution_summary",
+            ),
+            usable=lambda value: isinstance(value, dict),
+        )
+        route_contribution_summary = (
+            route_contribution_summary
+            if isinstance(route_contribution_summary, dict)
+            else {}
+        )
+        canonical_bound = (
+            bool(source.get("execution_plan_id"))
+            and bool(source.get("execution_plan_schema_version"))
+            and self._first_meaningful(
+                source.get("finalized"),
+                source.get("execution_plan_finalized"),
+                default=False,
+            )
+            is True
+        )
+        canonical_binding_context = (
+            bool(source.get("execution_plan_binding_state"))
+            or bool(self._first_available_report_dict(
+                state,
+                training_report,
+                keys=(
+                    "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                    "active_runtime_reachability_audit",
+                ),
+                usable=self._usable_active_runtime_audit,
+            ))
+            or state.get("operation") != "training_batch"
+        )
+        display_plan_state = (
+            "CANONICAL_EXECUTION_PLAN_BOUND"
+            if canonical_bound and canonical_binding_context
+            else self._first_meaningful(
+                source.get("execution_plan_binding_state"),
+                source.get("execution_plan_state"),
+                source.get("planning_state"),
+                default="LEGACY_PLAN_UNAVAILABLE",
+            )
+        )
+        return self._section("EXECUTION PLAN REPORT", [
+            f"Execution Plan State: {display_plan_state}",
+            f"Planning State: {self._first_meaningful(source.get('planning_state'), default='NOT_APPLICABLE')}",
+            f"Execution Plan Id: {self._first_meaningful(source.get('execution_plan_id'), default='Canonical source unbound')}",
+            f"Execution Plan Schema Version: {self._first_meaningful(source.get('execution_plan_schema_version'), default='Not produced in this run')}",
+            f"Plan Origin: {self._first_meaningful(source.get('plan_origin'), default='Not produced in this run')}",
+            f"Planning Authority: {self._first_meaningful(source.get('planning_authority'), default='Not produced in this run')}",
+            f"Temporal Authority State: {self._first_meaningful(source.get('temporal_authority_state'), default='Not produced in this run')}",
+            f"Plan Scope: {self._first_meaningful(source.get('plan_scope'), default='Not produced in this run')}",
+            f"Plan Created At: {self._first_meaningful(source.get('plan_created_at'), default='Not produced in this run')}",
+            f"Plan Finalized At: {self._first_meaningful(source.get('plan_finalized_at'), default='Not produced in this run')}",
+            f"Execution Admission Started At: {self._first_meaningful(source.get('execution_admission_started_at'), default='Not produced in this run')}",
+            f"Immutable Fingerprint: {self._first_meaningful(source.get('immutable_fingerprint'), source.get('execution_plan_fingerprint'), default='Not produced in this run')}",
+            f"Execution Plan Finalized: {self._value(self._first_meaningful(source.get('finalized'), source.get('execution_plan_finalized'), default=False))}",
+            f"Execution Plan Immutable: {self._value(self._first_meaningful(source.get('immutable'), source.get('execution_plan_immutable'), default=False))}",
+            *[
+                "Plan Lifecycle Transition "
+                f"{index + 1}: {self._first_meaningful(row.get('transition_name'), row.get('state'), default='TRANSITION_UNBOUND')}"
+                f" | plan_id={self._first_meaningful(row.get('execution_plan_id'), default='EXECUTION_PLAN_ID_UNBOUND')}"
+                f" | run_id={self._first_meaningful(row.get('run_id'), default='RUN_ID_UNBOUND')}"
+                for index, row in enumerate(
+                    source.get("lifecycle_transitions", []) or []
+                )
+                if isinstance(row, dict)
+            ],
+            f"Selected Tools Reconciled: {self._count_pair(reconciled_tools, selected_tools)}",
+            f"Selected Layers Reconciled: {self._count_pair(reconciled_layers, selected_layers)}",
+            f"Active Routes Reconciled: {self._count_pair(reconciled_routes, active_routes)}",
+            f"Execution Nodes Materialized: {self._first_meaningful(source.get('execution_nodes_materialized'), source.get('execution_node_count'), default=0)}",
+            f"Dependency Activation State: {self._first_meaningful(source.get('dependency_activation_state'), default='NOT_REQUESTED')}",
+            f"Process Stage State: {self._first_meaningful(source.get('process_stage_state'), default='NOT_REQUESTED')}",
+            f"Unresolved Selected Items: {self._first_meaningful(source.get('unresolved_selected_item_count'), default=0)}",
+            f"Plan Validation State: {self._first_meaningful(source.get('execution_plan_validation_state'), default='NOT_APPLICABLE')}",
+            f"Dependency Execution State: {self._first_meaningful(dependency_execution.get('execution_state'), default='LEGACY_DEPENDENCY_EXECUTION_UNAVAILABLE')}",
+            f"Dependency Chains Executed: {self._first_meaningful(dependency_execution.get('executed_chain_count'), default=0)}",
+            f"Dependency Results Captured: {self._first_meaningful(dependency_execution.get('result_count'), default=0)}",
+            "RUNTIME BUDGET ENFORCEMENT REPORT",
+            f"Budget State: {self._first_meaningful(budget_report.get('runtime_budget_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Budget Scope: {self._first_meaningful(budget_report.get('runtime_budget_scope'), default='RUNTIME_BUDGET_SCOPE_UNRESOLVED')}",
+            f"Maximum Active Routes: {self._first_meaningful(budget_report.get('maximum_active_routes'), default='Not produced in this run')}",
+            f"Selected Routes: {self._first_meaningful(budget_report.get('selected_route_count'), default=0)}",
+            f"Admitted Routes: {self._first_meaningful(budget_report.get('admitted_route_count'), default=0)}",
+            f"Peak Concurrent Active Routes: {self._first_meaningful(budget_report.get('peak_concurrent_active_route_count'), default=0)}",
+            f"Routes Deferred or Rejected by Budget: {self._value((self._number(budget_report.get('deferred_by_budget_route_count')) or 0) + (self._number(budget_report.get('rejected_by_budget_route_count')) or 0))}",
+            f"Maximum Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_reasoning_depth'), default='Not produced in this run')}",
+            f"Maximum Dependency Depth: {self._first_meaningful(source.get('maximum_dependency_depth'), budget_report.get('maximum_dependency_depth'), default='Not produced in this run')}",
+            f"Maximum Hypotheses: {self._first_meaningful(source.get('maximum_hypotheses'), budget_report.get('maximum_hypotheses'), default='Not produced in this run')}",
+            f"Maximum Entered Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_entered_reasoning_depth'), default=0)}",
+            f"Maximum Completed Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_completed_reasoning_depth'), default=0)}",
+            f"Maximum Requested Reasoning Depth: {self._first_meaningful(budget_report.get('maximum_requested_reasoning_depth'), default=0)}",
+            f"Depth Admission Count: {self._first_meaningful(budget_report.get('depth_admission_count'), default=0)}",
+            f"Depth Block Count: {self._first_meaningful(budget_report.get('depth_block_count'), default=0)}",
+            f"Route Enforcement State: {self._first_meaningful(budget_report.get('route_budget_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Depth Enforcement State: {self._first_meaningful(budget_report.get('depth_enforcement_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Attempted Overrun State: {self._first_meaningful(budget_report.get('attempted_overrun_state'), default='NOT_PRODUCED')}",
+            f"Prevented Overrun State: {self._first_meaningful(budget_report.get('prevented_overrun_state'), default='NOT_PRODUCED')}",
+            f"Realized Overrun State: {self._first_meaningful(budget_report.get('realized_overrun_state'), default='NOT_PRODUCED')}",
+            f"Violation Reason: {self._first_meaningful(budget_report.get('violation_reason'), default='NONE')}",
+            "ROUTE CONTRIBUTION TELEMETRY",
+            f"Executed Route Attribution State: {self._first_meaningful(route_contribution_summary.get('executed_route_attribution_state'), route_contribution_summary.get('attribution_state'), default='ROUTE_ATTRIBUTION_INSUFFICIENT')}",
+            f"Executed Route Attribution Scope: {self._first_meaningful(route_contribution_summary.get('executed_route_attribution_scope'), default='EXECUTED_ROUTES')}",
+            f"Lineage State: {self._first_meaningful(route_contribution_summary.get('lineage_state'), default='ROUTE_LINEAGE_BROKEN')}",
+            f"Selected Routes: {self._first_meaningful(route_contribution_summary.get('selected_routes'), default=0)}",
+            f"Executed Routes: {self._first_meaningful(route_contribution_summary.get('executed_routes'), default=0)}",
+            f"Unique Useful Routes: {self._first_meaningful(route_contribution_summary.get('unique_useful_routes'), default=0)}",
+            f"Duplicate Routes: {self._first_meaningful(route_contribution_summary.get('duplicate_routes'), default=0)}",
+            f"Low-Value Routes: {self._first_meaningful(route_contribution_summary.get('low_value_routes'), default=0)}",
+            f"No Observable Routes: {self._first_meaningful(route_contribution_summary.get('no_observable_routes'), default=0)}",
+            f"Legacy Unmeasurable Routes Scope: {self._first_meaningful(route_contribution_summary.get('unmeasurable_routes_scope'), default='SELECTED_ROUTES')}",
+            f"Legacy Unmeasurable Routes: {self._first_meaningful(route_contribution_summary.get('unmeasurable_routes'), default=0)}",
+            f"Selected Routes With Measurable Contribution: {self._first_meaningful(route_contribution_summary.get('selected_routes_with_measurable_contribution'), default=0)}",
+            f"Selected Routes With Unmeasurable Contribution: {self._first_meaningful(route_contribution_summary.get('selected_routes_with_unmeasurable_contribution'), route_contribution_summary.get('unmeasurable_routes'), default=0)}",
+            f"Executed Routes With Measurable Contribution: {self._first_meaningful(route_contribution_summary.get('executed_routes_with_measurable_contribution'), default=0)}",
+            f"Executed Routes With Unmeasurable Contribution: {self._first_meaningful(route_contribution_summary.get('executed_routes_with_unmeasurable_contribution'), default=0)}",
+            f"Unmeasurable Because Not Executed: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_not_executed'), default=0)}",
+            f"Unmeasurable Because Lineage Error: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_lineage_error'), default=0)}",
+            f"Unmeasurable Because Insufficient Downstream Lineage: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_insufficient_downstream_lineage'), default=0)}",
+            f"Unmeasurable Because Other: {self._first_meaningful(route_contribution_summary.get('unmeasurable_because_other'), default=0)}",
+            f"Selected Route Partition Integrity: {self._first_meaningful(route_contribution_summary.get('selected_route_partition_integrity'), default='PARTITION_INTEGRITY_FAILED')}",
+            f"Selected Route Partition Delta: {self._first_meaningful(route_contribution_summary.get('selected_route_partition_delta'), default=0)}",
+            f"Executed Route Partition Integrity: {self._first_meaningful(route_contribution_summary.get('executed_route_partition_integrity'), default='PARTITION_INTEGRITY_FAILED')}",
+            f"Executed Route Partition Delta: {self._first_meaningful(route_contribution_summary.get('executed_route_partition_delta'), default=0)}",
+            f"Marginal Routes Executed: {self._first_meaningful(route_contribution_summary.get('marginal_routes_executed'), default=0)}",
+            f"Marginal Routes Measurable: {self._first_meaningful(route_contribution_summary.get('marginal_routes_measurable'), default=0)}",
+            f"Marginal Routes Unmeasurable: {self._first_meaningful(route_contribution_summary.get('marginal_routes_unmeasurable'), default=0)}",
+            f"Marginal Useful Routes: {self._first_meaningful(route_contribution_summary.get('marginal_useful_routes'), default=0)}",
+            f"Marginal Duplicate Routes: {self._first_meaningful(route_contribution_summary.get('marginal_duplicate_routes'), default=0)}",
+            f"Marginal Low-Value Routes: {self._first_meaningful(route_contribution_summary.get('marginal_low_value_routes'), default=0)}",
+            f"Marginal No Observable Routes: {self._first_meaningful(route_contribution_summary.get('marginal_no_observable_routes'), default=0)}",
+            f"Marginal Unique Contribution Rate: {self._first_meaningful(route_contribution_summary.get('marginal_unique_contribution_rate'), default='NOT_MEASURABLE')}",
+            f"Marginal Redundancy Rate: {self._first_meaningful(route_contribution_summary.get('marginal_redundancy_rate'), default='NOT_MEASURABLE')}",
+            f"Telemetry Consumed By Cognition: {self._value(route_contribution_summary.get('telemetry_consumed_by_cognition') is True)}",
+            f"Route Manifest Artifact: {self._first_meaningful(route_contribution_summary.get('artifact_path'), default='NOT_PERSISTED')}",
+        ])
+
+    def _render_human_active_runtime_reachability(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        training_report = self._first_dict(state, "training_report", "TRAINING_REPORT")
+        audit = self._first_available_report_dict(
+            state,
+            training_report,
+            keys=(
+                "ACTIVE_RUNTIME_REACHABILITY_AUDIT",
+                "active_runtime_reachability_audit",
+            ),
+            usable=self._usable_active_runtime_audit,
+        )
+        if (
+            audit
+            and not self._meaningful_token(audit.get("execution_plan_id"))
+            and self._meaningful_token(
+                self._human_value(
+                    canonical,
+                    "raw_result_authoritative_execution_plan_id",
+                )
+            )
+        ):
+            audit = {
+                **audit,
+                "execution_plan_id": self._human_value(
+                    canonical,
+                    "raw_result_authoritative_execution_plan_id",
+                ),
+                "execution_plan_identity_state": self._first_meaningful(
+                    audit.get("execution_plan_identity_state"),
+                    "PLAN_IDENTITY_BOUND",
+                ),
+            }
+        gaps = audit.get("reachability_gaps") if isinstance(audit, dict) else []
+        if not isinstance(gaps, list):
+            gaps = []
+        gap_summary = ", ".join(str(gap) for gap in gaps) if gaps else "none"
+        try:
+            conclusion = self._engineering_conclusion(canonical)
+        except Exception:
+            conclusion = {}
+        late_run_id = (
+            audit.get("audit_run_id") in {None, "", "RUN_ID_UNBOUND"}
+            and conclusion.get("conclusion_run_id")
+        )
+        late_timestamp = (
+            audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"}
+            and conclusion.get("conclusion_source_timestamp")
+        )
+        metadata = canonical.get("runtime_metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        metadata_run_id = self._first_meaningful(
+            metadata.get("run_id"),
+            metadata.get("execution_id"),
+            self._run_id_from_timestamp(metadata.get("timestamp")),
+            default=None,
+        )
+        metadata_timestamp = self._first_meaningful(
+            metadata.get("timestamp"),
+            default=None,
+        )
+        late_run_id = late_run_id or (
+            audit.get("audit_run_id") in {None, "", "RUN_ID_UNBOUND"}
+            and metadata_run_id
+        )
+        late_timestamp = late_timestamp or (
+            audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"}
+            and metadata_timestamp
+        )
+        if late_run_id or late_timestamp:
+            audit = {
+                **audit,
+                "audit_run_id": (
+                    conclusion.get("conclusion_run_id") or metadata_run_id
+                    if late_run_id
+                    else audit.get("audit_run_id")
+                ),
+                "run_id": (
+                    conclusion.get("conclusion_run_id") or metadata_run_id
+                    if late_run_id
+                    else audit.get("run_id")
+                ),
+                "source_timestamp": (
+                    conclusion.get("conclusion_source_timestamp") or metadata_timestamp
+                    if late_timestamp
+                    else audit.get("source_timestamp")
+                ),
+                "lifecycle_transitions": [
+                    {
+                        **row,
+                        "run_id": (
+                            conclusion.get("conclusion_run_id") or metadata_run_id
+                            if late_run_id
+                            else row.get("run_id")
+                        ),
+                        "source_timestamp": (
+                            conclusion.get("conclusion_source_timestamp") or metadata_timestamp
+                            if late_timestamp
+                            else row.get("source_timestamp")
+                        ),
+                    }
+                    for row in audit.get("lifecycle_transitions", [])
+                    if isinstance(row, dict)
+                ],
+            }
+        if audit:
+            audit = mark_active_runtime_audit_bound_to_canonical_report(audit)
+        conclusion_conflicts = conclusion.get("integrity_conflicts") or []
+        conclusion_has_conflict = (
+            engineering_conclusion_integrity_evaluator.has_conflict(conclusion)
+        )
+        if (
+            conclusion_has_conflict
+            and conclusion.get("conclusion_is_current") is not False
+            and "ENGINEERING_CONCLUSION_CONFLICT" not in gaps
+        ):
+            gaps = [*gaps, "ENGINEERING_CONCLUSION_CONFLICT"]
+            audit = {
+                **audit,
+                "engineering_conclusion_state": "ENGINEERING_CONCLUSION_CONFLICT",
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        elif "ENGINEERING_CONCLUSION_CONFLICT" in gaps:
+            gaps = [
+                gap for gap in gaps
+                if gap != "ENGINEERING_CONCLUSION_CONFLICT"
+            ]
+            audit = {
+                **audit,
+                "engineering_conclusion_state": (
+                    "ENGINEERING_CONCLUSION_NOT_CONFLICTING"
+                ),
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        raw_state = str(self._human_value(canonical, "raw_result_state")).upper()
+        raw_id = str(self._human_value(canonical, "raw_validation_result_id")).upper()
+        raw_applicability_state = str(
+            self._human_value(canonical, "raw_result_applicability_state")
+        ).upper()
+        raw_id_missing = raw_id in {
+            "",
+            "NOT_ISSUED",
+            "NOT PRODUCED IN THIS RUN",
+            "RAW_VALIDATION_RESULT_ID_NOT_ISSUED",
+            "RAW_RESULT_ID_NOT_ISSUED",
+            "NOT AVAILABLE",
+        }
+        if raw_state == "RAW_RESULT_CAPTURED" and raw_id_missing:
+            raw_state = "RAW_RESULT_ENVELOPE_INCOMPLETE"
+        if (
+            raw_applicability_state != "RAW_RESULT_NOT_APPLICABLE"
+            and
+            raw_state == "RAW_RESULT_CAPTURED"
+            and raw_id_missing
+            and "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY" not in gaps
+        ):
+            gaps = [*gaps, "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY"]
+            audit = {
+                **audit,
+                "raw_result_identity_state": "RAW_RESULT_IDENTITY_MISSING",
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        elif (
+            raw_state != "RAW_RESULT_CAPTURED" or not raw_id_missing
+        ) and "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY" in gaps:
+            gaps = [
+                gap for gap in gaps
+                if gap != "RAW_RESULT_CAPTURED_WITHOUT_IDENTITY"
+            ]
+            audit = {
+                **audit,
+                "raw_result_identity_state": "RAW_RESULT_IDENTITY_CLEAR",
+                "reachability_gap_count": len(gaps),
+                "reachability_gaps": gaps,
+            }
+        if audit.get("source_timestamp") in {None, "", "TIMESTAMP_UNBOUND"} and conclusion.get(
+            "conclusion_source_timestamp"
+        ):
+            audit = {
+                **audit,
+                "source_timestamp": conclusion.get("conclusion_source_timestamp"),
+                "source_stage": self._first_meaningful(
+                    audit.get("source_stage"),
+                    "active_runtime_reachability_audit",
+                ),
+            }
+        gap_summary = ", ".join(str(gap) for gap in gaps) if gaps else "none"
+        transitions = [
+            row for row in audit.get("lifecycle_transitions", [])
+            if isinstance(row, dict)
+        ]
+        transition_lines = [
+            (
+                "Audit Lifecycle Transition "
+                f"{row.get('sequence_index')}: "
+                f"{row.get('transition_name') or row.get('state')} "
+                f"| audit_id={row.get('audit_id')} "
+                f"| schema={row.get('audit_schema_version')} "
+                f"| run_id={row.get('run_id')}"
+            )
+            for row in transitions
+        ]
+        return self._section("ACTIVE RUNTIME REACHABILITY", [
+            f"Audit State: {self._first_meaningful(audit.get('audit_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Audit Id: {self._first_meaningful(audit.get('audit_id'), default='AUDIT_ID_UNBOUND')}",
+            f"Audit Schema Version: {self._first_meaningful(audit.get('audit_schema_version'), default='SCHEMA_VERSION_UNBOUND')}",
+            f"Audit Run Id: {self._first_meaningful(audit.get('audit_run_id'), audit.get('run_id'), default='RUN_ID_UNBOUND')}",
+            f"Audit Source Stage: {self._first_meaningful(audit.get('source_stage'), default='SOURCE_STAGE_UNBOUND')}",
+            f"Audit Source Timestamp: {self._first_meaningful(audit.get('source_timestamp'), default='TIMESTAMP_UNBOUND')}",
+            f"Audit Is Current Run: {self._value(self._first_meaningful(audit.get('is_current_run'), default=False))}",
+            f"Execution Plan Id: {self._first_meaningful(audit.get('execution_plan_id'), default='EXECUTION_PLAN_ID_UNBOUND')}",
+            f"Execution Plan Identity State: {self._first_meaningful(audit.get('execution_plan_identity_state'), default='PLAN_IDENTITY_UNBOUND')}",
+            f"Canonical Execution Plan Present: {self._value(self._first_meaningful(audit.get('canonical_execution_plan_present'), default=False))}",
+            f"Budget Report Present: {self._value(self._first_meaningful(audit.get('budget_report_present'), default=False))}",
+            f"Task Runtime Telemetry Present: {self._value(self._first_meaningful(audit.get('task_runtime_telemetry_present'), default=False))}",
+            f"Task Budget Snapshot Present: {self._value(self._first_meaningful(audit.get('task_budget_snapshot_present'), default=False))}",
+            f"Budget State: {self._first_meaningful(audit.get('budget_state'), default='RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE')}",
+            f"Budget Exceeded Detected: {self._value(self._first_meaningful(audit.get('budget_exceeded_detected'), default=False))}",
+            f"Declared/Observed Active Routes: {self._count_pair(self._first_meaningful(audit.get('declared_active_routes'), audit.get('declared_max_active_routes')), audit.get('observed_active_routes'))}",
+            f"Declared/Observed Reasoning Depth: {self._count_pair(self._first_meaningful(audit.get('declared_reasoning_depth'), audit.get('declared_max_reasoning_depth')), audit.get('observed_reasoning_depth'))}",
+            f"Repair Reachability State: {self._first_meaningful(audit.get('repair_reachability_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Raw Result Identity State: {self._first_meaningful(audit.get('raw_result_identity_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Engineering Conclusion State: {self._first_meaningful(audit.get('engineering_conclusion_state'), default='AUDIT_NOT_PRODUCED')}",
+            f"Audit Lifecycle Integrity State: {self._first_meaningful(audit.get('audit_lifecycle_integrity_state'), default='AUDIT_LIFECYCLE_NOT_PRODUCED')}",
+            f"Audit Lifecycle Transition Count: {self._first_meaningful(audit.get('audit_lifecycle_transition_count'), default=0)}",
+            f"Audit Lifecycle Order State: {self._first_meaningful(audit.get('audit_lifecycle_order_state'), default='AUDIT_LIFECYCLE_ORDER_UNKNOWN')}",
+            f"Audit Lifecycle Identity State: {self._first_meaningful(audit.get('audit_lifecycle_identity_state'), default='AUDIT_LIFECYCLE_IDENTITY_UNKNOWN')}",
+            *transition_lines,
+            f"Reachability Gap Count: {self._first_meaningful(audit.get('reachability_gap_count'), default=0)}",
+            f"Reachability Gaps: {gap_summary}",
+            f"Recommended Next Fix: {self._first_meaningful(audit.get('recommended_next_fix'), default='produce_active_runtime_reachability_audit')}",
+        ])
+
+    def _render_human_engineering_conclusion(self, canonical: dict[str, Any]) -> str:
+        return self._section("ENGINEERING CONCLUSION", [
+            f"Largest Success: {self._human_value(canonical, 'largest_success')}",
+            f"Largest Regression: {self._human_value(canonical, 'largest_regression')}",
+            f"Current Open Decision: {self._human_value(canonical, 'current_open_decision')}",
+            f"Next Decision Gate: {self._human_value(canonical, 'next_decision_gate')}",
+            f"Current Bottleneck: {self._human_value(canonical, 'current_bottleneck')}",
+            f"Root Cause: {self._human_value(canonical, 'root_cause')}",
+            f"Responsible Component: {self._human_value(canonical, 'responsible_component')}",
+            f"Immediate Next Development Task: {self._human_value(canonical, 'immediate_next_development_task')}",
+            f"Engineering Priority: {self._human_value(canonical, 'engineering_priority')}",
+        ])
+
+    def _render_human_constitutional_boundary(self, canonical: dict[str, Any]) -> str:
+        return self._section("CONSTITUTIONAL BOUNDARY", [
+            "No truth, trust, graduation, candidate compilation, candidate execution, or deployment authority was granted."
+        ])
+
+    def _render_human_observability_notes(self, canonical: dict[str, Any]) -> str:
+        return self._section("CRITICAL OBSERVABILITY NOTES", self._human_observability_notes(canonical))
+
+    def _render_human_report_integrity(self, integrity: dict[str, Any]) -> str:
+        attribution = integrity.get("Human Report Conflict Attribution")
+        attribution = attribution if isinstance(attribution, list) else []
+        section_accounting = integrity.get("Human Projection Section Accounting")
+        section_accounting = (
+            section_accounting if isinstance(section_accounting, list) else []
+        )
+        local_reductions = integrity.get("Human Report Local Reductions")
+        local_reductions = local_reductions if isinstance(local_reductions, list) else []
+        scalar_lines = [
+            f"{key}: {self._value(value)}"
+            for key, value in integrity.items()
+            if key not in {
+                "Human Report Conflict Attribution",
+                "Human Projection Section Accounting",
+                "Human Projection Selected Outside Universe",
+                "Human Projection Visible Outside Selected",
+                "Human Projection Selected But Empty",
+                "Human Report Local Reductions",
+            }
+        ]
+        attribution_lines = [
+            (
+                "Human Report Conflict Attribution "
+                f"{index + 1}: "
+                f"field={self._value(row.get('field'))}; "
+                f"conflict_type={self._value(row.get('conflict_type'))}; "
+                f"source_component={self._value(row.get('source_component'))}; "
+                f"authoritative_source={self._value(row.get('authoritative_source'))}; "
+                f"expected_value={self._value(row.get('expected_value'))}; "
+                f"observed_value={self._value(row.get('observed_value'))}; "
+                "engineering_conclusion_related="
+                f"{self._value(row.get('engineering_conclusion_related'))}; "
+                f"run_id={self._value(row.get('run_id'))}; "
+                f"execution_plan_id={self._value(row.get('execution_plan_id'))}"
+            )
+            for index, row in enumerate(attribution)
+            if isinstance(row, dict)
+        ]
+        section_lines = [
+            (
+                "Human Projection Section Accounting "
+                f"{index + 1}: "
+                f"section_id={self._value(row.get('section_id'))}; "
+                f"selected={self._value(row.get('selected'))}; "
+                "membership_semantics="
+                f"{self._value(row.get('membership_semantics'))}; "
+                f"render_attempted={self._value(row.get('render_attempted'))}; "
+                f"visible_rendering={self._value(row.get('visible_rendering'))}; "
+                f"selection_state={self._value(row.get('selection_state'))}; "
+                f"render_state={self._value(row.get('render_state'))}; "
+                "selection_reason_if_known="
+                f"{self._value(row.get('selection_reason_if_known'))}"
+            )
+            for index, row in enumerate(section_accounting)
+            if isinstance(row, dict)
+        ]
+        reduction_lines = [
+            (
+                "Human Report Local Reduction "
+                f"{index + 1}: "
+                f"collection={self._value(row.get('collection'))}; "
+                f"original_count={self._value(row.get('original_count'))}; "
+                f"rendered_count={self._value(row.get('rendered_count'))}; "
+                f"omitted_count={self._value(row.get('omitted_count'))}; "
+                f"limit={self._value(row.get('limit'))}; "
+                f"reduction_type={self._value(row.get('reduction_type'))}; "
+                f"visibility_state={self._value(row.get('visibility_state'))}"
+            )
+            for index, row in enumerate(local_reductions)
+            if isinstance(row, dict)
+        ]
+        return self._section("REPORT INTEGRITY", [
+            *scalar_lines,
+            *section_lines,
+            *reduction_lines,
+            *attribution_lines,
+        ])
+
+    def _completeness_states(
+        self,
+        *,
+        render_complete: bool,
+        binding: dict[str, Any],
+        canonical_body: dict[str, Any],
+        persistence_measurement: dict[str, Any] | None,
+        emission_measurement: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        canonical_state = self._canonical_completeness_state(binding)
+        projection_state = self._projection_completeness_state(binding)
+        render_state = self._render_completeness_state(
+            render_complete=render_complete,
+            projection_state=projection_state,
+            canonical_body=canonical_body,
+        )
+        transport_states = self._transport_completeness_states(
+            persistence_measurement,
+            emission_measurement,
+        )
+        return {
+            "Canonical Completeness State": canonical_state,
+            "Human Projection Completeness State": projection_state,
+            "Render Completeness State": render_state,
+            **transport_states,
+        }
+
+    def _canonical_completeness_state(self, binding: dict[str, Any]) -> str:
+        integrity = self._value(
+            binding.get("Human Report Canonical Binding Integrity"),
+            "INCOMPLETE",
+        )
+        if integrity == "CONFLICTED":
+            return "CANONICAL_CONFLICTED"
+        if integrity != "COMPLETE":
+            return "CANONICAL_INCOMPLETE"
+        if int(binding.get("Human Report Binding Conflict Count", 0) or 0) > 0:
+            return "CANONICAL_CONFLICTED"
+        if (
+            int(binding.get("Human Report Unbound Required Field Count", 0) or 0) > 0
+            or int(binding.get("Human Report Expected Missing Count", 0) or 0) > 0
+        ):
+            return "CANONICAL_INCOMPLETE"
+        return "CANONICAL_COMPLETE"
+
+    def _projection_completeness_state(self, binding: dict[str, Any]) -> str:
+        if self._canonical_completeness_state(binding) == "CANONICAL_CONFLICTED":
+            return "PROJECTION_INCOMPLETE"
+        if (
+            int(binding.get("Human Report Unbound Required Field Count", 0) or 0) > 0
+            or int(binding.get("Human Report Expected Missing Count", 0) or 0) > 0
+            or int(binding.get("Human Report Binding Conflict Count", 0) or 0) > 0
+        ):
+            return "PROJECTION_INCOMPLETE"
+        if self._value(
+            binding.get("Human Report Semantic Completeness"),
+            "INCOMPLETE",
+        ) != "COMPLETE":
+            return "PROJECTION_INCOMPLETE"
+        return "PROJECTION_COMPLETE"
+
+    def _render_completeness_state(
+        self,
+        *,
+        render_complete: bool,
+        projection_state: str,
+        canonical_body: dict[str, Any],
+    ) -> str:
+        if canonical_body.get("measurement_state") not in {None, "VERIFIED"}:
+            return "RENDER_INVALID"
+        if not render_complete:
+            return "RENDER_INVALID"
+        if projection_state != "PROJECTION_COMPLETE":
+            return "RENDER_INCOMPLETE"
+        return "RENDER_COMPLETE"
+
+    def _transport_completeness_states(
+        self,
+        persistence_measurement: dict[str, Any] | None,
+        emission_measurement: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        return {
+            "Persistence Completeness State": (
+                self._persistence_completeness_state(persistence_measurement)
+            ),
+            "Emission Completeness State": (
+                self._emission_completeness_state(emission_measurement)
+            ),
+            "Delivery Completeness State": "DELIVERY_NOT_VERIFIED",
+        }
+
+    def _persistence_completeness_state(
+        self,
+        measurement: dict[str, Any] | None,
+    ) -> str:
+        if not measurement:
+            if self._persistence_requested_for_current_render:
+                return "PERSISTENCE_NOT_VERIFIED"
+            return "PERSISTENCE_NOT_REQUESTED"
+        if measurement.get("measurement_boundary") == "NO_ARTIFACT_WRITTEN":
+            return "PERSISTENCE_NOT_REQUESTED"
+        if measurement.get("integrity_state") == "FAILED":
+            return "PERSISTENCE_FAILED"
+        if (
+            measurement.get("integrity_state") == "VERIFIED"
+            and measurement.get("measurement_state") == "VERIFIED"
+            and measurement.get("readback_performed") is True
+            and measurement.get("byte_count") is not None
+            and measurement.get("fingerprint")
+        ):
+            return "PERSISTENCE_VERIFIED"
+        return "PERSISTENCE_NOT_VERIFIED"
+
+    def _emission_completeness_state(
+        self,
+        measurement: dict[str, Any] | None,
+    ) -> str:
+        if not measurement:
+            return "EMISSION_NOT_ATTEMPTED"
+        if measurement.get("measurement_boundary") == "EMISSION_NOT_ATTEMPTED":
+            return "EMISSION_NOT_ATTEMPTED"
+        if measurement.get("write_attempted") and not measurement.get("write_completed"):
+            return "EMISSION_FAILED"
+        if measurement.get("integrity_state") == "FAILED":
+            return "EMISSION_FAILED"
+        if (
+            measurement.get("integrity_state") == "VERIFIED"
+            and measurement.get("measurement_state") == "VERIFIED"
+            and measurement.get("write_completed") is True
+            and measurement.get("payload_independently_measured") is True
+            and measurement.get("byte_count") is not None
+            and measurement.get("fingerprint")
+        ):
+            return "EMISSION_VERIFIED"
+        return "EMISSION_NOT_VERIFIED"
+
+    def _human_report_integrity(
+        self,
+        persisted_text: str,
+        *,
+        selected_sections: list[str],
+        emitted_text: str,
+        critical_note_count: int = 0,
+        binding: dict[str, Any] | None = None,
+        report_level: str = "normal",
+    ) -> dict[str, Any]:
+        start_count = persisted_text.count(REPORT_BEGIN_MARKER)
+        end_count = persisted_text.count(REPORT_END_MARKER)
+        starts_at_boundary = persisted_text.startswith(REPORT_BEGIN_MARKER)
+        ends_at_boundary = persisted_text.rstrip().endswith(REPORT_END_MARKER)
+        missing_sections = [
+            section
+            for section in selected_sections
+            if section != "NEXRYN HUMAN RUN SUMMARY"
+            and not (
+                section == "NATURAL PRODUCTION AUTHORITY HANDOFF"
+                and report_level == "minimal"
+            )
+            and persisted_text.count(self._section_title(section)) != 1
+        ]
+        if "NEXRYN HUMAN RUN SUMMARY" in selected_sections:
+            if persisted_text.count("\nNEXRYN HUMAN RUN SUMMARY\n") != 1:
+                missing_sections.append("NEXRYN HUMAN RUN SUMMARY")
+        failures: list[str] = []
+        if start_count != 1:
+            failures.append("start_marker_count_not_one")
+        if end_count != 1:
+            failures.append("end_marker_count_not_one")
+        if not starts_at_boundary:
+            failures.append("rendered_content_does_not_start_at_boundary")
+        if not ends_at_boundary:
+            failures.append("rendered_content_does_not_end_at_boundary")
+        if missing_sections:
+            failures.append("selected_sections_missing:" + ",".join(missing_sections))
+        complete = not failures
+        binding_supplied = binding is not None
+        binding = binding or {}
+        measurement = self._measure_report_payload(persisted_text)
+        canonical_body = measurement["canonical_body"]
+        binding_integrity = self._value(
+            binding.get("Human Report Canonical Binding Integrity"),
+            "SOURCE_NOT_ATTACHED",
+        )
+        semantic_completeness = self._value(
+            binding.get("Human Report Semantic Completeness"),
+            "INCOMPLETE",
+        )
+        completeness = self._completeness_states(
+            render_complete=complete,
+            binding=binding,
+            canonical_body=canonical_body,
+            persistence_measurement=None,
+            emission_measurement=None,
+        )
+        if binding_supplied:
+            self._last_render_completeness = dict(completeness)
+        return {
+            "Human Report Generated": True,
+            "Human Report Complete": complete,
+            "Human Report Completeness Contract Version": HUMAN_REPORT_COMPLETENESS_CONTRACT_VERSION,
+            **completeness,
+            "Legacy Human Report Integrity State": "COMPLETE" if complete else "INCOMPLETE",
+            "Legacy Integrity Interpretation": "selected_human_report_content_preserved",
+            "Legacy Compatibility Field": "Human Report Integrity State",
+            "Human Report Structural Integrity": "COMPLETE" if complete else "INCOMPLETE",
+            "Human Report Semantic Completeness": semantic_completeness,
+            "Human Report Semantic Completeness Meaning": "required_human_projection_fields_resolved",
+            "Human Report Canonical Body Integrity": canonical_body["measurement_state"],
+            "Human Report Persistence Integrity": "NOT_VERIFIED",
+            "Human Report Emission Integrity": "NOT_VERIFIED",
+            "Human Report Persistence-Emission Equivalence": "NOT_VERIFIED",
+            "Human Report Receipt Integrity": "NOT_AVAILABLE",
+            "Human Report Canonical Binding Integrity": binding_integrity,
+            "Human Report Measurement Contract Version": HUMAN_REPORT_MEASUREMENT_CONTRACT["schema_version"],
+            "Canonical Body Fingerprint Scope": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_body_fingerprint_scope"],
+            "Canonical Line Ending": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_line_ending"],
+            "Canonical Encoding": HUMAN_REPORT_MEASUREMENT_CONTRACT["canonical_encoding"],
+            "Canonical Body Character Count": canonical_body["character_count"],
+            "Canonical Body Byte Count": canonical_body["byte_count"],
+            "Canonical Body Fingerprint": canonical_body["fingerprint"],
+            "Detached Emission Receipt": "PENDING",
+            "Human Report Character Limit": "NONE",
+            "Human Report Truncation Enabled": False,
+            "Human Report Truncated": False,
+            "Human Report Starts At Boundary": starts_at_boundary,
+            "Human Report Ends At Boundary": ends_at_boundary,
+            "Human Report Start Marker Present": start_count > 0,
+            "Human Report End Marker Present": end_count > 0,
+            "Human Report Start Marker Count": start_count,
+            "Human Report End Marker Count": end_count,
+            "Human Report Legacy Attestation Interpretation": "LEGACY_UNDECLARED",
+            "Human Report Persistence Matches Emission": False,
+            **self._human_section_accounting(
+                selected_sections,
+                rendered_report=persisted_text,
+                report_level=report_level,
+            ),
+            "Human Report Critical Observability Note Count": int(
+                critical_note_count or 0
+            ),
+            "Human Report Bound Field Count": binding.get("Human Report Bound Field Count", 0),
+            "Human Report Resolved Required Field Count": binding.get("Human Report Resolved Required Field Count", 0),
+            "Human Report Unbound Required Field Count": binding.get("Human Report Unbound Required Field Count", 0),
+            "Human Report Expected Missing Count": binding.get("Human Report Expected Missing Count", 0),
+            "Human Report Binding Conflict Count": binding.get("Human Report Binding Conflict Count", 0),
+            "Human Report Conflict Attribution": binding.get(
+                "Human Report Conflict Attribution",
+                [],
+            ),
+            "Engineering Conclusion Binding Conflict Count": binding.get(
+                "Engineering Conclusion Binding Conflict Count",
+                0,
+            ),
+            "Engineering Conclusion Projection Divergence Count": binding.get(
+                "Engineering Conclusion Projection Divergence Count",
+                0,
+            ),
+            "Human Report Generic Unavailable Value Count": binding.get("Human Report Generic Unavailable Value Count", 0),
+            "Character Count/Fingerprint Attestation": "OUT_OF_SCOPE_UNCHANGED",
+            "Human Report Transport Limit Encountered": False,
+            "Human Report Transport Segmented": False,
+            "Human Report Authority": "NONE",
+            "Human Report Integrity State": "COMPLETE" if complete else "INCOMPLETE",
+            "Human Report Integrity Reason": "all selected human-report content preserved"
+            if complete
+            else ";".join(failures),
+        }
+
+    def _record_local_reduction(
+        self,
+        *,
+        collection: str,
+        original_count: int,
+        rendered_count: int,
+        limit: int,
+        reduction_type: str,
+        visibility_state: str,
+    ) -> None:
+        omitted_count = max(int(original_count) - int(rendered_count), 0)
+        if original_count != rendered_count + omitted_count:
+            visibility_state = "UNMEASURABLE"
+        self._current_local_reductions.append({
+            "collection": collection,
+            "original_count": int(original_count),
+            "rendered_count": int(rendered_count),
+            "omitted_count": omitted_count,
+            "limit": int(limit),
+            "reduction_applied": omitted_count > 0,
+            "reduction_type": reduction_type,
+            "visibility_state": visibility_state,
+        })
+
+    def _human_report_local_reduction_integrity(self) -> dict[str, Any]:
+        reductions = [
+            dict(row)
+            for row in self._current_local_reductions
+            if isinstance(row, dict)
+        ]
+        applied = [row for row in reductions if row.get("reduction_applied")]
+        silent = [
+            row for row in applied
+            if row.get("visibility_state") != "VISIBLE"
+        ]
+        summary = {
+            "Human Report Local Reduction Site Count": len(reductions),
+            "Human Report Local Reduction Applied Count": len(applied),
+            "Human Report Local Reduction Omitted Item Count": sum(
+                int(row.get("omitted_count", 0) or 0)
+                for row in applied
+            ),
+            "Human Report Silent Local Reduction Count": len(silent),
+            "Human Report Local Reduction Contract": (
+                "original_count=rendered_count+omitted_count"
+            ),
+            "Human Report Local Reduction Semantics": (
+                "PREVIEW_IS_LOCAL_REDUCTION_NOT_GLOBAL_TRUNCATION"
+            ),
+            "Human Report Local Reductions": reductions,
+        }
+        self._last_local_reduction_summary = dict(summary)
+        return summary
+
+    def _human_observability_notes(self, canonical: dict[str, Any]) -> list[str]:
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        notes: list[str] = []
+        timing_status = self._first_meaningful(
+            state.get("report_timing_status"),
+            performance.get("report_timing_status"),
+            default="Not Available",
+        )
+        timing_semantics = self._first_meaningful(
+            state.get("report_timing_semantics_valid"),
+            performance.get("report_timing_semantics_valid"),
+            default="Not Available",
+        )
+        if str(timing_status).upper() == "VALID" and str(timing_semantics).upper() in {"FALSE", "INVALID"}:
+            notes.append(
+                "Observability contradiction: Report Timing Status is VALID while Report Timing Semantics Valid is FALSE."
+            )
+        invoked = self._boolish(self._first_meaningful(state.get("execution_invoked"), performance.get("execution_invoked"), default=None))
+        started = self._boolish(self._first_meaningful(state.get("execution_started"), performance.get("execution_started"), default=None))
+        completed = self._boolish(self._first_meaningful(state.get("execution_completed"), performance.get("execution_completed"), default=None))
+        if invoked is False and (started is True or completed is True):
+            notes.append(
+                "Observability contradiction: Execution Invoked is FALSE while Execution Started or Execution Completed is TRUE."
+            )
+        runner_invoked = self._boolish(self._first_meaningful(state.get("runner_invoked"), performance.get("runner_invoked"), default=None))
+        runner_status = self._first_meaningful(state.get("runner_status"), performance.get("runner_status"), default="Not Available")
+        if runner_invoked is False and str(runner_status).upper() == "COMPLETED":
+            notes.append(
+                "Observability contradiction: Runner Invoked is FALSE while Runner Status is COMPLETED."
+            )
+        warning_count = self._number(
+            self._first_meaningful(state.get("warning_count"), canonical["runtime_metadata"].get("warning_count"), default=0)
+        )
+        if warning_count == 0 and notes:
+            notes.append(
+                "Observability contradiction: Warning Count is zero despite active critical observability contradictions."
+            )
+        return list(dict.fromkeys(notes))
+
+    def _highest_exclusive_consumer(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        performance = canonical["performance"]
+        candidates: list[tuple[str, float]] = []
+        for row in performance.get("top_expensive_modules", []) or []:
+            if isinstance(row, dict):
+                duration = self._number(row.get("exclusive_duration_seconds") or row.get("seconds") or row.get("duration"))
+                if duration is not None:
+                    candidates.append((self._value(row.get("module") or row.get("stage_name") or row.get("name")), duration))
+        for row in performance.get("stage_metrics", []) or []:
+            if isinstance(row, dict):
+                duration = self._number(row.get("exclusive_duration_seconds") or row.get("total_duration") or row.get("seconds"))
+                if duration is not None:
+                    candidates.append((self._value(row.get("stage_name") or row.get("module") or row.get("name")), duration))
+        if not candidates:
+            return {"name": "Not Available", "duration": None, "share": None}
+        name, duration = max(candidates, key=lambda item: item[1])
+        total = self._number(performance.get("active_compute_time_seconds") or performance.get("total_runtime_seconds"))
+        share = (duration / total * 100.0) if total else None
+        return {"name": name, "duration": duration, "share": share}
+
+    def _leading_candidate(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        state = canonical["report_state"]
+        for key in (
+            "leading_candidate",
+            "relevant_candidate",
+            "selected_candidate",
+            "target_candidate",
+        ):
+            value = state.get(key)
+            if isinstance(value, dict):
+                return value
+        arena = self._first_dict(state, "COGNITIVE_CANDIDATE_ARENA_REPORT", "cognitive_candidate_arena_report")
+        arena_summary = arena.get("candidate_arena_summary")
+        if isinstance(arena_summary, dict):
+            arena = {**arena, **arena_summary}
+        for key in ("leading_candidate", "highest_ranked_candidate", "validation_probe_candidate"):
+            value = arena.get(key)
+            if isinstance(value, dict):
+                return value
+        for row in arena.get("candidate_source_flow_trace", []) or []:
+            if isinstance(row, dict):
+                return row
+        proposals = self._first_dict(state, "CANDIDATE_PROPOSAL_REPORT", "candidate_proposal_report")
+        for row in proposals.get("candidate_proposals", []) or []:
+            if isinstance(row, dict):
+                return row
+        return {}
+
+    def _boolish(self, value: Any) -> bool | None:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            text = value.strip().upper()
+            if text == "TRUE":
+                return True
+            if text == "FALSE":
+                return False
+        return None
+
+    def _arena_target_operation_required(self, arena: dict[str, Any]) -> bool:
+        if not isinstance(arena, dict) or not arena:
+            return False
+        for key in (
+            "arena_evidence_admission_attempted",
+            "arena_evidence_admission_invoked",
+            "arena_admission_invoked",
+            "arena_evidence_admitted",
+            "arena_evidence_consumed",
+            "redeliberation_invoked",
+            "redeliberation_completed",
+            "formal_selection_invoked",
+            "formal_selection_admission_invoked",
+            "formal_selection_review_completed",
+            "tie_resolved",
+            "winner_selected",
+        ):
+            if self._boolish(arena.get(key)) is True:
+                return True
+        non_applicable_states = {
+            "NOT_EXPECTED_AT_CURRENT_STATE",
+            "NOT_APPLICABLE",
+            "NOT_AVAILABLE",
+            "NOT_PRODUCED",
+            "NOT_PRODUCED_IN_THIS_RUN",
+            "NOT_EVALUATED",
+            "FALSE",
+            "NONE",
+            "NULL",
+            "UNKNOWN",
+        }
+        applicable_states = {
+            "ADMITTED",
+            "ADMISSION_INVOKED",
+            "ARENA_EVIDENCE_ADMITTED",
+            "ARENA_EVIDENCE_CONSUMED",
+            "REDELIBERATION_INVOKED",
+            "REDELIBERATION_COMPLETED",
+            "FORMAL_SELECTION_INVOKED",
+            "FORMAL_SELECTION_REVIEW_COMPLETED",
+            "TIE_RESOLVED",
+            "WINNER_SELECTED",
+        }
+        for key in (
+            "arena_evidence_admission",
+            "admission_state",
+            "arena_admission_state",
+            "redeliberation_outcome",
+            "formal_selection_outcome",
+            "selection_state",
+        ):
+            value = arena.get(key)
+            bool_value = self._boolish(value)
+            if bool_value is True:
+                return True
+            if bool_value is False or not self._meaningful_token(value):
+                continue
+            normalized = str(value).strip().upper().replace(" ", "_")
+            if normalized in non_applicable_states or normalized.startswith("NOT_"):
+                continue
+            if (
+                normalized in applicable_states
+                or normalized.endswith("_ADMITTED")
+                or normalized.endswith("_INVOKED")
+                or normalized.endswith("_COMPLETED")
+                or normalized.endswith("_CONSUMED")
+            ):
+                return True
+        return False
+
+    def _fingerprint(self, text: str) -> str:
+        return self._sha256_bytes(self._encode_canonical_text(text))
+
+    def _render_full_report(self, canonical: dict[str, Any]) -> str:
+        sections = [
+            self._render_lifecycle_start("VALID"),
+            self._render_header(canonical),
+            self._render_executive_runtime_summary(canonical),
+            self._render_candidate_pipeline_dashboard(canonical),
+            self._render_runtime_choke_point(canonical),
+            self._render_source_competition_summary(canonical),
+            self._render_knowledge_operationalization_summary(canonical),
+            self._render_validation_summary(canonical),
+            self._render_human_execution_summary(canonical),
+            self._render_runtime_health_dashboard(canonical),
+            self._render_execution_summary(canonical),
+            self._render_constitutional_contracts(canonical),
+            self._render_cognitive_outputs(canonical),
+            self._render_program_quality(canonical),
+            self._render_unified_concept_lifecycle(canonical),
+            self._render_program_generation(canonical),
+            self._render_program_blueprint_intelligence(canonical),
+            self._render_cognitive_program_lifecycle(canonical),
+            self._render_cognitive_knowledge_domains(canonical),
+            self._render_cognitive_domain_intelligence(canonical),
+            self._render_cognitive_domain_lifecycle(canonical),
+            self._render_cognitive_domain_interaction(canonical),
+            self._render_cognitive_domain_governance(canonical),
+            self._render_cognitive_domain_ecosystem(canonical),
+            self._render_cognitive_domain_constitution(canonical),
+            self._render_semantic_compilation(canonical),
+            self._render_executable_semantic_coverage(canonical),
+            self._render_cognitive_capability_coverage(canonical),
+            self._render_transformation_decision(canonical),
+            self._render_multi_hypothesis_report(canonical),
+            self._render_candidate_proposal(canonical),
+            self._render_candidate_arena(canonical),
+            self._render_training_assistant_plan_consumption(canonical),
+            self._render_validation_task_execution_report(canonical),
+            self._render_validation_evidence_evaluation_report(canonical),
+            self._render_arena_evidence_admission_report(canonical),
+            self._render_arena_formal_selection_report(canonical),
+            self._render_evidence_generation_report(canonical),
+            self._render_counterfactual_reasoning(canonical),
+            self._render_executable_intelligence(canonical),
+            self._render_natural_production_handoff(canonical),
+            self._render_search_quality(canonical),
+            self._render_knowledge_pipeline(canonical),
+            self._render_system_health(canonical),
+            self._render_timing_summary(canonical),
+            self._render_stage_timing(canonical),
+            self._render_resource_summary(canonical),
+            self._render_diagnostic_timing_detail(canonical),
+            self._render_warnings(canonical),
+            self._render_runtime_metadata(canonical),
+            self._render_technical_appendix(canonical),
+            self._render_critical_execution_trace(canonical),
+            self._render_human_engineering_conclusion(canonical),
+            self._render_final_status(canonical, report_integrity="VALID"),
+            self._render_lifecycle_end(),
+        ]
+        text = "\n".join(sections)
+        return self._normalize_text(text)
+
+    def _render_budget_summary(
+        self,
+        canonical: dict[str, Any],
+        full_report: str,
+    ) -> str:
+        # Backward-compatible method retained for callers that still reference
+        # the former budget path. Human reports are no longer character-clipped.
+        return full_report
+
+    def _render_lifecycle_start(self, report_integrity: str) -> str:
+        return "\n".join([
+            REPORT_BEGIN_MARKER,
+            "",
+            f"Report Schema Version: {REPORT_SCHEMA_VERSION}",
+            f"Human Report Integrity State: {report_integrity}",
+            "Console Emission Started: TRUE",
+            "",
+        ])
+
+    def _render_lifecycle_end(self) -> str:
+        return "\n".join([
+            REPORT_END_MARKER,
+        ])
+
+    def _render_header(self, canonical: dict[str, Any]) -> str:
+        metadata = canonical["runtime_metadata"]
+        return self._section("REPORT HEADER", [
+            f"System Name: {self._value(metadata.get('system'), 'NEXRYN')}",
+            f"Execution Mode: {self._field(canonical, 'execution_mode')}",
+            f"Execution Profile: {self._field(canonical, 'execution_profile')}",
+            f"Report Level: {canonical['report_level']}",
+            "Execution Identifier: "
+            f"{self._field(canonical, 'execution_identifier')}",
+            f"Timestamp: {self._field(canonical, 'timestamp')}",
+            "Runtime Status: "
+            f"{self._field(canonical, 'runtime_status')}",
+        ])
+
+    def _render_execution_summary(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        lifecycle = canonical["lifecycle"]
+        coverage_summary = self._binding_value(
+            canonical,
+            "cognitive_capability_coverage",
+        )
+        coverage_summary = (
+            coverage_summary if isinstance(coverage_summary, dict) else {}
+        )
+        return self._section("EXECUTION SUMMARY", [
+            f"Total Executions: {self._field(canonical, 'total_executions')}",
+            f"Completed Executions: {self._field(canonical, 'completed_executions')}",
+            f"Archived Executions: {self._field(canonical, 'archived_executions')}",
+            f"Execution Coverage: {self._field(canonical, 'execution_coverage')}",
+            f"Snapshot Coverage: {self._field(canonical, 'snapshot_coverage')}",
+            f"Lifecycle Coverage: {self._field(canonical, 'lifecycle_coverage')}",
+            f"Parent Execution Duration: {self._field(canonical, 'parent_execution_duration')}",
+            f"Total Wall Time: {self._field(canonical, 'total_wall_time')}",
+            f"Overall Status: {self._field(canonical, 'runtime_status')}",
+            "Knowledge Operationalization Root Cause: "
+            f"{self._value(coverage_summary.get('knowledge_operationalization_root_cause'))}",
+            "Governed Validation Bottleneck State: "
+            f"{self._value(coverage_summary.get('governed_validation_bottleneck_state'))}",
+            "Governed Validation Failure Share: "
+            f"{self._percent(coverage_summary.get('governed_validation_failure_share'))}",
+            "Operational Capability Coverage Semantics: "
+            f"{self._value(coverage_summary.get('operational_capability_coverage_semantics'))}",
+            "Sandbox Operational Citizen Coverage: "
+            f"{self._percent(coverage_summary.get('sandbox_operational_citizen_coverage'))}",
+            "Capability Evidence Contamination State: "
+            f"{self._value(coverage_summary.get('capability_evidence_contamination_state'))}",
+            "Capability Evidence Contamination Count: "
+            f"{self._value(coverage_summary.get('capability_evidence_contamination_count'))}",
+        ])
+
+    def _render_executive_runtime_summary(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, activation = self._executable_report_pair(canonical)
+        validation_success_count = self._count_value(
+            executable.get("validated_programs"),
+            executable.get("program_validation_success_count"),
+        )
+        execution_compiled_count = self._count_value(
+            executable.get("compiled_execution_programs"),
+            executable.get("execution_compiled_program_count"),
+        )
+        probe_compiled_count = self._count_value(
+            executable.get("validation_probe_compiled_programs"),
+            executable.get("validation_probe_compiled_program_count"),
+            coverage.get("validation_probe_compiled_program_count"),
+        )
+        successes = []
+        if arena.get("arena_winner"):
+            successes.append(f"arena_winner={self._value(arena.get('arena_winner'))}")
+        if executable.get("object_grounding_produced") is True:
+            successes.append("object_grounding_produced")
+        if validation_success_count:
+            successes.append(f"validated_programs={validation_success_count}")
+        if activation.get("validation_probe_forwarded"):
+            successes.append("validation_probe_forwarded")
+        failures = []
+        for key in (
+            "knowledge_operationalization_choke_cause",
+            "execution_compilation_admission_reason",
+            "validation_probe_evidence_insufficiency_cause",
+        ):
+            value = coverage.get(key) or executable.get(key) or arena.get(key)
+            if value:
+                failures.append(str(value))
+        stage = self._development_stage(coverage, arena, executable)
+        return self._section("EXECUTIVE RUNTIME SUMMARY", [
+            f"Overall Runtime State: {self._field(canonical, 'runtime_status')}",
+            f"Major Successes: {', '.join(successes) if successes else 'Not Available'}",
+            f"Major Failures: {', '.join(list(dict.fromkeys(failures))) if failures else 'Not Available'}",
+            "Primary Bottleneck: "
+            f"{self._value(coverage.get('knowledge_operationalization_choke_point'))}",
+            "Secondary Bottleneck: "
+            f"{self._value(coverage.get('secondary_operationalization_bottleneck'))}",
+            f"Current Development Stage: {stage}",
+            "Next Recommended Engineering Action: "
+            f"{self._value(coverage.get('knowledge_operationalization_choke_action') or executable.get('validation_probe_recommended_validation_action') or arena.get('arena_source_diversity_action'))}",
+            f"Execution Compiled Programs: {self._value(execution_compiled_count)}",
+            f"Validation Probe Compiled Programs: {self._value(probe_compiled_count)}",
+        ])
+
+    def _render_candidate_pipeline_dashboard(self, canonical: dict[str, Any]) -> str:
+        proposal = self._proposal_summary(canonical)
+        arena = self._arena_summary(canonical)
+        coverage = self._coverage_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        candidate_rows = arena.get("candidate_rows") or []
+        candidate_rows = candidate_rows if isinstance(candidate_rows, list) else []
+        proposal_count = self._count_value(proposal.get("proposal_count"))
+        built_count = sum(
+            1
+            for row in source_trace
+            if isinstance(row, dict) and row.get("arena_proposal_built") is True
+        )
+        gateway_count = sum(
+            1
+            for row in source_trace
+            if isinstance(row, dict) and row.get("gateway_accepted") is True
+        )
+        arena_count = self._count_value(arena.get("candidate_count"), len(candidate_rows))
+        execution_compiled = self._count_value(
+            executable.get("compiled_execution_programs"),
+            executable.get("execution_compiled_program_count"),
+        )
+        validated = self._count_value(executable.get("validated_programs"))
+        materialized = self._count_value(
+            coverage.get("materialized_operational_capabilities"),
+            executable.get("materialized_operational_capabilities"),
+        )
+        stages = [
+            ("Proposal Runtime", self._stage_from_count(proposal_count)),
+            ("Candidate Builder", self._stage_from_count(built_count, blocked=proposal_count and not built_count)),
+            ("Arena Gateway", self._stage_from_count(gateway_count, blocked=built_count and not gateway_count)),
+            ("Arena Admission", self._stage_from_count(arena_count)),
+            ("Arena Winner", self._stage_from_winner(arena)),
+            ("Execution", self._stage_from_count(execution_compiled, blocked=arena.get("execution_compilation_admission_state") or coverage.get("execution_compilation_admission_state"))),
+            ("Validation", self._stage_from_count(validated, blocked=executable.get("program_validation_contract_state") or executable.get("validation_probe_evidence_acceptance_state"))),
+            ("Materialization", self._stage_from_count(materialized, blocked=validated and not materialized)),
+        ]
+        lines = [
+            f"{name}: {status}"
+            for name, status in stages
+        ]
+        lines.extend([
+            f"Arena Winner: {self._value(arena.get('arena_winner'))}",
+            f"Selection State: {self._value(arena.get('selection_state'))}",
+            "Execution Admission Reason: "
+            f"{self._value(coverage.get('execution_compilation_admission_reason') or arena.get('execution_compilation_admission_reason'))}",
+        ])
+        return self._section("CANDIDATE PIPELINE", lines)
+
+    def _render_runtime_choke_point(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        choke = (
+            coverage.get("knowledge_operationalization_choke_point")
+            or arena.get("arena_to_compiled_bridge_state")
+            or executable.get("compiled_to_validated_probe_state")
+        )
+        cause = (
+            coverage.get("knowledge_operationalization_choke_cause")
+            or executable.get("validation_probe_evidence_insufficiency_cause")
+            or arena.get("prediction_quality_calibration_cause")
+        )
+        action = (
+            coverage.get("knowledge_operationalization_choke_action")
+            or executable.get("validation_probe_recommended_validation_action")
+            or arena.get("prediction_quality_calibration_action")
+        )
+        path = [
+            ("Candidate Proposal Runtime", self._value(self._proposal_summary(canonical).get("proposal_phase_status"))),
+            ("Semantic Compiler", self._value(self._semantic_summary(canonical).get("compilation_status"))),
+            ("Compiler Resolution", self._compiler_resolution_state(canonical)),
+            ("Candidate Builder", self._candidate_builder_state(arena)),
+            ("Arena", self._value(arena.get("selection_state") or arena.get("arena_state"))),
+            ("Validation", self._value(executable.get("program_validation_contract_state") or executable.get("validation_probe_evidence_acceptance_state"))),
+            ("Materialization", self._value(coverage.get("capability_materialization_state") or coverage.get("operational_capability_coverage_semantics"))),
+        ]
+        lines = [
+            f"Execution stopped at: {self._value(choke)}",
+            f"Root Cause: {self._value(cause)}",
+            f"Recommended Action: {self._value(action)}",
+            "Choke Path:",
+        ]
+        lines.extend(f"  {name}: {state}" for name, state in path)
+        return self._section("RUNTIME CHOKE POINT", lines)
+
+    def _render_source_competition_summary(self, canonical: dict[str, Any]) -> str:
+        proposal = self._proposal_summary(canonical)
+        arena = self._arena_summary(canonical)
+        rejected = proposal.get("sources_rejected") or []
+        rejected = rejected if isinstance(rejected, list) else [rejected]
+        source_flow = arena.get("candidate_source_flow_trace") or []
+        source_flow = source_flow if isinstance(source_flow, list) else []
+        rejection_lines = []
+        for row in source_flow[:8]:
+            if not isinstance(row, dict) or not row.get("proposal_runtime_rejected"):
+                continue
+            rejection_lines.append(
+                "  "
+                f"{self._value(row.get('source'))}: "
+                f"{self._value(row.get('proposal_runtime_rejection_reason') or row.get('build_failure_reason'))} "
+                f"detail={self._value(row.get('build_failure_detail'))}"
+            )
+        lines = [
+            f"Source Count: {self._value(arena.get('source_count'))}",
+            f"Proposal Count: {self._value(proposal.get('proposal_count'))}",
+            f"Rejected Sources: {', '.join(str(item) for item in rejected) if rejected else 'Not Available'}",
+            f"Winning Source: {self._value(arena.get('winner_source'))}",
+            "Cross Source Consensus: "
+            f"{self._value(arena.get('cross_source_consensus_state'))}",
+            f"Arena Diversity: {self._value(arena.get('source_diversity'))}",
+            "Source Coverage: "
+            f"{self._percent(arena.get('arena_source_coverage') or arena.get('source_coverage'))}",
+            "Arena State: "
+            f"{self._value(arena.get('arena_state'))}",
+        ]
+        if rejection_lines:
+            lines.append("Rejected Reasons:")
+            lines.extend(rejection_lines)
+        return self._section("SOURCE COMPETITION SUMMARY", lines)
+
+    def _render_knowledge_operationalization_summary(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        coverage = self._coverage_summary(canonical)
+        attrition = coverage.get("knowledge_attrition_lifecycle") or []
+        attrition = attrition if isinstance(attrition, list) else []
+        largest = None
+        for row in attrition:
+            if not isinstance(row, dict):
+                continue
+            if largest is None or (self._number(row.get("lost_count")) or 0) > (
+                self._number(largest.get("lost_count")) or 0
+            ):
+                largest = row
+        lines = [
+            "Largest Attrition Point: "
+            f"{self._value((largest or {}).get('from_stage'))}->{self._value((largest or {}).get('to_stage'))}",
+            f"Loss %: {self._percent((largest or {}).get('loss_rate'))}",
+            "Root Cause: "
+            f"{self._value(coverage.get('knowledge_operationalization_root_cause') or coverage.get('knowledge_operationalization_choke_cause') or (largest or {}).get('likely_cause'))}",
+            "Responsible Module: "
+            f"{self._value(coverage.get('knowledge_operationalization_evidence_responsibility') or (largest or {}).get('evidence_responsibility'))}",
+            "Required Evidence: "
+            f"{self._value(coverage.get('knowledge_operationalization_required_evidence') or (largest or {}).get('required_evidence'))}",
+            "Recommended Action: "
+            f"{self._value(coverage.get('knowledge_operationalization_choke_action') or (largest or {}).get('action'))}",
+            "Knowledge Operationalization State: "
+            f"{self._value(coverage.get('knowledge_operationalization_state'))}",
+        ]
+        return self._section("KNOWLEDGE OPERATIONALIZATION", lines)
+
+    def _render_validation_summary(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        executable, activation = self._executable_report_pair(canonical)
+        validated = self._count_value(executable.get("validated_programs"))
+        failures = (
+            executable.get("program_validation_failure_count")
+            or coverage.get("governed_validation_failure_count")
+            or activation.get("validation_failure_count")
+        )
+        lines = [
+            f"Validation Success Count: {self._value(validated)}",
+            f"Validation Failures: {self._value(failures)}",
+            "Evidence Missing: "
+            f"{self._value(executable.get('validation_probe_evidence_insufficiency_cause') or coverage.get('highest_remaining_evidence_deficit'))}",
+            "Validation Contract: "
+            f"{self._value(executable.get('program_validation_contract_state'))}",
+            "Validation Probe: "
+            f"{self._value(executable.get('compiled_to_validated_probe_state') or activation.get('compiled_to_validated_probe_state'))}",
+            "Grounding State: "
+            f"{self._value(executable.get('object_grounding_flow_state') or executable.get('object_grounding_produced'))}",
+            "Validation Probe Evidence Acceptance State: "
+            f"{self._value(executable.get('validation_probe_evidence_acceptance_state') or activation.get('validation_probe_evidence_acceptance_state'))}",
+            "Validation Probe Required Evidence: "
+            f"{self._value(executable.get('validation_probe_required_evidence') or activation.get('validation_probe_required_evidence'))}",
+        ]
+        return self._section("VALIDATION SUMMARY", lines)
+
+    def _render_human_execution_summary(self, canonical: dict[str, Any]) -> str:
+        coverage = self._coverage_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        compiled = self._count_value(executable.get("compiled_programs"))
+        validated = self._count_value(executable.get("validated_programs"))
+        materialized = self._count_value(
+            coverage.get("materialized_operational_capabilities"),
+            executable.get("materialized_operational_capabilities"),
+        )
+        return self._section("EXECUTION SUMMARY DASHBOARD", [
+            f"Compiled Programs: {self._value(compiled)}",
+            f"Validated Programs: {self._value(validated)}",
+            f"Materialized Capabilities: {self._value(materialized)}",
+            "Operational Citizens: "
+            f"{self._value(coverage.get('operational_citizen_count') or coverage.get('sandbox_operational_citizen_count'))}",
+            "Execution Success Rate: "
+            f"{self._value(executable.get('execution_success_rate'))}",
+            f"Repair Count: {self._value(executable.get('generated_repairs'))}",
+            "Compiled Execution Programs: "
+            f"{self._value(executable.get('compiled_execution_programs'))}",
+            "Validation Probe Compiled Programs: "
+            f"{self._value(executable.get('validation_probe_compiled_programs'))}",
+        ])
+
+    def _render_runtime_health_dashboard(self, canonical: dict[str, Any]) -> str:
+        arena = self._arena_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        semantic = self._semantic_summary(canonical)
+        runtime_timing = self._binding_value(canonical, "runtime_timing_summary")
+        runtime_timing = runtime_timing if isinstance(runtime_timing, dict) else {}
+        health = {
+            "Task IO": "HEALTHY"
+            if self._value(
+                arena.get("validation_probe_shared_input_trace", {}).get("input_population_state")
+                if isinstance(arena.get("validation_probe_shared_input_trace"), dict)
+                else None
+            )
+            in {"SHARED_TASK_IO_AVAILABLE", "Not Available"}
+            else "WARNING",
+            "Grounding": "HEALTHY"
+            if executable.get("object_grounding_produced") is True
+            else "WARNING",
+            "Compiler": "HEALTHY"
+            if self._count_value(executable.get("compiled_programs")) > 0
+            else "WARNING",
+            "Arena": "HEALTHY"
+            if arena.get("selection_state") not in {"NO_SAFE_WINNER", "NO_CANDIDATES"}
+            else "WARNING",
+            "Validation": "HEALTHY"
+            if self._count_value(executable.get("validated_programs")) > 0
+            else "WARNING",
+            "Execution": "HEALTHY"
+            if self._number(executable.get("execution_success_rate")) not in (None, 0.0)
+            else "WARNING",
+            "Reporting": "HEALTHY"
+            if self._binding_status(canonical) not in {"FAILED", "INVALID"}
+            else "FAILED",
+            "Timing": "HEALTHY"
+            if runtime_timing.get("timing_coverage") in (None, "Not Available")
+            or (self._number(runtime_timing.get("timing_coverage")) or 0) >= 0.8
+            else "WARNING",
+        }
+        return self._section(
+            "RUNTIME HEALTH",
+            [f"{name}: {state}" for name, state in health.items()],
+        )
+
+    def _render_critical_execution_trace(self, canonical: dict[str, Any]) -> str:
+        semantic = self._semantic_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, activation = self._executable_report_pair(canonical)
+        resolution_trace = semantic.get("compiler_resolution_trace") or []
+        resolution_trace = (
+            resolution_trace if isinstance(resolution_trace, list) else []
+        )
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        resolution_row = self._critical_resolution_row(resolution_trace, semantic)
+        semantic_source = self._source_trace_row_for_operation(
+            source_trace,
+            "semantic_to_transformation_compiler",
+            resolution_row.get("operation"),
+        )
+        source_alignment = self._compiler_source_flow_alignment(
+            semantic_source,
+            resolution_row,
+        )
+        identity_chain = self._operation_identity_chain(
+            resolution_row,
+            semantic_source,
+            arena,
+        )
+        entry_payload = resolution_row.get("compiler_entry_payload")
+        entry_payload = entry_payload if isinstance(entry_payload, dict) else {}
+        operation_diagnostic = self._operation_diagnostic_for_resolution(
+            semantic,
+            resolution_row,
+        )
+        entry_payload = self._hydrate_payload(
+            entry_payload,
+            self._hydrate_payload(
+                self._operation_diagnostic_entry_payload(
+                    operation_diagnostic,
+                ),
+                self._fallback_compiler_entry_payload(
+                    resolution_row,
+                    semantic,
+                    arena,
+                ),
+            ),
+        )
+        exit_payload = resolution_row.get("compiler_exit_payload")
+        exit_payload = exit_payload if isinstance(exit_payload, dict) else {}
+        exit_payload = self._hydrate_payload(
+            exit_payload,
+            self._hydrate_payload(
+                self._operation_diagnostic_exit_payload(
+                    operation_diagnostic,
+                ),
+                self._fallback_compiler_exit_payload(
+                    resolution_row,
+                    semantic,
+                ),
+            ),
+        )
+        exit_payload = self._normalize_materialization_payload(exit_payload)
+        candidate_emitted = resolution_row.get("candidate_emitted")
+        raw_rejection_reason = (
+            resolution_row.get("candidate_rejection_reason")
+            or operation_diagnostic.get("rejection_reason")
+        )
+        if candidate_emitted is True:
+            candidate_outcome = "CANDIDATE_EMITTED"
+            candidate_rejection_reason = "none"
+            failure_reason = "none"
+        elif candidate_emitted is False:
+            candidate_outcome = "CANDIDATE_REJECTED"
+            candidate_rejection_reason = raw_rejection_reason
+            failure_reason = (
+                raw_rejection_reason
+                or semantic.get("failure_reason")
+                or semantic_source.get("proposal_runtime_rejection_reason")
+                or semantic_source.get("build_failure_reason")
+            )
+        else:
+            candidate_outcome = "Not Available"
+            candidate_rejection_reason = raw_rejection_reason
+            failure_reason = (
+                raw_rejection_reason
+                or semantic.get("failure_reason")
+                or semantic_source.get("proposal_runtime_rejection_reason")
+                or semantic_source.get("build_failure_reason")
+            )
+        lines = [
+            "Semantic Compiler:",
+            f"  Intent: {self._value(resolution_row.get('semantic_intent') or semantic.get('selected_intent'))}",
+            f"  Operation: {self._value(resolution_row.get('operation') or semantic.get('selected_operation') or semantic.get('compiled_operation'))}",
+            f"  Resolved Compiler: {self._value(resolution_row.get('resolved_compiler'))}",
+            f"  Compiler Found: {self._value(resolution_row.get('compiler_found'))}",
+            f"  Attempted: {self._value(resolution_row.get('compilation_attempted'))}",
+            f"  Candidate Emitted: {self._value(resolution_row.get('candidate_emitted'))}",
+            f"  Candidate Outcome: {self._value(candidate_outcome)}",
+            "  Resolution State: "
+            f"{self._value(resolution_row.get('resolution_state'))}",
+            f"  Failure Reason: {self._value(failure_reason)}",
+            "  Failure Detail: "
+            f"{self._value(semantic_source.get('build_failure_detail'))}",
+            "  Compiler Entry Payload: "
+            f"operation={self._value(entry_payload.get('operation'))} "
+            f"semantic_matches={self._value(entry_payload.get('semantic_match_count'))} "
+            f"execution_intents={self._value(entry_payload.get('execution_intent_count'))} "
+            f"input_grid={self._value(entry_payload.get('input_grid_available'))} "
+            f"target_grid={self._value(entry_payload.get('target_grid_available'))} "
+            f"source_color={self._value(entry_payload.get('source_color'))} "
+            f"target_color={self._value(entry_payload.get('target_color'))} "
+            f"scope={self._value(entry_payload.get('application_scope'))} "
+            f"mapping_count={self._value(entry_payload.get('mapping_count'))} "
+            f"affected_cells={self._value(entry_payload.get('affected_cell_count'))} "
+            f"affected_positions={self._value(entry_payload.get('affected_position_count'))} "
+            f"parameter_source={self._value(entry_payload.get('parameter_source'))}",
+            "  Compiler Exit Payload: "
+            f"candidate_count={self._value(exit_payload.get('candidate_count'))} "
+            f"valid_candidate_count={self._value(exit_payload.get('valid_candidate_count'))} "
+            f"rejected_candidate_count={self._value(exit_payload.get('rejected_candidate_count'))} "
+            f"total_candidate_count={self._value(exit_payload.get('total_candidate_count'))} "
+            f"composition_steps={self._value(exit_payload.get('composition_step_count'))} "
+            f"scope={self._value(exit_payload.get('application_scope'))} "
+            f"mapping_count={self._value(exit_payload.get('mapping_count'))} "
+            f"affected_positions={self._value(exit_payload.get('affected_position_count'))} "
+            f"schema_valid={self._value(exit_payload.get('candidate_schema_valid'))} "
+            f"predicted_accuracy={self._value(exit_payload.get('predicted_accuracy'))} "
+            f"validation_threshold={self._value(exit_payload.get('validation_threshold'))} "
+            f"best_confidence={self._value(exit_payload.get('best_candidate_confidence'))} "
+            f"best_accuracy={self._value(exit_payload.get('best_accuracy'))}",
+            "  Predicted Accuracy Breakdown: "
+            f"{self._color_remap_accuracy_breakdown_line(exit_payload, operation_diagnostic)}",
+            "  Mapping Extraction State: "
+            f"{self._value(operation_diagnostic.get('mapping_extraction_state'))}",
+            "  Preservation Contract: "
+            f"{self._value(exit_payload.get('preservation_contract_state') or operation_diagnostic.get('preservation_contract_state'))} "
+            f"changed_cells={self._value(exit_payload.get('changed_cell_count') or operation_diagnostic.get('changed_cell_count'))} "
+            f"preserved_cells={self._value(exit_payload.get('preserved_cell_count') or operation_diagnostic.get('preserved_cell_count'))}",
+            "  Candidate Rejection Reason: "
+            f"{self._value(candidate_rejection_reason)}",
+            "Operation Identity Chain:",
+            "  Identity State: "
+            f"{self._value(identity_chain.get('identity_state'))}",
+            "  Semantic Intent: "
+            f"{self._value(identity_chain.get('semantic_intent'))}",
+            "  Compiler Operation: "
+            f"{self._value(identity_chain.get('compiler_operation'))}",
+            "  Proposal Operation: "
+            f"{self._value(identity_chain.get('proposal_operation'))}",
+            "  Arena Operation: "
+            f"{self._value(identity_chain.get('arena_operation'))}",
+            "  Validation Probe Operation: "
+            f"{self._value(identity_chain.get('validation_probe_operation'))}",
+            "  First Drift Stage: "
+            f"{self._value(identity_chain.get('first_drift_stage'))}",
+            "  Drift Detail: "
+            f"{self._value(identity_chain.get('drift_detail'))}",
+            "Candidate Materialization:",
+            "  Materialization Outcome: "
+            f"{self._value(exit_payload.get('materialization_outcome'))}",
+            "  Composition Validation: "
+            f"{self._value(exit_payload.get('composition_validation_state') or operation_diagnostic.get('composition_validation_state'))}",
+            "  Candidate Object Created: "
+            f"{self._value(exit_payload.get('candidate_object_created'))}",
+            "  Candidate Registered: "
+            f"{self._value(exit_payload.get('candidate_registered'))}",
+            "  Candidate Count Incremented: "
+            f"{self._value(exit_payload.get('candidate_count_incremented'))}",
+            "  Proposal Emission Ready: "
+            f"{self._value(exit_payload.get('proposal_emission_ready'))}",
+            "  Completion Stage: "
+            f"{self._value(exit_payload.get('materialization_completion_stage'))}",
+            "  Blocked Stage: "
+            f"{self._value(exit_payload.get('materialization_blocked_stage'))}",
+            "  Materialization Rejection: "
+            f"{self._value(exit_payload.get('materialization_rejection_reason'))}",
+            "Candidate Flow:",
+            "  Compiler/Flow Alignment: "
+            f"{source_alignment}",
+            "  Proposal Generated: "
+            f"{self._value(semantic_source.get('proposal_runtime_proposed'))}",
+            "  Proposal Rejected: "
+            f"{self._value(semantic_source.get('proposal_runtime_rejected'))}",
+            "  Proposal Built: "
+            f"{self._value(semantic_source.get('arena_proposal_built'))}",
+            f"  Gateway Accepted: {self._value(semantic_source.get('gateway_accepted'))}",
+            f"  Arena Admitted: {self._value(semantic_source.get('entered_arena'))}",
+            f"  Final State: {self._value(semantic_source.get('flow_state'))}",
+            f"  Failure Stage: {self._value(semantic_source.get('blocked_stage'))}",
+            "Validation Probe:",
+            "  Forwarded: "
+            f"{self._value(activation.get('validation_probe_forwarded'))}",
+            "  Consumed: "
+            f"{self._value(executable.get('validation_probe_consumed', activation.get('validation_probe_consumed')))}",
+            "  Compiler Participation: "
+            f"{self._value(executable.get('validation_probe_compiler_participation', activation.get('validation_probe_compiler_participation')))}",
+            "  Admission State: "
+            f"{self._value(executable.get('validation_probe_admission_state', activation.get('validation_probe_admission_state')))}",
+            "  Evidence Acceptance: "
+            f"{self._value(executable.get('validation_probe_evidence_acceptance_state', activation.get('validation_probe_evidence_acceptance_state')))}",
+            "  Evidence Cause: "
+            f"{self._value(executable.get('validation_probe_evidence_insufficiency_cause', activation.get('validation_probe_evidence_insufficiency_cause')))}",
+            "Execution Admission:",
+            "  Selection State: "
+            f"{self._value(arena.get('selection_state'))}",
+            "  Execution Admission State: "
+            f"{self._value(arena.get('execution_compilation_admission_state'))}",
+            "  Execution Admission Reason: "
+            f"{self._value(arena.get('execution_compilation_admission_reason'))}",
+            "Decision Resolution:",
+            "  Resolution State: "
+            f"{self._value(arena.get('arena_decision_resolution_state'))}",
+            "  Outcome: "
+            f"{self._value(arena.get('arena_decision_resolution_outcome'))}",
+            "  Ranking Changed: "
+            f"{self._value(arena.get('arena_decision_ranking_changed'))}",
+            "  Final Decision State: "
+            f"{self._value(arena.get('arena_decision_final_state'))}",
+            "  Execution Recommendation: "
+            f"{self._value(arena.get('arena_decision_execution_recommendation'))}",
+            "Evidence Acquisition:",
+            "  State: "
+            f"{self._value(arena.get('evidence_acquisition_state'))}",
+            "  Required Evidence: "
+            f"{self._value(arena.get('evidence_acquisition_required_evidence'))}",
+            "  Required Validation Task: "
+            f"{self._value(arena.get('evidence_acquisition_validation_task'))}",
+            "  Expected Tie-Break Impact: "
+            f"{self._value(arena.get('evidence_acquisition_expected_tie_break_impact'))}",
+            "  Governed Re-entry: "
+            f"{self._value(arena.get('evidence_acquisition_governed_reentry_action'))}",
+            "Decision Orchestration:",
+            "  Plan Forwarded: "
+            f"{self._value(arena.get('evidence_acquisition_plan_forwarded'))}",
+            "  Plan Persisted: "
+            f"{self._value(arena.get('evidence_plan_persisted'))}",
+            "  Plan Persistence Result: "
+            f"{self._value(arena.get('evidence_plan_persistence_result'))}",
+            "  Lifecycle Update Persisted: "
+            f"{self._value(arena.get('lifecycle_update_persisted'))}",
+            "  Persisted Lifecycle State: "
+            f"{self._value(arena.get('persisted_lifecycle_state'))}",
+            "  Persisted Selected Task: "
+            f"{self._value(arena.get('persisted_selected_validation_task'))}",
+            "  Boot Recovery Route: "
+            f"{self._value(arena.get('boot_recovery_route'))}",
+            "  Execution State: "
+            f"{self._value(arena.get('execution_state'))}",
+            "  Execution Authority: "
+            f"{self._value(arena.get('execution_authority'))}",
+            "  Plan Id: "
+            f"{self._value(arena.get('evidence_plan_id'))}",
+            "  Plan Lifecycle: "
+            f"{self._value(arena.get('evidence_plan_lifecycle_state'))}",
+            "  Training Assistant Plan Available: "
+            f"{self._value(arena.get('training_assistant_plan_available'))}",
+            "  Current Run Consumption Expected: "
+            f"{self._value(arena.get('training_assistant_current_run_consumption_expected'))}",
+            "  Next Run Consumption Required: "
+            f"{self._value(arena.get('training_assistant_next_run_consumption_required'))}",
+            "  Inbound Plan State: "
+            f"{self._value(arena.get('inbound_evidence_plan_state'))}",
+            "  Outbound Plan State: "
+            f"{self._value(arena.get('outbound_evidence_plan_state'))}",
+            "  Training Assistant Consumed: "
+            f"{self._value(arena.get('training_assistant_consumed_plan'))}",
+            "  Consumption State: "
+            f"{self._value(arena.get('consumption_state'))}",
+            "  Curriculum Search: "
+            f"{self._value(arena.get('curriculum_search_state'))}",
+            "  Matching Validation Tasks: "
+            f"{self._value(arena.get('matching_validation_tasks'))}",
+            "  Best Matching Task: "
+            f"{self._value(arena.get('best_matching_task'))}",
+            "  Best Matching Curriculum: "
+            f"{self._value(arena.get('best_matching_curriculum'))}",
+            "  Matching Score: "
+            f"{self._value(arena.get('matching_score'))}",
+            "  Selection Authority: "
+            f"{self._value(arena.get('selection_authority'))}",
+            "  Validation Task Selection State: "
+            f"{self._value(arena.get('validation_task_selection_state'))}",
+            "  Waiting Execution: "
+            f"{self._value(arena.get('waiting_execution'))}",
+            "  Task Selection Consumed: "
+            f"{self._value(arena.get('task_selection_consumed_plan'))}",
+            "  Task Selected: "
+            f"{self._value(arena.get('task_selected'))}",
+            "  Tie-Break Task Scheduled: "
+            f"{self._value(arena.get('tie_break_task_scheduled'))}",
+            "  Task Scheduled: "
+            f"{self._value(arena.get('task_scheduled'))}",
+            "  Schedule Id: "
+            f"{self._value(arena.get('schedule_id'))}",
+            "  Schedule Creation Result: "
+            f"{self._value(arena.get('schedule_creation_result'))}",
+            "  Scheduling Authority: "
+            f"{self._value(arena.get('scheduling_authority'))}",
+            "  Scheduling Admission State: "
+            f"{self._value(arena.get('scheduling_admission_state'))}",
+            "  Scheduling Admission Reason: "
+            f"{self._value(arena.get('scheduling_admission_reason'))}",
+            "  Scheduling State: "
+            f"{self._value(arena.get('scheduling_state'))}",
+            "  Execution Started: "
+            f"{self._value(arena.get('task_execution_started'))}",
+            "  Execution Completed: "
+            f"{self._value(arena.get('task_execution_completed'))}",
+            "  Execution State: "
+            f"{self._value(arena.get('execution_state'))}",
+            "  Execution Invoked: "
+            f"{self._value(arena.get('execution_invoked'))}",
+            "  Execution Authority: "
+            f"{self._value(arena.get('execution_authority'))}",
+            "  Selected Tie-Break Task: "
+            f"{self._value(arena.get('selected_tie_break_task'))}",
+            "Validation Task Execution:",
+            "  Plan Loaded: "
+            f"{self._value(arena.get('validation_task_execution_plan_id'))}",
+            "  Schedule Loaded: "
+            f"{self._value(arena.get('validation_task_execution_schedule_id'))}",
+            "  Plan Schedule Alignment: "
+            f"{self._value('ALIGNED' if arena.get('validation_task_execution_plan_id') not in {None, 'Not Available'} and arena.get('validation_task_execution_schedule_id') not in {None, 'Not Available'} else 'Not Available')}",
+            "  Scheduled Task Resolved: "
+            f"{self._value(arena.get('validation_task_execution_selected_task'))}",
+            "  Executable Payload Materialized: "
+            f"{self._value(arena.get('execution_admission_state') == 'ADMITTED')}",
+            "  Execution Admission Evaluated: "
+            f"{self._value(arena.get('execution_admission_evaluated'))}",
+            "  Execution Admission State: "
+            f"{self._value(arena.get('execution_admission_state'))}",
+            "  Execution Admission Reason: "
+            f"{self._value(arena.get('execution_admission_reason'))}",
+            "  Execution Authority Scope: "
+            f"{self._value(arena.get('validation_execution_scope'))}",
+            "  Execution Id: "
+            f"{self._value(arena.get('execution_id'))}",
+            "  Runner Invoked: "
+            f"{self._value(arena.get('execution_invoked'))}",
+            "  Execution Attempt Count: "
+            f"{self._value(arena.get('execution_attempt_count'))}",
+            "  Runner Id: "
+            f"{self._value(arena.get('runner_id'))}",
+            "  Runner Status: "
+            f"{self._value(arena.get('runner_status'))}",
+            "  Execution Started: "
+            f"{self._value(arena.get('task_execution_started'))}",
+            "  Execution Completed: "
+            f"{self._value(arena.get('task_execution_completed'))}",
+            "  Raw Result Captured: "
+            f"{self._value(arena.get('raw_result_captured'))}",
+            "  Raw Result Id: "
+            f"{self._value(arena.get('raw_result_id'))}",
+            "  Target Reference Forwarded To Solver: "
+            f"{self._value(arena.get('target_reference_forwarded_to_solver'))}",
+            "  Result Comparison Performed: "
+            f"{self._value(arena.get('prediction_target_comparison_performed'))}",
+            "  Accuracy Calculated: "
+            f"{self._value(arena.get('accuracy_calculated'))}",
+            "  Evidence Evaluation Invoked: "
+            f"{self._value(arena.get('evidence_evaluation_invoked'))}",
+            "  Evidence Produced: "
+            f"{self._value(arena.get('evidence_produced'))}",
+            "  Evidence Accepted: "
+            f"{self._value(arena.get('evidence_accepted'))}",
+            "  Arena Re-entry Invoked: "
+            f"{self._value(arena.get('arena_reentry_invoked'))}",
+            "  Evidence State: "
+            f"{self._value(arena.get('evidence_state'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
+            "Validation Evidence Evaluation:",
+            "  Plan Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_plan_id') not in {None, 'Not Available'})}",
+            "  Schedule Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_schedule_id') not in {None, 'Not Available'})}",
+            "  Execution Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_execution_id') not in {None, 'Not Available'})}",
+            "  Raw Result Loaded: "
+            f"{self._value(arena.get('validation_evidence_evaluation_raw_result_id') not in {None, 'Not Available'})}",
+            "  Evaluation Contract Id: "
+            f"{self._value(arena.get('evaluation_contract_id'))}",
+            "  Record Alignment: "
+            f"{self._value('ALIGNED' if arena.get('evaluation_admission_state') in {'ADMITTED', 'ADMITTED_TO_VALIDATION_EVIDENCE_EVALUATION'} else 'Not Available')}",
+            "  Evaluation Admission Evaluated: "
+            f"{self._value(arena.get('evaluation_admission_evaluated'))}",
+            "  Evaluation Admission State: "
+            f"{self._value(arena.get('evaluation_admission_state'))}",
+            "  Evaluation Admission Reason: "
+            f"{self._value(arena.get('evaluation_admission_reason'))}",
+            "  Evaluation Authority Scope: "
+            f"{self._value(arena.get('evidence_evaluation_scope'))}",
+            "  Sealed Reference Resolved: "
+            f"{self._value(arena.get('sealed_reference_resolved'))}",
+            "  Sealed Reference Id: "
+            f"{self._value(arena.get('sealed_reference_id'))}",
+            "  Reference Integrity Verified: "
+            f"{self._value(arena.get('reference_integrity_state') == 'VERIFIED')}",
+            "  Comparator Resolved: "
+            f"{self._value(arena.get('comparator_resolved'))}",
+            "  Comparison Started: "
+            f"{self._value(arena.get('comparison_started'))}",
+            "  Comparison Completed: "
+            f"{self._value(arena.get('comparison_completed'))}",
+            "  Comparable Result Id: "
+            f"{self._value(arena.get('comparable_result_id'))}",
+            "  Exact Match: "
+            f"{self._value(arena.get('exact_match'))}",
+            "  Accuracy: "
+            f"{self._value(arena.get('accuracy'))}",
+            "  Difference Count: "
+            f"{self._value(arena.get('difference_count'))}",
+            "  Candidate Attribution State: "
+            f"{self._value(arena.get('candidate_attribution_state'))}",
+            "  Operation Attribution State: "
+            f"{self._value(arena.get('operation_attribution_state'))}",
+            "  Contamination State: "
+            f"{self._value(arena.get('evidence_contamination_state'))}",
+            "  Evidence Admissibility State: "
+            f"{self._value(arena.get('evidence_admissibility_state'))}",
+            "  Evidence Sufficiency State: "
+            f"{self._value(arena.get('evidence_sufficiency_state'))}",
+            "  Evidence Direction: "
+            f"{self._value(arena.get('evidence_direction'))}",
+            "  Evidence Acceptance State: "
+            f"{self._value(arena.get('evidence_acceptance_state'))}",
+            "  Evidence Evaluation Outcome: "
+            f"{self._value(arena.get('evidence_evaluation_outcome'))}",
+            "  Evidence Decision Id: "
+            f"{self._value(arena.get('evidence_decision_id'))}",
+            "  Accepted Evidence Id: "
+            f"{self._value(arena.get('accepted_evidence_id'))}",
+            "  Arena Evidence Admission Invoked: "
+            f"{self._value(arena.get('arena_evidence_admission_invoked'))}",
+            "  Arena Re-entry Invoked: "
+            f"{self._value(arena.get('arena_reentry_invoked'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
+            "Arena Evidence Admission:",
+            "  Evidence Plan Loaded: "
+            f"{self._value(arena.get('arena_evidence_admission_plan_id') not in {None, 'Not Available'})}",
+            "  Evidence Decision Loaded: "
+            f"{self._value(arena.get('arena_evidence_admission_evidence_decision_id') not in {None, 'Not Available'})}",
+            "  Accepted Evidence Loaded: "
+            f"{self._value(arena.get('arena_evidence_admission_accepted_evidence_id') not in {None, 'Not Available'})}",
+            "  Originating Arena Loaded: "
+            f"{self._value(arena.get('originating_arena_id') not in {None, 'Not Available'})}",
+            "  Baseline Snapshot Loaded: "
+            f"{self._value(arena.get('baseline_snapshot_loaded'))}",
+            "  Record Alignment: "
+            f"{self._value('ALIGNED' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Fingerprint Integrity: "
+            f"{self._value('VERIFIED' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Target Candidate Resolved: "
+            f"{self._value(arena.get('arena_evidence_target_candidate') not in {None, 'Not Available'})}",
+            "  Target Operation Resolved: "
+            f"{self._value(arena.get('arena_evidence_target_operation') not in {None, 'Not Available'})}",
+            "  Duplicate Admission Check: "
+            f"{self._value('NO_DUPLICATE' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Duplicate Counting Check: "
+            f"{self._value('NO_DUPLICATE' if arena.get('arena_admission_state') == 'ADMITTED' else 'Not Available')}",
+            "  Arena Admission Evaluated: "
+            f"{self._value(arena.get('arena_admission_evaluated'))}",
+            "  Arena Admission State: "
+            f"{self._value(arena.get('arena_admission_state'))}",
+            "  Arena Admission Reason: "
+            f"{self._value(arena.get('arena_admission_reason'))}",
+            "  Admission Record Id: "
+            f"{self._value(arena.get('arena_evidence_admission_id'))}",
+            "  Ledger Entry Id: "
+            f"{self._value(arena.get('arena_evidence_ledger_entry_id'))}",
+            "  Evidence Admitted: "
+            f"{self._value(arena.get('arena_evidence_admitted'))}",
+            "Governed Redeliberation:",
+            "  Redeliberation Admission Evaluated: "
+            f"{self._value(arena.get('redeliberation_admission_evaluated'))}",
+            "  Redeliberation Admission State: "
+            f"{self._value(arena.get('redeliberation_admission_state'))}",
+            "  Redeliberation Authority Scope: "
+            f"{self._value(arena.get('arena_redeliberation_scope'))}",
+            "  Redeliberation Started: "
+            f"{self._value(arena.get('redeliberation_started'))}",
+            "  Candidate Evidence Profiles Rebuilt: "
+            f"{self._value(arena.get('candidate_evidence_profiles_rebuilt'))}",
+            "  Evidence Direction Preserved: "
+            f"{self._value(arena.get('evidence_direction_preserved'))}",
+            "  Evidence Effect Policy Resolved: "
+            f"{self._value(arena.get('evidence_effect_policy_resolved'))}",
+            "  Evidence Effect Applied: "
+            f"{self._value(arena.get('evidence_effect_applied'))}",
+            "  Candidate Scores Recomputed: "
+            f"{self._value(arena.get('candidate_scores_recomputed'))}",
+            "  Candidate Ranking Recomputed: "
+            f"{self._value(arena.get('candidate_ranking_recomputed'))}",
+            "  Cross-Source Consensus Recomputed: "
+            f"{self._value(arena.get('cross_source_consensus_recomputed'))}",
+            "  Tie-Break Strategy Applied: "
+            f"{self._value(arena.get('tie_break_strategy_applied'))}",
+            "  Tie-Break Strategy Satisfied: "
+            f"{self._value(arena.get('tie_break_strategy_satisfied'))}",
+            "  Provisional Leader Available: "
+            f"{self._value(arena.get('provisional_leader_available'))}",
+            "  Decision Proposal Available: "
+            f"{self._value(arena.get('decision_proposal_available'))}",
+            "  Decision Proposal Id: "
+            f"{self._value(arena.get('decision_proposal_id'))}",
+            "  Redeliberation Outcome: "
+            f"{self._value(arena.get('redeliberation_outcome'))}",
+            "  Redeliberation Completed: "
+            f"{self._value(arena.get('redeliberation_completed'))}",
+            "  Evidence Consumed: "
+            f"{self._value(arena.get('arena_evidence_consumed'))}",
+            "  Formal Selection Invoked: "
+            f"{self._value(arena.get('formal_selection_invoked'))}",
+            "  Tie Resolved: "
+            f"{self._value(arena.get('tie_resolved'))}",
+            "  Winner Selected: "
+            f"{self._value(arena.get('winner_selected'))}",
+            "  Selected Candidate: "
+            f"{self._value(arena.get('selected_candidate'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
+            "  State: "
+            f"{self._value(arena.get('decision_orchestration_state'))}",
+            "Arena Formal Selection:",
+            "  Decision Proposal Route Detected: "
+            f"{self._value(arena.get('decision_proposal_route_detected'))}",
+            "  Decision Proposal Loaded: "
+            f"{self._value(arena.get('decision_proposal_loaded'))}",
+            "  Originating Arena Loaded: "
+            f"{self._value(arena.get('originating_arena_loaded'))}",
+            "  Baseline Snapshot Loaded: "
+            f"{self._value(arena.get('formal_baseline_snapshot_loaded'))}",
+            "  Redeliberation Snapshot Loaded: "
+            f"{self._value(arena.get('formal_redeliberation_snapshot_loaded'))}",
+            "  Deliberative Outcome Loaded: "
+            f"{self._value(arena.get('deliberative_outcome_loaded'))}",
+            "  Candidate Set Loaded: "
+            f"{self._value(arena.get('candidate_set_loaded'))}",
+            "  Proposed Candidate Resolved: "
+            f"{self._value(arena.get('proposed_candidate_resolved'))}",
+            "  Proposal Lineage Alignment: "
+            f"{self._value(arena.get('proposal_lineage_alignment'))}",
+            "  Fingerprint Integrity: "
+            f"{self._value(arena.get('fingerprint_integrity'))}",
+            "  Proposal Uniqueness: "
+            f"{self._value(arena.get('proposal_uniqueness'))}",
+            "  Formal Selection Admission Evaluated: "
+            f"{self._value(arena.get('formal_selection_admission_evaluated'))}",
+            "  Formal Selection Admission State: "
+            f"{self._value(arena.get('formal_selection_admission_state'))}",
+            "  Formal Selection Admission Reason: "
+            f"{self._value(arena.get('formal_selection_admission_reason'))}",
+            "  Formal Selection Review Started: "
+            f"{self._value(arena.get('formal_selection_review_started'))}",
+            "  Proposal Readiness Reverified: "
+            f"{self._value(arena.get('proposal_readiness_reverified'))}",
+            "  Minimum Margin Reverified: "
+            f"{self._value(arena.get('minimum_margin_reverified'))}",
+            "  Candidate Eligibility Reverified: "
+            f"{self._value(arena.get('candidate_eligibility_reverified'))}",
+            "  Cross-Source Requirements Reverified: "
+            f"{self._value(arena.get('cross_source_requirements_reverified'))}",
+            "  Consensus Integrity Verified: "
+            f"{self._value(arena.get('consensus_integrity_verified'))}",
+            "  Evidence Attribution Verified: "
+            f"{self._value(arena.get('evidence_attribution_verified'))}",
+            "  Evidence Quality Verified: "
+            f"{self._value(arena.get('evidence_quality_verified'))}",
+            "  Constitutional Review Completed: "
+            f"{self._value(arena.get('constitutional_review_completed'))}",
+            "  Constitutional Veto Active: "
+            f"{self._value(arena.get('constitutional_veto_active'))}",
+            "  Temporal Validity Verified: "
+            f"{self._value(arena.get('temporal_validity_verified'))}",
+            "  Formal Selection Outcome: "
+            f"{self._value(arena.get('formal_selection_outcome'))}",
+            "  Formal Selection Decision Id: "
+            f"{self._value(arena.get('formal_selection_decision_id'))}",
+            "  Arena Selection Snapshot Id: "
+            f"{self._value(arena.get('arena_selection_snapshot_id'))}",
+            "  Proposal Disposition Id: "
+            f"{self._value(arena.get('proposal_disposition_id'))}",
+            "  Proposal Ratified: "
+            f"{self._value(arena.get('proposal_ratified'))}",
+            "  Proposal Rejected: "
+            f"{self._value(arena.get('proposal_rejected'))}",
+            "  Proposal Deferred: "
+            f"{self._value(arena.get('proposal_deferred'))}",
+            "  Tie Resolved: "
+            f"{self._value(arena.get('tie_resolved'))}",
+            "  Winner Selected: "
+            f"{self._value(arena.get('winner_selected'))}",
+            "  Selected Candidate: "
+            f"{self._value(arena.get('selected_candidate'))}",
+            "  Candidate Execution Authority: "
+            f"{self._value(arena.get('candidate_execution_authority'))}",
+            "  Candidate Execution Started: "
+            f"{self._value(arena.get('candidate_execution_started'))}",
+            "  Truth Authority: "
+            f"{self._value(arena.get('truth_authority'))}",
+            "  Trust Authority: "
+            f"{self._value(arena.get('trust_authority'))}",
+            "  Graduation Authority: "
+            f"{self._value(arena.get('graduation_authority'))}",
+            "  Next Consumer: "
+            f"{self._value(arena.get('next_consumer'))}",
+        ]
+        return self._section("CRITICAL EXECUTION TRACE", lines)
+
+    def _render_human_engineering_conclusion(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        conclusion = self._engineering_conclusion(canonical)
+        conclusion = (
+            engineering_conclusion_integrity_evaluator
+            .mark_human_report_projected(conclusion)
+        )
+        transitions = [
+            row for row in (
+                conclusion.get("engineering_conclusion_lifecycle_transitions")
+                or []
+            )
+            if isinstance(row, dict)
+        ]
+        transition_lines = [
+            (
+                "Engineering Conclusion Lifecycle Transition "
+                f"{row.get('sequence_index')}: "
+                f"{row.get('transition_name') or row.get('state')} "
+                f"| run_id={row.get('run_id')} "
+                f"| execution_plan_id={row.get('execution_plan_id')} "
+                f"| timestamp={row.get('source_timestamp')}"
+            )
+            for row in transitions
+        ]
+        emission_comparison = (
+            conclusion.get("authoritative_emitted_stable_field_comparison") or []
+        )
+        if isinstance(emission_comparison, list) and emission_comparison:
+            emission_comparison_value = "; ".join(
+                (
+                    f"{row.get('field')}={row.get('state')}"
+                    if isinstance(row, dict)
+                    else self._value(row)
+                )
+                for row in emission_comparison
+            )
+        else:
+            emission_comparison_value = "none"
+        emission_conflict_fields = conclusion.get("emission_conflict_fields")
+        if emission_conflict_fields == []:
+            emission_conflict_fields_value = "none"
+        else:
+            emission_conflict_fields_value = self._value(emission_conflict_fields)
+        persistence_triple_comparison = (
+            conclusion.get(
+                "authoritative_persisted_emitted_stable_field_comparison"
+            )
+            or []
+        )
+        if isinstance(persistence_triple_comparison, list) and persistence_triple_comparison:
+            persistence_triple_comparison_value = "; ".join(
+                (
+                    f"{row.get('field')}={row.get('comparison_result')}"
+                    f"/{row.get('conflict_type')}"
+                    if isinstance(row, dict)
+                    else self._value(row)
+                )
+                for row in persistence_triple_comparison
+            )
+        else:
+            persistence_triple_comparison_value = "none"
+        lines = [
+            "Engineering Conclusion State: "
+            f"{self._value(conclusion.get('engineering_conclusion_state'))}",
+            "Substantive Conclusion State: "
+            f"{self._value(conclusion.get('conclusion_state'))}",
+            "Engineering Conclusion Integrity State: "
+            f"{self._value(conclusion.get('engineering_conclusion_integrity_state'))}",
+            "Engineering Conclusion Integrity Reason: "
+            f"{self._value(conclusion.get('engineering_conclusion_integrity_reason'))}",
+            f"Largest Success: {self._value(conclusion.get('largest_success'))}",
+            f"Largest Regression: {self._value(conclusion.get('largest_regression'))}",
+            "Current Open Decision: "
+            f"{self._value(conclusion.get('current_open_decision'))}",
+            "Next Decision Gate: "
+            f"{self._value(conclusion.get('next_decision_gate'))}",
+            f"Next Gate: {self._value(conclusion.get('next_gate'))}",
+            "Current Bottleneck: "
+            f"{self._value(conclusion.get('current_bottleneck'))}",
+            f"Failure Reason: {self._value(conclusion.get('failure_reason'))}",
+            f"Root Cause: {self._value(conclusion.get('root_cause'))}",
+            "Recommended Action: "
+            f"{self._value(conclusion.get('recommended_action'))}",
+            f"Responsible Area: {self._value(conclusion.get('responsible_area'))}",
+            "Exact Responsible Component: "
+            f"{self._value(conclusion.get('responsible_component'))}",
+            "Immediate Next Development Task: "
+            f"{self._value(conclusion.get('next_task'))}",
+            "Estimated Engineering Priority: "
+            f"{self._value(conclusion.get('engineering_priority'))}",
+            "Engineering Conclusion Integrity: "
+            f"{self._value(conclusion.get('integrity'))}",
+            f"Conclusion Scope: {self._value(conclusion.get('conclusion_scope'))}",
+            f"Conclusion Run Id: {self._value(conclusion.get('conclusion_run_id'))}",
+            "Authoritative Run Id: "
+            f"{self._value(conclusion.get('authoritative_run_id'))}",
+            "Authoritative Execution Plan Id: "
+            f"{self._value(conclusion.get('authoritative_execution_plan_id'))}",
+            f"Conclusion Task Id: {self._value(conclusion.get('conclusion_task_id'))}",
+            "Canonical Raw Result Id: "
+            f"{self._value(conclusion.get('canonical_raw_result_id'), 'Not expected at current lifecycle state')}",
+            f"Conclusion Source: {self._value(conclusion.get('conclusion_source'))}",
+            "Conclusion Evaluation Source: "
+            f"{self._value(conclusion.get('conclusion_evaluation_source'))}",
+            "Conclusion Source Stage: "
+            f"{self._value(conclusion.get('conclusion_source_stage'))}",
+            "Conclusion Source Timestamp: "
+            f"{self._value(conclusion.get('conclusion_source_timestamp'))}",
+            f"Conclusion Is Current: {self._value(conclusion.get('conclusion_is_current'))}",
+            "Current Run Binding State: "
+            f"{self._value(conclusion.get('current_run_binding_state'))}",
+            "Persistence Applicability: "
+            f"{self._value(conclusion.get('persistence_applicability'))}",
+            "Persistence Applicability Reason: "
+            f"{self._value(conclusion.get('persistence_applicability_reason'))}",
+            "Persistence Write Attempted: "
+            f"{self._value(conclusion.get('persistence_write_attempted'))}",
+            "Persistence Write Completed: "
+            f"{self._value(conclusion.get('persistence_write_completed'))}",
+            "Persistence Readback Attempted: "
+            f"{self._value(conclusion.get('persistence_readback_attempted'))}",
+            "Persistence Readback Completed: "
+            f"{self._value(conclusion.get('persistence_readback_completed'))}",
+            "Persistence Integrity: "
+            f"{self._value(conclusion.get('persistence_integrity'))}",
+            "Persistence Integrity Reason: "
+            f"{self._value(conclusion.get('persistence_integrity_reason'))}",
+            "Emission Integrity: "
+            f"{self._value(conclusion.get('emission_integrity'))}",
+            "Emission Integrity Reason: "
+            f"{self._value(conclusion.get('emission_integrity_reason'))}",
+            "Authoritative Fingerprint: "
+            f"{self._value(conclusion.get('authoritative_fingerprint'), 'Not produced in this run')}",
+            "Stored Fingerprint: "
+            f"{self._value(conclusion.get('stored_fingerprint'), 'Not produced in this run')}",
+            "Recomputed Readback Fingerprint: "
+            f"{self._value(conclusion.get('recomputed_readback_fingerprint'), 'Not produced in this run')}",
+            "Emitted Fingerprint: "
+            f"{self._value(conclusion.get('emitted_fingerprint'), 'Not produced in this run')}",
+            "Persisted Run Id: "
+            f"{self._value(conclusion.get('persisted_run_id'), 'Not produced in this run')}",
+            "Readback Run Id: "
+            f"{self._value(conclusion.get('readback_run_id'), 'Not produced in this run')}",
+            "Emitted Run Id: "
+            f"{self._value(conclusion.get('emitted_run_id'), 'Not produced in this run')}",
+            "Persisted Execution Plan Id: "
+            f"{self._value(conclusion.get('persisted_execution_plan_id'), 'Not produced in this run')}",
+            "Readback Execution Plan Id: "
+            f"{self._value(conclusion.get('readback_execution_plan_id'), 'Not produced in this run')}",
+            "Emitted Execution Plan Id: "
+            f"{self._value(conclusion.get('emitted_execution_plan_id'), 'Not produced in this run')}",
+            "Authoritative/Emitted Stable Field Comparison: "
+            f"{emission_comparison_value}",
+            "Authoritative/Persisted/Emitted Stable Field Comparison: "
+            f"{persistence_triple_comparison_value}",
+            "Emission Conflict Count: "
+            f"{self._value(conclusion.get('emission_conflict_count'))}",
+            "Emission Conflict Fields: "
+            f"{emission_conflict_fields_value}",
+            "Persistence Matches Emission: "
+            f"{self._value(conclusion.get('persistence_matches_emission'))}",
+            "Persistence/Emission Conflict Count: "
+            f"{self._value(conclusion.get('persistence_emission_conflict_count'))}",
+            "Persistence/Emission Conflict Fields: "
+            f"{self._value(conclusion.get('persistence_emission_conflict_fields'))}",
+            "Conclusion Conflict Count: "
+            f"{self._value(conclusion.get('conclusion_conflict_count'))}",
+            "Pre-Reconciliation Fingerprint: "
+            f"{self._value(conclusion.get('pre_reconciliation_fingerprint'))}",
+            "Post-Reconciliation Fingerprint: "
+            f"{self._value(conclusion.get('post_reconciliation_fingerprint'))}",
+            "Conclusion Historical Issue Count: "
+            f"{self._value(conclusion.get('conclusion_historical_issue_count'))}",
+            *transition_lines,
+        ]
+        conflicts = conclusion.get("integrity_conflicts") or []
+        if conflicts:
+            lines.append("Conclusion Integrity Conflicts:")
+            lines.extend(f"  {self._value(item)}" for item in conflicts)
+        return self._section("ENGINEERING CONCLUSION", lines)
+
+    def _render_constitutional_contracts(self, canonical: dict[str, Any]) -> str:
+        summary = self._binding_value(
+            canonical,
+            "cognitive_capability_coverage_summary",
+        )
+        summary = summary if isinstance(summary, dict) else {}
+        validation_boundary = (
+            summary.get("validation_sponsorship_truth_boundary") or []
+        )
+        if not isinstance(validation_boundary, list):
+            validation_boundary = [validation_boundary]
+        investment_boundary = summary.get(
+            "capability_investment_truth_boundary",
+        )
+        boundaries = [
+            "TRUTH_IS_EVIDENCE_GOVERNED",
+            "TRUST_IS_EVIDENCE_GOVERNED",
+            "GRADUATION_IS_EVIDENCE_GOVERNED",
+        ]
+        if investment_boundary:
+            boundaries.append(str(investment_boundary))
+        boundaries.extend(str(item) for item in validation_boundary if item)
+        boundaries = list(dict.fromkeys(boundaries))
+        return self._section("CONSTITUTIONAL CONTRACTS", [
+            "Truth Contract: TRUTH_IS_EVIDENCE_GOVERNED",
+            "Trust Contract: TRUST_IS_EVIDENCE_GOVERNED",
+            "Graduation Contract: GRADUATION_IS_EVIDENCE_GOVERNED",
+            "Capability Investment Contract: "
+            f"{self._value(investment_boundary)}",
+            "Validation Sponsorship Contract: "
+            f"{self._value(summary.get('validation_sponsorship_contract_state'))}",
+            "Truth Preparation Gate: "
+            f"{self._value(summary.get('truth_preparation_gate'))}",
+            "Capability Merit Scope: "
+            f"{self._value(summary.get('capability_merit_system'))}",
+            "Evidence Sufficiency Contract: "
+            "evidence_sufficiency_precedes_trust_update_and_graduation",
+            "Constitutional Truth Boundaries: "
+            f"{self._value(boundaries)}",
+        ])
+
+    def _render_cognitive_outputs(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        knowledge = canonical["knowledge"]
+        return self._section("COGNITIVE OUTPUTS", [
+            f"Generated Concepts: {self._field(canonical, 'generated_concepts')}",
+            f"Generated Programs: {self._field(canonical, 'generated_programs')}",
+            f"Validated Programs: {self._field(canonical, 'validated_programs')}",
+            f"Truth Candidates: {self._field(canonical, 'truth_candidates')}",
+            f"Generated Memory Entries: {self._field(canonical, 'generated_memory_entries')}",
+            f"Semantic Memory Entries: {self._field(canonical, 'semantic_memory_entries')}",
+            f"Search Routes: {self._field(canonical, 'search_routes')}",
+            f"Experience Count: {self._field(canonical, 'experience_count')}",
+            f"Fabric Links: {self._field(canonical, 'fabric_links')}",
+        ])
+
+    def _render_program_quality(self, canonical: dict[str, Any]) -> str:
+        program = canonical["program"]
+        performance = canonical["performance"]
+        return self._section("PROGRAM QUALITY", [
+            f"Average Program Confidence: {self._field(canonical, 'average_program_confidence')}",
+            f"Highest Confidence: {self._field(canonical, 'highest_confidence')}",
+            f"Lowest Confidence: {self._field(canonical, 'lowest_confidence')}",
+            f"Validation Distribution: {self._field(canonical, 'validation_distribution')}",
+        ])
+
+    def _render_unified_concept_lifecycle(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "unified_concept_lifecycle_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        rows = summary.get("concept_lifecycles") or []
+        rows = rows if isinstance(rows, list) else []
+        lines = [
+            f"Concept Count: {self._value(summary.get('concept_count'))}",
+            "Canonical Source: "
+            f"{self._value(summary.get('canonical_concept_lifecycle_source'))}",
+            "Traceable From Discovery: "
+            f"{self._value(summary.get('concepts_traceable_from_discovery'))}",
+        ]
+        status_counts = summary.get("lifecycle_status_counts") or {}
+        if isinstance(status_counts, dict) and status_counts:
+            lines.append(
+                "Lifecycle Status Counts: "
+                + "; ".join(
+                    f"{self._value(key)}={self._value(value)}"
+                    for key, value in sorted(status_counts.items())
+                )
+            )
+        for row in rows[:12]:
+            if not isinstance(row, dict):
+                continue
+            missing = row.get("missing_requirements") or []
+            if not isinstance(missing, list):
+                missing = [missing]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Concept: {self._value(row.get('concept_name'))}",
+                f"Semantic Cluster: {self._value(row.get('semantic_cluster'))}",
+                f"Mental Model: {self._value(row.get('mental_model'))}",
+                f"Truth Candidate: {self._value(row.get('truth_candidate_state'))}",
+                f"Compiler Support: {self._value(row.get('compiler_supported'))}",
+                f"Execution Package: {self._value(row.get('execution_package_available'))}",
+                f"Candidate Generation State: {self._value(row.get('candidate_generated'))}",
+                "Execution State: "
+                f"attempted={self._value(row.get('execution_attempted'))}, "
+                f"success={self._value(row.get('execution_success'))}",
+                f"Prediction Contribution: {self._value(row.get('prediction_contribution'))}",
+                f"Semantic Memory Integration: {self._value(row.get('semantic_memory_integrated'))}",
+                f"Missing Requirements: {', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                f"Lifecycle Status: {self._value(row.get('lifecycle_status'))}",
+            ])
+        if len(rows) > 12:
+            lines.append(f"Additional Concepts Omitted: {len(rows) - 12}")
+        return self._section("UNIFIED CONCEPT LIFECYCLE REPORT", lines)
+
+    def _render_program_generation(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "program_generation_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        blueprints = summary.get("program_blueprints") or []
+        blueprints = blueprints if isinstance(blueprints, list) else []
+        missing = summary.get("missing_requirements") or []
+        missing = missing if isinstance(missing, list) else [missing]
+        lines = [
+            f"Generated Programs: {self._value(summary.get('generated_programs'))}",
+            f"Eligible Concepts: {self._value(summary.get('eligible_concepts'))}",
+            f"Generated Blueprints: {self._value(summary.get('generated_blueprints'))}",
+            f"Blocked Programs: {self._value(summary.get('blocked_programs'))}",
+            f"Missing Requirements: {', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+            f"Generation Success Rate: {self._percent(summary.get('generation_success_rate'))}",
+            f"Execution Agnostic: {self._value(summary.get('execution_agnostic'))}",
+            f"Competition Agnostic: {self._value(summary.get('competition_agnostic'))}",
+        ]
+        for blueprint in blueprints[:12]:
+            if not isinstance(blueprint, dict):
+                continue
+            blueprint_missing = blueprint.get("missing_requirements") or []
+            if not isinstance(blueprint_missing, list):
+                blueprint_missing = [blueprint_missing]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Program: {self._label(str(blueprint.get('program_type') or 'program'))}",
+                f"Concept: {self._value(blueprint.get('concept_name'))}",
+                f"Semantic Cluster: {self._value(blueprint.get('semantic_cluster'))}",
+                f"Generation Status: {self._value(blueprint.get('generation_status'))}",
+                f"Compiler Support: {self._value(blueprint.get('compiler_supported'))}",
+                f"Execution Package: {self._value(blueprint.get('execution_package_available'))}",
+                f"Executable: {self._value(blueprint.get('executable'))}",
+                f"Candidate Ready: {self._value(blueprint.get('candidate_ready'))}",
+                f"Blocking Reason: {self._value(blueprint.get('blocking_reason'))}",
+                "Missing Requirements: "
+                f"{', '.join(str(item) for item in blueprint_missing) if blueprint_missing else 'Not Available'}",
+            ])
+        if len(blueprints) > 12:
+            lines.append(f"Additional Blueprints Omitted: {len(blueprints) - 12}")
+        return self._section("PROGRAM GENERATION REPORT", lines)
+
+    def _render_program_blueprint_intelligence(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "program_blueprint_intelligence_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        programs = summary.get("program_blueprint_intelligence") or []
+        programs = programs if isinstance(programs, list) else []
+        readiness_counts = summary.get("execution_readiness_counts") or {}
+        readiness_counts = readiness_counts if isinstance(readiness_counts, dict) else {}
+        failures = summary.get("validation_failures") or []
+        failures = failures if isinstance(failures, list) else [failures]
+        lines = [
+            f"Program Intelligence Count: {self._value(summary.get('program_intelligence_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            f"Silent Capability Failures: {self._value(summary.get('capability_failures_silent'))}",
+            "Validation Failures: "
+            f"{', '.join(str(item) for item in failures) if failures else 'Not Available'}",
+        ]
+        if readiness_counts:
+            lines.append(
+                "Execution Readiness Counts: "
+                + "; ".join(
+                    f"{self._value(key)}={self._value(value)}"
+                    for key, value in sorted(readiness_counts.items())
+                )
+            )
+        for program in programs[:12]:
+            if not isinstance(program, dict):
+                continue
+            supported = program.get("supported_concepts") or []
+            supported = supported if isinstance(supported, list) else [supported]
+            required = program.get("required_packages") or []
+            required = required if isinstance(required, list) else [required]
+            missing = program.get("missing_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            limitations = program.get("capability_limitations") or []
+            limitations = limitations if isinstance(limitations, list) else [limitations]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Program: {self._label(str(program.get('program_type') or 'program'))}",
+                f"Semantic Family: {self._value(program.get('semantic_family'))}",
+                f"Mental Model: {self._value(program.get('mental_model'))}",
+                "Supported Concepts: "
+                f"{', '.join(str(item) for item in supported) if supported else 'Not Available'}",
+                f"Execution Readiness: {self._value(program.get('execution_ready'))}",
+                f"Candidate Readiness: {self._value(program.get('candidate_ready'))}",
+                f"Compiler Support: {self._value(program.get('compiler_supported'))}",
+                f"Validation Ready: {self._value(program.get('validation_ready'))}",
+                f"Execution Package: {self._value(program.get('execution_package_available'))}",
+                "Required Packages: "
+                f"{', '.join(str(item) for item in required) if required else 'Not Available'}",
+                "Missing Requirements: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                "Capability Limitations: "
+                f"{', '.join(str(item) for item in limitations) if limitations else 'Not Available'}",
+                f"Capability Status: {self._value(program.get('lifecycle_status'))}",
+            ])
+        if len(programs) > 12:
+            lines.append(f"Additional Program Intelligence Rows Omitted: {len(programs) - 12}")
+        return self._section("PROGRAM BLUEPRINT INTELLIGENCE REPORT", lines)
+
+    def _render_cognitive_program_lifecycle(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_program_lifecycle_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        registry = summary.get("program_registry") or []
+        registry = registry if isinstance(registry, list) else []
+        lines = [
+            f"Total Program Blueprints: {self._value(summary.get('total_program_blueprints'))}",
+            f"Operational Program Count: {self._value(summary.get('operational_program_count'))}",
+            f"Blocked Program Count: {self._value(summary.get('blocked_program_count'))}",
+            "Partially Operational Program Count: "
+            f"{self._value(summary.get('partially_operational_program_count'))}",
+            f"Silent Lifecycle Failures: {self._value(summary.get('silent_lifecycle_failures'))}",
+            "Readiness Distribution: "
+            f"{self._inline_map(summary.get('readiness_distribution'))}",
+            "Maturity Distribution: "
+            f"{self._inline_map(summary.get('maturity_distribution'))}",
+            "Semantic Family Coverage: "
+            f"{self._inline_map(summary.get('semantic_family_coverage'))}",
+        ]
+        for row in registry[:12]:
+            if not isinstance(row, dict):
+                continue
+            required = row.get("required_packages") or []
+            required = required if isinstance(required, list) else [required]
+            missing = row.get("missing_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            supported = row.get("supported_concepts") or []
+            supported = supported if isinstance(supported, list) else [supported]
+            failures = row.get("lifecycle_failures") or []
+            failure_bits = []
+            if isinstance(failures, list):
+                for failure in failures[:4]:
+                    if isinstance(failure, dict):
+                        failure_bits.append(
+                            f"{failure.get('failed_stage')}:{failure.get('reason')}"
+                        )
+            lines.extend([
+                "--------------------------------------------------",
+                f"Program: {self._label(str(row.get('program_type') or 'program'))}",
+                f"Semantic Family: {self._value(row.get('semantic_family'))}",
+                f"Lifecycle Status: {self._value(row.get('lifecycle_status'))}",
+                f"Maturity Level: {self._value(row.get('maturity_level'))}",
+                f"Execution Readiness: {self._value(row.get('execution_readiness'))}",
+                f"Candidate Readiness: {self._value(row.get('candidate_readiness'))}",
+                f"Operational Readiness: {self._value(row.get('operational_readiness'))}",
+                "Required Packages: "
+                f"{', '.join(str(item) for item in required) if required else 'Not Available'}",
+                "Missing Requirements: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                "Supported Concepts: "
+                f"{', '.join(str(item) for item in supported) if supported else 'Not Available'}",
+                f"Capability Profile: {self._compact_value(row.get('capability_profile'))}",
+                "Lifecycle Failures: "
+                f"{', '.join(failure_bits) if failure_bits else 'Not Available'}",
+            ])
+        if len(registry) > 12:
+            lines.append(f"Additional Program Lifecycle Rows Omitted: {len(registry) - 12}")
+        return self._section("COGNITIVE PROGRAM LIFECYCLE REPORT", lines)
+
+    def _render_cognitive_knowledge_domains(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_knowledge_domains_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        domains = summary.get("domains") or []
+        domains = domains if isinstance(domains, list) else []
+        lines = [
+            f"Domain Count: {self._value(summary.get('domain_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Domain Assignment Failures: "
+            f"{self._value(summary.get('silent_domain_assignment_failures'))}",
+            "Orphan Concepts: "
+            f"{self._value(summary.get('orphan_concepts'))}",
+            "Missing Domain Ownership: "
+            f"{self._value(summary.get('missing_domain_ownership'))}",
+        ]
+        invalid_family = summary.get("invalid_family_assignments") or []
+        invalid_model = summary.get("invalid_mental_model_assignments") or []
+        invalid_program = summary.get("invalid_program_blueprint_assignments") or []
+        if invalid_family:
+            lines.append(f"Invalid Family Assignments: {self._value(invalid_family)}")
+        if invalid_model:
+            lines.append(f"Invalid Mental Model Assignments: {self._value(invalid_model)}")
+        if invalid_program:
+            lines.append(f"Invalid Program Blueprint Assignments: {self._value(invalid_program)}")
+        for domain in domains[:15]:
+            if not isinstance(domain, dict):
+                continue
+            families = domain.get("semantic_families") or []
+            families = families if isinstance(families, list) else [families]
+            mental_models = domain.get("mental_models") or []
+            mental_models = mental_models if isinstance(mental_models, list) else [mental_models]
+            programs = domain.get("program_blueprints") or []
+            programs = programs if isinstance(programs, list) else [programs]
+            missing = domain.get("missing_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            operational = domain.get("operational_capabilities") or []
+            operational = operational if isinstance(operational, list) else [operational]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain: {self._value(domain.get('domain_name'))}",
+                "Semantic Families: "
+                f"{', '.join(str(item) for item in families) if families else 'Not Available'}",
+                "Mental Models: "
+                f"{', '.join(str(item) for item in mental_models) if mental_models else 'Not Available'}",
+                "Program Blueprints: "
+                f"{', '.join(str(item) for item in programs) if programs else 'Not Available'}",
+                f"Concept Count: {self._value(domain.get('concept_count'))}",
+                "Execution Package Count: "
+                f"{self._value(domain.get('execution_package_count'))}",
+                f"Domain Maturity: {self._value(domain.get('maturity_level'))}",
+                f"Operational Status: {self._value(domain.get('lifecycle_status'))}",
+                "Operational Capabilities: "
+                f"{', '.join(str(item) for item in operational) if operational else 'Not Available'}",
+                "Missing Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+            ])
+        if len(domains) > 15:
+            lines.append(f"Additional Cognitive Domains Omitted: {len(domains) - 15}")
+        return self._section("COGNITIVE KNOWLEDGE DOMAINS REPORT", lines)
+
+    def _render_cognitive_domain_intelligence(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_intelligence_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        domains = summary.get("domain_intelligence") or []
+        domains = domains if isinstance(domains, list) else []
+        active_domains = [
+            domain
+            for domain in domains
+            if isinstance(domain, dict)
+            and (
+                domain.get("semantic_concept_count")
+                or domain.get("mental_model_count")
+                or domain.get("program_blueprint_count")
+                or domain.get("execution_package_count")
+                or domain.get("operational_capability_count")
+                or domain.get("missing_capabilities")
+            )
+        ]
+        failures = summary.get("validation_failures") or []
+        failures = failures if isinstance(failures, list) else [failures]
+        lines = [
+            f"Domain Intelligence Count: {self._value(summary.get('domain_intelligence_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Domain Intelligence Failures: "
+            f"{self._value(summary.get('silent_domain_intelligence_failures'))}",
+            "Readiness Distribution: "
+            f"{self._inline_map(summary.get('readiness_distribution'))}",
+            f"Validation Failures: {self._value(failures)}",
+        ]
+        for domain in active_domains[:12]:
+            if not isinstance(domain, dict):
+                continue
+            semantic_capabilities = domain.get("semantic_capabilities") or []
+            semantic_capabilities = semantic_capabilities if isinstance(semantic_capabilities, list) else [semantic_capabilities]
+            operational = domain.get("operational_capabilities") or []
+            operational = operational if isinstance(operational, list) else [operational]
+            required_domains = domain.get("required_domains") or []
+            required_domains = required_domains if isinstance(required_domains, list) else [required_domains]
+            optional_domains = domain.get("optional_domains") or []
+            optional_domains = optional_domains if isinstance(optional_domains, list) else [optional_domains]
+            families = domain.get("semantic_families") or []
+            families = families if isinstance(families, list) else [families]
+            mental_models = domain.get("mental_models") or []
+            mental_models = mental_models if isinstance(mental_models, list) else [mental_models]
+            programs = domain.get("program_blueprints") or []
+            programs = programs if isinstance(programs, list) else [programs]
+            packages = domain.get("execution_packages") or []
+            packages = packages if isinstance(packages, list) else [packages]
+            missing = domain.get("missing_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            supported_operations = domain.get("supported_operations") or []
+            supported_operations = supported_operations if isinstance(supported_operations, list) else [supported_operations]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(domain.get('domain_name'))}",
+                "Semantic Capabilities: "
+                f"{', '.join(str(item) for item in semantic_capabilities) if semantic_capabilities else 'Not Available'}",
+                "Operational Capabilities: "
+                f"{', '.join(str(item) for item in operational) if operational else 'Not Available'}",
+                "Domain Dependencies: "
+                f"{', '.join(str(item) for item in required_domains) if required_domains else 'Independent'}",
+                "Optional Domains: "
+                f"{', '.join(str(item) for item in optional_domains) if optional_domains else 'Not Available'}",
+                "Semantic Families: "
+                f"{', '.join(str(item) for item in families) if families else 'Not Available'}",
+                "Mental Models: "
+                f"{', '.join(str(item) for item in mental_models) if mental_models else 'Not Available'}",
+                "Program Blueprints: "
+                f"{', '.join(str(item) for item in programs) if programs else 'Not Available'}",
+                "Execution Packages: "
+                f"{', '.join(str(item) for item in packages) if packages else 'Not Available'}",
+                "Supported Operations: "
+                f"{', '.join(str(item) for item in supported_operations) if supported_operations else 'Not Available'}",
+                "Missing Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                f"Domain Readiness: {self._value(domain.get('readiness_state'))}",
+                f"Maturity Level: {self._value(domain.get('maturity_level'))}",
+                "Coverage Counts: "
+                f"concepts={self._value(domain.get('semantic_concept_count'))}, "
+                f"families={self._value(domain.get('semantic_family_count'))}, "
+                f"mental_models={self._value(domain.get('mental_model_count'))}, "
+                f"programs={self._value(domain.get('program_blueprint_count'))}, "
+                f"packages={self._value(domain.get('execution_package_count'))}, "
+                f"operational={self._value(domain.get('operational_capability_count'))}",
+            ])
+        if len(active_domains) > 12:
+            lines.append(f"Additional Active Domain Intelligence Rows Omitted: {len(active_domains) - 12}")
+        inactive_count = len(domains) - len(active_domains)
+        if inactive_count > 0:
+            lines.append(f"Inactive Domain Intelligence Rows Omitted: {inactive_count}")
+        return self._section("COGNITIVE DOMAIN INTELLIGENCE REPORT", lines)
+
+    def _render_cognitive_domain_lifecycle(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_lifecycle_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        registry = summary.get("domain_registry") or []
+        registry = registry if isinstance(registry, list) else []
+        active_rows = [
+            row for row in registry
+            if isinstance(row, dict)
+            and (
+                row.get("semantic_capability_evolution")
+                or row.get("mental_model_evolution")
+                or row.get("program_blueprint_evolution")
+                or row.get("execution_capability_evolution")
+                or row.get("operational_capability_evolution")
+                or row.get("missing_capabilities")
+            )
+        ]
+        lines = [
+            f"Total Domains: {self._value(summary.get('total_domains'))}",
+            f"Operational Domains: {self._value(summary.get('operational_domains'))}",
+            "Partially Operational Domains: "
+            f"{self._value(summary.get('partially_operational_domains'))}",
+            f"Foundational Domains: {self._value(summary.get('foundational_domains'))}",
+            f"Advanced Domains: {self._value(summary.get('advanced_domains'))}",
+            "Domain Readiness Distribution: "
+            f"{self._inline_map(summary.get('domain_readiness_distribution'))}",
+            "Lifecycle Distribution: "
+            f"{self._inline_map(summary.get('lifecycle_distribution'))}",
+            "Capability Distribution: "
+            f"{self._inline_map(summary.get('capability_distribution'))}",
+            "Silent Domain Lifecycle Failures: "
+            f"{self._value(summary.get('silent_domain_lifecycle_failures'))}",
+        ]
+        for row in active_rows[:12]:
+            required = row.get("required_domains") or []
+            required = required if isinstance(required, list) else [required]
+            optional = row.get("optional_domains") or []
+            optional = optional if isinstance(optional, list) else [optional]
+            missing = row.get("missing_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            failures = row.get("lifecycle_failures") or []
+            failure_bits = []
+            if isinstance(failures, list):
+                for failure in failures[:4]:
+                    if isinstance(failure, dict):
+                        failure_bits.append(
+                            f"{failure.get('failed_lifecycle_stage')}:{failure.get('reason')}"
+                        )
+            inherited = row.get("inherited_capabilities") or {}
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(row.get('domain_name'))}",
+                f"Lifecycle Stage: {self._value(row.get('lifecycle_stage'))}",
+                f"Maturity Level: {self._value(row.get('maturity_level'))}",
+                "Readiness States: "
+                f"Semantic={self._value(row.get('semantic_readiness'))}; "
+                f"Mental Models={self._value(row.get('mental_model_readiness'))}; "
+                f"Programs={self._value(row.get('program_readiness'))}; "
+                f"Execution={self._value(row.get('execution_readiness'))}; "
+                f"Candidate={self._value(row.get('candidate_readiness'))}; "
+                f"Operational={self._value(row.get('operational_readiness'))}",
+                "Dependencies: "
+                f"{', '.join(str(item) for item in required) if required else 'Independent'}",
+                "Optional Dependencies: "
+                f"{', '.join(str(item) for item in optional) if optional else 'Not Available'}",
+                "Inherited Capabilities: "
+                f"{self._inline_map(inherited)}",
+                "Missing Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                "Lifecycle Failures: "
+                f"{', '.join(failure_bits) if failure_bits else 'Not Available'}",
+                f"Operational Status: {self._value(row.get('operational_status'))}",
+            ])
+        if len(active_rows) > 12:
+            lines.append(f"Additional Active Domain Lifecycle Rows Omitted: {len(active_rows) - 12}")
+        inactive_count = len(registry) - len(active_rows)
+        if inactive_count > 0:
+            lines.append(f"Inactive Domain Lifecycle Rows Omitted: {inactive_count}")
+        return self._section("COGNITIVE DOMAIN LIFECYCLE REPORT", lines)
+
+    def _render_cognitive_domain_interaction(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_interaction_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        reports = summary.get("domain_interaction_reports") or []
+        reports = reports if isinstance(reports, list) else []
+        active_reports = [
+            row for row in reports
+            if isinstance(row, dict)
+            and (
+                row.get("collaborating_domains")
+                or row.get("shared_capabilities")
+                or row.get("private_capabilities")
+                or row.get("operational_capability_composition")
+                or row.get("missing_collaborative_capabilities")
+            )
+        ]
+        compositions = summary.get("operational_capability_compositions") or []
+        compositions = compositions if isinstance(compositions, list) else []
+        readiness_rows = summary.get("cross_domain_operational_readiness") or []
+        readiness_rows = readiness_rows if isinstance(readiness_rows, list) else []
+        lines = [
+            f"Domain Interactions: {self._value(summary.get('domain_interaction_count'))}",
+            "Operational Capability Lifecycle Count: "
+            f"{self._value(summary.get('operational_capability_lifecycle_count'))}",
+            "Capability Promotion Candidates: "
+            f"{self._value(summary.get('capability_promotion_candidate_count'))}",
+            "Sandbox Operational Capabilities: "
+            f"{self._value(summary.get('sandbox_operational_capability_count'))}",
+            "Promoted Capabilities: "
+            f"{self._value(summary.get('promoted_capability_count'))}",
+            "Reusable Operational Capabilities: "
+            f"{self._value(summary.get('reusable_operational_capability_count'))}",
+            "Capability Organisms: "
+            f"{self._value(summary.get('capability_organism_count'))}",
+            "Emerging Capabilities: "
+            f"{self._value(summary.get('emerging_capability_count'))}",
+            "Developing Capabilities: "
+            f"{self._value(summary.get('developing_capability_count'))}",
+            "Evolving Capabilities: "
+            f"{self._value(summary.get('evolving_capability_count'))}",
+            "Capability Economy Invest: "
+            f"{self._value(summary.get('capability_invest_count'))}",
+            "Capability Economy Watch: "
+            f"{self._value(summary.get('capability_watch_count'))}",
+            "Capability Economy Hold: "
+            f"{self._value(summary.get('capability_hold_count'))}",
+            "Capability Economy Archive: "
+            f"{self._value(summary.get('capability_archive_count'))}",
+            "Governance Review Capabilities: "
+            f"{self._value(summary.get('governance_review_capability_count'))}",
+            "Governance Blocked Capabilities: "
+            f"{self._value(summary.get('governance_blocked_capability_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Dependency Graph: "
+            f"{self._inline_map(summary.get('dependency_graph'))}",
+        ]
+        if canonical["report_level"] == "diagnostic":
+            lines.insert(
+                1,
+                f"Collaboration Score: {self._percent(summary.get('collaboration_score'))}",
+            )
+            lines.insert(
+                3,
+                "Silent Interaction Failures: "
+                f"{self._value(summary.get('silent_domain_interaction_failures'))}",
+            )
+        for index, composition in enumerate(compositions[:3]):
+            if isinstance(composition, dict):
+                lines.append(
+                    "Operational Capability Composition: "
+                    f"{self._value(composition.get('composition_name'))} "
+                    f"[{self._value(composition.get('composition_status'))}]"
+                )
+                if canonical["report_level"] == "diagnostic" or index == 0:
+                    lines.append(
+                    "  Cross-Domain Readiness: "
+                    f"{self._percent(composition.get('cross_domain_operational_readiness'))}"
+                    )
+                lines.append(
+                    "  Capability Lifecycle: "
+                    f"{self._value(composition.get('lifecycle_state'))}; "
+                    f"Blocking Stage: {self._value(composition.get('blocking_stage'))}; "
+                    f"Governance: {self._value(composition.get('governance_status'))}; "
+                    f"Validation: {self._value(composition.get('validation_status'))}"
+                )
+                lines.append(
+                    "  Capability Promotion: "
+                    f"{self._value(composition.get('promotion_state'))}; "
+                    f"Score: {self._percent(composition.get('promotion_score'))}; "
+                    f"Registry: {self._value(composition.get('registry_eligibility'))}"
+                )
+                identity = composition.get("capability_identity") or {}
+                identity = identity if isinstance(identity, dict) else {}
+                lines.append(
+                    "  Capability Growth: "
+                    f"{self._value(composition.get('growth_stage'))}; "
+                    f"Organism: {self._value(composition.get('organism_state'))}; "
+                    f"Growth Score: {self._percent(composition.get('growth_score'))}; "
+                    f"Evolution: {self._percent(composition.get('evolution_readiness'))}"
+                )
+                if canonical["report_level"] == "diagnostic" or index == 0:
+                    lines.append(
+                        "  Capability Identity: "
+                        f"{self._value(identity.get('capability_id'))} "
+                        f"v{self._value(identity.get('version'))}"
+                    )
+                lines.append(
+                    "  Capability Economy: "
+                    f"{self._value(composition.get('resource_decision'))}; "
+                    f"Value: {self._percent(composition.get('value_score'))}; "
+                    f"Benefit: {self._percent(composition.get('operational_benefit'))}; "
+                    f"Net: {self._percent(composition.get('net_economic_value'))}"
+                )
+                if canonical["report_level"] == "diagnostic" or index == 0:
+                    budget = composition.get("resource_budget") or {}
+                    budget = budget if isinstance(budget, dict) else {}
+                    lines.append(
+                        "  Capability Resource Budget: "
+                        f"growth={self._value(budget.get('growth_budget'))}, "
+                        f"evolution={self._value(budget.get('evolution_budget'))}, "
+                        f"promotion={self._value(budget.get('promotion_budget'))}, "
+                        f"maintenance={self._value(budget.get('maintenance_budget'))}, "
+                        f"retirement={self._value(budget.get('retirement_budget'))}"
+                    )
+                    lines.append(
+                        "  Economy Rationale: "
+                        f"{self._value(composition.get('economy_rationale'))}"
+                    )
+                blockers = composition.get("promotion_blockers") or []
+                blockers = blockers if isinstance(blockers, list) else [blockers]
+                if blockers and (canonical["report_level"] == "diagnostic" or index == 0):
+                    lines.append(
+                        "  Promotion Blockers: "
+                        + ", ".join(str(item) for item in blockers[:5])
+                    )
+        readiness_limit = 3 if canonical["report_level"] == "diagnostic" else 0
+        for row in readiness_rows[:readiness_limit]:
+            if isinstance(row, dict):
+                domains = row.get("participating_domains") or []
+                domains = domains if isinstance(domains, list) else [domains]
+                short_domains = [
+                    str(item).replace(" Cognitive Domain", "")
+                    for item in domains
+                ]
+                lines.append(
+                    "Cross-Domain Operational Readiness: "
+                    f"{' + '.join(short_domains)} = "
+                    f"{self._percent(row.get('cross_domain_operational_readiness'))} "
+                    f"[{self._value(row.get('composition_status'))}]"
+                )
+        for row in active_reports[:6]:
+            collaborators = row.get("collaborating_domains") or []
+            collaborators = collaborators if isinstance(collaborators, list) else [collaborators]
+            shared = row.get("shared_capabilities") or []
+            shared = shared if isinstance(shared, list) else [shared]
+            private = row.get("private_capabilities") or []
+            private = private if isinstance(private, list) else [private]
+            dependencies = row.get("dependency_relationships") or []
+            dependencies = dependencies if isinstance(dependencies, list) else [dependencies]
+            compositions_for_domain = row.get("operational_capability_composition") or []
+            compositions_for_domain = compositions_for_domain if isinstance(compositions_for_domain, list) else [compositions_for_domain]
+            missing = row.get("missing_collaborative_capabilities") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(row.get('domain_name'))}",
+                "Collaborating Domains: "
+                f"{', '.join(str(item) for item in collaborators) if collaborators else 'Not Available'}",
+                "Shared Capabilities: "
+                f"{', '.join(str(item) for item in shared) if shared else 'Not Available'}",
+                "Private Capabilities: "
+                f"{', '.join(str(item) for item in private) if private else 'Not Available'}",
+                "Dependency Relationships: "
+                f"{', '.join(str(item) for item in dependencies) if dependencies else 'Independent'}",
+                f"Capability Composition Status: {self._value(row.get('capability_composition_status'))}",
+                "Operational Capability Composition: "
+                f"{', '.join(str(item) for item in compositions_for_domain) if compositions_for_domain else 'Not Available'}",
+                "Missing Collaborative Capabilities: "
+                f"{', '.join(str(item) for item in missing) if missing else 'Not Available'}",
+                f"Collaboration Maturity: {self._value(row.get('collaboration_maturity'))}",
+                f"Capability Sharing Maturity: {self._value(row.get('capability_sharing_maturity'))}",
+                f"Dependency Maturity: {self._value(row.get('dependency_maturity'))}",
+                f"Operational Composition Maturity: {self._value(row.get('operational_composition_maturity'))}",
+            ])
+        if len(active_reports) > 6:
+            lines.append(f"Additional Active Domain Interaction Rows Omitted: {len(active_reports) - 6}")
+        inactive = len(reports) - len(active_reports)
+        if inactive > 0:
+            lines.append(f"Inactive Domain Interaction Rows Omitted: {inactive}")
+        return self._section("COGNITIVE DOMAIN INTERACTION REPORT", lines)
+
+    def _render_cognitive_domain_governance(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_domain_governance_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        rows = summary.get("domain_governance") or []
+        rows = rows if isinstance(rows, list) else []
+        active_rows = [
+            row for row in rows
+            if isinstance(row, dict)
+            and (
+                row.get("capability_conflicts")
+                or row.get("boundary_violations")
+            )
+        ]
+        if not active_rows:
+            active_rows = [row for row in rows if isinstance(row, dict)][:3]
+        lines = [
+            f"Domain Governance Count: {self._value(summary.get('domain_governance_count'))}",
+            f"Validation Success: {self._value(summary.get('validation_success'))}",
+            "Silent Governance Failures: "
+            f"{self._value(summary.get('silent_domain_governance_failures'))}",
+            f"Capability Conflicts: {self._value(summary.get('capability_conflicts'))}",
+            f"Boundary Violations: {self._value(summary.get('boundary_violations'))}",
+            f"Migration Events: {self._compact_value(summary.get('migration_history'))}",
+        ]
+        for row in active_rows[:4]:
+            conflicts = row.get("capability_conflicts") or []
+            conflicts = conflicts if isinstance(conflicts, list) else [conflicts]
+            migrations = row.get("migration_history") or []
+            migrations = migrations if isinstance(migrations, list) else [migrations]
+            violations = row.get("boundary_violations") or []
+            violations = violations if isinstance(violations, list) else [violations]
+            missing = row.get("missing_governance_requirements") or []
+            missing = missing if isinstance(missing, list) else [missing]
+            migration_bits = []
+            for event in migrations[:3]:
+                if isinstance(event, dict):
+                    migration_bits.append(
+                        f"{event.get('capability')}:{event.get('previous_owner')}->{event.get('new_owner')}"
+                    )
+            lines.extend([
+                "--------------------------------------------------",
+                f"Domain Name: {self._value(row.get('domain_name'))}",
+                f"Governance Status: {self._value(row.get('governance_status'))}",
+                f"Semantic Integrity: {self._percent(row.get('semantic_coherence_score'))}",
+                f"Ownership Integrity: {self._percent(row.get('ownership_consistency_score'))}",
+                f"Dependency Integrity: {self._percent(row.get('dependency_consistency_score'))}",
+                f"Domain Health Score: {self._percent(row.get('governance_integrity_score'))}",
+                f"Capability Conflicts: {self._compact_value(conflicts) if conflicts else 'NONE'}",
+                f"Migration Events: {', '.join(migration_bits) if migration_bits else 'NONE'}",
+                f"Boundary Violations: {self._compact_value(violations) if violations else 'NONE'}",
+                "Missing Governance Requirements: "
+                f"{', '.join(str(item) for item in missing) if missing else 'NONE'}",
+            ])
+        if len(active_rows) > 4:
+            lines.append(f"Additional Active Domain Governance Rows Omitted: {len(active_rows) - 4}")
+        inactive = len(rows) - len(active_rows)
+        if inactive > 0:
+            lines.append(f"Inactive Domain Governance Rows Omitted: {inactive}")
+        return self._section("COGNITIVE DOMAIN GOVERNANCE REPORT", lines)
+
+    def _render_cognitive_domain_ecosystem(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+
+        summary = self._binding_value(canonical, "cognitive_domain_ecosystem_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        ecosystem = summary.get("ecosystem") or {}
+        ecosystem = ecosystem if isinstance(ecosystem, dict) else {}
+        coverage = summary.get("global_cognitive_coverage") or {}
+        coverage = coverage if isinstance(coverage, dict) else {}
+        health = summary.get("ecosystem_health_metrics") or {}
+        health = health if isinstance(health, dict) else {}
+        lines = [
+            f"Total Domains: {self._value(coverage.get('domains'))}",
+            f"Operational Domains: {self._value(coverage.get('operational_domains'))}",
+            f"Total Semantic Concepts: {self._value(coverage.get('semantic_concepts'))}",
+            f"Total Mental Models: {self._value(coverage.get('mental_models'))}",
+            f"Total Program Blueprints: {self._value(coverage.get('program_blueprints'))}",
+            f"Total Execution Packages: {self._value(coverage.get('execution_packages'))}",
+            f"Total Operational Capabilities: {self._value(coverage.get('operational_capabilities'))}",
+            f"Candidate Ready Programs: {self._value(coverage.get('candidate_ready_programs'))}",
+            f"Capability Coverage: {self._percent(health.get('capability_coverage_score'))}",
+            f"Ecosystem Health: {self._percent(health.get('architectural_coherence_score'))}",
+            f"Collaboration Score: {self._percent(health.get('collaboration_score'))}",
+            f"Operational Readiness: {self._percent(health.get('operational_readiness_score'))}",
+            f"Architectural Coherence: {self._percent(health.get('architectural_coherence_score'))}",
+            f"Ecosystem Maturity: {self._value(summary.get('ecosystem_maturity'))}",
+            f"Domain Distribution: {self._inline_map(summary.get('domain_distribution'))}",
+            f"Covered Domains: {self._value(ecosystem.get('covered_domains'))}",
+            f"Partially Covered Domains: {self._value(ecosystem.get('partially_covered_domains'))}",
+            f"Missing Domains: {self._value(ecosystem.get('missing_domains'))}",
+            f"Missing Capabilities: {self._value(summary.get('missing_ecosystem_capabilities'))}",
+            f"Cognitive Bottlenecks: {self._compact_value(summary.get('cognitive_bottlenecks'))}",
+            f"Cognitive Imbalances: {self._compact_value(summary.get('cognitive_imbalances'))}",
+            f"Dependency Graph Summary: {self._compact_value(summary.get('dependency_graph'))}",
+            f"Collaboration Summary: {self._compact_value(summary.get('collaboration_graph'))}",
+            f"Operational Capability Graph: {self._compact_value(summary.get('operational_capability_graph'))}",
+            f"Silent Ecosystem Failures: {self._value(summary.get('silent_ecosystem_failures'))}",
+        ]
+        return self._section("COGNITIVE DOMAIN ECOSYSTEM REPORT", lines)
+
+    def _render_cognitive_domain_constitution(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+
+        summary = self._binding_value(canonical, "cognitive_domain_constitution_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        metrics = summary.get("constitutional_health_metrics") or {}
+        metrics = metrics if isinstance(metrics, dict) else {}
+        violations = summary.get("constitutional_violations") or []
+        health = summary.get("domain_constitutional_health") or []
+        validations = summary.get("constitutional_validations") or {}
+        lines = [
+            f"Constitutional Status: {self._value(summary.get('constitutional_status'))}",
+            f"Constitutional Integrity: {self._percent(metrics.get('constitutional_integrity_score'))}",
+            f"Architectural Integrity: {self._percent(metrics.get('architectural_integrity_score'))}",
+            f"Semantic Integrity: {self._percent(metrics.get('semantic_integrity_score'))}",
+            f"Governance Integrity: {self._percent(metrics.get('governance_integrity_score'))}",
+            f"Collaboration Integrity: {self._percent(metrics.get('collaboration_integrity_score'))}",
+            f"Ecosystem Coherence: {self._percent(metrics.get('ecosystem_coherence_score'))}",
+            f"Constitutional Compliance: {self._percent(metrics.get('constitutional_compliance_score'))}",
+            f"Governance Compliance: {self._value(summary.get('governance_compliance'))}",
+            f"Ownership Compliance: {self._value(summary.get('ownership_compliance'))}",
+            f"Lifecycle Compliance: {self._value(summary.get('lifecycle_compliance'))}",
+            f"Constitutional Invariants: {self._value(summary.get('architectural_invariants'))}",
+            f"Constitutional Validations: {self._inline_map(validations)}",
+            f"Constitutional Violations: {self._compact_value(violations)}",
+            f"Domain Constitutional Health: {self._compact_value(health)}",
+            f"Silent Constitutional Failures: {self._value(summary.get('silent_constitutional_failures'))}",
+        ]
+        return self._section("COGNITIVE DOMAIN CONSTITUTION REPORT", lines)
+
+    def _render_semantic_compilation(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "semantic_compilation_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        diagnostics = self._binding_value(canonical, "semantic_compilation_diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        concepts = summary.get("detected_concepts") or []
+        if not isinstance(concepts, list):
+            concepts = [concepts]
+        parameters = summary.get("parameter_inference") or {}
+        resolution_trace = summary.get("compiler_resolution_trace") or []
+        resolution_trace = (
+            resolution_trace if isinstance(resolution_trace, list) else []
+        )
+        parameter_bits = []
+        if isinstance(parameters, dict):
+            for key in sorted(parameters.keys(), key=str):
+                value = parameters.get(key)
+                if isinstance(value, (dict, list)):
+                    value = self._compact_value(value)
+                parameter_bits.append(f"{key}={self._value(value)}")
+        lines = [
+            f"Detected Concepts: {', '.join(str(item) for item in concepts[:12]) if concepts else 'Not Available'}",
+            f"Semantic Intent Router Success: {self._value(summary.get('semantic_intent_routing_success'))}",
+            "Semantic Intent Router Integration: "
+            f"{self._value(summary.get('semantic_intent_router_integration_status'))}",
+            "Compiler Activation Source: "
+            f"{self._value(summary.get('compiler_activation_source'))}",
+            f"Execution Intents: {self._value(summary.get('execution_intent_count'))}",
+            f"Compiler Triggered: {self._value(summary.get('compiler_triggered'))}",
+            f"Compiled Candidates: {self._value(summary.get('compiled_candidate_count'))}",
+            f"Selected Intent: {self._value(summary.get('selected_intent'))}",
+            f"Compiled Operation: {self._value(summary.get('compiled_operation'))}",
+            f"Selected Operation: {self._value(summary.get('selected_operation'))}",
+            f"Selected From Compiler: {self._value(summary.get('selected_from_compiler'))}",
+            f"Compiler Advisory State: {self._value(summary.get('compiler_advisory_state'))}",
+            f"Compilation Confidence: {self._value(summary.get('compilation_confidence'))}",
+            f"Prediction Accuracy: {self._value(summary.get('prediction_accuracy'))}",
+            f"Compilation Status: {self._value(summary.get('compilation_status'))}",
+            f"Primitive Executor Called: {self._value(summary.get('primitive_executor_called'))}",
+            f"Execution Status: {self._value(summary.get('execution_status'))}",
+            f"Failure Cause: {self._value(summary.get('failure_cause'))}",
+        ]
+        if parameter_bits:
+            lines.append(f"Parameter Inference: {'; '.join(parameter_bits[:8])}")
+        if resolution_trace:
+            lines.append("Compiler Resolution Trace:")
+            for row in resolution_trace[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"intent={self._value(row.get('semantic_intent'))} "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"resolved={self._value(row.get('resolved_operation'))} "
+                    f"compiler={self._value(row.get('resolved_compiler'))} "
+                    f"found={self._value(row.get('compiler_found'))} "
+                    f"attempted={self._value(row.get('compilation_attempted'))} "
+                    f"emitted={self._value(row.get('candidate_emitted'))} "
+                    f"state={self._value(row.get('resolution_state'))}"
+                )
+        if canonical["report_level"] == "diagnostic":
+            compiler = diagnostics.get("compiler_report", {})
+            graph = compiler.get("transformation_graph", {}) if isinstance(compiler, dict) else {}
+            plan = compiler.get("transformation_plan", {}) if isinstance(compiler, dict) else {}
+            if isinstance(graph, dict):
+                lines.append(
+                    "Transformation Graph: "
+                    f"nodes={self._value(graph.get('node_count'))}, "
+                    f"edges={self._value(graph.get('edge_count'))}"
+                )
+            if isinstance(plan, dict):
+                lines.append(f"Transformation Plan Type: {self._value(plan.get('plan_type'))}")
+                lines.append(f"Transformation Plan Rationale: {self._value(plan.get('rationale'))}")
+        return self._section("SEMANTIC COMPILATION", lines)
+
+    def _render_transformation_decision(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "prediction_provenance_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        pipeline = summary.get("decision_pipeline") or []
+        if not isinstance(pipeline, list):
+            pipeline = [pipeline]
+        lines = [
+            f"Prediction Source: {self._value(summary.get('prediction_source'))}",
+            f"Decision Owner: {self._value(summary.get('decision_owner'))}",
+            f"Decision Confidence: {self._value(summary.get('decision_confidence'))}",
+            f"Winning Candidate: {self._value(summary.get('winning_candidate'))}",
+            f"Selected Operation: {self._value(summary.get('selected_operation'))}",
+            f"Compiler Attempted: {self._value(summary.get('compiler_attempted'))}",
+            f"Compiler Participation: {self._value(summary.get('compiler_participation'))}",
+            f"Repair Participation: {self._value(summary.get('repair_participation'))}",
+            "Transfer Learning Participation: "
+            f"{self._value(summary.get('transfer_learning_participation'))}",
+            f"Counterfactual Search: {self._value(summary.get('counterfactual_search'))}",
+            f"Program Validation: {self._value(summary.get('program_validation'))}",
+            f"Prediction Accuracy: {self._value(summary.get('prediction_accuracy'))}",
+            f"Generated Concepts Observed: {self._value(summary.get('generated_concept_count'))}",
+            f"Generated Programs Observed: {self._value(summary.get('generated_program_count'))}",
+            f"Program Candidates: {self._value(summary.get('candidate_count'))}",
+            f"Programs Rejected: {self._value(summary.get('programs_rejected'))}",
+            f"Programs Executed: {self._value(summary.get('programs_executed'))}",
+            "Decision Pipeline: "
+            f"{' -> '.join(str(item) for item in pipeline) if pipeline else 'Not Available'}",
+        ]
+        if canonical["report_level"] == "diagnostic":
+            diagnostics = self._binding_value(canonical, "prediction_provenance_diagnostics")
+            diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+            for key in (
+                "transformation_synthesis_report",
+                "color_mapping_report",
+                "adaptive_reuse_report",
+                "search_report",
+                "repair_report",
+            ):
+                value = diagnostics.get(key)
+                if isinstance(value, dict):
+                    lines.append(f"{self._label(key)} Fields: {len(value)}")
+        return self._section("TRANSFORMATION DECISION", lines)
+
+    def _render_executable_semantic_coverage(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "executable_semantic_coverage_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        supported = summary.get("supported_operations") or []
+        supported = supported if isinstance(supported, list) else [supported]
+        unsupported = summary.get("unsupported_operations") or []
+        unsupported = unsupported if isinstance(unsupported, list) else [unsupported]
+        missing_clusters = summary.get("missing_cluster_counts") or {}
+        lines = [
+            f"Generated Concepts: {self._value(summary.get('generated_concepts'))}",
+            f"Measured Concepts: {self._value(summary.get('measured_concepts'))}",
+            f"Coverage State: {self._value(summary.get('coverage_state'))}",
+            f"Executable Concepts: {self._value(summary.get('executable_concepts'))}",
+            f"Unsupported Concepts: {self._value(summary.get('unsupported_concepts'))}",
+            f"Coverage: {self._percent(summary.get('executable_semantic_coverage'))}",
+            f"Coverage Status: {self._value(summary.get('coverage_status'))}",
+            f"Measurement Blocker: {self._value(summary.get('measurement_blocker'))}",
+            f"Highest Missing Semantic Cluster: {self._value(summary.get('highest_missing_semantic_cluster'))}",
+            f"Supported Operations: {', '.join(str(item) for item in supported) if supported else 'Not Available'}",
+            f"Unsupported Operations: {', '.join(str(item) for item in unsupported[:12]) if unsupported else 'Not Available'}",
+        ]
+        if isinstance(missing_clusters, dict) and missing_clusters:
+            cluster_bits = [
+                f"{cluster}={count}"
+                for cluster, count in sorted(missing_clusters.items())
+            ]
+            lines.append(f"Missing Cluster Counts: {'; '.join(cluster_bits[:8])}")
+        return self._section("EXECUTABLE SEMANTIC COVERAGE", lines)
+
+    def _render_cognitive_capability_coverage(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "cognitive_capability_coverage_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        bottlenecks = summary.get("lowest_coverage_bottlenecks") or []
+        bottlenecks = bottlenecks if isinstance(bottlenecks, list) else []
+        attrition = summary.get("candidate_attrition_summary") or {}
+        attrition = attrition if isinstance(attrition, dict) else {}
+        lifecycle = summary.get("end_to_end_program_lifecycle") or {}
+        lifecycle = lifecycle if isinstance(lifecycle, dict) else {}
+        domain_architecture = summary.get("cognitive_domain_architecture_summary") or {}
+        domain_architecture = (
+            domain_architecture if isinstance(domain_architecture, dict) else {}
+        )
+        lineage = summary.get("candidate_source_lineage") or []
+        lineage = lineage if isinstance(lineage, list) else []
+        survival_distribution = (
+            summary.get("capability_survival_state_distribution") or {}
+        )
+        survival_distribution = (
+            survival_distribution
+            if isinstance(survival_distribution, dict)
+            else {}
+        )
+        top_incubating = summary.get("top_incubating_capabilities") or []
+        top_incubating = top_incubating if isinstance(top_incubating, list) else []
+        top_operational_citizens = summary.get("top_operational_citizens") or []
+        top_operational_citizens = (
+            top_operational_citizens
+            if isinstance(top_operational_citizens, list)
+            else []
+        )
+        top_crystallization_candidates = (
+            summary.get("top_crystallization_candidates") or []
+        )
+        top_crystallization_candidates = (
+            top_crystallization_candidates
+            if isinstance(top_crystallization_candidates, list)
+            else []
+        )
+        top_graduation_candidates = summary.get("top_graduation_candidates") or []
+        top_graduation_candidates = (
+            top_graduation_candidates
+            if isinstance(top_graduation_candidates, list)
+            else []
+        )
+        graduation_pipeline_stages = (
+            summary.get("graduation_pipeline_stages") or {}
+        )
+        graduation_pipeline_stages = (
+            graduation_pipeline_stages
+            if isinstance(graduation_pipeline_stages, dict)
+            else {}
+        )
+        graduation_transition_rows = (
+            summary.get("graduation_transition_rows") or []
+        )
+        graduation_transition_rows = (
+            graduation_transition_rows
+            if isinstance(graduation_transition_rows, list)
+            else []
+        )
+        capability_promotion_rows = (
+            summary.get("capability_promotion_rows") or []
+        )
+        capability_promotion_rows = (
+            capability_promotion_rows
+            if isinstance(capability_promotion_rows, list)
+            else []
+        )
+        graduation_sprint_recommendations = (
+            summary.get("graduation_sprint_recommendations") or []
+        )
+        graduation_sprint_recommendations = (
+            graduation_sprint_recommendations
+            if isinstance(graduation_sprint_recommendations, list)
+            else []
+        )
+        validator_failure_distribution = (
+            summary.get("validator_failure_distribution") or {}
+        )
+        validator_failure_distribution = (
+            validator_failure_distribution
+            if isinstance(validator_failure_distribution, dict)
+            else {}
+        )
+        operational_domain_diagnostics = (
+            summary.get("operational_domain_diagnostics") or []
+        )
+        operational_domain_diagnostics = (
+            operational_domain_diagnostics
+            if isinstance(operational_domain_diagnostics, list)
+            else []
+        )
+        operational_domain_gaps = summary.get("operational_domain_gaps") or []
+        operational_domain_gaps = (
+            operational_domain_gaps if isinstance(operational_domain_gaps, list) else []
+        )
+        domain_collaboration_rows = summary.get("domain_collaboration_rows") or []
+        domain_collaboration_rows = (
+            domain_collaboration_rows
+            if isinstance(domain_collaboration_rows, list)
+            else []
+        )
+        domain_operational_targets = summary.get("domain_operational_targets") or []
+        domain_operational_targets = (
+            domain_operational_targets
+            if isinstance(domain_operational_targets, list)
+            else []
+        )
+        domain_expansion_roadmap = summary.get("domain_expansion_roadmap") or []
+        domain_expansion_roadmap = (
+            domain_expansion_roadmap
+            if isinstance(domain_expansion_roadmap, list)
+            else []
+        )
+        composite_capability_candidates = (
+            summary.get("composite_capability_candidates") or []
+        )
+        composite_capability_candidates = (
+            composite_capability_candidates
+            if isinstance(composite_capability_candidates, list)
+            else []
+        )
+        capability_synergy_matrix = summary.get("capability_synergy_matrix") or []
+        capability_synergy_matrix = (
+            capability_synergy_matrix
+            if isinstance(capability_synergy_matrix, list)
+            else []
+        )
+        capability_specialization_report = (
+            summary.get("capability_specialization_report") or []
+        )
+        capability_specialization_report = (
+            capability_specialization_report
+            if isinstance(capability_specialization_report, list)
+            else []
+        )
+        capability_composition_opportunities = (
+            summary.get("capability_composition_opportunities") or []
+        )
+        capability_composition_opportunities = (
+            capability_composition_opportunities
+            if isinstance(capability_composition_opportunities, list)
+            else []
+        )
+        capability_investment_priorities = (
+            summary.get("capability_investment_priorities") or []
+        )
+        capability_investment_priorities = (
+            capability_investment_priorities
+            if isinstance(capability_investment_priorities, list)
+            else []
+        )
+        knowledge_attrition_lifecycle = (
+            summary.get("knowledge_attrition_lifecycle") or []
+        )
+        knowledge_attrition_lifecycle = (
+            knowledge_attrition_lifecycle
+            if isinstance(knowledge_attrition_lifecycle, list)
+            else []
+        )
+        operational_lifecycle_conversion_rates = (
+            summary.get("operational_lifecycle_conversion_rates") or {}
+        )
+        operational_lifecycle_conversion_rates = (
+            operational_lifecycle_conversion_rates
+            if isinstance(operational_lifecycle_conversion_rates, dict)
+            else {}
+        )
+        knowledge_operationalization_path = (
+            summary.get("knowledge_operationalization_path") or []
+        )
+        knowledge_operationalization_path = (
+            knowledge_operationalization_path
+            if isinstance(knowledge_operationalization_path, list)
+            else []
+        )
+        operational_economy_roadmap = (
+            summary.get("operational_economy_roadmap") or []
+        )
+        operational_economy_roadmap = (
+            operational_economy_roadmap
+            if isinstance(operational_economy_roadmap, list)
+            else []
+        )
+        operational_capability_clusters = (
+            summary.get("operational_capability_clusters") or []
+        )
+        operational_capability_clusters = (
+            operational_capability_clusters
+            if isinstance(operational_capability_clusters, list)
+            else []
+        )
+        top_cognitive_citizens = summary.get("top_cognitive_citizens") or []
+        top_cognitive_citizens = (
+            top_cognitive_citizens
+            if isinstance(top_cognitive_citizens, list)
+            else []
+        )
+        capability_governance_rows = (
+            summary.get("capability_governance_rows") or []
+        )
+        capability_governance_rows = (
+            capability_governance_rows
+            if isinstance(capability_governance_rows, list)
+            else []
+        )
+        evidence_contamination_rows = (
+            summary.get("capability_evidence_contamination_rows") or []
+        )
+        evidence_contamination_rows = (
+            evidence_contamination_rows
+            if isinstance(evidence_contamination_rows, list)
+            else []
+        )
+        top_stability_regressions = summary.get("top_stability_regressions") or []
+        top_stability_regressions = (
+            top_stability_regressions
+            if isinstance(top_stability_regressions, list)
+            else []
+        )
+        evidence_contribution_rows = (
+            summary.get("evidence_contribution_rows") or []
+        )
+        evidence_contribution_rows = (
+            evidence_contribution_rows
+            if isinstance(evidence_contribution_rows, list)
+            else []
+        )
+        evidence_deficit_progress_rows = (
+            summary.get("evidence_deficit_progress_rows") or []
+        )
+        evidence_deficit_progress_rows = (
+            evidence_deficit_progress_rows
+            if isinstance(evidence_deficit_progress_rows, list)
+            else []
+        )
+        compiler_failure_reasons = (
+            summary.get("compiler_failure_reason_distribution") or {}
+        )
+        compiler_failure_reasons = (
+            compiler_failure_reasons
+            if isinstance(compiler_failure_reasons, dict)
+            else {}
+        )
+        compiler_failure_domains = (
+            summary.get("compiler_failure_domain_distribution") or {}
+        )
+        compiler_failure_domains = (
+            compiler_failure_domains
+            if isinstance(compiler_failure_domains, dict)
+            else {}
+        )
+        compiler_failure_rows = summary.get("compiler_failure_rows") or []
+        compiler_failure_rows = (
+            compiler_failure_rows
+            if isinstance(compiler_failure_rows, list)
+            else []
+        )
+        missing_packages = summary.get("missing_execution_packages") or []
+        missing_packages = (
+            missing_packages if isinstance(missing_packages, list) else [missing_packages]
+        )
+        missing_requirements = summary.get("missing_compiler_requirements") or []
+        missing_requirements = (
+            missing_requirements
+            if isinstance(missing_requirements, list)
+            else [missing_requirements]
+        )
+        unused_packages = summary.get("unused_execution_packages") or []
+        unused_packages = (
+            unused_packages if isinstance(unused_packages, list) else [unused_packages]
+        )
+        package_utilization_gap_rows = (
+            summary.get("package_utilization_gap_rows") or []
+        )
+        package_utilization_gap_rows = (
+            package_utilization_gap_rows
+            if isinstance(package_utilization_gap_rows, list)
+            else []
+        )
+        partial_packages = summary.get("partial_execution_packages") or []
+        partial_packages = (
+            partial_packages if isinstance(partial_packages, list) else [partial_packages]
+        )
+        package_inventory = summary.get("execution_package_inventory") or []
+        package_inventory = (
+            package_inventory if isinstance(package_inventory, list) else []
+        )
+        primitive_inventory = summary.get("primitive_operation_inventory") or []
+        primitive_inventory = (
+            primitive_inventory if isinstance(primitive_inventory, list) else []
+        )
+        multi_step_report = summary.get("multi_step_program_report") or {}
+        multi_step_report = (
+            multi_step_report if isinstance(multi_step_report, dict) else {}
+        )
+        lines = [
+            "Overall Cognitive Capability Coverage: "
+            f"{self._percent(summary.get('overall_cognitive_capability_coverage'))}",
+            f"Coverage Status: {self._value(summary.get('coverage_status'))}",
+            "Architecture Freeze State: "
+            f"{self._value(summary.get('architecture_freeze_state'))}",
+            "Architecture Freeze Reason: "
+            f"{self._value(summary.get('architecture_freeze_reason'))}",
+            "Execution Package Coverage Target: "
+            f"{self._percent(summary.get('execution_package_coverage_target'))}",
+            "Compiler Runtime Coverage Target: "
+            f"{self._percent(summary.get('compiler_runtime_coverage_target'))}",
+            "Operational Capability Coverage Target: "
+            f"{self._percent(summary.get('operational_capability_coverage_target'))}",
+            f"Semantic Coverage: {self._percent(summary.get('semantic_coverage'))}",
+            f"Compiler Coverage: {self._percent(summary.get('compiler_coverage'))}",
+            "Execution Package Coverage: "
+            f"{self._percent(summary.get('execution_package_coverage'))}",
+            f"Candidate Coverage: {self._percent(summary.get('candidate_coverage'))}",
+            f"Arena Coverage: {self._percent(summary.get('arena_coverage'))}",
+            "Arena Source Coverage: "
+            f"{self._percent(summary.get('arena_source_coverage'))}",
+            f"Program Coverage: {self._percent(summary.get('program_coverage'))}",
+            "Compiler Runtime Coverage: "
+            f"{self._percent(summary.get('compiler_runtime_coverage'))}",
+            "Execution Package Health Score: "
+            f"{self._percent(summary.get('execution_package_health_score'))}",
+            "Primitive Operation Coverage: "
+            f"{self._percent(summary.get('primitive_operation_coverage'))}",
+            "Compiler Infrastructure Health: "
+            f"{self._percent(summary.get('compiler_infrastructure_health'))}",
+            "Multi-Step Program Support: "
+            f"{self._percent(summary.get('multi_step_program_support'))}",
+            "Execution Package Dependency Coverage: "
+            f"{self._percent(summary.get('execution_package_dependency_coverage'))}",
+            "Primitive Infrastructure Coverage: "
+            f"{self._percent(summary.get('primitive_infrastructure_coverage'))}",
+            "Compiler Primitive Success Rate: "
+            f"{self._percent(summary.get('compiler_primitive_success_rate'))}",
+            "Execution Package Utilization: "
+            f"{self._percent(summary.get('execution_package_utilization'))}",
+            "Compiler Infrastructure Readiness: "
+            f"{self._value(summary.get('compiler_infrastructure_readiness'))}",
+            "Execution Package Inventory State: "
+            f"{self._value(summary.get('execution_package_inventory_state'))}",
+            "Primitive Operation Inventory State: "
+            f"{self._value(summary.get('primitive_operation_inventory_state'))}",
+            "Execution Package Inventory Count: "
+            f"{self._value(summary.get('execution_package_inventory_count'))}",
+            "Primitive Operation Inventory Count: "
+            f"{self._value(summary.get('primitive_operation_inventory_count'))}",
+            "Executable Package Count: "
+            f"{self._value(summary.get('executable_package_count'))}",
+            "Executable Primitive Count: "
+            f"{self._value(summary.get('executable_primitive_count'))}",
+            "Validated Executable Coverage: "
+            f"{self._percent(summary.get('validated_executable_coverage'))}",
+            "Operational Capability Coverage: "
+            f"{self._percent(summary.get('operational_capability_coverage'))}",
+            "Operational Capability Coverage Semantics: "
+            f"{self._value(summary.get('operational_capability_coverage_semantics'))}",
+            "Sandbox Operational Citizen Coverage: "
+            f"{self._percent(summary.get('sandbox_operational_citizen_coverage'))}",
+            "Sandbox Operational Citizen Coverage Semantics: "
+            f"{self._value(summary.get('sandbox_operational_citizen_coverage_semantics'))}",
+            "Operational Capability Materialization Rate: "
+            f"{self._percent(summary.get('operational_capability_materialization_rate'))}",
+            "Operational Yield From Concepts: "
+            f"{self._percent(summary.get('operational_yield_from_concepts'))}",
+            "Operational Yield From Programs: "
+            f"{self._percent(summary.get('operational_yield_from_programs'))}",
+            "Operational Yield From Candidates: "
+            f"{self._percent(summary.get('operational_yield_from_candidates'))}",
+            "Operational Yield From Arena: "
+            f"{self._percent(summary.get('operational_yield_from_arena'))}",
+            "Knowledge Production Efficiency: "
+            f"{self._percent(summary.get('knowledge_production_efficiency'))}",
+            "Knowledge Operationalization Efficiency: "
+            f"{self._percent(summary.get('knowledge_operationalization_efficiency'))}",
+            "Operational Knowledge Waste: "
+            f"{self._percent(summary.get('operational_knowledge_waste'))}",
+            "Operational Yield Stability: "
+            f"{self._percent(summary.get('operational_yield_stability'))}",
+            "Operational Yield Stability Basis: "
+            f"{self._value(summary.get('operational_yield_stability_basis'))}",
+            "Operational Yield Health State: "
+            f"{self._value(summary.get('operational_yield_health_state'))}",
+            "Knowledge Investment Policy: "
+            f"{self._value(summary.get('knowledge_investment_policy'))}",
+            "Knowledge Investment Authority: "
+            f"{self._value(summary.get('knowledge_investment_authority'))}",
+            "High Value Knowledge Items: "
+            f"{self._value(summary.get('high_value_knowledge_items'))}",
+            "Medium Value Knowledge Items: "
+            f"{self._value(summary.get('medium_value_knowledge_items'))}",
+            "Low Value Knowledge Items: "
+            f"{self._value(summary.get('low_value_knowledge_items'))}",
+            "Deprioritized Knowledge Items: "
+            f"{self._value(summary.get('deprioritized_knowledge_items'))}",
+            "Operational Investment Accuracy: "
+            f"{self._percent(summary.get('operational_investment_accuracy'))}",
+            "Operational Investment Accuracy State: "
+            f"{self._value(summary.get('operational_investment_accuracy_state'))}",
+            "High Value Operational False Positives: "
+            f"{self._value(summary.get('high_value_operational_false_positives'))}",
+            "Validation Efficiency: "
+            f"{self._percent(summary.get('validation_efficiency'))}",
+            "Validation Bottleneck Inflation: "
+            f"{self._percent(summary.get('validation_bottleneck_inflation'))}",
+            "Validation Bottleneck State: "
+            f"{self._value(summary.get('validation_bottleneck_state'))}",
+            "High Value Validation Yield: "
+            f"{self._percent(summary.get('high_value_validation_yield'))}",
+            "Operational Capability Acquisition Rate: "
+            f"{self._percent(summary.get('operational_capability_acquisition_rate'))}",
+            "Capability Acquisition Rate Per 100 Tasks: "
+            f"{self._value(summary.get('operational_capability_acquisition_rate_per_100_tasks'))}",
+            "Capability Survival Rate: "
+            f"{self._percent(summary.get('capability_survival_rate'))}",
+            "Materialization Survival Rate: "
+            f"{self._percent(summary.get('materialization_survival_rate'))}",
+            "Candidate Retention Rate: "
+            f"{self._percent(summary.get('candidate_retention_rate'))}",
+            "Incubation Conversion Rate: "
+            f"{self._percent(summary.get('incubation_conversion_rate'))}",
+            "Surviving Capability Conversion Rate: "
+            f"{self._percent(summary.get('surviving_capability_conversion_rate'))}",
+            "Operational Citizen Conversion Rate: "
+            f"{self._percent(summary.get('operational_citizen_conversion_rate'))}",
+            "Generated Survival Candidates: "
+            f"{self._value(summary.get('generated_survival_candidate_count'))}",
+            "Arena-Simulated Survival Candidates: "
+            f"{self._value(summary.get('arena_simulated_survival_candidate_count'))}",
+            "Arena-Quality Survival Candidates: "
+            f"{self._value(summary.get('arena_quality_survival_candidate_count'))}",
+            "Incubating Operational Capabilities: "
+            f"{self._value(summary.get('incubating_operational_capability_count'))}",
+            "Operational Citizens: "
+            f"{self._value(summary.get('operational_citizen_count'))}",
+            "Current Run Operational Citizens: "
+            f"{self._value(summary.get('current_run_operational_citizen_count'))}",
+            "Historical Operational Citizens: "
+            f"{self._value(summary.get('historical_operational_citizen_count'))}",
+            "Operational Domain Citizenship Coverage: "
+            f"{self._percent(summary.get('operational_domain_citizenship_coverage'))}",
+            "Historical Operational Domain Citizens: "
+            f"{self._value(summary.get('historical_operational_domain_citizen_count'))}",
+            "Sandbox Operational Domain Citizens: "
+            f"{self._value(summary.get('sandbox_operational_domain_citizen_count'))}",
+            "Operational Domain Citizens: "
+            f"{self._value(summary.get('operational_domain_citizen_count'))}",
+            "Expected Operational Domain Citizens: "
+            f"{self._value(summary.get('expected_operational_domain_citizen_count'))}",
+            "Surviving Capability Domain Count: "
+            f"{self._value(summary.get('surviving_capability_domain_count'))}",
+            "Operational Citizen Domain Distribution: "
+            f"{self._value(summary.get('operational_citizen_domain_distribution'))}",
+            "Historical Operational Domain Distribution: "
+            f"{self._value(summary.get('historical_operational_domain_distribution'))}",
+            "Sandbox Operational Domain Distribution: "
+            f"{self._value(summary.get('sandbox_operational_domain_distribution'))}",
+            "Combined Operational Domain Distribution: "
+            f"{self._value(summary.get('combined_operational_domain_distribution'))}",
+            "Dominant Operational Domain: "
+            f"{self._value(summary.get('dominant_operational_domain'))}",
+            "Domain Monopoly Share: "
+            f"{self._percent(summary.get('domain_monopoly_share'))}",
+            "Domain Operational Imbalance State: "
+            f"{self._value(summary.get('domain_operational_imbalance_state'))}",
+            "Operational Domain Health: "
+            f"{self._percent(summary.get('operational_domain_health'))}",
+            "Operational Domain Coverage: "
+            f"{self._percent(summary.get('operational_domain_coverage'))}",
+            "Domain Operationalization Score: "
+            f"{self._percent(summary.get('domain_operationalization_score'))}",
+            "Domain Operationalization Bottleneck: "
+            f"{self._value(summary.get('domain_operationalization_bottleneck'))}",
+            "Domain Population Balance: "
+            f"{self._value(summary.get('domain_population_balance'))}",
+            "Domain Collaboration Score: "
+            f"{self._percent(summary.get('domain_collaboration_score'))}",
+            "Domain Operational Growth Rate: "
+            f"{self._percent(summary.get('domain_operational_growth_rate'))}",
+            "Domain Primitive Coverage: "
+            f"{self._percent(summary.get('domain_primitive_coverage'))}",
+            "Domain Capability Diversity: "
+            f"{self._percent(summary.get('domain_capability_diversity'))}",
+            "Domain Infrastructure Readiness: "
+            f"{self._value(summary.get('domain_infrastructure_readiness'))}",
+            "Operational Domain Population: "
+            f"{self._value(summary.get('operational_domain_population'))}",
+            "Domain Diversification Score: "
+            f"{self._percent(summary.get('domain_diversification_score'))}",
+            "Domain Monopoly Pressure: "
+            f"{self._value(summary.get('domain_monopoly_pressure'))}",
+            "Operational Domain Growth Rate: "
+            f"{self._percent(summary.get('operational_domain_growth_rate'))}",
+            "Operational Domain Evolution Speed: "
+            f"{self._percent(summary.get('operational_domain_evolution_speed'))}",
+            "Capability Ecology Health: "
+            f"{self._percent(summary.get('capability_ecology_health'))}",
+            "Capability Ecology State: "
+            f"{self._value(summary.get('capability_ecology_state'))}",
+            "Capability Cooperation Score: "
+            f"{self._percent(summary.get('capability_cooperation_score'))}",
+            "Capability Composition Score: "
+            f"{self._percent(summary.get('capability_composition_score'))}",
+            "Composite Capability Score: "
+            f"{self._percent(summary.get('composite_capability_score'))}",
+            "Capability Collaboration Diversity: "
+            f"{self._percent(summary.get('capability_collaboration_diversity'))}",
+            "Composite Operational Capability Count: "
+            f"{self._value(summary.get('composite_operational_capability_count'))}",
+            "Capability Interaction Density: "
+            f"{self._percent(summary.get('capability_interaction_density'))}",
+            "Capability Composition Readiness: "
+            f"{self._value(summary.get('capability_composition_readiness'))}",
+            "Composite Intelligence Readiness: "
+            f"{self._value(summary.get('composite_intelligence_readiness'))}",
+            "Capability Economy Health: "
+            f"{self._percent(summary.get('capability_economy_health'))}",
+            "Operational Economy Health: "
+            f"{self._percent(summary.get('operational_economy_health'))}",
+            "Knowledge Attrition Health: "
+            f"{self._percent(summary.get('knowledge_attrition_health'))}",
+            "Knowledge Attrition Loss Score: "
+            f"{self._percent(summary.get('knowledge_attrition_loss_score'))}",
+            "Knowledge Attrition State: "
+            f"{self._value(summary.get('knowledge_attrition_state'))}",
+            "Operational Investment Return: "
+            f"{self._percent(summary.get('operational_investment_return'))}",
+            "Operational Investment Return State: "
+            f"{self._value(summary.get('operational_investment_return_state'))}",
+            "Knowledge Crystallization Efficiency: "
+            f"{self._percent(summary.get('knowledge_crystallization_efficiency'))}",
+            "Knowledge Crystallization Pressure: "
+            f"{self._value(summary.get('knowledge_crystallization_pressure'))}",
+            "Operational Population Growth Pressure: "
+            f"{self._percent(summary.get('operational_population_growth_pressure'))}",
+            "Capability Economy Crisis Score: "
+            f"{self._percent(summary.get('capability_economy_crisis_score'))}",
+            "Capability Economy Crisis State: "
+            f"{self._value(summary.get('capability_economy_crisis_state'))}",
+            "Capability Lifecycle Efficiency: "
+            f"{self._percent(summary.get('capability_lifecycle_efficiency'))}",
+            "Knowledge To Citizen Efficiency: "
+            f"{self._percent(summary.get('knowledge_to_citizen_efficiency'))}",
+            "Candidate Attrition Cost: "
+            f"{self._value(summary.get('candidate_attrition_cost'))}",
+            "Candidate Attrition Cost State: "
+            f"{self._value(summary.get('candidate_attrition_cost_state'))}",
+            "Operational Economy Bottleneck: "
+            f"{self._value(summary.get('operational_economy_bottleneck'))}",
+            "Operational Cluster Readiness: "
+            f"{self._percent(summary.get('operational_cluster_readiness'))}",
+            "Operational Cluster Count: "
+            f"{self._value(summary.get('operational_cluster_count'))}",
+            "Ready Operational Cluster Count: "
+            f"{self._value(summary.get('ready_operational_cluster_count'))}",
+            "Cluster Operationalization Candidate Count: "
+            f"{self._value(summary.get('cluster_operationalization_candidate_count'))}",
+            "Cluster To Materialization Gap: "
+            f"{self._value(summary.get('cluster_to_materialization_gap'))}",
+            "Cluster To Citizen Gap: "
+            f"{self._value(summary.get('cluster_to_citizen_gap'))}",
+            "Cluster Operationalization Pressure: "
+            f"{self._percent(summary.get('cluster_operationalization_pressure'))}",
+            "Cluster Operationalization State: "
+            f"{self._value(summary.get('cluster_operationalization_state'))}",
+            "Cluster Operationalization Action: "
+            f"{self._value(summary.get('cluster_operationalization_action'))}",
+            "Missing Operational Citizen Domains: "
+            f"{self._value(summary.get('missing_operational_citizen_domains'))}",
+            "Surviving Capabilities: "
+            f"{self._value(summary.get('surviving_capability_count'))}",
+            "Validation Gap Candidate Count: "
+            f"{self._value(summary.get('validation_gap_candidate_count'))}",
+            "Unresolved Validation Gap Candidate Count: "
+            f"{self._value(summary.get('unresolved_validation_gap_candidate_count'))}",
+            "Crystallization Candidate Count: "
+            f"{self._value(summary.get('crystallization_candidate_count'))}",
+            "Quality To Citizen Crystallization Rate: "
+            f"{self._percent(summary.get('quality_to_citizen_crystallization_rate'))}",
+            "Candidate To Citizen Crystallization Rate: "
+            f"{self._percent(summary.get('candidate_to_citizen_crystallization_rate'))}",
+            "Generated To Citizen Pressure Ratio: "
+            f"{self._value(summary.get('generated_to_citizen_pressure_ratio'))}",
+            "Capability Crystallization State: "
+            f"{self._value(summary.get('capability_crystallization_state'))}",
+            "Capability Graduation Candidates: "
+            f"{self._value(summary.get('capability_graduation_candidate_count'))}",
+            "Capability Graduation Pressure: "
+            f"{self._percent(summary.get('capability_graduation_pressure'))}",
+            "Capability Graduation Pressure State: "
+            f"{self._value(summary.get('capability_graduation_pressure_state'))}",
+            "World Governance Graduation Action: "
+            f"{self._value(summary.get('world_governance_graduation_action'))}",
+            "Capability Graduation Health: "
+            f"{self._percent(summary.get('capability_graduation_health'))}",
+            "Graduation Pipeline Health: "
+            f"{self._value(summary.get('graduation_pipeline_health'))}",
+            "Graduation Success Rate: "
+            f"{self._percent(summary.get('graduation_success_rate'))}",
+            "Graduation Failure Rate: "
+            f"{self._percent(summary.get('graduation_failure_rate'))}",
+            "Graduation Queue Health: "
+            f"{self._value(summary.get('graduation_queue_health'))}",
+            "Graduation Evidence Coverage: "
+            f"{self._percent(summary.get('graduation_evidence_coverage'))}",
+            "Graduation Infrastructure Readiness: "
+            f"{self._value(summary.get('graduation_infrastructure_readiness'))}",
+            "Average Capability Graduation Time: "
+            f"{self._value(summary.get('average_capability_graduation_time'))}",
+            "Graduation Backlog Size: "
+            f"{self._value(summary.get('graduation_backlog_size'))}",
+            "Capability Graduation Risk: "
+            f"{self._value(summary.get('capability_graduation_risk'))}",
+            "Capability Graduation Complexity: "
+            f"{self._value(summary.get('capability_graduation_complexity'))}",
+            "Capability Graduation Confidence: "
+            f"{self._percent(summary.get('capability_graduation_confidence'))}",
+            "Cognitive Citizens: "
+            f"{self._value(summary.get('cognitive_citizen_count'))}",
+            "Cognitive Citizenship Definition: "
+            f"{self._value(summary.get('cognitive_citizenship_definition'))}",
+            "World Governance Promotion Policy: "
+            f"{self._value(summary.get('world_governance_promotion_policy_state'))}",
+            "Sandbox Citizenship Thresholds: "
+            f"{self._value(summary.get('sandbox_citizenship_thresholds'))}",
+            "Trusted Capability Policy: "
+            f"{self._value(summary.get('trusted_capability_policy'))}",
+            "Decision Authority Policy: "
+            f"{self._value(summary.get('decision_authority_policy'))}",
+            "Validation Sponsorship Contract State: "
+            f"{self._value(summary.get('validation_sponsorship_contract_state'))}",
+            "Truth Preparation Gate: "
+            f"{self._value(summary.get('truth_preparation_gate'))}",
+            "Capability Merit System: "
+            f"{self._value(summary.get('capability_merit_system'))}",
+            "Validation Sponsorship Truth Boundary: "
+            f"{self._value(summary.get('validation_sponsorship_truth_boundary'))}",
+            "Capability Governance Contract State: "
+            f"{self._value(summary.get('capability_governance_contract_state'))}",
+            "Capability Rights Policy: "
+            f"{self._value(summary.get('capability_rights_policy'))}",
+            "Capability Obligations Policy: "
+            f"{self._value(summary.get('capability_obligations_policy'))}",
+            "Capability Reputation Average: "
+            f"{self._percent(summary.get('capability_reputation_average'))}",
+            "Capability Trust Average: "
+            f"{self._percent(summary.get('capability_trust_average'))}",
+            "Capability Evidence Contamination State: "
+            f"{self._value(summary.get('capability_evidence_contamination_state'))}",
+            "Capability Evidence Contamination Count: "
+            f"{self._value(summary.get('capability_evidence_contamination_count'))}",
+            "Capability Stability Regression Count: "
+            f"{self._value(summary.get('capability_stability_regression_count'))}",
+            "Capability Population Evolution Speed: "
+            f"{self._percent(summary.get('capability_population_evolution_speed'))}",
+            "Operational Experience Growth Speed: "
+            f"{self._percent(summary.get('operational_experience_growth_speed'))}",
+            "Capability Population Evolution Lag: "
+            f"{self._percent(summary.get('capability_population_evolution_lag'))}",
+            "Capability Population Evolution State: "
+            f"{self._value(summary.get('capability_population_evolution_state'))}",
+            "Expected Operational Capability Count: "
+            f"{self._value(summary.get('expected_operational_capability_count'))}",
+            "Capability Population Evolution Gap: "
+            f"{self._value(summary.get('capability_population_evolution_gap'))}",
+            "Target Experience Per Capability: "
+            f"{self._value(summary.get('target_experience_per_capability'))}",
+            f"Generated Concepts: {self._value(summary.get('generated_concepts'))}",
+            f"Generated Programs: {self._value(summary.get('generated_programs'))}",
+            f"Generated Blueprints: {self._value(summary.get('generated_blueprints'))}",
+            f"Candidate Count: {self._value(summary.get('candidate_count'))}",
+            f"Arena Candidate Count: {self._value(summary.get('arena_candidate_count'))}",
+            f"Arena Source Count: {self._value(summary.get('arena_source_count'))}",
+            "Candidate Attrition Coverage: "
+            f"{self._percent(attrition.get('arena_acceptance_rate'))}",
+            "Rejected Before Arena: "
+            f"{self._value(attrition.get('rejected_before_arena'))}",
+            f"Compiled Programs: {self._value(summary.get('compiled_programs'))}",
+            "Compiler Runtime Activated Programs: "
+            f"{self._value(summary.get('compiler_runtime_activated_programs'))}",
+            f"Validated Programs: {self._value(summary.get('validated_programs'))}",
+            "Materialized Operational Capabilities: "
+            f"{self._value(summary.get('materialized_operational_capabilities'))}",
+            "Operational Confidence State: "
+            f"{self._value(summary.get('operational_confidence_state'))}",
+            "Authority Transfer State: "
+            f"{self._value(summary.get('authority_transfer_state'))}",
+            "Decision Trust State: "
+            f"{self._value(summary.get('decision_trust_state'))}",
+            "Trusted For Decision: "
+            f"{self._value(summary.get('trusted_for_decision_count'))}",
+            "Operational Experience Count: "
+            f"{self._value(summary.get('operational_experience_count'))}",
+            "Operational Experience Task Count: "
+            f"{self._value(summary.get('operational_experience_task_count'))}",
+            "Operational Experience Per Capability: "
+            f"{self._value(summary.get('operational_experience_per_capability'))}",
+            "Operational Specialization Pressure: "
+            f"{self._value(summary.get('operational_specialization_pressure'))}",
+            "Current Operational Exploration Rate: "
+            f"{self._percent(summary.get('current_operational_exploration_rate'))}",
+            "Current Operational Exploitation Rate: "
+            f"{self._percent(summary.get('current_operational_exploitation_rate'))}",
+            "Known Operational Candidate Count: "
+            f"{self._value(summary.get('known_operational_candidate_count'))}",
+            "Novel Operational Candidate Count: "
+            f"{self._value(summary.get('novel_operational_candidate_count'))}",
+            "Operational Exploration Target: "
+            f"{self._percent(summary.get('operational_exploration_target'))}",
+            "Historical Exploitation Bias: "
+            f"{self._percent(summary.get('historical_exploitation_bias'))}",
+            "Exploration Exploitation Balance State: "
+            f"{self._value(summary.get('exploration_exploitation_balance_state'))}",
+            "Capability Monopoly Share: "
+            f"{self._percent(summary.get('capability_monopoly_share'))}",
+            "Capability Monopoly Pressure: "
+            f"{self._value(summary.get('capability_monopoly_pressure'))}",
+            "Dominant Operational Capability: "
+            f"{self._value(summary.get('dominant_operational_capability'))}",
+            "Dominant Capability Experience Count: "
+            f"{self._value(summary.get('dominant_capability_experience_count'))}",
+            "Experienced Capability Count: "
+            f"{self._value(summary.get('experienced_capability_count'))}",
+            "Independent Reuse Capability Count: "
+            f"{self._value(summary.get('independent_reuse_capability_count'))}",
+            "Known Operational Capabilities: "
+            f"{self._value(summary.get('known_operational_capability_count'))}",
+            "Operational Capability Population Target: "
+            f"{self._value(summary.get('operational_capability_population_target'))}",
+            "Known Operational Operations: "
+            f"{self._value(summary.get('known_operational_operations'))}",
+            "Known Operational Domains: "
+            f"{self._value(summary.get('known_operational_domains'))}",
+            "Operational Domain Population Target: "
+            f"{self._value(summary.get('operational_domain_population_target'))}",
+            "Capability Population Diversification: "
+            f"{self._percent(summary.get('capability_population_diversification'))}",
+            "Reuse Evidence Count: "
+            f"{self._value(summary.get('reuse_evidence_count'))}",
+            "Independent Reuse Successes: "
+            f"{self._value(summary.get('independent_reuse_success_count'))}",
+            "Operational Experience Store: "
+            f"{self._value(summary.get('operational_experience_store_path'))}",
+            "Capability Survival Store: "
+            f"{self._value(summary.get('capability_survival_store_path'))}",
+            "Domain Architecture State: "
+            f"{self._value(domain_architecture.get('domain_architecture_state'))}",
+            f"Cognitive Domain Count: {self._value(domain_architecture.get('domain_count'))}",
+            "Operational Domain Count: "
+            f"{self._value(domain_architecture.get('operational_domain_count'))}",
+            f"Decision Authority: {self._value(summary.get('arena_decision_authority'))}",
+            "Prediction Authority Preserved: "
+            f"{self._value(summary.get('prediction_authority_preserved'))}",
+            "End-To-End Program Lifecycle: "
+            f"programs={self._value(lifecycle.get('generated_programs'))} "
+            f"compiler={self._value(lifecycle.get('compiler_runtime_activated_programs'))} "
+            f"compiled={self._value(lifecycle.get('compiled_programs'))} "
+            f"candidates={self._value(lifecycle.get('candidate_count'))} "
+            f"arena={self._value(lifecycle.get('arena_candidate_count'))} "
+            f"validated={self._value(lifecycle.get('validated_programs'))} "
+            f"prediction={self._value(lifecycle.get('prediction_contribution_count'))} "
+            f"operational={self._value(lifecycle.get('materialized_operational_capabilities'))} "
+            f"known={self._value(lifecycle.get('known_operational_capabilities'))}",
+            "Operationalization Bottleneck: "
+            f"{self._value(lifecycle.get('operationalization_bottleneck'))}",
+            "Secondary Operationalization Bottleneck: "
+            f"{self._value(lifecycle.get('secondary_operationalization_bottleneck'))}",
+            "Current Run Materialization Gap: "
+            f"{self._value(lifecycle.get('current_run_materialization_gap'))}",
+            "Compiler Success Rate: "
+            f"{self._percent(lifecycle.get('compiler_activation_to_compile_success_rate'))}",
+            "Compiler Diagnostic State: "
+            f"{self._value(summary.get('compiler_diagnostic_state'))}",
+            "Compiler Failure Count: "
+            f"{self._value(summary.get('compiler_failure_count'))}",
+            "Compiler Failure Pressure: "
+            f"{self._percent(summary.get('compiler_failure_pressure'))}",
+            "Operational Grounding State: "
+            f"{self._value(summary.get('operational_grounding_state'))}",
+            "Operational Grounding Failure Count: "
+            f"{self._value(summary.get('operational_grounding_failure_count'))}",
+            "Operational Grounding Failure Rate: "
+            f"{self._percent(summary.get('operational_grounding_failure_rate'))}",
+            "Grounding Required For Operations: "
+            f"{self._value(summary.get('grounding_required_for_operations'))}",
+            "Grounding Required For Domains: "
+            f"{self._value(summary.get('grounding_required_for_domains'))}",
+            "Compiler Semantic Failure Count: "
+            f"{self._value(summary.get('compiler_semantic_failure_count'))}",
+            "Compiler Failure Interpretation: "
+            f"{self._value(summary.get('compiler_failure_interpretation'))}",
+            "Grounding Adjusted Compiler Failure Pressure: "
+            f"{self._percent(summary.get('grounding_adjusted_compiler_failure_pressure'))}",
+            "Compiler Failure Detail Capture: "
+            f"{self._value(summary.get('compiler_failure_detail_capture_state'))}",
+            "Validation Success Rate: "
+            f"{self._percent(lifecycle.get('arena_to_validation_rate'))}",
+            "Capability Materialization Rate: "
+            f"{self._percent(lifecycle.get('validation_to_operational_capability_rate'))}",
+        ]
+        if compiler_failure_reasons:
+            lines.append(
+                "Compiler Failure Reasons: "
+                + "; ".join(
+                    f"{self._value(reason)}={self._value(count)}"
+                    for reason, count in sorted(compiler_failure_reasons.items())
+                )
+            )
+        if compiler_failure_domains:
+            lines.append(
+                "Compiler Failure Distribution By Domain: "
+                + "; ".join(
+                    f"{self._value(domain)}={self._value(count)}"
+                    for domain, count in sorted(compiler_failure_domains.items())
+                )
+            )
+        if compiler_failure_rows:
+            lines.append("Top Compiler Failure Examples:")
+            for row in compiler_failure_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"program={self._value(row.get('program'))} "
+                    f"intent={self._value(row.get('semantic_intent'))} "
+                    f"expected={self._value(row.get('expected_operation'))} "
+                    f"resolved={self._value(row.get('resolved_operation'))} "
+                    f"stage={self._value(row.get('failure_stage'))} "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"reason={self._value(row.get('reason'))} "
+                    f"rule={self._value(row.get('compiler_rule'))} "
+                    f"detail={self._value(row.get('detail'))} "
+                    f"count={self._value(row.get('failure_count'))} "
+                    f"source={self._value(row.get('diagnostic_row_source'))}"
+                )
+        grounding_requirement_rows = summary.get("grounding_requirement_rows") or []
+        if grounding_requirement_rows:
+            lines.append("Operational Grounding Requirements:")
+            for row in grounding_requirement_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"program={self._value(row.get('program'))} "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"missing={self._value(row.get('missing_grounding'))} "
+                    f"requires={self._value(row.get('required_task_property'))}"
+                )
+        if package_inventory:
+            lines.append("Execution Package Inventory:")
+            for row in package_inventory[:8]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('package'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('support_state'))} "
+                    f"usage={self._value(row.get('usage_count'))} "
+                    f"supported={self._value(row.get('supported_operations'))} "
+                    f"unsupported={self._value(row.get('unsupported_operations'))}"
+                )
+        if primitive_inventory:
+            lines.append("Primitive Operation Inventory:")
+            for row in primitive_inventory[:10]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"package={self._value(row.get('package'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"primitive={self._value(row.get('primitive_present'))} "
+                    f"executable={self._value(row.get('executable'))} "
+                    f"params={self._value(row.get('parameter_support'))} "
+                    f"multi_step={self._value(row.get('multi_step_supported'))} "
+                    f"compiler_emit={self._value(row.get('compiler_can_emit'))}"
+                )
+        multi_step_rows = multi_step_report.get("multi_step_program_rows") or []
+        multi_step_rows = multi_step_rows if isinstance(multi_step_rows, list) else []
+        if multi_step_rows:
+            lines.append("Multi-Step Program Diagnostics:")
+            for row in multi_step_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('program'))}: "
+                    f"steps={self._value(row.get('step_count'))} "
+                    f"primitives={self._value(row.get('required_primitives'))} "
+                    f"packages={self._value(row.get('required_execution_packages'))} "
+                    f"success={self._percent(row.get('step_success_rate'))} "
+                    f"failure_step={self._value(row.get('failure_step'))}"
+                )
+        rejection_reasons = attrition.get("rejection_reasons") or {}
+        if isinstance(rejection_reasons, dict) and rejection_reasons:
+            lines.append(
+                "Candidate Attrition Reasons: "
+                + "; ".join(
+                    f"{self._value(reason)}={self._value(count)}"
+                    for reason, count in sorted(rejection_reasons.items())
+                )
+            )
+        capability_distribution = summary.get("capability_experience_distribution") or []
+        capability_distribution = (
+            capability_distribution
+            if isinstance(capability_distribution, list)
+            else []
+        )
+        if capability_distribution:
+            lines.append("Capability Experience Distribution:")
+            for row in capability_distribution[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"experience={self._value(row.get('experience_count'))} "
+                    f"reuse={self._value(row.get('independent_reuse_success_count'))}"
+                )
+        if survival_distribution:
+            lines.append(
+                "Capability Survival State Distribution: "
+                + "; ".join(
+                    f"{self._value(state)}={self._value(count)}"
+                    for state, count in sorted(survival_distribution.items())
+                )
+            )
+        if top_incubating:
+            lines.append("Top Incubating Capabilities:")
+            for row in top_incubating[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"arena={self._value(row.get('arena_simulated_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"validation_attempts={self._value(row.get('validation_attempts'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    f"next={self._value(row.get('next_required_evidence'))}"
+                )
+        if top_operational_citizens:
+            lines.append("Top Operational Citizens:")
+            for row in top_operational_citizens[:5]:
+                if not isinstance(row, dict):
+                    continue
+                trusted = bool(row.get("trusted_for_decision"))
+                citizenship_tier = row.get("citizenship_tier") or (
+                    "TRUSTED_OPERATIONAL_CAPABILITY"
+                    if trusted
+                    else "SANDBOX_OPERATIONAL_CITIZEN"
+                )
+                authority_scope = row.get("authority_scope") or (
+                    "DECISION_AUTHORIZED" if trusted else "SANDBOX_REUSE_ONLY"
+                )
+                trust_state = row.get("trust_state") or (
+                    "TRUSTED_FOR_DECISION"
+                    if trusted
+                    else "NOT_TRUSTED_FOR_DECISION"
+                )
+                graduation_semantics = row.get("graduation_semantics") or (
+                    "citizenship_includes_trusted_decision_authority"
+                    if trusted
+                    else "citizenship_is_sandbox_reuse_not_decision_authority"
+                )
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"arena={self._value(row.get('arena_simulated_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"basis={self._value(row.get('citizenship_basis'))} "
+                    f"tier={self._value(citizenship_tier)} "
+                    f"authority={self._value(authority_scope)} "
+                    f"trust_state={self._value(trust_state)}"
+                )
+                lines.append(
+                    "    Graduation Semantics: "
+                    f"{self._value(graduation_semantics)}"
+                )
+        if capability_governance_rows:
+            lines.append("Capability Governance Contracts:")
+            for row in capability_governance_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"tier={self._value(row.get('citizenship_tier'))} "
+                    f"authority={self._value(row.get('authority_scope'))} "
+                    f"reputation={self._percent(row.get('reputation_score'))} "
+                    f"trust={self._percent(row.get('trust_score'))} "
+                    f"evidence_state={self._value(row.get('evidence_contamination_state'))} "
+                    f"adjusted_accuracy={self._percent(row.get('evidence_adjusted_accuracy'))} "
+                    f"relevant_attempts={self._value(row.get('relevant_task_attempt_count'))} "
+                    f"arena_simulations={self._value(row.get('arena_simulation_count'))} "
+                    f"rights={self._value(row.get('rights'))} "
+                    f"obligations={self._value(row.get('obligations'))}"
+                )
+        if evidence_contamination_rows:
+            lines.append("Capability Evidence Contamination Risks:")
+            for row in evidence_contamination_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"raw_avg={self._percent((row.get('evidence_ledger') or {}).get('raw_average_accuracy'))} "
+                    f"adjusted_avg={self._percent(row.get('evidence_adjusted_accuracy'))} "
+                    f"best_accuracy={self._percent((row.get('reputation_basis') or {}).get('best_accuracy'))} "
+                    f"tasks={self._value((row.get('reputation_basis') or {}).get('distinct_tasks'))} "
+                    f"arena={self._value(row.get('arena_simulation_count'))} "
+                    f"basis={self._value(row.get('recommended_accuracy_basis'))}"
+                )
+        if top_crystallization_candidates:
+            lines.append("Top Crystallization Candidates:")
+            for row in top_crystallization_candidates[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"quality={self._value(row.get('arena_quality_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    f"next={self._value(row.get('next_required_evidence'))}"
+                )
+        if top_graduation_candidates:
+            lines.append("Top Graduation Candidates:")
+            for row in top_graduation_candidates[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"quality={self._value(row.get('arena_quality_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    f"graduation_score={self._percent(row.get('graduation_score'))} "
+                    f"missing={self._value(row.get('missing_graduation_evidence'))} "
+                    f"validator={self._value(row.get('validator_gap'))} "
+                    f"confidence={self._percent(row.get('capability_graduation_confidence'))} "
+                    f"action={self._value(row.get('world_governance_graduation_action'))}"
+                )
+        if graduation_pipeline_stages:
+            lines.append(
+                "Graduation Pipeline Stages: "
+                f"{self._value(graduation_pipeline_stages)}"
+            )
+        lines.extend([
+            "Capability Promotion Phase State: "
+            f"{self._value(summary.get('capability_promotion_phase_state'))}",
+            "Capability Promotion Candidate Count: "
+            f"{self._value(summary.get('capability_promotion_candidate_count'))}",
+            "Capability Promotion Interpretation: "
+            f"{self._value(summary.get('capability_promotion_interpretation'))}",
+            "Evidence Acceptance State: "
+            f"{self._value(summary.get('evidence_acceptance_state'))}",
+            "Evidence Acceptance Bottleneck: "
+            f"{self._value(summary.get('evidence_acceptance_bottleneck'))}",
+            "Evidence Acceptance Failure Count: "
+            f"{self._value(summary.get('evidence_acceptance_failure_count'))}",
+            "Evidence Acceptance Failure Share: "
+            f"{self._percent(summary.get('evidence_acceptance_failure_share'))}",
+            "Evidence Sufficiency State: "
+            f"{self._value(summary.get('evidence_sufficiency_state'))}",
+            "Evidence Sufficiency Question: "
+            f"{self._value(summary.get('evidence_sufficiency_question'))}",
+            "Evidence Sufficiency Contract: "
+            f"{self._value(summary.get('evidence_sufficiency_contract'))}",
+            "Evidence Contribution State: "
+            f"{self._value(summary.get('evidence_contribution_state'))}",
+            "Highest Remaining Evidence Deficit: "
+            f"{self._value(summary.get('highest_remaining_evidence_deficit'))}",
+            "Highest Remaining Evidence Deficit Action: "
+            f"{self._value(summary.get('highest_remaining_evidence_deficit_action'))}",
+            "Evidence Deficit Progress State: "
+            f"{self._value(summary.get('evidence_deficit_progress_state'))}",
+            "Overall Evidence Progress: "
+            f"{self._value(summary.get('overall_evidence_progress'))}",
+        ])
+        if evidence_contribution_rows:
+            lines.append("Evidence Contribution:")
+            for row in evidence_contribution_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('evidence_type'))}: "
+                    f"contribution={self._percent(row.get('contribution'))} "
+                    f"deficit={self._percent(row.get('remaining_deficit'))} "
+                    f"action={self._value(row.get('recommended_action'))}"
+                )
+        if evidence_deficit_progress_rows:
+            lines.append("Evidence Deficit Progress:")
+            for row in evidence_deficit_progress_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('evidence_type'))}: "
+                    f"previous={self._percent(row.get('previous_deficit'))} "
+                    f"current={self._percent(row.get('current_deficit'))} "
+                    f"delta={self._value(row.get('deficit_delta'))} "
+                    f"progress={self._value(row.get('progress'))}"
+                )
+        if capability_promotion_rows:
+            lines.append("Capability Promotion Candidates:")
+            for row in capability_promotion_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"status={self._value(row.get('graduation_status'))} "
+                    f"validator={self._value(row.get('validator_gap'))} "
+                    f"confidence={self._percent(row.get('capability_graduation_confidence'))} "
+                    f"promotion={self._value(row.get('promotion_interpretation'))} "
+                    f"trusted={self._value(row.get('trusted_for_decision'))}"
+                )
+        if graduation_transition_rows:
+            lines.append("Graduation Pipeline Transitions:")
+            for row in graduation_transition_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('transition'))}: "
+                    f"source={self._value(row.get('source_count'))} "
+                    f"target={self._value(row.get('target_count'))} "
+                    f"stuck={self._value(row.get('stuck_count'))} "
+                    f"success={self._percent(row.get('success_rate'))} "
+                    f"avg_time={self._value(row.get('average_graduation_time'))} "
+                    f"reasons={self._value(row.get('stuck_reasons'))}"
+                )
+        if validator_failure_distribution:
+            lines.append(
+                "Validator Failure Distribution: "
+                f"{self._value(validator_failure_distribution)}"
+            )
+        lines.extend([
+            "Governed Validation Bottleneck: "
+            f"{self._value(summary.get('governed_validation_bottleneck'))}",
+            "Governed Validation Bottleneck State: "
+            f"{self._value(summary.get('governed_validation_bottleneck_state'))}",
+            "Governed Validation Failure Count: "
+            f"{self._value(summary.get('governed_validation_failure_count'))}",
+            "Governed Validation Failure Share: "
+            f"{self._percent(summary.get('governed_validation_failure_share'))}",
+            "Governed Validation Action: "
+            f"{self._value(summary.get('governed_validation_action'))}",
+            "Governed Validation Required Evidence: "
+            f"{self._value(summary.get('governed_validation_required_evidence'))}",
+        ])
+        if graduation_sprint_recommendations:
+            lines.append("Graduation Sprint Recommendations:")
+            for row in graduation_sprint_recommendations[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"priority={self._percent(row.get('priority'))} "
+                    f"minimum_evidence={self._value(row.get('minimum_required_evidence'))} "
+                    f"validation={self._value(row.get('recommended_validation_type'))} "
+                    f"training={self._value(row.get('recommended_training_signal'))} "
+                    f"single_run={self._value(row.get('can_graduate_in_single_run'))} "
+                    f"estimated_runs={self._value(row.get('estimated_runs_required'))}"
+                )
+        if top_cognitive_citizens:
+            lines.append("Top Cognitive Citizens:")
+            for row in top_cognitive_citizens[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"quality={self._value(row.get('arena_quality_count'))} "
+                    f"best_accuracy={self._percent(row.get('best_accuracy'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"trend={self._value(row.get('improvement_trend'))} "
+                    "authority=SANDBOX_ONLY trusted=FALSE"
+                )
+        if top_stability_regressions:
+            lines.append("Top Stability Regressions:")
+            for row in top_stability_regressions[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_id'))}: "
+                    f"operation={self._value(row.get('operation'))} "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"state={self._value(row.get('lifecycle_state'))} "
+                    f"stability={self._value(row.get('stability_state'))} "
+                    f"tasks={self._value(row.get('distinct_task_count'))} "
+                    f"avg_accuracy={self._percent(row.get('average_accuracy'))} "
+                    f"next={self._value(row.get('next_required_evidence'))}"
+                )
+        if operational_domain_diagnostics:
+            lines.append("Operational Domain Diagnostics:")
+            for row in operational_domain_diagnostics[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"semantic={self._value(row.get('semantic_concept_count'))} "
+                    f"packages={self._value(row.get('execution_package_count'))} "
+                    f"programs={self._value(row.get('program_blueprint_count'))} "
+                    f"candidates={self._value(row.get('candidate_count'))} "
+                    f"arena={self._value(row.get('arena_candidate_count'))} "
+                    f"validated={self._value(row.get('validation_success_count'))} "
+                    f"citizens={self._value(row.get('operational_citizen_count'))} "
+                    f"surviving={self._value(row.get('surviving_capability_count'))} "
+                    f"score={self._percent(row.get('domain_operationalization_score'))} "
+                    f"bottleneck={self._value(row.get('domain_operationalization_bottleneck'))} "
+                    f"health={self._value(row.get('domain_operational_health'))}"
+                )
+        if operational_domain_gaps:
+            lines.append("Operational Domain Expansion Gaps:")
+            for row in operational_domain_gaps[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"bottleneck={self._value(row.get('domain_operationalization_bottleneck'))} "
+                    f"priority={self._value(row.get('domain_expansion_priority'))} "
+                    f"guidance={self._value(row.get('domain_training_guidance'))}"
+                )
+        if domain_collaboration_rows:
+            lines.append("Operational Domain Collaborations:")
+            for row in domain_collaboration_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('composition_name'))}: "
+                    f"domains={self._value(row.get('participating_domains'))} "
+                    f"present={self._value(row.get('present_domains'))} "
+                    f"missing={self._value(row.get('missing_domains'))} "
+                    f"readiness={self._percent(row.get('domain_collaboration_readiness'))} "
+                    f"status={self._value(row.get('collaboration_status'))}"
+                )
+        if domain_operational_targets:
+            lines.append("Operational Domain Targets:")
+            for row in domain_operational_targets[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"target={self._value(row.get('target'))} "
+                    f"bottleneck={self._value(row.get('bottleneck'))} "
+                    f"guidance={self._value(row.get('training_guidance'))}"
+                )
+        if domain_expansion_roadmap:
+            lines.append("Domain Expansion Roadmap:")
+            for row in domain_expansion_roadmap[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"priority={self._value(row.get('priority'))} "
+                    f"target={self._value(row.get('target'))} "
+                    f"bottleneck={self._value(row.get('bottleneck'))} "
+                    f"score={self._percent(row.get('score'))} "
+                    f"citizens={self._value(row.get('operational_citizens'))}"
+                )
+        if composite_capability_candidates:
+            lines.append("Composite Capability Candidates:")
+            for row in composite_capability_candidates[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('composite_name'))}: "
+                    f"required={self._value(row.get('required_capabilities'))} "
+                    f"present={self._value(row.get('present_capabilities'))} "
+                    f"missing={self._value(row.get('missing_capabilities'))} "
+                    f"readiness={self._percent(row.get('composition_readiness'))} "
+                    f"state={self._value(row.get('composition_state'))}"
+                )
+        if capability_synergy_matrix:
+            lines.append("Capability Synergy Matrix:")
+            for row in capability_synergy_matrix[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('capability_pair'))}: "
+                    f"score={self._percent(row.get('synergy_score'))} "
+                    f"state={self._value(row.get('synergy_state'))} "
+                    f"contexts={self._value(row.get('contexts'))}"
+                )
+        if capability_specialization_report:
+            lines.append("Capability Specialization Report:")
+            for row in capability_specialization_report[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"specialization={self._value(row.get('specialization'))} "
+                    f"collaborators={self._value(row.get('collaborates_with'))} "
+                    f"value={self._percent(row.get('operational_value_score'))}"
+                )
+        if capability_composition_opportunities:
+            lines.append("Capability Composition Opportunities:")
+            for row in capability_composition_opportunities[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('composite_name'))}: "
+                    f"missing={self._value(row.get('missing_capabilities'))} "
+                    f"readiness={self._percent(row.get('composition_readiness'))}"
+                )
+        if capability_investment_priorities:
+            lines.extend([
+                "Capability Investment Intelligence Phase: "
+                f"{self._value(summary.get('capability_investment_intelligence_phase'))}",
+                "Capability Investment Governance Principle: "
+                f"{self._value(summary.get('capability_investment_governance_principle'))}",
+                "Capability Investment Truth Boundary: "
+                f"{self._value(summary.get('capability_investment_truth_boundary'))}",
+                "Capability Investment Authority Scope: "
+                f"{self._value(summary.get('capability_investment_authority_scope'))}",
+                "Capability Investment Forbidden Authority: "
+                f"{self._value(summary.get('capability_investment_forbidden_authority'))}",
+                "Capability Promotion Roadmap: "
+                f"{self._value(summary.get('capability_promotion_roadmap'))}",
+            ])
+            lines.append("Capability Economy Priorities:")
+            for row in capability_investment_priorities[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('operation'))}: "
+                    f"investment={self._percent(row.get('capability_investment_score'))} "
+                    f"reuse={self._percent(row.get('capability_reuse_value'))} "
+                    f"collaboration={self._percent(row.get('capability_collaboration_value'))} "
+                    f"state={self._value(row.get('capability_value_state'))}"
+                )
+        if knowledge_attrition_lifecycle:
+            lines.append("Knowledge Attrition Lifecycle:")
+            for row in knowledge_attrition_lifecycle[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('from_stage'))}"
+                    f"->{self._value(row.get('to_stage'))}: "
+                    f"input={self._value(row.get('input_count'))} "
+                    f"output={self._value(row.get('output_count'))} "
+                    f"lost={self._value(row.get('lost_count'))} "
+                    f"conversion={self._percent(row.get('conversion_rate'))} "
+                    f"loss={self._percent(row.get('loss_rate'))} "
+                    f"state={self._value(row.get('attrition_state'))}"
+                )
+        if operational_lifecycle_conversion_rates:
+            lines.append(
+                "Operational Lifecycle Conversion Rates: "
+                f"{self._value(operational_lifecycle_conversion_rates)}"
+            )
+        lines.extend([
+            "Knowledge Operationalization Choke Point: "
+            f"{self._value(summary.get('knowledge_operationalization_choke_point'))}",
+            "Knowledge Operationalization Symptom: "
+            f"{self._value(summary.get('knowledge_operationalization_symptom'))}",
+            "Knowledge Operationalization Root Cause: "
+            f"{self._value(summary.get('knowledge_operationalization_root_cause'))}",
+            "Knowledge Operationalization Choke Cause: "
+            f"{self._value(summary.get('knowledge_operationalization_choke_cause'))}",
+            "Knowledge Operationalization Choke Action: "
+            f"{self._value(summary.get('knowledge_operationalization_choke_action'))}",
+            "Knowledge Operationalization Evidence Responsibility: "
+            f"{self._value(summary.get('knowledge_operationalization_evidence_responsibility'))}",
+            "Knowledge Operationalization Required Evidence: "
+            f"{self._value(summary.get('knowledge_operationalization_required_evidence'))}",
+            "Knowledge Operationalization Loss Count: "
+            f"{self._value(summary.get('knowledge_operationalization_loss_count'))}",
+            "Knowledge Operationalization Loss Pressure: "
+            f"{self._percent(summary.get('knowledge_operationalization_loss_pressure'))}",
+            "Knowledge Operationalization State: "
+            f"{self._value(summary.get('knowledge_operationalization_state'))}",
+            "Arena To Compiled Admission State: "
+            f"{self._value(summary.get('arena_to_compiled_admission_state'))}",
+            "Arena To Compiled Admission Action: "
+            f"{self._value(summary.get('arena_to_compiled_admission_action'))}",
+            "Execution Compilation Admission State: "
+            f"{self._value(summary.get('execution_compilation_admission_state'))}",
+            "Execution Compilation Admission Reason: "
+            f"{self._value(summary.get('execution_compilation_admission_reason'))}",
+            "Execution Compilation Admission Action: "
+            f"{self._value(summary.get('execution_compilation_admission_action'))}",
+            "Execution Compiled Program Count: "
+            f"{self._value(summary.get('execution_compiled_program_count'))}",
+            "Validation Probe Compiled Program Count: "
+            f"{self._value(summary.get('validation_probe_compiled_program_count'))}",
+            "Arena To Validation Compilation Rate: "
+            f"{self._percent(summary.get('arena_to_validation_compilation_rate'))}",
+        ])
+        blockers = summary.get("execution_compilation_blockers") or []
+        if blockers:
+            lines.append("Execution Compilation Blockers:")
+            for blocker in blockers[:8]:
+                lines.append(f"  {self._value(blocker)}")
+        if knowledge_operationalization_path:
+            lines.append("Knowledge Operationalization Path:")
+            for row in knowledge_operationalization_path[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('stage'))}: "
+                    f"input={self._value(row.get('input_count'))} "
+                    f"output={self._value(row.get('output_count'))} "
+                    f"lost={self._value(row.get('lost_count'))} "
+                    f"conversion={self._percent(row.get('conversion_rate'))} "
+                    f"cause={self._value(row.get('likely_cause'))} "
+                    f"action={self._value(row.get('action'))} "
+                    "responsibility="
+                    f"{self._value(row.get('evidence_responsibility'))} "
+                    f"required_evidence={self._value(row.get('required_evidence'))}"
+                )
+        if operational_capability_clusters:
+            lines.append("Operational Capability Clusters:")
+            for row in operational_capability_clusters[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('cluster_name'))}: "
+                    f"members={self._value(row.get('member_capabilities'))} "
+                    f"present={self._value(row.get('present_capabilities'))} "
+                    f"missing={self._value(row.get('missing_capabilities'))} "
+                    f"readiness={self._percent(row.get('cluster_readiness'))} "
+                    f"state={self._value(row.get('cluster_state'))} "
+                    f"required_grounding_count={len(row.get('required_grounding') or [])}"
+                )
+                for grounding in (row.get("required_grounding") or [])[:3]:
+                    if not isinstance(grounding, dict):
+                        continue
+                    lines.append(
+                        "    "
+                        f"{self._value(grounding.get('operation'))}: "
+                        "required_task_property="
+                        f"{self._value(grounding.get('required_task_property'))} "
+                        f"required_evidence={self._value(grounding.get('required_evidence'))}"
+                    )
+        if operational_economy_roadmap:
+            lines.append("Operational Economy Roadmap:")
+            for row in operational_economy_roadmap[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('priority'))}: "
+                    f"target={self._value(row.get('target'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
+        domain_rows = domain_architecture.get("domain_rows") or []
+        domain_rows = domain_rows if isinstance(domain_rows, list) else []
+        if domain_rows:
+            lines.append("Cognitive Domain Architecture:")
+            for row in domain_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"semantic={self._value(row.get('semantic_concept_count'))} "
+                    f"packages={self._value(row.get('execution_package_count'))} "
+                    f"programs={self._value(row.get('program_blueprint_count'))} "
+                    f"candidates={self._value(row.get('candidate_count'))} "
+                    f"arena={self._value(row.get('arena_candidate_count'))} "
+                    f"validated={self._value(row.get('validated_program_count'))} "
+                    f"readiness={self._percent(row.get('domain_operational_readiness'))} "
+                    f"status={self._value(row.get('domain_status'))} "
+                    f"gap={self._value(row.get('operationalization_gap'))} "
+                    f"role={self._value(row.get('domain_operational_role'))} "
+                    f"arena_relationship={self._value(row.get('domain_arena_relationship'))} "
+                    f"action={self._value(row.get('domain_operationalization_action'))}"
+                )
+        domain_gaps = domain_architecture.get("domain_operationalization_gaps") or []
+        domain_gaps = domain_gaps if isinstance(domain_gaps, list) else []
+        if domain_gaps:
+            lines.append("Domain Operationalization Gaps:")
+            for row in domain_gaps[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('domain_name'))}: "
+                    f"{self._value(row.get('operationalization_gap'))} "
+                    f"programs={self._value(row.get('program_blueprint_count'))} "
+                    f"packages={self._value(row.get('execution_package_count'))} "
+                    f"candidates={self._value(row.get('candidate_count'))} "
+                    f"arena={self._value(row.get('arena_candidate_count'))} "
+                    f"role={self._value(row.get('domain_operational_role'))} "
+                    f"action={self._value(row.get('domain_operationalization_action'))}"
+                )
+        if bottlenecks:
+            lines.append("Lowest Coverage Bottlenecks:")
+            for item in bottlenecks[:3]:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._label(item.get('coverage_type'))}: "
+                    f"{self._percent(item.get('coverage'))} "
+                    f"status={self._value(item.get('status'))}"
+                )
+        if missing_packages:
+            lines.append(
+                "Missing Execution Packages: "
+                + ", ".join(str(item) for item in missing_packages[:8])
+            )
+        if partial_packages:
+            lines.append(
+                "Partial Execution Packages: "
+                + ", ".join(str(item) for item in partial_packages[:8])
+            )
+        if unused_packages:
+            lines.append(
+                "Unused Execution Packages: "
+                + ", ".join(str(item) for item in unused_packages[:8])
+            )
+        lines.extend([
+            "Package Utilization Gap Count: "
+            f"{self._value(summary.get('package_utilization_gap_count'))}",
+            "Package Utilization Gap State: "
+            f"{self._value(summary.get('package_utilization_gap_state'))}",
+        ])
+        if package_utilization_gap_rows:
+            lines.append("Package Utilization Gaps:")
+            for row in package_utilization_gap_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('package'))}: "
+                    f"domain={self._value(row.get('domain'))} "
+                    f"operations={self._value(row.get('supported_operations'))} "
+                    f"type={self._value(row.get('utilization_gap_type'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
+        if missing_requirements:
+            lines.append(
+                "Missing Compiler Requirements: "
+                + ", ".join(str(item) for item in missing_requirements[:8])
+            )
+        if lineage:
+            lines.append("Candidate Source Lineage:")
+            lineage_limit = 3 if canonical["report_level"] == "diagnostic" else 1
+            for row in lineage[:lineage_limit]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"raw={self._value(row.get('raw_source'))} -> "
+                    f"adapter={self._value(row.get('candidate_adapter'))} -> "
+                    f"normalized={self._value(row.get('normalized_source'))} -> "
+                    f"arena={self._value(row.get('arena_source'))} "
+                    f"op={self._value(row.get('operation'))} "
+                    f"entered={self._value(row.get('entered_arena'))}"
+                )
+        return self._section("COGNITIVE CAPABILITY COVERAGE", lines)
+
+    def _render_candidate_arena(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "candidate_arena_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        sources = summary.get("competitor_sources") or []
+        if not isinstance(sources, list):
+            sources = [sources]
+        rows = summary.get("candidate_rows") or []
+        rows = rows if isinstance(rows, list) else []
+        source_status = summary.get("source_status") or {}
+        source_status = source_status if isinstance(source_status, dict) else {}
+        source_outcomes = summary.get("source_outcomes") or []
+        source_outcomes = source_outcomes if isinstance(source_outcomes, list) else []
+        source_flow_trace = summary.get("candidate_source_flow_trace") or []
+        source_flow_trace = (
+            source_flow_trace if isinstance(source_flow_trace, list) else []
+        )
+        shared_input_trace = summary.get("validation_probe_shared_input_trace")
+        shared_input_trace = (
+            shared_input_trace if isinstance(shared_input_trace, dict) else {}
+        )
+        source_materialization_rows = (
+            summary.get("candidate_source_materialization_rows") or []
+        )
+        source_materialization_rows = (
+            source_materialization_rows
+            if isinstance(source_materialization_rows, list)
+            else []
+        )
+        source_diversity = summary.get("source_diversity")
+        operational_diversity = summary.get("operational_diversity")
+        source_diversity_bottleneck = (
+            "LOW_SOURCE_DIVERSITY"
+            if (
+                isinstance(source_diversity, (int, float))
+                and source_diversity < 0.25
+                and isinstance(operational_diversity, (int, float))
+                and operational_diversity >= 0.75
+            )
+            else "none"
+        )
+        shared_input_source_status = str(
+            shared_input_trace.get("task_io_source_status") or ""
+        )
+        shared_input_fallback_reason = (
+            shared_input_trace.get("fallback_reason")
+            or "Original Task IO unavailable"
+            if shared_input_source_status == "failed_task_io_fallback"
+            else shared_input_trace.get("fallback_reason")
+        )
+        shared_input_recovered_from = (
+            shared_input_trace.get("recovered_from")
+            or "Cached Runtime Context"
+            if shared_input_source_status == "failed_task_io_fallback"
+            else shared_input_trace.get("recovered_from")
+        )
+        lines = [
+            f"Arena State: {self._value(summary.get('arena_state'))}",
+            f"Candidate Count: {self._value(summary.get('candidate_count'))}",
+            f"Unique Candidate Count: {self._value(summary.get('unique_candidate_count'))}",
+            f"Source Count: {self._value(summary.get('source_count'))}",
+            f"Attempted Candidates: {self._value(summary.get('attempted_candidate_count'))}",
+            f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
+            f"Competitor Sources: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            "Proposal Sources With Proposals: "
+            f"{self._value(summary.get('proposal_sources_with_proposals'))}",
+            "Cross Source Consensus State: "
+            f"{self._value(summary.get('cross_source_consensus_state'))}",
+            "Cross Source Consensus Count: "
+            f"{self._value(summary.get('cross_source_consensus_count'))}",
+            f"Competition Diversity: {self._value(summary.get('competition_diversity'))}",
+            f"Operational Diversity: {self._value(summary.get('operational_diversity'))}",
+            f"Source Diversity: {self._value(summary.get('source_diversity'))}",
+            f"Source Diversity Bottleneck: {source_diversity_bottleneck}",
+            "Candidate Source Materialization Gap Count: "
+            f"{self._value(summary.get('candidate_source_materialization_gap_count'))}",
+            "Candidate Source Materialization State: "
+            f"{self._value(summary.get('candidate_source_materialization_state'))}",
+            "Arena Source Diversity State: "
+            f"{self._value(summary.get('arena_source_diversity_state'))}",
+            "Arena Source Diversity Action: "
+            f"{self._value(summary.get('arena_source_diversity_action'))}",
+            f"Simulation Count: {self._value(summary.get('simulation_count'))}",
+            f"Simulation Success Count: {self._value(summary.get('simulation_success_count'))}",
+            f"Governance Blocked Count: {self._value(summary.get('governance_blocked_count'))}",
+            f"Winner Source: {self._value(summary.get('winner_source'))}",
+            f"Arena Winner: {self._value(summary.get('arena_winner'))}",
+            f"Winner Operation: {self._value(summary.get('winner_operation'))}",
+            f"Winner Score: {self._value(summary.get('winner_score'))}",
+            f"Second Best Score: {self._value(summary.get('second_best_score'))}",
+            f"Selection Margin: {self._value(summary.get('selection_margin'))}",
+            f"Selection State: {self._value(summary.get('selection_state'))}",
+            f"Winner Takes All Detected: {self._value(summary.get('winner_takes_all_detected'))}",
+            f"Source Dominance Detected: {self._value(summary.get('source_dominance_detected'))}",
+            f"Dominance Source: {self._value(summary.get('dominance_source'))}",
+            f"Selection Mode: {self._value(summary.get('selection_mode'))}",
+            f"Validation Coverage: {self._percent(summary.get('validation_coverage'))}",
+            f"Missing Competition Reason: {self._value(summary.get('missing_competition_reason'))}",
+            f"Selection Explanation: {self._value(summary.get('selection_explanation'))}",
+            "Arena To Compiled Bridge State: "
+            f"{self._value(summary.get('arena_to_compiled_bridge_state'))}",
+            "Arena To Compiled Bridge Action: "
+            f"{self._value(summary.get('arena_to_compiled_bridge_action'))}",
+            "Validation Probe Candidate: "
+            f"{self._value(summary.get('validation_probe_candidate_id'))}",
+            "Validation Probe Operation: "
+            f"{self._value(summary.get('validation_probe_operation'))}",
+            "Validation Probe Source: "
+            f"{self._value(summary.get('validation_probe_source'))}",
+            "Validation Probe Authority: "
+            f"{self._value(summary.get('validation_probe_authority'))}",
+            "Validation Probe Shared Input State: "
+            f"{self._value(shared_input_trace.get('input_population_state'))}",
+            "Validation Probe Shared Input Source Status: "
+            f"{self._value(shared_input_trace.get('task_io_source_status'))}",
+            "Validation Probe Shared Input Fallback Reason: "
+            f"{self._value(shared_input_fallback_reason)}",
+            "Validation Probe Shared Input Recovered From: "
+            f"{self._value(shared_input_recovered_from)}",
+            "Validation Probe Shared Input Present Keys: "
+            f"{self._value(shared_input_trace.get('present_keys'))}",
+            "Validation Probe Shared Input Empty Keys: "
+            f"{self._value(shared_input_trace.get('empty_keys'))}",
+            "Validation Probe Shared Input Non Empty Keys: "
+            f"{self._value(shared_input_trace.get('non_empty_keys'))}",
+            "Prediction Quality Calibration State: "
+            f"{self._value(summary.get('prediction_quality_calibration_state'))}",
+            "Prediction Quality Calibration Cause: "
+            f"{self._value(summary.get('prediction_quality_calibration_cause'))}",
+            "Prediction Quality Calibration Action: "
+            f"{self._value(summary.get('prediction_quality_calibration_action'))}",
+            "Prediction Quality Calibration Trigger: "
+            f"{self._value(summary.get('prediction_quality_calibration_trigger'))}",
+            "Prediction Quality Calibration Evidence State: "
+            f"{self._value(summary.get('prediction_quality_calibration_evidence_state'))}",
+            "Prediction Quality Calibration Authority Boundary: "
+            f"{self._value(summary.get('prediction_quality_calibration_authority_boundary'))}",
+            "Prediction Quality Calibration Invoked: "
+            f"{self._value(summary.get('prediction_quality_calibration_invoked'))}",
+            "Prediction Quality Calibration Review Outcome: "
+            f"{self._value(summary.get('prediction_quality_calibration_review_outcome'))}",
+            "Prediction Quality Calibration Score Authority: "
+            f"{self._value(summary.get('prediction_quality_calibration_score_update_authority'))}",
+            "Prediction Quality Calibration Truth Authority: "
+            f"{self._value(summary.get('prediction_quality_calibration_truth_authority'))}",
+            "Arena Decision Resolution State: "
+            f"{self._value(summary.get('arena_decision_resolution_state'))}",
+            "Arena Decision Resolution Outcome: "
+            f"{self._value(summary.get('arena_decision_resolution_outcome'))}",
+            "Arena Decision Resolution Reason: "
+            f"{self._value(summary.get('arena_decision_resolution_reason'))}",
+            "Arena Decision Resolution Action: "
+            f"{self._value(summary.get('arena_decision_resolution_action'))}",
+            "Arena Decision Ranking Changed: "
+            f"{self._value(summary.get('arena_decision_ranking_changed'))}",
+            "Arena Decision Ranking Change Reason: "
+            f"{self._value(summary.get('arena_decision_ranking_change_reason'))}",
+            "Arena Decision Final State: "
+            f"{self._value(summary.get('arena_decision_final_state'))}",
+            "Arena Decision Execution Recommendation: "
+            f"{self._value(summary.get('arena_decision_execution_recommendation'))}",
+            "Evidence Acquisition State: "
+            f"{self._value(summary.get('evidence_acquisition_state'))}",
+            "Evidence Acquisition Trigger: "
+            f"{self._value(summary.get('evidence_acquisition_trigger'))}",
+            "Evidence Acquisition Target Candidate: "
+            f"{self._value(summary.get('evidence_acquisition_target_candidate'))}",
+            "Evidence Acquisition Target Operation: "
+            f"{self._value(summary.get('evidence_acquisition_target_operation'))}",
+            "Required Evidence Category: "
+            f"{self._value(summary.get('evidence_acquisition_required_category'))}",
+            "Required Evidence: "
+            f"{self._value(summary.get('evidence_acquisition_required_evidence'))}",
+            "Tie-Break Strategy: "
+            f"{self._value(summary.get('evidence_acquisition_tie_break_strategy'))}",
+            "Required Validation Task: "
+            f"{self._value(summary.get('evidence_acquisition_validation_task'))}",
+            "Expected Tie-Break Impact: "
+            f"{self._value(summary.get('evidence_acquisition_expected_tie_break_impact'))}",
+            "Governed Re-entry Action: "
+            f"{self._value(summary.get('evidence_acquisition_governed_reentry_action'))}",
+            "Evidence Acquisition Truth Authority: "
+            f"{self._value(summary.get('evidence_acquisition_truth_authority'))}",
+            "Evidence Acquisition Plan Forwarded: "
+            f"{self._value(summary.get('evidence_acquisition_plan_forwarded'))}",
+            "Evidence Plan Persistence Attempted: "
+            f"{self._value(summary.get('evidence_plan_persistence_attempted'))}",
+            "Evidence Plan Persisted: "
+            f"{self._value(summary.get('evidence_plan_persisted'))}",
+            "Evidence Plan Persistence Result: "
+            f"{self._value(summary.get('evidence_plan_persistence_result'))}",
+            "Plan Creation Result: "
+            f"{self._value(summary.get('plan_creation_result'))}",
+            "Lifecycle Update Attempted: "
+            f"{self._value(summary.get('lifecycle_update_attempted'))}",
+            "Lifecycle Update Persisted: "
+            f"{self._value(summary.get('lifecycle_update_persisted'))}",
+            "Persisted Lifecycle State: "
+            f"{self._value(summary.get('persisted_lifecycle_state'))}",
+            "Persisted Selected Validation Task: "
+            f"{self._value(summary.get('persisted_selected_validation_task'))}",
+            "Boot Recovery Route: "
+            f"{self._value(summary.get('boot_recovery_route'))}",
+            "Execution State: "
+            f"{self._value(summary.get('execution_state'))}",
+            "Execution Authority: "
+            f"{self._value(summary.get('execution_authority'))}",
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('evidence_plan_id'))}",
+            "Evidence Plan Fingerprint: "
+            f"{self._value(summary.get('evidence_plan_fingerprint'))}",
+            "Evidence Plan Lifecycle State: "
+            f"{self._value(summary.get('evidence_plan_lifecycle_state'))}",
+            "Evidence Plan Storage State: "
+            f"{self._value(summary.get('evidence_plan_storage_state'))}",
+            "Evidence Plan Storage Path: "
+            f"{self._value(summary.get('evidence_plan_storage_path'))}",
+            "Equivalent Pending Plan Found: "
+            f"{self._value(summary.get('equivalent_pending_plan_found'))}",
+            "Duplicate Persistence Prevented: "
+            f"{self._value(summary.get('duplicate_persistence_prevented'))}",
+            "Pending Evidence Plan Count: "
+            f"{self._value(summary.get('pending_evidence_plan_count'))}",
+            "Evidence Plans Loaded At Boot: "
+            f"{self._value(summary.get('evidence_plans_loaded_at_boot'))}",
+            "Evidence Plans Delivered To Training Assistant: "
+            f"{self._value(summary.get('evidence_plans_delivered_to_training_assistant'))}",
+            "Training Assistant Plan Available: "
+            f"{self._value(summary.get('training_assistant_plan_available'))}",
+            "Training Assistant Current Run Consumption Expected: "
+            f"{self._value(summary.get('training_assistant_current_run_consumption_expected'))}",
+            "Training Assistant Next Run Consumption Required: "
+            f"{self._value(summary.get('training_assistant_next_run_consumption_required'))}",
+            "Current Run Consumption Failure: "
+            f"{self._value(summary.get('current_run_consumption_failure'))}",
+            "Plan Persistence Failure Reason: "
+            f"{self._value(summary.get('plan_persistence_failure_reason'))}",
+            "Plan Schema Version: "
+            f"{self._value(summary.get('plan_schema_version'))}",
+            "Plan Constitutional Boundary: "
+            f"{self._value(summary.get('plan_constitutional_boundary'))}",
+            "Inbound Evidence Plan State: "
+            f"{self._value(summary.get('inbound_evidence_plan_state'))}",
+            "Outbound Evidence Plan State: "
+            f"{self._value(summary.get('outbound_evidence_plan_state'))}",
+            "Outbound Evidence Plan Id: "
+            f"{self._value(summary.get('outbound_evidence_plan_id'))}",
+            "Training Assistant Consumed Plan: "
+            f"{self._value(summary.get('training_assistant_consumed_plan'))}",
+            "Consumption State: "
+            f"{self._value(summary.get('consumption_state'))}",
+            "Curriculum Search: "
+            f"{self._value(summary.get('curriculum_search_state'))}",
+            "Matching Validation Tasks: "
+            f"{self._value(summary.get('matching_validation_tasks'))}",
+            "Best Matching Task: "
+            f"{self._value(summary.get('best_matching_task'))}",
+            "Best Matching Curriculum: "
+            f"{self._value(summary.get('best_matching_curriculum'))}",
+            "Matching Score: "
+            f"{self._value(summary.get('matching_score'))}",
+            "Matching Explanation: "
+            f"{self._value(summary.get('matching_explanation'))}",
+            "Selection Authority: "
+            f"{self._value(summary.get('selection_authority'))}",
+            "Validation Task Selection State: "
+            f"{self._value(summary.get('validation_task_selection_state'))}",
+            "Waiting Execution: "
+            f"{self._value(summary.get('waiting_execution'))}",
+            "Generation Eligible: "
+            f"{self._value(summary.get('generation_eligible'))}",
+            "Generation Invoked: "
+            f"{self._value(summary.get('generation_invoked'))}",
+            "Waiting Generator: "
+            f"{self._value(summary.get('waiting_generator'))}",
+            "Task Selection Consumed Plan: "
+            f"{self._value(summary.get('task_selection_consumed_plan'))}",
+            "Tie-Break Task Scheduled: "
+            f"{self._value(summary.get('tie_break_task_scheduled'))}",
+            "Task Selected: "
+            f"{self._value(summary.get('task_selected'))}",
+            "Task Scheduled: "
+            f"{self._value(summary.get('task_scheduled'))}",
+            "Schedule Id: "
+            f"{self._value(summary.get('schedule_id'))}",
+            "Schedule Creation Result: "
+            f"{self._value(summary.get('schedule_creation_result'))}",
+            "Scheduling Authority: "
+            f"{self._value(summary.get('scheduling_authority'))}",
+            "Scheduling Admission State: "
+            f"{self._value(summary.get('scheduling_admission_state'))}",
+            "Scheduling Admission Reason: "
+            f"{self._value(summary.get('scheduling_admission_reason'))}",
+            "Scheduling State: "
+            f"{self._value(summary.get('scheduling_state'))}",
+            "Execution Started: "
+            f"{self._value(summary.get('task_execution_started'))}",
+            "Execution Completed: "
+            f"{self._value(summary.get('task_execution_completed'))}",
+            "Execution State: "
+            f"{self._value(summary.get('execution_state'))}",
+            "Execution Invoked: "
+            f"{self._value(summary.get('execution_invoked'))}",
+            "Execution Authority: "
+            f"{self._value(summary.get('execution_authority'))}",
+            "Selected Tie-Break Task: "
+            f"{self._value(summary.get('selected_tie_break_task'))}",
+            "Decision Orchestration State: "
+            f"{self._value(summary.get('decision_orchestration_state'))}",
+        ]
+        if rows:
+            lines.append("Top Arena Candidates:")
+            for index, row in enumerate(rows[:6], start=1):
+                if not isinstance(row, dict):
+                    continue
+                marker = "selected" if row.get("selected") else "candidate"
+                origin_sources = self._source_names(row, "origin_source", "origin_sources")
+                normalized_sources = self._source_names(row, "normalized_source", "normalized_sources")
+                lines.append(
+                    "  "
+                    f"{index}. {self._value(row.get('source'))}: "
+                    f"{self._value(row.get('candidate_id'))} "
+                    f"op={self._value(row.get('operation'))} "
+                    f"confidence={self._value(row.get('confidence', row.get('score')))} "
+                    f"accuracy={self._value(row.get('accuracy'))} "
+                    f"status={self._value(row.get('validation_status'))} "
+                    f"{marker}"
+                )
+                if row.get("program_representation") or row.get("reuse_evidence"):
+                    lines.append(
+                        "     Program Representation: "
+                        f"{self._value(row.get('program_representation'))}; "
+                        f"Reuse Evidence: {self._value(row.get('reuse_evidence'))}"
+                    )
+                lines.append(f"     Origin Sources: {origin_sources}")
+                lines.append(f"     Normalized Sources: {normalized_sources}")
+        if source_materialization_rows:
+            lines.append("Candidate Source Materialization:")
+            for row in source_materialization_rows[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('source'))}: "
+                    f"signal={self._value(row.get('knowledge_signal'))} "
+                    f"candidate={self._value(row.get('candidate_materialized'))} "
+                    f"arena={self._value(row.get('entered_arena'))} "
+                    f"state={self._value(row.get('source_materialization_state'))} "
+                    f"stage={self._value(row.get('failure_stage'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
+        if source_flow_trace:
+            lines.append("Candidate Source Flow Trace:")
+            for row in source_flow_trace[:7]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('source'))}: "
+                    f"proposal={self._value(row.get('proposal_runtime_proposed'))} "
+                    f"rejected={self._value(row.get('proposal_runtime_rejected'))} "
+                    "rejection_reason="
+                    f"{self._value(row.get('proposal_runtime_rejection_reason'))} "
+                    f"built={self._value(row.get('arena_proposal_built'))} "
+                    f"gateway={self._value(row.get('gateway_accepted'))} "
+                    f"arena={self._value(row.get('entered_arena'))} "
+                    f"state={self._value(row.get('flow_state'))} "
+                    f"blocked={self._value(row.get('blocked_stage'))} "
+                    f"reason={self._value(row.get('build_failure_reason'))} "
+                    f"detail={self._value(row.get('build_failure_detail'))} "
+                    f"action={self._value(row.get('action'))}"
+                )
+        if source_outcomes:
+            lines.append("Cognitive Source Outcomes:")
+            for outcome in source_outcomes[:6]:
+                if not isinstance(outcome, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(outcome.get('source'))}: "
+                    f"{self._value(outcome.get('status'))} "
+                    f"reason={self._value(outcome.get('reason'))}"
+                )
+        if canonical["report_level"] == "diagnostic" and source_status:
+            lines.append("Arena Source Status:")
+            for source, status in sorted(source_status.items()):
+                lines.append(f"  {source}: {status}")
+        return self._section("COGNITIVE CANDIDATE ARENA", lines)
+
+    def _evidence_generation_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        summary = self._arena_summary(canonical)
+        report = summary.get("evidence_generation_report")
+        if isinstance(report, dict) and report:
+            return report
+        report = self._first_dict(
+            canonical["report_state"],
+            "evidence_generation_report",
+            "EVIDENCE_GENERATION_REPORT",
+        )
+        if report:
+            return report
+        report = self._first_dict(
+            canonical["performance"],
+            "evidence_generation_report",
+            "EVIDENCE_GENERATION_REPORT",
+        )
+        if report:
+            return report
+        plan_forwarded = summary.get("evidence_acquisition_plan_forwarded") is True
+        training_consumed = summary.get("training_assistant_consumed_plan") is True
+        task_scheduled = summary.get("tie_break_task_scheduled") is True
+        awaiting_curriculum_search = plan_forwarded and not training_consumed
+        generation_required_after_search = (
+            plan_forwarded and training_consumed and not task_scheduled
+        )
+        return {
+            "generation_required": (
+                True
+                if generation_required_after_search
+                else False
+                if awaiting_curriculum_search
+                else summary.get("evidence_generation_required")
+            ),
+            "generation_trigger": (
+                "curriculum_search_failed_to_find_validation_task"
+                if generation_required_after_search
+                else "awaiting_training_assistant_curriculum_search"
+                if awaiting_curriculum_search
+                else "none"
+            ),
+            "required_evidence": summary.get(
+                "evidence_acquisition_required_evidence"
+            ),
+            "required_validation_task": summary.get(
+                "evidence_acquisition_validation_task"
+            ),
+            "existing_tasks_found": (
+                False
+                if generation_required_after_search
+                else "Not Available"
+                if awaiting_curriculum_search
+                else summary.get("tie_break_task_scheduled")
+            ),
+            "generated_tasks": 0,
+            "generated_curriculum_size": 0,
+            "generated_domains": [],
+            "generation_strategy": summary.get(
+                "evidence_acquisition_tie_break_strategy"
+            ),
+            "generation_governance": (
+                "POTENTIAL_VALIDATION_OPPORTUNITY_ONLY"
+            ),
+            "training_assistant_queue_updated": False,
+            "future_execution_ready": False,
+            "generation_status": (
+                "GENERATION_REQUIRED_AFTER_CURRICULUM_SEARCH"
+                if generation_required_after_search
+                else "AWAITING_TRAINING_ASSISTANT_CURRICULUM_SEARCH"
+                if awaiting_curriculum_search
+                else summary.get(
+                    "evidence_generation_status",
+                    "GENERATION_NOT_REQUIRED",
+                )
+            ),
+            "truth_authority": "NONE",
+            "trust_authority": "NONE",
+            "graduation_authority": "NONE",
+            "evidence_produced": False,
+            "constitutional_boundary": (
+                "GENERATED_TASKS_ARE_VALIDATION_OPPORTUNITIES_NOT_EVIDENCE"
+            ),
+        }
+
+    def _render_training_assistant_plan_consumption(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        summary = self._arena_summary(canonical)
+        report = summary.get("evidence_plan_consumption_report") or {}
+        report = report if isinstance(report, dict) else {}
+        lines = [
+            "Plans Delivered: "
+            f"{self._value(report.get('plans_delivered', summary.get('evidence_plans_delivered_to_training_assistant')))}",
+            "Plans Consumed: "
+            f"{self._value(report.get('plans_consumed'))}",
+            "Current Plan Id: "
+            f"{self._value(report.get('current_plan_id', summary.get('evidence_plan_id')))}",
+            "Lifecycle State: "
+            f"{self._value(summary.get('consumption_lifecycle_state', report.get('lifecycle_state')))}",
+            "Consumption State: "
+            f"{self._value(summary.get('consumption_state'))}",
+            "Current Required Evidence: "
+            f"{self._value(report.get('current_required_evidence', summary.get('evidence_acquisition_required_evidence')))}",
+            "Current Required Validation Task: "
+            f"{self._value(report.get('current_required_validation_task', summary.get('evidence_acquisition_validation_task')))}",
+            "Current Target Operation: "
+            f"{self._value(report.get('current_target_operation', summary.get('evidence_acquisition_target_operation')))}",
+            "Current Tie Break Strategy: "
+            f"{self._value(report.get('current_tie_break_strategy', summary.get('evidence_acquisition_tie_break_strategy')))}",
+            "Curriculum Search: "
+            f"{self._value(summary.get('curriculum_search_state'))}",
+            "Registered Curricula: "
+            f"{self._value(summary.get('registered_curricula', report.get('registered_curricula')))}",
+            "Loaded Curricula: "
+            f"{self._value(summary.get('loaded_curricula', report.get('loaded_curricula')))}",
+            "Enabled Curricula: "
+            f"{self._value(summary.get('enabled_curricula', report.get('enabled_curricula')))}",
+            "Disabled Curricula: "
+            f"{self._value(summary.get('disabled_curricula', report.get('disabled_curricula')))}",
+            "Curricula Searched: "
+            f"{self._value(summary.get('curricula_searched', report.get('curricula_searched')))}",
+            "Total Validation Tasks: "
+            f"{self._value(summary.get('total_validation_tasks', report.get('total_validation_tasks')))}",
+            "Matching Validation Tasks: "
+            f"{self._value(summary.get('matching_validation_tasks'))}",
+            "Best Matching Task: "
+            f"{self._value(summary.get('best_matching_task'))}",
+            "Best Matching Curriculum: "
+            f"{self._value(summary.get('best_matching_curriculum'))}",
+            "Matching Score: "
+            f"{self._value(summary.get('matching_score'))}",
+            "Matching Explanation: "
+            f"{self._value(summary.get('matching_explanation'))}",
+            "Selected Validation Task: "
+            f"{self._value(summary.get('selected_tie_break_task'))}",
+            "Selection Authority: "
+            f"{self._value(summary.get('selection_authority'))}",
+            "Selection State: "
+            f"{self._value(summary.get('validation_task_selection_state'))}",
+            "Waiting Execution: "
+            f"{self._value(summary.get('waiting_execution'))}",
+            "Generation Eligible: "
+            f"{self._value(summary.get('generation_eligible'))}",
+            "Generation Invoked: "
+            f"{self._value(summary.get('generation_invoked'))}",
+            "Waiting Generator: "
+            f"{self._value(summary.get('waiting_generator'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('plan_consumption_truth_authority', report.get('truth_authority', 'NONE')))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('plan_consumption_trust_authority', report.get('trust_authority', 'NONE')))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('plan_consumption_graduation_authority', report.get('graduation_authority', 'NONE')))}",
+            "Execution Authority: "
+            f"{self._value(summary.get('plan_consumption_execution_authority', report.get('execution_authority', 'NONE')))}",
+        ]
+        rows = report.get("consumed_plan_reports") or []
+        rows = rows if isinstance(rows, list) else []
+        if rows and canonical["report_level"] in {"diagnostic", "full", "debug", "audit"}:
+            lines.append("Consumption Trace:")
+            for row in rows[:3]:
+                if isinstance(row, dict):
+                    lines.append(
+                        "  "
+                        f"{self._value(row.get('plan_id'))}: "
+                        f"{self._value(row.get('consumption_state'))} "
+                        f"selection={self._value(row.get('selection_state'))}"
+                    )
+        return self._section("TRAINING ASSISTANT PLAN CONSUMPTION", lines)
+
+    def _render_evidence_generation_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        report = self._evidence_generation_report(canonical)
+        lines = [
+            "Generation Required: "
+            f"{self._value(report.get('generation_required'))}",
+            "Generation Trigger: "
+            f"{self._value(report.get('generation_trigger'))}",
+            "Required Evidence: "
+            f"{self._value(report.get('required_evidence'))}",
+            "Required Validation Task: "
+            f"{self._value(report.get('required_validation_task'))}",
+            "Existing Tasks Found: "
+            f"{self._value(report.get('existing_tasks_found'))}",
+            "Generated Tasks: "
+            f"{self._value(report.get('generated_tasks'))}",
+            "Generated Task Files: "
+            f"{self._value(report.get('generated_task_files') or [])}",
+            "Generated Curriculum Path: "
+            f"{self._value(report.get('generated_curriculum_path'))}",
+            "Generated Curriculum Size: "
+            f"{self._value(report.get('generated_curriculum_size'))}",
+            "Generated Domains: "
+            f"{self._value(report.get('generated_domains') or [])}",
+            "Generation Strategy: "
+            f"{self._value(report.get('generation_strategy'))}",
+            "Generation Governance: "
+            f"{self._value(report.get('generation_governance'))}",
+            "Training Assistant Queue Updated: "
+            f"{self._value(report.get('training_assistant_queue_updated'))}",
+            "Future Execution Ready: "
+            f"{self._value(report.get('future_execution_ready'))}",
+            "Generation Status: "
+            f"{self._value(report.get('generation_status'))}",
+            "Evidence Produced: "
+            f"{self._value(report.get('evidence_produced'))}",
+            "Truth Authority: "
+            f"{self._value(report.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(report.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(report.get('graduation_authority'))}",
+            "Constitutional Boundary: "
+            f"{self._value(report.get('constitutional_boundary'))}",
+        ]
+        return self._section("EVIDENCE GENERATION REPORT", lines)
+
+    def _render_validation_task_execution_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        lines = [
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('validation_task_execution_plan_id'))}",
+            "Schedule Id: "
+            f"{self._value(summary.get('validation_task_execution_schedule_id'))}",
+            "Execution Id: "
+            f"{self._value(summary.get('execution_id'))}",
+            "Raw Result Id: "
+            f"{self._value(summary.get('raw_result_id'))}",
+            "Selected Validation Task: "
+            f"{self._value(summary.get('validation_task_execution_selected_task'))}",
+            "Selected Curriculum: "
+            f"{self._value(summary.get('validation_task_execution_selected_curriculum'))}",
+            "Required Evidence: "
+            f"{self._value(summary.get('evidence_acquisition_required_evidence'))}",
+            "Required Evidence Category: "
+            f"{self._value(summary.get('evidence_acquisition_required_category'))}",
+            "Target Candidate: "
+            f"{self._value(summary.get('evidence_acquisition_target_candidate'))}",
+            "Target Operation: "
+            f"{self._value(summary.get('evidence_acquisition_target_operation'))}",
+            "Tie-Break Strategy: "
+            f"{self._value(summary.get('evidence_acquisition_tie_break_strategy'))}",
+            "Execution Admission Evaluated: "
+            f"{self._value(summary.get('execution_admission_evaluated'))}",
+            "Execution Admission State: "
+            f"{self._value(summary.get('execution_admission_state'))}",
+            "Execution Admission Reason: "
+            f"{self._value(summary.get('execution_admission_reason'))}",
+            "Validation Execution Authority: "
+            f"{self._value(summary.get('validation_execution_authority'))}",
+            "Validation Execution Scope: "
+            f"{self._value(summary.get('validation_execution_scope'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Execution Invoked: "
+            f"{self._value(summary.get('execution_invoked'))}",
+            "Execution Started: "
+            f"{self._value(summary.get('task_execution_started'))}",
+            "Execution Completed: "
+            f"{self._value(summary.get('task_execution_completed'))}",
+            "Execution State: "
+            f"{self._value(summary.get('execution_state'))}",
+            "Execution Attempt Count: "
+            f"{self._value(summary.get('execution_attempt_count'))}",
+            "Runner Id: "
+            f"{self._value(summary.get('runner_id'))}",
+            "Runner Status: "
+            f"{self._value(summary.get('runner_status'))}",
+            "Executed Task Count: "
+            f"{self._value(summary.get('executed_task_count'))}",
+            "Executed Case Count: "
+            f"{self._value(summary.get('executed_case_count'))}",
+            "Execution Duration: "
+            f"{self._value(summary.get('execution_duration'))}",
+            "Raw Result Captured: "
+            f"{self._value(summary.get('raw_result_captured'))}",
+            "Raw Result Creation Result: "
+            f"{self._value(summary.get('raw_result_creation_result'))}",
+            "Raw Result Persistence State: "
+            f"{self._value(summary.get('raw_result_persistence_state'))}",
+            "Raw Result Fingerprint: "
+            f"{self._value(summary.get('raw_result_fingerprint'))}",
+            "Predicted Output Available: "
+            f"{self._value(summary.get('predicted_output_available'))}",
+            "Runtime Error Available: "
+            f"{self._value(summary.get('runtime_error_available'))}",
+            "Target Reference Forwarded To Solver: "
+            f"{self._value(summary.get('target_reference_forwarded_to_solver'))}",
+            "Prediction Target Comparison Performed: "
+            f"{self._value(summary.get('prediction_target_comparison_performed'))}",
+            "Accuracy Calculated: "
+            f"{self._value(summary.get('accuracy_calculated'))}",
+            "Comparable Result Available: "
+            f"{self._value(summary.get('comparable_result_available'))}",
+            "Evidence Evaluation Invoked: "
+            f"{self._value(summary.get('evidence_evaluation_invoked'))}",
+            "Evidence Produced: "
+            f"{self._value(summary.get('evidence_produced'))}",
+            "Evidence Acceptance Evaluated: "
+            f"{self._value(summary.get('evidence_acceptance_evaluated'))}",
+            "Evidence Accepted: "
+            f"{self._value(summary.get('evidence_accepted'))}",
+            "Arena Re-entry Invoked: "
+            f"{self._value(summary.get('arena_reentry_invoked'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('validation_task_execution_constitutional_boundary'))}",
+        ]
+        return self._section("VALIDATION TASK EXECUTION REPORT", lines)
+
+    def _render_validation_evidence_evaluation_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        lines = [
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_plan_id'))}",
+            "Schedule Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_schedule_id'))}",
+            "Execution Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_execution_id'))}",
+            "Raw Result Id: "
+            f"{self._value(summary.get('validation_evidence_evaluation_raw_result_id'))}",
+            "Evaluation Contract Id: "
+            f"{self._value(summary.get('evaluation_contract_id'))}",
+            "Evaluation Contract Fingerprint: "
+            f"{self._value(summary.get('evaluation_contract_fingerprint'))}",
+            "Comparable Result Id: "
+            f"{self._value(summary.get('comparable_result_id'))}",
+            "Evidence Decision Id: "
+            f"{self._value(summary.get('evidence_decision_id'))}",
+            "Accepted Evidence Id: "
+            f"{self._value(summary.get('accepted_evidence_id'))}",
+            "Selected Validation Task: "
+            f"{self._value(summary.get('validation_task_execution_selected_task'))}",
+            "Selected Curriculum: "
+            f"{self._value(summary.get('validation_task_execution_selected_curriculum'))}",
+            "Target Candidate: "
+            f"{self._value(summary.get('evidence_acquisition_target_candidate'))}",
+            "Target Operation: "
+            f"{self._value(summary.get('evidence_acquisition_target_operation'))}",
+            "Required Evidence: "
+            f"{self._value(summary.get('evidence_acquisition_required_evidence'))}",
+            "Required Evidence Category: "
+            f"{self._value(summary.get('evidence_acquisition_required_category'))}",
+            "Tie-Break Strategy: "
+            f"{self._value(summary.get('evidence_acquisition_tie_break_strategy'))}",
+            "Evaluation Admission Evaluated: "
+            f"{self._value(summary.get('evaluation_admission_evaluated'))}",
+            "Evaluation Admission State: "
+            f"{self._value(summary.get('evaluation_admission_state'))}",
+            "Evaluation Admission Reason: "
+            f"{self._value(summary.get('evaluation_admission_reason'))}",
+            "Evidence Evaluation Authority: "
+            f"{self._value(summary.get('evidence_evaluation_authority'))}",
+            "Evidence Evaluation Scope: "
+            f"{self._value(summary.get('evidence_evaluation_scope'))}",
+            "Sealed Reference Available: "
+            f"{self._value(summary.get('sealed_reference_available'))}",
+            "Sealed Reference Id: "
+            f"{self._value(summary.get('sealed_reference_id'))}",
+            "Sealed Reference Fingerprint: "
+            f"{self._value(summary.get('sealed_reference_fingerprint'))}",
+            "Sealed Reference Resolved: "
+            f"{self._value(summary.get('sealed_reference_resolved'))}",
+            "Sealed Reference Opened By Evaluator: "
+            f"{self._value(summary.get('sealed_reference_opened_by_evaluator'))}",
+            "Sealed Reference Forwarded To Solver: "
+            f"{self._value(summary.get('sealed_reference_forwarded_to_solver'))}",
+            "Target Reference Forwarded To Solver: "
+            f"{self._value(summary.get('target_reference_forwarded_to_solver'))}",
+            "Reference Integrity State: "
+            f"{self._value(summary.get('reference_integrity_state'))}",
+            "Comparison Invoked: "
+            f"{self._value(summary.get('comparison_invoked'))}",
+            "Comparison Started: "
+            f"{self._value(summary.get('comparison_started'))}",
+            "Comparison Completed: "
+            f"{self._value(summary.get('comparison_completed'))}",
+            "Comparison State: "
+            f"{self._value(summary.get('comparison_state'))}",
+            "Comparator Id: "
+            f"{self._value(summary.get('comparator_id'))}",
+            "Comparator Version: "
+            f"{self._value(summary.get('comparator_version'))}",
+            "Comparator Resolved: "
+            f"{self._value(summary.get('comparator_resolved'))}",
+            "Comparable Result Available: "
+            f"{self._value(summary.get('comparable_result_available'))}",
+            "Comparable Result Creation Result: "
+            f"{self._value(summary.get('comparable_result_creation_result'))}",
+            "Expected Case Count: "
+            f"{self._value(summary.get('expected_case_count'))}",
+            "Compared Case Count: "
+            f"{self._value(summary.get('compared_case_count'))}",
+            "Case Coverage: "
+            f"{self._value(summary.get('case_coverage'))}",
+            "Exact Match Count: "
+            f"{self._value(summary.get('exact_match_count'))}",
+            "Exact Match Rate: "
+            f"{self._value(summary.get('exact_match_rate'))}",
+            "Exact Match: "
+            f"{self._value(summary.get('exact_match'))}",
+            "Accuracy: "
+            f"{self._value(summary.get('accuracy'))}",
+            "Difference Count: "
+            f"{self._value(summary.get('difference_count'))}",
+            "Shape Compatibility State: "
+            f"{self._value(summary.get('shape_compatibility_state'))}",
+            "Comparator Measurement Summary: "
+            f"{self._value(summary.get('comparator_measurement_summary'))}",
+            "Grounding Measurement Summary: "
+            f"{self._value(summary.get('grounding_measurement_summary'))}",
+            "Evidence Evaluation Invoked: "
+            f"{self._value(summary.get('evidence_evaluation_invoked'))}",
+            "Evidence Admissibility Evaluated: "
+            f"{self._value(summary.get('evidence_admissibility_evaluated'))}",
+            "Evidence Admissibility State: "
+            f"{self._value(summary.get('evidence_admissibility_state'))}",
+            "Evidence Admissibility Reason: "
+            f"{self._value(summary.get('evidence_admissibility_reason'))}",
+            "Evidence Sufficiency Evaluated: "
+            f"{self._value(summary.get('evidence_sufficiency_evaluated'))}",
+            "Evidence Sufficiency State: "
+            f"{self._value(summary.get('evidence_sufficiency_state'))}",
+            "Evidence Sufficiency Reason: "
+            f"{self._value(summary.get('evidence_sufficiency_reason'))}",
+            "Evidence Direction: "
+            f"{self._value(summary.get('evidence_direction'))}",
+            "Evidence Direction Reason: "
+            f"{self._value(summary.get('evidence_direction_reason'))}",
+            "Evidence Acceptance State: "
+            f"{self._value(summary.get('evidence_acceptance_state'))}",
+            "Evidence Evaluation Outcome: "
+            f"{self._value(summary.get('evidence_evaluation_outcome'))}",
+            "Evidence Acceptance Reason: "
+            f"{self._value(summary.get('evidence_acceptance_reason'))}",
+            "Outcome Reason: "
+            f"{self._value(summary.get('outcome_reason'))}",
+            "Evidence Decision Recorded: "
+            f"{self._value(summary.get('evidence_decision_recorded'))}",
+            "Evidence Decision Creation Result: "
+            f"{self._value(summary.get('evidence_decision_creation_result'))}",
+            "Evidence Contamination State: "
+            f"{self._value(summary.get('evidence_contamination_state'))}",
+            "Independent Validation State: "
+            f"{self._value(summary.get('independent_validation_state'))}",
+            "Candidate Attribution State: "
+            f"{self._value(summary.get('candidate_attribution_state'))}",
+            "Operation Attribution State: "
+            f"{self._value(summary.get('operation_attribution_state'))}",
+            "Duplicate Evidence Detected: "
+            f"{self._value(summary.get('duplicate_evidence_detected'))}",
+            "Accepted Evidence Artifact Created: "
+            f"{self._value(summary.get('accepted_evidence_artifact_created'))}",
+            "Accepted Evidence Creation Result: "
+            f"{self._value(summary.get('accepted_evidence_creation_result'))}",
+            "Evidence Accepted: "
+            f"{self._value(summary.get('evidence_accepted'))}",
+            "Arena Evidence Admission Invoked: "
+            f"{self._value(summary.get('arena_evidence_admission_invoked'))}",
+            "Arena Re-entry Invoked: "
+            f"{self._value(summary.get('arena_reentry_invoked'))}",
+            "Candidate Score Changed: "
+            f"{self._value(summary.get('candidate_score_changed'))}",
+            "Candidate Ranking Changed: "
+            f"{self._value(summary.get('candidate_ranking_changed'))}",
+            "Tie Resolved: "
+            f"{self._value(summary.get('tie_resolved'))}",
+            "Winner Selected: "
+            f"{self._value(summary.get('winner_selected'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Candidate Compilation Authority: "
+            f"{self._value(summary.get('candidate_compilation_authority'))}",
+            "Deployment Authority: "
+            f"{self._value(summary.get('deployment_authority'))}",
+            "Next Consumer: "
+            f"{self._value(summary.get('next_consumer'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('validation_evidence_evaluation_constitutional_boundary'))}",
+        ]
+        return self._section("VALIDATION EVIDENCE EVALUATION REPORT", lines)
+
+    def _render_arena_evidence_admission_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        if (
+            summary.get("arena_admission_invoked") is not True
+            and summary.get("arena_evidence_admitted") is not True
+            and summary.get("accepted_evidence_artifact_available") is not True
+            and summary.get("decision_proposal_available") is not True
+        ):
+            return ""
+        lines = [
+            "Evidence Plan Id: "
+            f"{self._value(summary.get('arena_evidence_admission_plan_id'))}",
+            "Evidence Decision Id: "
+            f"{self._value(summary.get('arena_evidence_admission_evidence_decision_id'))}",
+            "Accepted Evidence Id: "
+            f"{self._value(summary.get('arena_evidence_admission_accepted_evidence_id'))}",
+            "Originating Arena Id: "
+            f"{self._value(summary.get('originating_arena_id'))}",
+            "Originating Arena Snapshot Id: "
+            f"{self._value(summary.get('originating_arena_snapshot_id'))}",
+            "Target Candidate: "
+            f"{self._value(summary.get('arena_evidence_target_candidate'))}",
+            "Target Operation: "
+            f"{self._value(summary.get('arena_evidence_target_operation'))}",
+            "Evidence Direction: "
+            f"{self._value(summary.get('arena_evidence_direction'))}",
+            "Accepted Evidence Artifact Available: "
+            f"{self._value(summary.get('accepted_evidence_artifact_available'))}",
+            "Arena Admission Invoked: "
+            f"{self._value(summary.get('arena_admission_invoked'))}",
+            "Arena Admission Review Completed: "
+            f"{self._value(summary.get('arena_admission_review_completed'))}",
+            "Arena Admission State: "
+            f"{self._value(summary.get('arena_admission_state'))}",
+            "Arena Admission Reason: "
+            f"{self._value(summary.get('arena_admission_reason'))}",
+            "Admission Record Created: "
+            f"{self._value(summary.get('arena_admission_record_created'))}",
+            "Admission Record Id: "
+            f"{self._value(summary.get('arena_evidence_admission_id'))}",
+            "Admission Record Creation Result: "
+            f"{self._value(summary.get('arena_admission_record_creation_result'))}",
+            "Ledger Entry Created: "
+            f"{self._value(summary.get('arena_evidence_ledger_entry_created'))}",
+            "Ledger Entry Id: "
+            f"{self._value(summary.get('arena_evidence_ledger_entry_id'))}",
+            "Ledger Creation Result: "
+            f"{self._value(summary.get('arena_evidence_ledger_creation_result'))}",
+            "Arena Evidence Admitted: "
+            f"{self._value(summary.get('arena_evidence_admitted'))}",
+            "Arena Evidence Consumed: "
+            f"{self._value(summary.get('arena_evidence_consumed'))}",
+            "Redeliberation Invoked: "
+            f"{self._value(summary.get('redeliberation_invoked'))}",
+            "Redeliberation Started: "
+            f"{self._value(summary.get('redeliberation_started'))}",
+            "Redeliberation Completed: "
+            f"{self._value(summary.get('redeliberation_completed'))}",
+            "Redeliberation Admission State: "
+            f"{self._value(summary.get('redeliberation_admission_state'))}",
+            "Redeliberation Authority: "
+            f"{self._value(summary.get('arena_redeliberation_authority'))}",
+            "Redeliberation Scope: "
+            f"{self._value(summary.get('arena_redeliberation_scope'))}",
+            "Baseline Snapshot Loaded: "
+            f"{self._value(summary.get('baseline_snapshot_loaded'))}",
+            "Redeliberation Snapshot Created: "
+            f"{self._value(summary.get('redeliberation_snapshot_created'))}",
+            "Redeliberation Snapshot Id: "
+            f"{self._value(summary.get('redeliberation_snapshot_id'))}",
+            "Candidate Evidence Profiles Rebuilt: "
+            f"{self._value(summary.get('candidate_evidence_profiles_rebuilt'))}",
+            "Evidence Direction Preserved: "
+            f"{self._value(summary.get('evidence_direction_preserved'))}",
+            "Evidence Effect Policy Resolved: "
+            f"{self._value(summary.get('evidence_effect_policy_resolved'))}",
+            "Evidence Effect Applied: "
+            f"{self._value(summary.get('evidence_effect_applied'))}",
+            "Candidate Scores Recomputed: "
+            f"{self._value(summary.get('candidate_scores_recomputed'))}",
+            "Candidate Score Changed: "
+            f"{self._value(summary.get('candidate_score_changed'))}",
+            "Candidate Ranking Recomputed: "
+            f"{self._value(summary.get('candidate_ranking_recomputed'))}",
+            "Candidate Ranking Changed: "
+            f"{self._value(summary.get('candidate_ranking_changed'))}",
+            "Cross-Source Consensus Recomputed: "
+            f"{self._value(summary.get('cross_source_consensus_recomputed'))}",
+            "Cross-Source Consensus Changed: "
+            f"{self._value(summary.get('cross_source_consensus_changed'))}",
+            "Validation Evidence Counted As Candidate Source: "
+            f"{self._value(summary.get('validation_evidence_counted_as_candidate_source'))}",
+            "Decision Proposal Available: "
+            f"{self._value(summary.get('decision_proposal_available'))}",
+            "Decision Proposal Id: "
+            f"{self._value(summary.get('decision_proposal_id'))}",
+            "Redeliberation Outcome: "
+            f"{self._value(summary.get('redeliberation_outcome'))}",
+            "Deliberative Outcome Id: "
+            f"{self._value(summary.get('deliberative_outcome_id'))}",
+            "Next Consumer: "
+            f"{self._value(summary.get('next_consumer'))}",
+            "Formal Selection Invoked: "
+            f"{self._value(summary.get('formal_selection_invoked'))}",
+            "Tie Resolved: "
+            f"{self._value(summary.get('tie_resolved'))}",
+            "Winner Selected: "
+            f"{self._value(summary.get('winner_selected'))}",
+            "Selected Candidate: "
+            f"{self._value(summary.get('selected_candidate'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('arena_evidence_admission_constitutional_boundary'))}",
+        ]
+        return self._section("ARENA EVIDENCE ADMISSION REPORT", lines)
+
+    def _render_arena_formal_selection_report(
+        self,
+        canonical: dict[str, Any],
+    ) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._arena_summary(canonical)
+        formal_outcome = summary.get("formal_selection_outcome")
+        if (
+            summary.get("formal_selection_gate_attempted") is not True
+            and summary.get("formal_selection_invoked") is not True
+            and summary.get("winner_selected") is not True
+            and formal_outcome in {None, "Not Available", "NOT_EVALUATED"}
+        ):
+            return ""
+        lines = [
+            "Decision Proposal Route Detected: "
+            f"{self._value(summary.get('decision_proposal_route_detected'))}",
+            "Decision Proposal Loaded: "
+            f"{self._value(summary.get('decision_proposal_loaded'))}",
+            "Decision Proposal Id: "
+            f"{self._value(summary.get('formal_selection_decision_proposal_id'))}",
+            "Originating Arena Loaded: "
+            f"{self._value(summary.get('originating_arena_loaded'))}",
+            "Baseline Snapshot Loaded: "
+            f"{self._value(summary.get('formal_baseline_snapshot_loaded'))}",
+            "Redeliberation Snapshot Loaded: "
+            f"{self._value(summary.get('formal_redeliberation_snapshot_loaded'))}",
+            "Deliberative Outcome Loaded: "
+            f"{self._value(summary.get('deliberative_outcome_loaded'))}",
+            "Candidate Set Loaded: "
+            f"{self._value(summary.get('candidate_set_loaded'))}",
+            "Proposed Candidate Resolved: "
+            f"{self._value(summary.get('proposed_candidate_resolved'))}",
+            "Proposal Lineage Alignment: "
+            f"{self._value(summary.get('proposal_lineage_alignment'))}",
+            "Fingerprint Integrity: "
+            f"{self._value(summary.get('fingerprint_integrity'))}",
+            "Proposal Uniqueness: "
+            f"{self._value(summary.get('proposal_uniqueness'))}",
+            "Formal Selection Admission Invoked: "
+            f"{self._value(summary.get('formal_selection_admission_invoked'))}",
+            "Formal Selection Admission Evaluated: "
+            f"{self._value(summary.get('formal_selection_admission_evaluated'))}",
+            "Formal Selection Admission State: "
+            f"{self._value(summary.get('formal_selection_admission_state'))}",
+            "Formal Selection Admission Reason: "
+            f"{self._value(summary.get('formal_selection_admission_reason'))}",
+            "Formal Selection Review Authority: "
+            f"{self._value(summary.get('formal_selection_review_authority'))}",
+            "Formal Selection Review Scope: "
+            f"{self._value(summary.get('formal_selection_review_scope'))}",
+            "Formal Selection Review Started: "
+            f"{self._value(summary.get('formal_selection_review_started'))}",
+            "Formal Selection Review Completed: "
+            f"{self._value(summary.get('formal_selection_review_completed'))}",
+            "Proposal Lineage Integrity: "
+            f"{self._value(summary.get('proposal_lineage_integrity_state'))}",
+            "Candidate Identity Integrity: "
+            f"{self._value(summary.get('candidate_identity_integrity_state'))}",
+            "Redeliberation Completeness: "
+            f"{self._value(summary.get('redeliberation_completeness_state'))}",
+            "Proposal Readiness: "
+            f"{self._value(summary.get('proposal_readiness_state'))}",
+            "Minimum Margin: "
+            f"{self._value(summary.get('minimum_margin_state'))}",
+            "Candidate Eligibility: "
+            f"{self._value(summary.get('candidate_eligibility_state'))}",
+            "Cross-Source Requirement: "
+            f"{self._value(summary.get('cross_source_requirement_state'))}",
+            "Consensus Integrity: "
+            f"{self._value(summary.get('consensus_integrity_state'))}",
+            "Evidence Attribution: "
+            f"{self._value(summary.get('evidence_attribution_state'))}",
+            "Evidence Quality: "
+            f"{self._value(summary.get('evidence_quality_state'))}",
+            "Remaining Uncertainty: "
+            f"{self._value(summary.get('remaining_uncertainty_state'))}",
+            "Remaining Evidence Deficit: "
+            f"{self._value(summary.get('remaining_evidence_deficit_state'))}",
+            "Constitutional Review State: "
+            f"{self._value(summary.get('constitutional_review_state'))}",
+            "Constitutional Veto Active: "
+            f"{self._value(summary.get('constitutional_veto_active'))}",
+            "Temporal Validity: "
+            f"{self._value(summary.get('temporal_validity_state'))}",
+            "Selection Authority Boundary: "
+            f"{self._value(summary.get('selection_authority_boundary_state'))}",
+            "Downstream Execution Separation: "
+            f"{self._value(summary.get('downstream_execution_separation_state'))}",
+            "Formal Selection Outcome: "
+            f"{self._value(summary.get('formal_selection_outcome'))}",
+            "Outcome Reason: "
+            f"{self._value(summary.get('formal_selection_outcome_reason'))}",
+            "Proposal Ratified: "
+            f"{self._value(summary.get('proposal_ratified'))}",
+            "Proposal Rejected: "
+            f"{self._value(summary.get('proposal_rejected'))}",
+            "Proposal Deferred: "
+            f"{self._value(summary.get('proposal_deferred'))}",
+            "Tie Resolved: "
+            f"{self._value(summary.get('tie_resolved'))}",
+            "Winner Selected: "
+            f"{self._value(summary.get('winner_selected'))}",
+            "Selected Candidate: "
+            f"{self._value(summary.get('selected_candidate'))}",
+            "Selection Basis: "
+            f"{self._value(summary.get('selection_basis'))}",
+            "Candidate Execution Authority: "
+            f"{self._value(summary.get('candidate_execution_authority'))}",
+            "Candidate Execution Started: "
+            f"{self._value(summary.get('candidate_execution_started'))}",
+            "Truth Authority: "
+            f"{self._value(summary.get('truth_authority'))}",
+            "Trust Authority: "
+            f"{self._value(summary.get('trust_authority'))}",
+            "Graduation Authority: "
+            f"{self._value(summary.get('graduation_authority'))}",
+            "Next Consumer: "
+            f"{self._value(summary.get('next_consumer'))}",
+            "Review Case Creation Result: "
+            f"{self._value(summary.get('formal_selection_review_creation_result'))}",
+            "Decision Creation Result: "
+            f"{self._value(summary.get('formal_selection_decision_creation_result'))}",
+            "Arena Selection Snapshot Creation Result: "
+            f"{self._value(summary.get('arena_selection_snapshot_creation_result'))}",
+            "Proposal Disposition Creation Result: "
+            f"{self._value(summary.get('proposal_disposition_creation_result'))}",
+            "Constitutional Boundary: "
+            f"{self._value(summary.get('formal_selection_constitutional_boundary'))}",
+        ]
+        return self._section("ARENA FORMAL SELECTION REPORT", lines)
+
+    def _render_multi_hypothesis_report(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "MULTI_HYPOTHESIS_REPORT",
+            "multi_hypothesis_report",
+        )
+        if not report:
+            engine_report = self._first_dict(
+                state,
+                "MULTI_HYPOTHESIS_ENGINE_REPORT",
+                "multi_hypothesis_engine_report",
+            )
+            if not engine_report:
+                engine_report = self._first_dict(
+                    performance,
+                    "MULTI_HYPOTHESIS_ENGINE_REPORT",
+                    "multi_hypothesis_engine_report",
+                )
+            compact = self._first_dict(engine_report, "MULTI_HYPOTHESIS_REPORT")
+            report = compact or engine_report
+        best = report.get("Best Ranked") or report.get("best_ranked") or []
+        ready = report.get("Execution Ready") or report.get("execution_ready") or []
+        if isinstance(best, list):
+            best_text = ", ".join(
+                self._value(item.get("hypothesis_name") if isinstance(item, dict) else item)
+                for item in best[:6]
+            )
+        else:
+            best_text = self._value(best)
+        if isinstance(ready, list):
+            ready_text = ", ".join(
+                self._value(item.get("hypothesis_name") if isinstance(item, dict) else item)
+                for item in ready[:6]
+            )
+        else:
+            ready_text = self._value(ready)
+        lines = [
+            f"Generated Hypotheses: {self._value(report.get('Generated Hypotheses', report.get('hypothesis_count')))}",
+            f"Accepted: {self._value(report.get('Accepted', report.get('accepted_count')))}",
+            f"Rejected: {self._value(report.get('Rejected', report.get('rejected_count')))}",
+            f"Reusable: {self._value(report.get('Reusable', report.get('reusable_count')))}",
+            f"Best Ranked: {best_text or 'Not Available'}",
+            f"Execution Ready: {ready_text or 'Not Available'}",
+        ]
+        if canonical["report_level"] == "diagnostic":
+            lines.extend([
+                "Hypothesis Ranking Operational: "
+                f"{self._value(report.get('hypothesis_ranking_operational'))}",
+                "Hypothesis Validation Operational: "
+                f"{self._value(report.get('hypothesis_validation_operational'))}",
+                "Hypothesis Memory Operational: "
+                f"{self._value(report.get('hypothesis_memory_operational'))}",
+            ])
+        return self._section("MULTI HYPOTHESIS REPORT", lines)
+
+    def _render_candidate_proposal(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        summary = self._binding_value(canonical, "candidate_proposal_summary")
+        summary = summary if isinstance(summary, dict) else {}
+        proposals = summary.get("candidate_proposals") or []
+        proposals = proposals if isinstance(proposals, list) else []
+        adaptive_trace = summary.get("adaptive_reuse_admission_trace") or []
+        adaptive_trace = adaptive_trace if isinstance(adaptive_trace, list) else []
+        sources = summary.get("sources_with_proposals") or []
+        sources = sources if isinstance(sources, list) else [sources]
+        rejected = summary.get("sources_rejected") or []
+        rejected = rejected if isinstance(rejected, list) else [rejected]
+        lines = [
+            f"Proposal Phase Entered: {self._value(summary.get('proposal_phase_entered'))}",
+            f"Proposal Phase Status: {self._value(summary.get('proposal_phase_status'))}",
+            f"Eligible Sources: {self._value(summary.get('eligible_source_count'))}",
+            f"Candidate Proposals: {self._value(summary.get('proposal_count'))}",
+            f"Explicit Rejections: {self._value(summary.get('explicit_rejection_count'))}",
+            f"Sources With Proposals: {', '.join(str(item) for item in sources) if sources else 'Not Available'}",
+            f"Sources Rejected: {', '.join(str(item) for item in rejected) if rejected else 'Not Available'}",
+            "Knowledge Investment Policy: "
+            f"{self._value(summary.get('knowledge_investment_policy'))}",
+            "Knowledge Investment Authority: "
+            f"{self._value(summary.get('knowledge_investment_authority'))}",
+            "High Value Knowledge Items: "
+            f"{self._value(summary.get('high_value_knowledge_items'))}",
+            "Medium Value Knowledge Items: "
+            f"{self._value(summary.get('medium_value_knowledge_items'))}",
+            "Low Value Knowledge Items: "
+            f"{self._value(summary.get('low_value_knowledge_items'))}",
+            "Deprioritized Knowledge Items: "
+            f"{self._value(summary.get('deprioritized_knowledge_items'))}",
+        ]
+        if proposals:
+            lines.append("Proposal Ledger:")
+            for proposal in proposals[:6]:
+                if not isinstance(proposal, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(proposal.get('source'))}: "
+                    f"{self._value(proposal.get('proposal_status'))} "
+                    f"op={self._value(proposal.get('operation'))} "
+                    f"value={self._value(proposal.get('operational_value_score'))} "
+                    f"tier={self._value(proposal.get('investment_tier'))} "
+                    f"reason={self._value(proposal.get('investment_reason') or proposal.get('rejection_reason'))}"
+                )
+        if adaptive_trace:
+            lines.append("Adaptive Reuse Admission Trace:")
+            for row in adaptive_trace[:3]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{self._value(row.get('stage'))}: "
+                    f"status={self._value(row.get('reuse_status'))} "
+                    f"mode={self._value(row.get('reuse_output_mode'))} "
+                    f"eligible={self._value(row.get('arena_admission_eligible'))} "
+                    f"strategies={self._value(row.get('reused_strategy_count'))} "
+                    f"programs={self._value(row.get('reused_program_count'))} "
+                    f"steps={self._value(row.get('program_steps_count'))} "
+                    "independent_reuse="
+                    f"{self._value(row.get('operational_independent_reuse_success_count'))} "
+                    f"candidate={self._value(row.get('candidate_payload_present'))} "
+                    f"detected={self._value(row.get('proposal_candidate_detected'))} "
+                    f"reason={self._value(row.get('proposal_rejection_reason'))}"
+                )
+                operations = row.get("resolved_operations") or row.get(
+                    "arena_adaptive_operations"
+                ) or []
+                if operations:
+                    lines.append(
+                        "     operations="
+                        + ", ".join(str(operation) for operation in operations[:6])
+                    )
+        return self._section("CANDIDATE PROPOSAL PHASE", lines)
+
+    def _render_search_quality(self, canonical: dict[str, Any]) -> str:
+        search = canonical["search"]
+        return self._section("SEARCH QUALITY", [
+            f"Overall Search Quality: {self._field(canonical, 'overall_search_quality')}",
+            f"Search Efficiency: {self._field(canonical, 'search_efficiency')}",
+            f"Search Coverage: {self._field(canonical, 'search_coverage')}",
+            f"Search Entropy: {self._field(canonical, 'search_entropy')}",
+            f"Average Route Quality: {self._field(canonical, 'average_route_quality')}",
+        ])
+
+    def _render_counterfactual_reasoning(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "COUNTERFACTUAL_REASONING_REPORT",
+            "counterfactual_reasoning_report",
+        )
+        if not report:
+            engine = self._first_dict(
+                state,
+                "COUNTERFACTUAL_REASONING_ENGINE_REPORT",
+                "counterfactual_reasoning_engine_report",
+            )
+            if not engine:
+                engine = self._first_dict(
+                    performance,
+                    "COUNTERFACTUAL_REASONING_ENGINE_REPORT",
+                    "counterfactual_reasoning_engine_report",
+                )
+            report = self._first_dict(engine, "COUNTERFACTUAL_REASONING_REPORT") or engine
+        summary = report.get("counterfactual_summary") or []
+        summary = summary if isinstance(summary, list) else []
+        lines = [
+            f"Counterfactual Required: {self._value(report.get('counterfactual_required'))}",
+            f"Eligibility State: {self._value(report.get('eligibility_state'))}",
+            f"Trigger Reasons: {', '.join(str(item) for item in report.get('trigger_reasons', [])[:6]) if isinstance(report.get('trigger_reasons'), list) and report.get('trigger_reasons') else 'Not Available'}",
+            f"Assumptions: {self._value(report.get('assumption_count'))}",
+            f"Challengeable Assumptions: {self._value(report.get('challengeable_assumption_count'))}",
+            f"Generated Counterfactuals: {self._value(report.get('generated_counterfactual_count'))}",
+            f"Simulated Counterfactuals: {self._value(report.get('simulated_counterfactual_count'))}",
+            f"Rejected Counterfactuals: {self._value(report.get('rejected_counterfactual_count'))}",
+            f"Best Counterfactual: {self._value(report.get('best_counterfactual_id'))}",
+            f"Original Still Best: {self._value(report.get('original_candidate_still_best'))}",
+            f"Falsification State: {self._value(report.get('falsification_state'))}",
+            f"Winner Stability State: {self._value(report.get('winner_stability_state'))}",
+            f"Winner Stability Score: {self._value(report.get('winner_stability_score'))}",
+            f"Minimal Revision Generated: {self._value(report.get('minimal_revision_generated'))}",
+            f"Execution Recommendation: {self._value(report.get('execution_recommendation'))}",
+            f"Budget Used: {self._value(report.get('budget_used'))}",
+            f"Stop Reason: {self._value(report.get('stop_reason'))}",
+        ]
+        if summary:
+            lines.append("Counterfactual Summary:")
+            for index, row in enumerate(summary[:6], start=1):
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    "  "
+                    f"{index}. {self._value(row.get('counterfactual_id'))} "
+                    f"accuracy={self._value(row.get('accuracy'))} "
+                    f"residual={self._value(row.get('residual'))} "
+                    f"evidence={self._value(row.get('evidence'))}"
+                )
+        return self._section("COUNTERFACTUAL REASONING REPORT", lines)
+
+    def _render_natural_production_handoff(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        trace = self._first_dict(
+            state,
+            "NATURAL_PRODUCTION_HANDOFF_TRACE",
+            "natural_production_handoff_trace",
+        )
+        if not trace:
+            executable = self._first_dict(
+                state,
+                "EXECUTABLE_INTELLIGENCE_REPORT",
+                "executable_intelligence_report",
+            )
+            if not executable:
+                executable = self._first_dict(
+                    performance,
+                    "EXECUTABLE_INTELLIGENCE_REPORT",
+                    "executable_intelligence_report",
+                )
+            trace = self._first_dict(
+                executable,
+                "NATURAL_PRODUCTION_HANDOFF_TRACE",
+                "natural_production_handoff_trace",
+            )
+        if not trace:
+            production = self._first_dict(
+                state,
+                "PRODUCTION_EXECUTION_RESULT",
+                "production_execution_result",
+            )
+            trace = self._first_dict(
+                production,
+                "NATURAL_PRODUCTION_HANDOFF_TRACE",
+                "natural_production_handoff_trace",
+            )
+        if not trace:
+            return self._section("NATURAL PRODUCTION AUTHORITY HANDOFF", [
+                "Phase-3 State: Not produced in this run",
+                "Delivery Authority: Not produced in this run",
+            ])
+        lines = [
+            f"Phase-3 State: {self._value(trace.get('phase_3_state'))}",
+            f"Run Id: {self._value(trace.get('run_id'))}",
+            f"Task Id: {self._value(trace.get('task_id'))}",
+            f"Candidate Generated: {self._value(trace.get('candidate_generated'))}",
+            f"Candidate Id: {self._value(trace.get('candidate_id'))}",
+            f"Candidate Source: {self._value(trace.get('candidate_source'))}",
+            f"Candidate Materialized: {self._value(trace.get('materialized'))}",
+            f"Sandbox Validation: {self._value(trace.get('sandbox_validation_state'))}",
+            f"Qualification: {self._value(trace.get('qualification_state'))}",
+            f"Arena Reached: {self._value(trace.get('arena_reached'))}",
+            f"Arena Decision: {self._value(trace.get('arena_decision'))}",
+            f"Safe Winner Selected: {self._value(trace.get('safe_winner_selected'))}",
+            f"Execution Grant Expected: {self._value(trace.get('grant_expected'))}",
+            f"Execution Grant Issued: {self._value(trace.get('grant_boundary_reached'))}",
+            f"Grant Id: {self._value(trace.get('grant_id'))}",
+            "Candidate Budget Admission Expected: "
+            f"{self._value(trace.get('candidate_budget_admission_expected'))}",
+            "Candidate Budget Admission State: "
+            f"{self._value(trace.get('budget_admission_state'))}",
+            "Production Executor Expected: "
+            f"{self._value(trace.get('production_executor_expected'))}",
+            "Production Executor Reached: "
+            f"{self._value(trace.get('production_executor_reached'))}",
+            "Underlying Executor Called: "
+            f"{self._value(trace.get('underlying_executor_called'))}",
+            "Real Execution Performed: "
+            f"{self._value(trace.get('real_execution_performed'))}",
+            "Outcome Provenance State: "
+            f"{self._value(trace.get('outcome_provenance_state'))}",
+            "Candidate Lineage State: "
+            f"{self._value(trace.get('candidate_lineage_state'))}",
+            "First Blocking Boundary: "
+            f"{self._value(trace.get('first_blocked_boundary'))}",
+            f"Blocking Reason: {self._value(trace.get('blocking_reason'))}",
+            "Highest Contract-Proven Level: "
+            f"{self._value(trace.get('highest_contract_proven_level'))}",
+            "Highest Natural Runtime Level: "
+            f"{self._value(trace.get('highest_natural_runtime_level'))}",
+            "Synthetic Assistance Used: "
+            f"{self._value(trace.get('synthetic_assistance_used'))}",
+            f"Test Fixture Used: {self._value(trace.get('test_fixture_used'))}",
+            f"Manual Grant Issuance: {self._value(trace.get('manual_grant_issuance'))}",
+            "Manual Executor Invocation: "
+            f"{self._value(trace.get('manual_executor_invocation'))}",
+            "Unauthorized Downstream Activity: "
+            f"{self._value(trace.get('unauthorized_downstream_activity'))}",
+            f"Reachability Gap: {self._value(trace.get('reachability_gap'))}",
+        ]
+        return self._section("NATURAL PRODUCTION AUTHORITY HANDOFF", lines)
+
+    def _render_executable_intelligence(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "EXECUTABLE_INTELLIGENCE_REPORT",
+            "executable_intelligence_report",
+        )
+        if not report:
+            engine = self._first_dict(
+                state,
+                "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                "executable_intelligence_engine_report",
+            )
+            if not engine:
+                engine = self._first_dict(
+                    performance,
+                    "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                    "executable_intelligence_engine_report",
+                )
+            report = self._first_dict(engine, "EXECUTABLE_INTELLIGENCE_REPORT") or engine
+        activation = {
+            **self._first_dict(
+                performance,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+            **self._first_dict(
+                state,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+        }
+        def _count(value: Any) -> int | None:
+            if isinstance(value, list | tuple | set | dict):
+                return len(value)
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                return int(value)
+            return None
+        compiled_programs = _count(report.get("compiled_programs"))
+        validated_programs = _count(report.get("validated_programs")) or 0
+        execution_attempt_count = _count(
+            report.get("execution_attempt_count")
+            or report.get("attempted_executions")
+            or report.get("executed_programs")
+            or compiled_programs
+        )
+        execution_success_count = _count(
+            report.get("execution_success_count")
+            or report.get("successful_executions")
+        )
+        validation_infrastructure_available = report.get(
+            "program_validation_infrastructure_available",
+            report.get("program_validation_operational"),
+        )
+        validation_invoked = report.get("program_validation_invoked")
+        if validation_invoked is None:
+            validation_invoked = bool(
+                (compiled_programs or 0) > 0 or validated_programs > 0
+            )
+        validation_semantics_state = report.get("program_validation_semantics_state")
+        if validation_semantics_state is None:
+            if (
+                validation_infrastructure_available is True
+                and validation_invoked is True
+                and validated_programs == 0
+            ):
+                validation_semantics_state = "VALIDATION_SEMANTICS_BOTTLENECK"
+            elif validation_infrastructure_available is False:
+                validation_semantics_state = "VALIDATION_INFRASTRUCTURE_UNAVAILABLE"
+            elif validation_invoked is False:
+                validation_semantics_state = "VALIDATION_NOT_INVOKED"
+            else:
+                validation_semantics_state = "VALIDATION_SEMANTICS_CLEAR"
+        validation_contract_state = report.get("program_validation_contract_state")
+        if validation_contract_state is None:
+            if validation_semantics_state == "VALIDATION_SEMANTICS_BOTTLENECK":
+                validation_contract_state = (
+                    "EVIDENCE_ACCEPTANCE_CONTRACT_UNSATISFIED"
+                )
+            else:
+                validation_contract_state = "VALIDATION_CONTRACT_CLEAR"
+        validation_semantics_question = report.get(
+            "program_validation_semantics_question",
+            "what_constitutes_acceptable_evidence",
+        )
+        lines = [
+            f"Semantic Intent Operational: {self._value(report.get('semantic_intent_operational'))}",
+            f"Object Grounding Operational: {self._value(report.get('object_grounding_operational'))}",
+            "Object Grounding Infrastructure Operational: "
+            f"{self._value(report.get('object_grounding_infrastructure_operational'))}",
+            "Object Grounding Produced: "
+            f"{self._value(report.get('object_grounding_produced'))}",
+            "Object Grounding Flow State: "
+            f"{self._value(report.get('object_grounding_flow_state'))}",
+            "Object Grounding Blocked Stage: "
+            f"{self._value(report.get('object_grounding_blocked_stage'))}",
+            "Object Grounding Flow Action: "
+            f"{self._value(report.get('object_grounding_flow_action'))}",
+            "Validation Probe Grounding Context Received: "
+            f"{self._value(report.get('validation_probe_grounding_context_received'))}",
+            "Validation Probe Grounding Context Input Available: "
+            f"{self._value(report.get('validation_probe_grounding_context_input_available'))}",
+            "Validation Probe Grounding Expected Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_expected_payload_keys'))}",
+            "Validation Probe Grounding Received Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_received_payload_keys'))}",
+            "Validation Probe Grounding Missing Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_missing_payload_keys'))}",
+            "Validation Probe Grounding Empty Payload Keys: "
+            f"{self._value(report.get('validation_probe_grounding_empty_payload_keys'))}",
+            "Object Grounding Input Source: "
+            f"{self._value(report.get('object_grounding_input_source'))}",
+            "Grounded Target Object Count: "
+            f"{self._value(report.get('grounded_target_object_count'))}",
+            f"Localized Execution Planning Operational: {self._value(report.get('localized_execution_planning_operational'))}",
+            f"Primitive Selection Operational: {self._value(report.get('primitive_selection_operational'))}",
+            f"Program Synthesis Operational: {self._value(report.get('program_synthesis_operational'))}",
+            f"Program Compilation Operational: {self._value(report.get('program_compilation_operational'))}",
+            f"Program Validation Operational: {self._value(report.get('program_validation_operational'))}",
+            "Program Validation Infrastructure Available: "
+            f"{self._value(validation_infrastructure_available)}",
+            f"Program Validation Invoked: {self._value(validation_invoked)}",
+            f"Program Validation Success Count: {self._value(validated_programs)}",
+            "Program Validation Semantics State: "
+            f"{self._value(validation_semantics_state)}",
+            "Program Validation Contract State: "
+            f"{self._value(validation_contract_state)}",
+            "Program Validation Semantics Question: "
+            f"{self._value(validation_semantics_question)}",
+            f"Residual Localization Operational: {self._value(report.get('residual_localization_operational'))}",
+            f"Residual Repair Operational: {self._value(report.get('residual_repair_operational'))}",
+            f"Execution Adaptation Operational: {self._value(report.get('execution_adaptation_operational'))}",
+            f"Execution Memory Operational: {self._value(report.get('execution_memory_operational'))}",
+            f"Governed Execution Operational: {self._value(report.get('governed_execution_operational'))}",
+            f"Knowledge Feedback Operational: {self._value(report.get('knowledge_feedback_operational'))}",
+            f"Executable Concepts: {self._value(report.get('executable_concepts'))}",
+            f"Localized Operations: {self._value(report.get('localized_operations'))}",
+            f"Target Objects: {self._value(report.get('target_objects'))}",
+            f"Synthesized Programs: {self._value(report.get('synthesized_programs'))}",
+            f"Compiled Programs: {self._value(report.get('compiled_programs'))}",
+            "Compiled Execution Programs: "
+            f"{self._value(report.get('compiled_execution_programs'))}",
+            "Validation Probe Compiled Programs: "
+            f"{self._value(report.get('validation_probe_compiled_programs'))}",
+            f"Validated Programs: {self._value(report.get('validated_programs'))}",
+            "Validation Probe Consumed: "
+            f"{self._value(report.get('validation_probe_consumed', activation.get('validation_probe_consumed')))}",
+            "Validation Probe Compiler Participation: "
+            f"{self._value(report.get('validation_probe_compiler_participation', activation.get('validation_probe_compiler_participation')))}",
+            "Validation Probe Admission State: "
+            f"{self._value(report.get('validation_probe_admission_state', activation.get('validation_probe_admission_state')))}",
+            "Validation Probe Authority: "
+            f"{self._value(report.get('validation_probe_authority', activation.get('validation_probe_authority')))}",
+            "Validation Probe Sandbox Validation Invoked: "
+            f"{self._value(report.get('validation_probe_sandbox_validation_invoked', activation.get('validation_probe_sandbox_validation_invoked')))}",
+            "Validation Probe Result Captured: "
+            f"{self._value(report.get('validation_probe_validation_result_captured', activation.get('validation_probe_validation_result_captured')))}",
+            "Validation Probe Comparable Output Captured: "
+            f"{self._value(report.get('validation_probe_comparable_output_captured', activation.get('validation_probe_comparable_output_captured')))}",
+            "Validation Probe Evidence Acceptance Evaluated: "
+            f"{self._value(report.get('validation_probe_evidence_acceptance_evaluated', activation.get('validation_probe_evidence_acceptance_evaluated')))}",
+            "Validation Probe Evidence Acceptance State: "
+            f"{self._value(report.get('validation_probe_evidence_acceptance_state', activation.get('validation_probe_evidence_acceptance_state')))}",
+            "Validation Probe Evidence Insufficiency Cause: "
+            f"{self._value(report.get('validation_probe_evidence_insufficiency_cause', activation.get('validation_probe_evidence_insufficiency_cause')))}",
+            "Validation Probe Required Evidence: "
+            f"{self._value(report.get('validation_probe_required_evidence', activation.get('validation_probe_required_evidence')))}",
+            "Validation Probe Recommended Validation Action: "
+            f"{self._value(report.get('validation_probe_recommended_validation_action', activation.get('validation_probe_recommended_validation_action')))}",
+            "Compiled To Validated Probe State: "
+            f"{self._value(report.get('compiled_to_validated_probe_state', activation.get('compiled_to_validated_probe_state')))}",
+            "Arena Execution Recommendation Forwarded: "
+            f"{self._value(activation.get('arena_execution_recommendation_forwarded'))}",
+            "Selected Arena Candidate Forwarded: "
+            f"{self._value(activation.get('selected_arena_candidate_forwarded'))}",
+            "Validation Probe Forwarded: "
+            f"{self._value(activation.get('validation_probe_forwarded'))}",
+            "Forwarded Validation Probe Candidate: "
+            f"{self._value(activation.get('validation_probe_candidate_id'))}",
+            f"Residual Regions: {self._value(report.get('residual_regions'))}",
+            f"Generated Repairs: {self._value(report.get('generated_repairs'))}",
+            f"Execution Success Rate: {self._value(report.get('execution_success_rate'))}",
+            "Execution Success Basis: "
+            f"{self._value(execution_success_count)} / {self._value(execution_attempt_count)}",
+            f"Execution Attempt Count: {self._value(execution_attempt_count)}",
+            f"Execution Adaptations: {self._value(report.get('execution_adaptations'))}",
+            f"Execution Feedback: {self._value(report.get('execution_feedback'))}",
+        ]
+        return self._section("EXECUTABLE INTELLIGENCE REPORT", lines)
+
+    def _render_knowledge_pipeline(self, canonical: dict[str, Any]) -> str:
+        knowledge = canonical["knowledge"]
+        return self._section("KNOWLEDGE PIPELINE", [
+            f"Knowledge Propagation Status: {self._field(canonical, 'knowledge_propagation_status')}",
+            f"Integrated Concepts: {self._field(canonical, 'integrated_concepts')}",
+            f"Knowledge Links: {self._field(canonical, 'knowledge_links')}",
+            f"Replication State: {self._field(canonical, 'replication_state')}",
+        ])
+
+    def _render_system_health(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        binding = canonical["binding"]
+        metric_sync = canonical["metric_sync"]
+        observability = canonical["observability"]
+        return self._section("SYSTEM HEALTH", [
+            f"Binding Status: {self._field(canonical, 'binding_status')}",
+            f"Metric Validation Status: {self._field(canonical, 'metric_validation_status')}",
+            f"Observability Status: {self._field(canonical, 'observability_status')}",
+            f"Missing Execution Instances: {self._field(canonical, 'missing_execution_instances')}",
+            f"Missing Snapshot Runtimes: {self._field(canonical, 'missing_snapshot_runtimes')}",
+            f"Governance Budget State: {self._field(canonical, 'governance_budget_state')}",
+            f"Instrumentation Overhead State: {self._field(canonical, 'instrumentation_overhead_state')}",
+        ])
+
+    def _render_timing_summary(self, canonical: dict[str, Any]) -> str:
+        runtime_summary = self._binding_value(canonical, "runtime_timing_summary")
+        if not isinstance(runtime_summary, dict):
+            runtime_summary = {}
+        top_consumers = self._binding_value(canonical, "top_time_consumers")
+        top_consumers = top_consumers if isinstance(top_consumers, list) else []
+        reporting_timing = self._binding_value(canonical, "reporting_timing_summary")
+        reporting_timing = reporting_timing if isinstance(reporting_timing, dict) else {}
+        task_selection_row = next(
+            (
+                row for row in top_consumers
+                if isinstance(row, dict)
+                and row.get("stage_name") == "Task Selection"
+            ),
+            {},
+        )
+        task_selection_percent = self._number(
+            task_selection_row.get("percentage_of_active_compute")
+        )
+        task_selection_cost_state = (
+            "TASK_SELECTION_COST_PRESSURE"
+            if task_selection_percent is not None and task_selection_percent >= 10.0
+            else "TASK_SELECTION_COST_MONITOR"
+            if task_selection_percent is not None and task_selection_percent >= 5.0
+            else "TASK_SELECTION_COST_WITHIN_BOUNDS"
+            if task_selection_percent is not None
+            else "TASK_SELECTION_COST_NOT_MEASURED"
+        )
+        task_selection_cost_action = (
+            "profile_training_signal_loading_and_cache_reuse"
+            if task_selection_cost_state == "TASK_SELECTION_COST_PRESSURE"
+            else "monitor_task_selection_cost"
+            if task_selection_cost_state == "TASK_SELECTION_COST_MONITOR"
+            else "no_action_required"
+        )
+        lines = [
+            f"Total Wall Time: {self._seconds(runtime_summary.get('total_wall_time') or self._field(canonical, 'total_wall_time'))}",
+            f"Active Compute Time: {self._seconds(runtime_summary.get('active_compute_time') or self._field(canonical, 'active_compute_time'))}",
+            f"Cognitive Runtime Time: {self._seconds(runtime_summary.get('cognitive_runtime_time'))}",
+            f"Untracked Time: {self._seconds(runtime_summary.get('untracked_time') or self._field(canonical, 'untracked_time'))}",
+            f"Timing Coverage: {self._percent(runtime_summary.get('timing_coverage') or self._field(canonical, 'timing_coverage'))}",
+            f"Report Lifecycle Total Time: {self._seconds(reporting_timing.get('report_lifecycle_total_time') or self._field(canonical, 'report_lifecycle_total_time'))}",
+            f"Final Report Rendering Time: {self._seconds(reporting_timing.get('final_report_rendering_time') or self._field(canonical, 'final_report_rendering_time'))}",
+            f"Report Timing Status: {self._value(reporting_timing.get('report_timing_status'))}",
+            f"Finalization Time: {self._seconds(runtime_summary.get('finalization_time') or self._field(canonical, 'finalization_time'))}",
+            f"Task Selection Cost State: {task_selection_cost_state}",
+            f"Task Selection Cost Action: {task_selection_cost_action}",
+        ]
+        if canonical["report_level"] != "minimal":
+            lines.extend([
+                "REPORTING TIMING SUMMARY",
+                f"Canonical Report Assembly Time: {self._seconds(reporting_timing.get('canonical_report_assembly_time'))}",
+                f"Cognitive Summary Aggregation Time: {self._seconds(reporting_timing.get('cognitive_summary_aggregation_time'))}",
+                f"Report Binding Time: {self._seconds(reporting_timing.get('report_binding_time'))}",
+                f"Report Visibility Filtering Time: {self._seconds(reporting_timing.get('report_visibility_filtering_time'))}",
+                f"Report Compression Time: {self._seconds(reporting_timing.get('report_compression_time'))}",
+                f"Representation Validation Time: {self._seconds(reporting_timing.get('representation_validation_time'))}",
+                f"Technical Appendix Serialization Time: {self._seconds(reporting_timing.get('technical_appendix_serialization_time'))}",
+                f"Report Artifact Writing Time: {self._seconds(reporting_timing.get('report_artifact_writing_time'))}",
+                f"Console Emission Time: {self._seconds(reporting_timing.get('console_emission_time'))}",
+                f"Report Overlap Duration: {self._seconds(reporting_timing.get('report_overlap_duration'))}",
+                f"Report Timing Semantics Valid: {self._value(reporting_timing.get('report_timing_semantics_valid'))}",
+            ])
+        if top_consumers:
+            lines.append("Top Three Exclusive-Time Consumers:")
+            lines.extend(
+                "  "
+                f"{item.get('rank', index + 1)}. "
+                f"{item.get('stage_name', 'Not Available')}: "
+                f"{self._seconds(item.get('exclusive_duration') or item.get('duration_seconds'))} "
+                f"({self._percent(item.get('percentage_of_active_compute'), already_percent=True)} "
+                "of ACTIVE_COMPUTE_TIME)"
+                for index, item in enumerate(top_consumers[:3])
+                if isinstance(item, dict)
+            )
+        reconciliation = self._binding_value(canonical, "timing_reconciliation_summary")
+        reconciliation = reconciliation if isinstance(reconciliation, dict) else {}
+        if canonical["report_level"] == "minimal":
+            lines.extend([
+                f"Overlap Detected: {self._value(reconciliation.get('overlap_detected'))}",
+                f"Timing Coverage: {self._percent(runtime_summary.get('timing_coverage') or self._field(canonical, 'timing_coverage'))} of TOTAL_WALL_TIME",
+                f"Resource Percentage Sum: {self._percent(reconciliation.get('resource_percentage_sum'), already_percent=True)} of ACTIVE_COMPUTE_TIME",
+            ])
+        return self._section("TIMING SUMMARY", lines)
+
+    def _render_stage_timing(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        rows = self._binding_value(canonical, "timing_hierarchy_summary")
+        rows = rows if isinstance(rows, list) else []
+        if not rows:
+            return self._section("COGNITIVE STAGE TIMING", [
+                "TIMING HIERARCHY SUMMARY",
+                "Stage Timing: Not Available",
+            ])
+        lines = [
+            "TIMING HIERARCHY SUMMARY",
+            "stage_name                       inclusive_duration  exclusive_duration  relationship_type  timing_scope",
+        ]
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            indent = "  " * int(row.get("depth", 0) or 0)
+            label = indent + self._stage_display_label(row, max_width=max(30 - len(indent), 12))
+            lines.append(
+                f"{label[:30]:30} "
+                f"{self._seconds(row.get('inclusive_duration')):>18} "
+                f"{self._seconds(row.get('exclusive_duration')):>18} "
+                f"{str(row.get('relationship_type', 'Not Available'))[:17]:17} "
+                f"{str(row.get('timing_scope', 'Not Available'))[:24]:24}"
+            )
+        return self._section("COGNITIVE STAGE TIMING", lines)
+
+    def _render_resource_summary(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] == "minimal":
+            return ""
+        hierarchy_rows = self._binding_value(canonical, "timing_hierarchy_summary")
+        hierarchy_rows = hierarchy_rows if isinstance(hierarchy_rows, list) else []
+        rows = self._binding_value(canonical, "resource_consumption_ranking")
+        rows = rows if isinstance(rows, list) else []
+        top = rows[0] if rows else {}
+        reconciliation = self._binding_value(canonical, "timing_reconciliation_summary")
+        reconciliation = reconciliation if isinstance(reconciliation, dict) else {}
+        lines = [
+            "RESOURCE CONSUMPTION RANKING",
+            "stage_name                       exclusive_duration  percentage_of_active_compute  rank",
+        ]
+        for row in rows[:10]:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"{str(row.get('stage_name', 'Not Available'))[:30]:30} "
+                f"{self._seconds(row.get('exclusive_duration')):>18} "
+                f"{self._percent(row.get('percentage_of_active_compute'), already_percent=True):>28} "
+                f"{self._value(row.get('rank')):>4}"
+            )
+        lines.extend([
+            f"Highest Time Consumer: {self._value(top.get('stage_name'))}",
+            "Highest Time Consumer Percentage: "
+            f"{self._percent(top.get('percentage_of_active_compute'), already_percent=True)} of ACTIVE_COMPUTE_TIME",
+            "Resource Percentage Sum: "
+            f"{self._percent(reconciliation.get('resource_percentage_sum'), already_percent=True)} of ACTIVE_COMPUTE_TIME",
+            f"Overlap Accounted For: {self._value(reconciliation.get('overlap_accounted_for'))}",
+            f"Timing Hierarchy Valid: {self._value(reconciliation.get('timing_hierarchy_valid'))}",
+            f"Timing Coverage: {self._field(canonical, 'timing_coverage')} of TOTAL_WALL_TIME",
+            f"Untracked Time: {self._seconds(self._field(canonical, 'untracked_time'))}",
+            f"Resource Distribution Status: {'AVAILABLE' if rows or hierarchy_rows else 'Not Available'}",
+        ])
+        return self._section("COGNITIVE RESOURCE SUMMARY", lines)
+
+    def _render_diagnostic_timing_detail(self, canonical: dict[str, Any]) -> str:
+        if canonical["report_level"] != "diagnostic":
+            return ""
+        rows = self._binding_value(canonical, "diagnostic_timing_nodes")
+        rows = rows if isinstance(rows, list) else []
+        report_nodes = self._binding_value(canonical, "reporting_timing_nodes")
+        report_nodes = report_nodes if isinstance(report_nodes, list) else []
+        legacy_mappings = self._binding_value(canonical, "legacy_report_timing_mappings")
+        legacy_mappings = legacy_mappings if isinstance(legacy_mappings, list) else []
+        lines = []
+        for row in report_nodes:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"Reporting {row.get('stage_name')}: "
+                f"scope={self._value(row.get('timing_scope'))}, "
+                f"inclusive={self._seconds(row.get('inclusive_duration_seconds'))}, "
+                f"exclusive={self._seconds(row.get('exclusive_duration_seconds'))}, "
+                f"parent={self._value(row.get('parent_timing_id'))}, "
+                f"source={self._value(row.get('measurement_source'))}, "
+                f"consistency={self._value(row.get('source_consistency'))}"
+            )
+        for mapping in legacy_mappings:
+            if not isinstance(mapping, dict):
+                continue
+            lines.append(
+                f"Legacy Reporting Field {self._value(mapping.get('legacy_field'))}: "
+                f"semantics={self._value(mapping.get('legacy_timing_semantics'))}, "
+                f"canonical_scope={self._value(mapping.get('canonical_timing_scope'))}, "
+                f"normal_allowed={self._value(mapping.get('normal_reporting_allowed'))}"
+            )
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                f"{row.get('stage_name')}: "
+                f"timing_id={self._value(row.get('timing_id'))}, "
+                f"inclusive={self._seconds(row.get('inclusive_duration_seconds'))}, "
+                f"exclusive={self._seconds(row.get('exclusive_duration_seconds'))}, "
+                f"child_union={self._seconds(row.get('child_interval_union_duration'))}, "
+                f"parallel_overlap={self._seconds(row.get('parallel_overlap_duration'))}, "
+                f"duplicate_overlap={self._seconds(row.get('duplicate_overlap_duration'))}, "
+                f"parent={self._value(row.get('parent_timing_id'))}, "
+                f"source={self._value(row.get('measurement_source'))}, "
+                f"relationship={self._value(row.get('relationship_type'))}"
+            )
+        return self._section("DIAGNOSTIC TIMING DETAIL", lines or [
+            "Raw Timing Records: Not Available",
+        ])
+
+    def _render_warnings(self, canonical: dict[str, Any]) -> str:
+        warnings = self._derive_warnings(canonical)
+        warning_lines = (
+            [f"- {warning}" for warning in warnings]
+            if warnings
+            else ["- No validated report warnings."]
+        )
+        return self._section("WARNINGS AND GAPS", [
+            f"Warning Count: {len(warnings)}",
+            *warning_lines,
+        ])
+
+    def _render_runtime_metadata(self, canonical: dict[str, Any]) -> str:
+        metadata = canonical["runtime_metadata"]
+        keys = [
+            "mode",
+            "report_level",
+            "runtime_status",
+            "execution_time",
+            "training_batch_size",
+            "tasks_directory",
+            "governance_budget_seconds",
+            "governance_budget_exceeded",
+            "cache_boot_loaded",
+            "cache_boot_skipped",
+            "timestamp",
+        ]
+        return self._section("RUNTIME METADATA", [
+            f"{self._label(key)}: {self._value(metadata.get(key))}"
+            for key in keys
+        ])
+
+    def _render_technical_appendix(self, canonical: dict[str, Any]) -> str:
+        state = canonical["report_state"]
+        included = [
+            key
+            for key in sorted(state.keys(), key=str)
+            if key.isupper()
+        ][:25]
+        note = canonical.get(
+            "technical_appendix_note",
+            "Diagnostic structures are intentionally excluded from console "
+            "rendering and can be serialized as JSON.",
+        )
+        return self._section("OPTIONAL TECHNICAL APPENDIX", [
+            f"Appendix State: {note}",
+            f"Available Diagnostic Key Count: {len(included)}",
+            "Report Binding Registry: Externalized to Technical Appendix",
+            "Binding Validation Status: "
+            f"{self._binding_status(canonical)}",
+        ])
+
+    def _render_final_status(
+        self,
+        canonical: dict[str, Any],
+        *,
+        report_integrity: str = "VALID",
+    ) -> str:
+        state = canonical["report_state"]
+        status = self._value(
+            self._read_any(state, canonical["performance"], "runtime_status", "status"),
+            "COMPLETED",
+        )
+        warning_count = len(self._derive_warnings(canonical))
+        return self._section("FINAL STATUS", [
+            f"Status: {str(status).upper()}",
+            "Report Complete: TRUE",
+            f"Warnings: {warning_count}",
+            "Errors: 0",
+            "",
+            "Console Emission Completed: TRUE",
+            f"Report Integrity: {report_integrity}",
+        ], title="NEXRYN :: FINAL STATUS")
+
+    def _derive_warnings(self, canonical: dict[str, Any]) -> list[str]:
+        warnings: list[str] = []
+        search = canonical["search"]
+        program = canonical["program"]
+        state = canonical["report_state"]
+        compact = self._first_dict(state, "compact_report")
+        compression_report = self._first_dict(state, "compression_report")
+        program_lifecycle = self._first_dict(
+            state,
+            "COGNITIVE_PROGRAM_LIFECYCLE_REPORT",
+            "cognitive_program_lifecycle_report",
+        )
+        entropy = self._read_any(search, "search_entropy")
+        routes = self._read_any(search, "route_count", "unique_route_count")
+        if self._number(entropy) == 0 and (self._number(routes) or 0) > 1:
+            warnings.append("Search entropy remains zero despite multiple routes.")
+        if (
+            self._read_any(program, "validation_distribution") is None
+            and self._read_any(program, "generated_programs") is not None
+            and not program_lifecycle.get("program_registry")
+        ):
+            warnings.append("Generated programs lack final lifecycle states.")
+        compression_status = str(
+            compression_report.get("compression_status", "")
+        ).upper()
+        if (
+            compression_status not in {"NOT_REQUIRED", "SKIPPED"}
+            and isinstance(compact, dict)
+            and all(
+            int(compact.get(key, 0) or 0) == 0
+            for key in (
+                "heavy_keys_removed",
+                "arrays_summarized",
+                "repeated_reports_collapsed",
+            )
+            )
+        ):
+            warnings.append("Compact reporting performed no compression.")
+        if state.get("legacy_cache_detected"):
+            warnings.append("Legacy cache remains detected.")
+        if self._read_any(canonical["performance"], "untracked_runtime_seconds"):
+            warnings.append("Timing scope remains ambiguous.")
+        return list(dict.fromkeys(warnings))
+
+    def _section(
+        self,
+        section_name: str,
+        lines: list[str],
+        *,
+        title: str | None = None,
+    ) -> str:
+        heading = title or section_name
+        body = "\n".join(str(line) for line in lines)
+        return f"\n{'=' * 50}\n{heading}\n{'=' * 50}\n\n{body}"
+
+    def _section_title(self, section_name: str) -> str:
+        if section_name == "FINAL STATUS":
+            return "NEXRYN :: FINAL STATUS"
+        return f"\n{section_name}\n"
+
+    def _normalize_report_level(self, level: str) -> str:
+        aliases = {
+            "full": "diagnostic",
+            "debug": "diagnostic",
+            "audit": "diagnostic",
+            "diagnostic_summary": "diagnostic",
+            "full_diagnostic": "diagnostic",
+        }
+        normalized = str(level or "normal").lower()
+        normalized = aliases.get(normalized, normalized)
+        return normalized if normalized in {"minimal", "normal", "diagnostic"} else "normal"
+
+    def _first_dict(
+        self,
+        base: dict[str, Any],
+        *keys: str,
+        source_override: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        active_source = kwargs.get("source", source_override)
+        if active_source is None:
+            active_source = base
+        for key in keys:
+            value = active_source.get(key) if isinstance(active_source, dict) else None
+            if isinstance(value, dict):
+                return value
+        return {}
+
+    def _meaningful_token(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            token = value.strip()
+            if not token:
+                return False
+            normalized = token.upper().replace(" ", "_")
+            return normalized not in {
+                "UNKNOWN",
+                "NOT_AVAILABLE",
+                "NOT_PRODUCED",
+                "NOT_PRODUCED_IN_THIS_RUN",
+                "NONE",
+                "NULL",
+                "UNBOUND",
+                "SOURCE_UNBOUND",
+                "CANONICAL_SOURCE_UNBOUND",
+                "EXECUTION_PLAN_ID_UNBOUND",
+                "RUN_ID_UNBOUND",
+                "TIMESTAMP_UNBOUND",
+            }
+        return True
+
+    def _first_available_report_dict(
+        self,
+        *sources: dict[str, Any],
+        keys: tuple[str, ...],
+        usable: Callable[[dict[str, Any]], bool],
+    ) -> dict[str, Any]:
+        fallback: dict[str, Any] = {}
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            candidate = self._first_dict(source, *keys)
+            if not candidate:
+                continue
+            if not fallback:
+                fallback = candidate
+            if usable(candidate):
+                return candidate
+        return fallback
+
+    def _usable_execution_plan_report(self, report: dict[str, Any]) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        canonical_plan = report.get("canonical_execution_plan")
+        source = (
+            {**report, **canonical_plan}
+            if isinstance(canonical_plan, dict)
+            else report
+        )
+        if self._meaningful_token(source.get("execution_plan_id")):
+            return True
+        state = self._first_meaningful(
+            source.get("execution_plan_binding_state"),
+            source.get("execution_plan_state"),
+            source.get("planning_state"),
+            default=None,
+        )
+        if not self._meaningful_token(state):
+            return False
+        return str(state).upper() not in {
+            "LEGACY_PLAN_UNAVAILABLE",
+            "NOT_APPLICABLE",
+            "PLAN_IDENTITY_UNBOUND",
+        }
+
+    def _usable_budget_report(self, report: dict[str, Any]) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        state = self._first_meaningful(
+            report.get("runtime_budget_state"),
+            report.get("route_budget_enforcement_state"),
+            report.get("depth_enforcement_state"),
+            default=None,
+        )
+        if self._meaningful_token(state) and str(state).upper() not in {
+            "RUNTIME_BUDGET_ENFORCEMENT_INPUT_UNAVAILABLE",
+            "RUNTIME_BUDGET_SCOPE_UNRESOLVED",
+        }:
+            return True
+        return any(
+            self._meaningful_token(report.get(key))
+            for key in (
+                "maximum_active_routes",
+                "maximum_reasoning_depth",
+                "selected_route_count",
+                "admitted_route_count",
+                "peak_concurrent_active_route_count",
+            )
+        )
+
+    def _usable_active_runtime_audit(self, report: dict[str, Any]) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        if self._meaningful_token(report.get("audit_id")):
+            return True
+        state = self._first_meaningful(report.get("audit_state"), default=None)
+        if not self._meaningful_token(state):
+            return False
+        return str(state).upper() != "AUDIT_NOT_PRODUCED"
+
+    def _usable_raw_result_applicability_report(
+        self,
+        report: dict[str, Any],
+    ) -> bool:
+        if not isinstance(report, dict) or not report:
+            return False
+        return (
+            self._meaningful_token(report.get("authoritative_execution_plan_id"))
+            or self._meaningful_token(report.get("current_run_binding_state"))
+            or self._meaningful_token(report.get("raw_result_applicability_state"))
+        )
+
+    def _coverage_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(
+            canonical,
+            "cognitive_capability_coverage_summary",
+        )
+        return summary if isinstance(summary, dict) else {}
+
+    def _proposal_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(canonical, "candidate_proposal_summary")
+        return summary if isinstance(summary, dict) else {}
+
+    def _arena_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(canonical, "candidate_arena_summary")
+        summary = dict(summary) if isinstance(summary, dict) else {}
+        raw = self._first_dict(
+            canonical["report_state"],
+            "COGNITIVE_CANDIDATE_ARENA_REPORT",
+            "candidate_arena_report",
+        )
+        raw_summary = self._first_dict(raw, "candidate_arena_summary")
+        if isinstance(raw_summary, dict):
+            summary = {**raw_summary, **summary}
+        return summary
+
+    def _semantic_summary(self, canonical: dict[str, Any]) -> dict[str, Any]:
+        summary = self._binding_value(canonical, "semantic_compilation_summary")
+        summary = dict(summary) if isinstance(summary, dict) else {}
+        raw = self._first_dict(
+            canonical["report_state"],
+            "semantic_to_transformation_compilation_report",
+        )
+        if not raw:
+            raw = self._first_dict(
+                canonical.get("performance", {}),
+                "semantic_to_transformation_compilation_report",
+            )
+        if not raw:
+            raw = self._first_dict(
+                canonical.get("synthesis", {}),
+                "semantic_to_transformation_compilation_report",
+            )
+        if isinstance(raw, dict):
+            summary = {**raw, **summary}
+        return summary
+
+    def _executable_report_pair(
+        self,
+        canonical: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        state = canonical["report_state"]
+        performance = canonical["performance"]
+        report = self._first_dict(
+            state,
+            "EXECUTABLE_INTELLIGENCE_REPORT",
+            "executable_intelligence_report",
+        )
+        if not report:
+            engine = self._first_dict(
+                state,
+                "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                "executable_intelligence_engine_report",
+            )
+            if not engine:
+                engine = self._first_dict(
+                    performance,
+                    "EXECUTABLE_INTELLIGENCE_ENGINE_REPORT",
+                    "executable_intelligence_engine_report",
+                )
+            report = self._first_dict(engine, "EXECUTABLE_INTELLIGENCE_REPORT") or engine
+        activation = {
+            **self._first_dict(
+                performance,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+            **self._first_dict(
+                state,
+                "EXECUTABLE_ACTIVATION_REPORT",
+                "executable_activation_report",
+            ),
+        }
+        return (
+            report if isinstance(report, dict) else {},
+            activation if isinstance(activation, dict) else {},
+        )
+
+    def _count_value(self, *values: Any) -> int:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, dict | list | tuple | set):
+                return len(value)
+            if isinstance(value, int | float):
+                return int(value)
+            number = self._number(value)
+            if number is not None:
+                return int(number)
+        return 0
+
+    def _stage_from_count(self, count: Any, *, blocked: Any = None) -> str:
+        count_value = self._count_value(count)
+        if count_value > 0:
+            return "SUCCESS"
+        if blocked:
+            return "BLOCKED"
+        return "SKIPPED"
+
+    def _stage_from_winner(self, arena: dict[str, Any]) -> str:
+        winner = arena.get("arena_winner")
+        selection_state = str(arena.get("selection_state") or "")
+        if winner and selection_state != "NO_SAFE_WINNER":
+            return "SUCCESS"
+        if selection_state in {"NO_SAFE_WINNER", "NO_CANDIDATES"}:
+            return "BLOCKED"
+        return "SKIPPED"
+
+    def _development_stage(
+        self,
+        coverage: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if self._count_value(executable.get("validated_programs")) > 0:
+            if self._count_value(
+                coverage.get("materialized_operational_capabilities"),
+                executable.get("materialized_operational_capabilities"),
+            ) > 0:
+                return "CAPABILITY_MATERIALIZATION"
+            return "POST_VALIDATION_MATERIALIZATION"
+        if executable.get("validation_probe_evidence_acceptance_state"):
+            return "EVIDENCE_ACCEPTANCE"
+        if arena.get("selection_state") == "NO_SAFE_WINNER":
+            return "PREDICTION_QUALITY_CALIBRATION"
+        return "CANDIDATE_OPERATIONALIZATION"
+
+    def _compiler_resolution_state(self, canonical: dict[str, Any]) -> str:
+        trace = self._semantic_summary(canonical).get("compiler_resolution_trace")
+        trace = trace if isinstance(trace, list) else []
+        if not trace:
+            return "Not Available"
+        states = [
+            row.get("resolution_state")
+            for row in trace
+            if isinstance(row, dict) and row.get("resolution_state")
+        ]
+        return self._value(states[0] if states else None)
+
+    def _critical_resolution_row(
+        self,
+        trace: list[Any],
+        semantic: dict[str, Any],
+    ) -> dict[str, Any]:
+        selected_operation = self._semantic_selected_operation(semantic)
+        selected_intent = semantic.get("selected_intent")
+        if selected_operation:
+            for row in trace:
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("operation") or "") != str(selected_operation):
+                    continue
+                if (
+                    selected_intent
+                    and row.get("semantic_intent")
+                    and str(row.get("semantic_intent")) != str(selected_intent)
+                ):
+                    continue
+                return row
+            for row in trace:
+                if isinstance(row, dict) and str(row.get("operation") or "") == str(selected_operation):
+                    return row
+        if semantic.get("semantic_to_transformation_compilation_success") is True:
+            for row in trace:
+                if not isinstance(row, dict):
+                    continue
+                if (
+                    row.get("candidate_emitted") is True
+                    or row.get("resolution_state")
+                    == "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+                ):
+                    return row
+        for row in trace:
+            if not isinstance(row, dict):
+                continue
+            if row.get("resolution_state") != "RESOLVED_COMPILER_EMITTED_CANDIDATE":
+                return row
+        for row in trace:
+            if isinstance(row, dict):
+                return row
+        return {
+            "semantic_intent": semantic.get("selected_intent"),
+            "operation": semantic.get("selected_operation")
+            or semantic.get("compiled_operation"),
+            "resolved_compiler": "Not Available",
+            "compiler_found": "Not Available",
+            "compilation_attempted": semantic.get("compiler_triggered"),
+            "candidate_emitted": (
+                (self._count_value(semantic.get("compiled_candidate_count")) > 0)
+                if semantic.get("compiled_candidate_count") is not None
+                else "Not Available"
+            ),
+            "resolution_state": semantic.get("compilation_status"),
+        }
+
+    def _semantic_selected_operation(self, semantic: dict[str, Any]) -> Any:
+        operation = semantic.get("selected_operation") or semantic.get("compiled_operation")
+        if operation:
+            return operation
+        program = semantic.get("compiled_program")
+        program = program if isinstance(program, dict) else {}
+        steps = program.get("steps")
+        if isinstance(steps, list) and steps and isinstance(steps[0], dict):
+            return steps[0].get("operation")
+        return None
+
+    def _critical_compiler_failure(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        row = self._current_critical_resolution_row(canonical)
+        if not row:
+            return {}
+        if (
+            row.get("compiler_found") is True
+            and row.get("compilation_attempted") is True
+            and row.get("candidate_emitted") is False
+        ):
+            return row
+        return {}
+
+    def _current_critical_resolution_row(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        semantic = self._semantic_summary(canonical)
+        trace = semantic.get("compiler_resolution_trace")
+        trace = trace if isinstance(trace, list) else []
+        return self._critical_resolution_row(trace, semantic) if trace else {}
+
+    def _historical_compiler_issue_count(
+        self,
+        canonical: dict[str, Any],
+        current_row: dict[str, Any],
+    ) -> int:
+        trace = self._semantic_summary(canonical).get("compiler_resolution_trace")
+        trace = trace if isinstance(trace, list) else []
+        count = 0
+        for row in trace:
+            if not isinstance(row, dict):
+                continue
+            if row is current_row:
+                continue
+            if (
+                row.get("compiler_found") is True
+                and row.get("compilation_attempted") is True
+                and row.get("candidate_emitted") is False
+            ):
+                count += 1
+        return count
+
+    def _engineering_conclusion(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        state = canonical.get("report_state", {})
+        state = state if isinstance(state, dict) else {}
+        metadata = canonical.get("runtime_metadata", {})
+        metadata = metadata if isinstance(metadata, dict) else {}
+        existing = self._first_dict(
+            state,
+            "ENGINEERING_CONCLUSION",
+            "engineering_conclusion",
+        )
+        if existing.get("engineering_conclusion_state"):
+            return engineering_conclusion_integrity_evaluator.bind_to_canonical_report(
+                existing,
+                report_state=state,
+                runtime_metadata=metadata,
+            )
+        return {
+            "engineering_conclusion_state": "ENGINEERING_CONCLUSION_NOT_PRODUCED",
+            "conclusion_state": "UNDETERMINED",
+            "engineering_conclusion_integrity_state": "NOT_EVALUATED",
+            "engineering_conclusion_integrity_reason": (
+                "authoritative_engineering_conclusion_not_attached"
+            ),
+            "integrity": "NOT_EVALUATED",
+            "integrity_conflicts": [],
+            "conclusion_conflict_count": 0,
+        }
+
+    def _legacy_derive_engineering_conclusion(
+        self,
+        canonical: dict[str, Any],
+    ) -> dict[str, Any]:
+        coverage = self._coverage_summary(canonical)
+        arena = self._arena_summary(canonical)
+        executable, _activation = self._executable_report_pair(canonical)
+        current_row = self._current_critical_resolution_row(canonical)
+        current_failure = self._critical_compiler_failure(canonical)
+        largest_success = self._largest_current_success(arena, executable)
+        raw_regression = (
+            arena.get("prediction_quality_calibration_state")
+            or coverage.get("capability_evidence_contamination_state")
+            or "none"
+        )
+        decision_state = arena.get("arena_decision_resolution_state")
+        decision_action = arena.get("arena_decision_resolution_action")
+        formal_selection_outcome_for_decision = arena.get(
+            "formal_selection_outcome"
+        )
+        decision_pending = (
+            decision_state == "DECISION_RESOLUTION_PENDING_AFTER_CALIBRATION"
+            or formal_selection_outcome_for_decision
+            in {"RATIFIED", "REJECTED", "DEFERRED"}
+        )
+        regression = "none" if decision_pending else raw_regression
+        current_open_decision = (
+            decision_state
+            or (
+                "prediction_quality_calibration_review"
+                if raw_regression
+                == "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED"
+                else "none"
+            )
+        )
+        next_decision_gate = (
+            arena.get("evidence_acquisition_validation_task")
+            or decision_action
+            or arena.get("prediction_quality_calibration_action")
+            or "none"
+        )
+        current_path_succeeded = self._compiler_path_succeeded(
+            current_row,
+            arena,
+            executable,
+        )
+        conclusion_run_id = self._conclusion_run_id(canonical, metadata)
+        conclusion_task_id = self._conclusion_task_id(
+            canonical,
+            metadata,
+            current_row,
+            arena,
+        )
+        if current_failure:
+            current_bottleneck = "semantic_compiler_candidate_emission"
+            root_cause = current_failure.get("candidate_rejection_reason") or "unknown"
+            responsible_component = current_failure.get("resolved_compiler")
+            next_task = (
+                f"repair_{str(responsible_component).lower()}_candidate_composition"
+            )
+            source_stage = "critical_compiler_resolution_trace"
+        elif current_path_succeeded:
+            if decision_pending:
+                plan_forwarded = (
+                    arena.get("evidence_acquisition_plan_forwarded") is True
+                )
+                plan_persisted = arena.get("evidence_plan_persisted") is True
+                plan_reused = (
+                    arena.get("evidence_plan_storage_state")
+                    == "EQUIVALENT_PENDING_PLAN_REUSED"
+                    or arena.get("plan_creation_result")
+                    == "REUSED_EXISTING_PLAN"
+                )
+                lifecycle_update_persisted = (
+                    arena.get("lifecycle_update_persisted") is True
+                )
+                plan_available = (
+                    arena.get("training_assistant_plan_available") is True
+                )
+                persistence_attempted = (
+                    arena.get("evidence_plan_persistence_attempted") is True
+                )
+                persistence_failure = arena.get("plan_persistence_failure_reason")
+                plan_consumed = arena.get("training_assistant_consumed_plan") is True
+                task_scheduled = arena.get("tie_break_task_scheduled") is True
+                waiting_execution = arena.get("waiting_execution") is True
+                scheduling_state = arena.get("scheduling_state")
+                raw_result_captured = (
+                    arena.get("raw_result_captured") is True
+                    and arena.get("execution_state") == "RAW_RESULT_CAPTURED"
+                )
+                raw_structural_eligibility = arena.get(
+                    "downstream_structural_eligibility"
+                )
+                raw_result_structurally_eligible = (
+                    raw_structural_eligibility == "STRUCTURALLY_ELIGIBLE"
+                )
+                evidence_acceptance_state = arena.get("evidence_acceptance_state")
+                evidence_terminal = evidence_acceptance_state in {
+                    "ACCEPTED",
+                    "INSUFFICIENT",
+                    "REJECTED",
+                }
+                redeliberation_outcome = arena.get("redeliberation_outcome")
+                redeliberation_completed = (
+                    arena.get("redeliberation_completed") is True
+                )
+                formal_selection_outcome = arena.get("formal_selection_outcome")
+                formal_selection_completed = (
+                    arena.get("formal_selection_review_completed") is True
+                    and formal_selection_outcome in {"RATIFIED", "REJECTED", "DEFERRED"}
+                )
+                if (
+                    persistence_attempted
+                    and not (plan_persisted or plan_reused or lifecycle_update_persisted)
+                ):
+                    current_bottleneck = "evidence_plan_persistence"
+                    root_cause = persistence_failure or "evidence_plan_not_persisted"
+                    responsible_component = "EVIDENCE_ACQUISITION_PLAN_STORE"
+                    next_task = "repair_evidence_acquisition_plan_persistence"
+                elif formal_selection_completed and formal_selection_outcome == "RATIFIED":
+                    largest_success = (
+                        "decision_proposal_formally_ratified_and_arena_winner_selected_without_execution_authority"
+                    )
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_SELECTED_CANDIDATE_EXECUTION_ADMISSION_REVIEW"
+                    )
+                    next_decision_gate = (
+                        "determine_whether_the_selected_candidate_may_enter_a_separate_governed_execution_path"
+                    )
+                    current_bottleneck = "selected_candidate_execution_admission"
+                    root_cause = (
+                        "arena_selection_does_not_and_must_not_grant_candidate_execution_authority"
+                    )
+                    responsible_component = (
+                        "FUTURE_SELECTED_CANDIDATE_EXECUTION_ADMISSION_GATE"
+                    )
+                    next_task = (
+                        "design_a_separate_selected_candidate_execution_admission_gate_without_granting_automatic_truth_trust_or_graduation"
+                    )
+                elif formal_selection_completed and formal_selection_outcome == "REJECTED":
+                    largest_success = (
+                        "unsafe_invalid_or_constitutionally_ineligible_decision_proposal_formally_rejected"
+                    )
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    )
+                    next_decision_gate = (
+                        "determine_whether_candidate_revision_or_additional_evidence_is_required"
+                    )
+                    current_bottleneck = "formal_proposal_rejection"
+                    root_cause = (
+                        arena.get("formal_selection_outcome_reason")
+                        or "formal_selection_rejected_decision_proposal"
+                    )
+                    responsible_component = "ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    next_task = (
+                        "address_the_exact_rejection_reason_without_default_candidate_selection"
+                    )
+                elif formal_selection_completed and formal_selection_outcome == "DEFERRED":
+                    largest_success = (
+                        "formal_selection_safely_deferred_without_forced_ratification_or_candidate_execution"
+                    )
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_FORMAL_SELECTION_RECOVERY_OR_GOVERNED_CLARIFICATION"
+                    )
+                    next_decision_gate = (
+                        "satisfy_the_exact_pending_formal_review_condition"
+                    )
+                    current_bottleneck = "formal_selection_review_completion"
+                    root_cause = (
+                        arena.get("formal_selection_outcome_reason")
+                        or "formal_selection_deferred_pending_condition"
+                    )
+                    responsible_component = (
+                        "FORMAL_SELECTION_REVIEW_RECOVERY_OR_GOVERNED_CLARIFICATION"
+                    )
+                    next_task = (
+                        "resolve_the_exact_deferral_condition_without_recreating_or_mutating_the_decision_proposal"
+                    )
+                elif (
+                    redeliberation_completed
+                    and redeliberation_outcome == "DECISION_PROPOSAL_AVAILABLE"
+                ):
+                    largest_success = (
+                        "accepted_validation_evidence_admitted_and_governed_redeliberation_produced_decision_proposal"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_FORMAL_ARENA_SELECTION_REVIEW"
+                    next_decision_gate = (
+                        "formally_review_decision_proposal_without_automatic_execution"
+                    )
+                    current_bottleneck = "formal_arena_selection"
+                    root_cause = (
+                        "redeliberation_proposal_not_yet_ratified_by_formal_selection_gate"
+                    )
+                    responsible_component = "ARENA_FORMAL_SELECTION_GATE"
+                    next_task = (
+                        "review_and_ratify_or_reject_decision_proposal_without_granting_automatic_truth_or_execution"
+                    )
+                elif redeliberation_completed and redeliberation_outcome == "TIE_PERSISTS":
+                    largest_success = (
+                        "accepted_evidence_admitted_and_tie_recomputed_without_forced_resolution"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_TARGETED_EVIDENCE_REMEDIATION"
+                    next_decision_gate = (
+                        "determine_next_discriminating_evidence_requirement"
+                    )
+                    current_bottleneck = "remaining_candidate_indistinguishability"
+                    root_cause = (
+                        "current_admitted_evidence_did_not_create_sufficient_deliberative_separation"
+                    )
+                    responsible_component = "EVIDENCE_REMEDIATION_PLANNER"
+                    next_task = (
+                        "prepare_one_targeted_discriminating_evidence_plan_without_automatic_scheduling"
+                    )
+                elif redeliberation_completed and redeliberation_outcome == "NO_SAFE_PROPOSAL":
+                    largest_success = "unsafe_or_under_supported_proposal_prevented"
+                    regression = "none"
+                    current_open_decision = (
+                        "WAITING_ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    )
+                    next_decision_gate = (
+                        "determine_whether_more_evidence_or_candidate_revision_is_required"
+                    )
+                    current_bottleneck = "proposal_readiness"
+                    root_cause = "no_candidate_satisfies_all_formal_proposal_requirements"
+                    responsible_component = "ARENA_REVIEW_OR_EVIDENCE_REMEDIATION"
+                    next_task = (
+                        "identify_exact_proposal_deficit_without_forcing_winner_selection"
+                    )
+                elif (
+                    redeliberation_completed
+                    and redeliberation_outcome == "CONFLICT_REQUIRES_REVIEW"
+                ):
+                    largest_success = "material_evidence_conflict_detected_and_contained"
+                    regression = "none"
+                    current_open_decision = "WAITING_GOVERNED_ARENA_CONFLICT_REVIEW"
+                    next_decision_gate = "review_conflicting_admitted_evidence"
+                    current_bottleneck = "evidence_conflict"
+                    root_cause = (
+                        arena.get("arena_admission_reason")
+                        or "material_evidence_conflict_requires_review"
+                    )
+                    responsible_component = "GOVERNED_ARENA_CONFLICT_REVIEW"
+                    next_task = (
+                        "resolve_or_remediate_evidence_conflict_without_candidate_execution"
+                    )
+                elif (
+                    redeliberation_completed
+                    and redeliberation_outcome == "ADDITIONAL_EVIDENCE_REQUIRED"
+                ):
+                    largest_success = (
+                        "exact_remaining_decision_evidence_deficit_identified"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_ADDITIONAL_EVIDENCE_PLANNING"
+                    next_decision_gate = "prepare_targeted_additional_evidence_plan"
+                    current_bottleneck = "decision_evidence_sufficiency"
+                    root_cause = (
+                        arena.get("arena_admission_reason")
+                        or "additional_discriminating_evidence_required"
+                    )
+                    responsible_component = "EVIDENCE_REMEDIATION_PLANNER"
+                    next_task = (
+                        "prepare_one_evidence_plan_for_the_exact_remaining_deficit"
+                    )
+                elif evidence_terminal and evidence_acceptance_state == "ACCEPTED":
+                    largest_success = (
+                        "validation_result_governedly_evaluated_and_evidence_accepted"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_ARENA_EVIDENCE_ADMISSION"
+                    next_decision_gate = (
+                        "admit_accepted_evidence_to_cognitive_candidate_arena"
+                    )
+                    current_bottleneck = "arena_evidence_admission"
+                    root_cause = "accepted_validation_evidence_not_yet_admitted_to_arena"
+                    responsible_component = "ARENA_EVIDENCE_ADMISSION_GATE"
+                    next_task = (
+                        "admit_accepted_evidence_without_automatic_winner_selection"
+                    )
+                elif evidence_terminal and evidence_acceptance_state == "INSUFFICIENT":
+                    largest_success = (
+                        "validation_result_compared_and_evidence_deficit_identified"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_EVIDENCE_REMEDIATION_DECISION"
+                    next_decision_gate = "determine_additional_evidence_acquisition"
+                    current_bottleneck = "evidence_sufficiency"
+                    root_cause = (
+                        "validation_result_does_not_fully_satisfy_required_evidence_contract"
+                    )
+                    responsible_component = "EVIDENCE_REMEDIATION_PLANNER"
+                    next_task = (
+                        "prepare_targeted_evidence_remediation_without_automatic_scheduling"
+                    )
+                elif evidence_terminal and evidence_acceptance_state == "REJECTED":
+                    largest_success = (
+                        "inadmissible_validation_result_detected_and_contained"
+                    )
+                    regression = "none"
+                    current_open_decision = "WAITING_EVIDENCE_REVIEW_OR_REPLAN"
+                    next_decision_gate = "review_rejection_and_decide_replanning"
+                    current_bottleneck = "evidence_admissibility"
+                    root_cause = (
+                        arena.get("evidence_acceptance_reason")
+                        or "evidence_admissibility_failed"
+                    )
+                    responsible_component = "VALIDATION_EVIDENCE_EVALUATOR"
+                    next_task = "review_rejected_evidence_without_candidate_penalty"
+                elif raw_result_captured and raw_result_structurally_eligible:
+                    largest_success = (
+                        "scheduled_validation_task_executed_and_raw_result_captured"
+                    )
+                    current_open_decision = "WAITING_RAW_RESULT_EVIDENCE_EVALUATION"
+                    next_decision_gate = "evaluate_raw_validation_result"
+                    current_bottleneck = "validation_evidence_evaluation"
+                    root_cause = "raw_validation_result_not_yet_evaluated"
+                    responsible_component = "VALIDATION_EVIDENCE_EVALUATOR"
+                    next_task = "evaluate_raw_validation_result_without_truth_grant"
+                elif raw_result_captured:
+                    largest_success = (
+                        "scheduled_validation_task_executed_and_raw_result_contained"
+                    )
+                    current_open_decision = "WAITING_RAW_RESULT_PROVENANCE_REPAIR"
+                    next_decision_gate = "repair_raw_validation_result_identity"
+                    current_bottleneck = "raw_validation_result_provenance"
+                    root_cause = (
+                        arena.get("structural_ineligibility_reason")
+                        or "raw_validation_result_not_structurally_eligible"
+                    )
+                    responsible_component = "VALIDATION_EXECUTION_PIPELINE"
+                    next_task = "repair_raw_validation_result_identity_without_evidence_evaluation"
+                elif task_scheduled and scheduling_state == "SCHEDULED":
+                    largest_success = "selected_validation_task_governedly_scheduled"
+                    current_open_decision = "WAITING_VALIDATION_TASK_EXECUTION"
+                    next_decision_gate = "start_scheduled_validation_task_execution"
+                    current_bottleneck = "validation_task_execution"
+                    root_cause = "scheduled_validation_task_execution_not_started"
+                    responsible_component = "VALIDATION_EXECUTION_PIPELINE"
+                    next_task = "execute_scheduled_validation_task"
+                elif plan_consumed and waiting_execution:
+                    largest_success = "training_assistant_consumed_evidence_plan"
+                    current_open_decision = "WAITING_VALIDATION_TASK_EXECUTION"
+                    next_decision_gate = "execute_selected_validation_task"
+                    current_bottleneck = "validation_execution_pipeline"
+                    root_cause = "validation_task_execution_not_started"
+                    responsible_component = "VALIDATION_EXECUTION_PIPELINE"
+                    next_task = "execute_selected_validation_task"
+                elif plan_available and not plan_consumed:
+                    current_bottleneck = "training_assistant_plan_consumption"
+                    root_cause = "training_assistant_consumption_logic_not_implemented"
+                    responsible_component = "TRAINING_ASSISTANT_EVIDENCE_PLAN_CONSUMER"
+                    next_task = "implement_persisted_evidence_plan_consumption"
+                elif (plan_persisted or plan_reused) and not plan_consumed:
+                    largest_success = "evidence_acquisition_plan_persisted"
+                    current_bottleneck = "next_run_training_assistant_plan_consumption"
+                    root_cause = "cross_run_evidence_plan_awaiting_next_runtime"
+                    responsible_component = "TRAINING_ASSISTANT_ORCHESTRATION_HANDOFF"
+                    next_task = "consume_persisted_evidence_plan_during_next_run"
+                elif plan_forwarded and not plan_consumed:
+                    current_bottleneck = "training_assistant_plan_consumption"
+                    root_cause = "evidence_acquisition_plan_not_consumed_by_training_assistant"
+                    responsible_component = "TRAINING_ASSISTANT"
+                    next_task = (
+                        arena.get("evidence_acquisition_validation_task")
+                        or decision_action
+                        or "resolve_post_calibration_arena_decision"
+                    )
+                elif plan_consumed and not task_scheduled:
+                    current_bottleneck = "task_selection_decision_orchestration"
+                    root_cause = "evidence_acquisition_plan_consumed_without_tie_break_task_scheduled"
+                    responsible_component = "TASK_SELECTION_INTELLIGENCE"
+                    next_task = (
+                        arena.get("evidence_acquisition_validation_task")
+                        or decision_action
+                        or "resolve_post_calibration_arena_decision"
+                    )
+                else:
+                    current_bottleneck = "arena_decision_finalization"
+                    root_cause = (
+                        arena.get("arena_decision_resolution_reason")
+                        or "post_calibration_decision_pending"
+                    )
+                    responsible_component = "CANDIDATE_ARENA_DECISION_RESOLUTION"
+                    next_task = (
+                        arena.get("evidence_acquisition_validation_task")
+                        or decision_action
+                        or "resolve_post_calibration_arena_decision"
+                    )
+            else:
+                current_bottleneck = "none"
+                root_cause = "none"
+                responsible_component = "none"
+                next_task = self._next_task_from_current_regression(
+                    regression,
+                    coverage,
+                    arena,
+                    executable,
+                )
+            source_stage = "current_successful_critical_execution_trace"
+        else:
+            current_bottleneck = (
+                coverage.get("knowledge_operationalization_choke_point") or "none"
+            )
+            root_cause = (
+                coverage.get("knowledge_operationalization_choke_cause")
+                or executable.get("validation_probe_evidence_insufficiency_cause")
+                or "none"
+            )
+            responsible_component = (
+                coverage.get("knowledge_operationalization_evidence_responsibility")
+                or executable.get("object_grounding_blocked_stage")
+                or arena.get("arena_source_diversity_action")
+                or "none"
+            )
+            next_task = (
+                coverage.get("knowledge_operationalization_choke_action")
+                or executable.get("validation_probe_recommended_validation_action")
+                or arena.get("prediction_quality_calibration_action")
+                or self._next_task_from_current_regression(
+                    regression,
+                    coverage,
+                    arena,
+                    executable,
+                )
+            )
+            source_stage = "current_canonical_operationalization_summary"
+        conclusion = {
+            "largest_success": largest_success,
+            "largest_regression": regression,
+            "current_open_decision": current_open_decision,
+            "next_decision_gate": next_decision_gate,
+            "current_bottleneck": current_bottleneck,
+            "root_cause": root_cause,
+            "responsible_component": responsible_component,
+            "next_task": next_task,
+            "engineering_priority": (
+                "HIGH"
+                if current_bottleneck in {
+                    "arena_evidence_admission",
+                    "evidence_sufficiency",
+                    "evidence_admissibility",
+                    "formal_arena_selection",
+                    "selected_candidate_execution_admission",
+                    "formal_proposal_rejection",
+                    "formal_selection_review_completion",
+                    "remaining_candidate_indistinguishability",
+                    "proposal_readiness",
+                    "evidence_conflict",
+                    "decision_evidence_sufficiency",
+                }
+                else self._priority_label(coverage, arena, executable)
+            ),
+            "conclusion_scope": "current_run",
+            "conclusion_run_id": conclusion_run_id,
+            "conclusion_task_id": conclusion_task_id,
+            "conclusion_source_stage": source_stage,
+            "conclusion_source_timestamp": (
+                metadata.get("timestamp") or self._field(canonical, "timestamp")
+            ),
+            "conclusion_is_current": True,
+            "conclusion_historical_issue_count": (
+                self._historical_compiler_issue_count(canonical, current_row)
+            ),
+        }
+        conflicts = self._engineering_conclusion_conflicts(
+            conclusion,
+            current_row,
+            arena,
+            executable,
+        )
+        conclusion["integrity_conflicts"] = conflicts
+        conclusion["integrity"] = "INVALID" if conflicts else "VALID"
+        if conflicts:
+            conclusion["current_bottleneck"] = "not_authoritative"
+            conclusion["root_cause"] = "not_authoritative"
+            conclusion["responsible_component"] = "not_authoritative"
+            conclusion["next_task"] = "repair_engineering_conclusion_integrity"
+        return conclusion
+
+    def _conclusion_run_id(
+        self,
+        canonical: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> str:
+        state = canonical.get("report_state", {})
+        performance = canonical.get("performance", {})
+        timestamp = (
+            metadata.get("timestamp")
+            or self._field(canonical, "timestamp")
+            or (state.get("timestamp") if isinstance(state, dict) else None)
+            or (performance.get("timestamp") if isinstance(performance, dict) else None)
+        )
+        return self._first_meaningful(
+            metadata.get("run_id"),
+            metadata.get("execution_id"),
+            metadata.get("current_execution_id"),
+            state.get("run_id") if isinstance(state, dict) else None,
+            state.get("execution_id") if isinstance(state, dict) else None,
+            state.get("current_execution_id") if isinstance(state, dict) else None,
+            performance.get("run_id") if isinstance(performance, dict) else None,
+            performance.get("execution_id") if isinstance(performance, dict) else None,
+            self._field(canonical, "execution_identifier"),
+            self._run_id_from_timestamp(timestamp),
+            default="current_run_unidentified",
+        )
+
+    def _run_id_from_timestamp(self, timestamp: Any) -> str | None:
+        if timestamp is None:
+            return None
+        digits = re.sub(r"\D", "", str(timestamp))
+        if len(digits) < 14:
+            return None
+        return f"run_{digits[:8]}_{digits[8:14]}"
+
+    def _conclusion_task_id(
+        self,
+        canonical: dict[str, Any],
+        metadata: dict[str, Any],
+        current_row: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> str:
+        state = canonical.get("report_state", {})
+        performance = canonical.get("performance", {})
+        operation = current_row.get("operation") if isinstance(current_row, dict) else None
+        return self._first_meaningful(
+            metadata.get("task_id"),
+            metadata.get("current_task_id"),
+            metadata.get("task_name"),
+            state.get("task_id") if isinstance(state, dict) else None,
+            state.get("current_task_id") if isinstance(state, dict) else None,
+            state.get("task_name") if isinstance(state, dict) else None,
+            performance.get("task_id") if isinstance(performance, dict) else None,
+            performance.get("current_task_id") if isinstance(performance, dict) else None,
+            arena.get("validation_probe_candidate_id"),
+            arena.get("arena_winner"),
+            f"operation:{operation}" if operation else None,
+            default="current_task_unidentified",
+        )
+
+    def _largest_current_success(
+        self,
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if self._count_value(executable.get("validated_programs")) > 0:
+            return "validated_program_produced"
+        if (
+            executable.get("validation_probe_evidence_acceptance_state") == "ACCEPTED"
+        ):
+            return "validation_probe_evidence_accepted"
+        if executable.get("object_grounding_produced") is True:
+            return "object_grounding_produced"
+        if arena.get("arena_winner"):
+            return "arena_winner_selected"
+        return "Not Available"
+
+    def _compiler_path_succeeded(
+        self,
+        current_row: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> bool:
+        if not current_row:
+            return False
+        if (
+            current_row.get("candidate_emitted") is not True
+            and current_row.get("resolution_state")
+            != "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+        ):
+            return False
+        failure = str(
+            current_row.get("candidate_rejection_reason")
+            or current_row.get("failure_reason")
+            or "none"
+        ).lower()
+        if failure not in {"none", "candidate_emitted", "not available"}:
+            return False
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        source_row = self._source_trace_row_for_operation(
+            source_trace,
+            "semantic_to_transformation_compiler",
+            current_row.get("operation"),
+        )
+        identity = self._operation_identity_chain(current_row, source_row, arena)
+        if identity.get("identity_state") == "OPERATION_IDENTITY_DRIFT":
+            return False
+        evidence_state = executable.get("validation_probe_evidence_acceptance_state")
+        if evidence_state and evidence_state != "ACCEPTED":
+            return False
+        return True
+
+    def _next_task_from_current_regression(
+        self,
+        regression: Any,
+        coverage: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if regression == "CALIBRATION_NOT_TRIGGERED":
+            return "diagnose_prediction_quality_calibration_trigger"
+        if regression == "POST_VALIDATION_PROBE_CALIBRATION_REVIEW_TRIGGERED":
+            return (
+                arena.get("prediction_quality_calibration_action")
+                or "perform_sandbox_evidence_ranking_recalibration"
+            )
+        return (
+            arena.get("prediction_quality_calibration_action")
+            or coverage.get("knowledge_operationalization_choke_action")
+            or executable.get("validation_probe_recommended_validation_action")
+            or "monitor_current_run"
+        )
+
+    def _engineering_conclusion_conflicts(
+        self,
+        conclusion: dict[str, Any],
+        current_row: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> list[str]:
+        conflicts: list[str] = []
+        emitted = (
+            current_row.get("candidate_emitted") is True
+            or current_row.get("resolution_state")
+            == "RESOLVED_COMPILER_EMITTED_CANDIDATE"
+        )
+        root = str(conclusion.get("root_cause") or "").lower()
+        bottleneck = str(conclusion.get("current_bottleneck") or "").lower()
+        source_trace = arena.get("candidate_source_flow_trace") or []
+        source_trace = source_trace if isinstance(source_trace, list) else []
+        source_row = self._source_trace_row_for_operation(
+            source_trace,
+            "semantic_to_transformation_compiler",
+            current_row.get("operation"),
+        )
+        identity = self._operation_identity_chain(current_row, source_row, arena)
+        if emitted and bottleneck == "semantic_compiler_candidate_emission":
+            conflicts.append(
+                "candidate_emitted=true conflicts with semantic_compiler_candidate_emission"
+            )
+        failure = str(
+            current_row.get("candidate_rejection_reason")
+            or current_row.get("failure_reason")
+            or "none"
+        ).lower()
+        decision_bottleneck = bottleneck in {
+            "arena_decision_finalization",
+            "training_assistant_plan_consumption",
+            "next_run_training_assistant_plan_consumption",
+            "task_selection_decision_orchestration",
+            "evidence_plan_persistence",
+            "validation_execution_pipeline",
+            "validation_task_execution",
+            "validation_evidence_evaluation",
+            "raw_validation_result_provenance",
+            "arena_evidence_admission",
+            "formal_arena_selection",
+            "selected_candidate_execution_admission",
+            "formal_proposal_rejection",
+            "formal_selection_review_completion",
+            "remaining_candidate_indistinguishability",
+            "proposal_readiness",
+            "evidence_conflict",
+            "decision_evidence_sufficiency",
+            "evidence_sufficiency",
+            "evidence_admissibility",
+        }
+        if (
+            current_row
+            and failure in {"none", "candidate_emitted"}
+            and root not in {"", "none"}
+            and not decision_bottleneck
+        ):
+            conflicts.append("failure_reason=none conflicts with non_none_root_cause")
+        if (
+            current_row
+            and
+            identity.get("identity_state") == "CONSISTENT"
+            and root == "operation_semantics_mismatch"
+        ):
+            conflicts.append(
+                "operation_identity_consistent conflicts with operation_semantics_mismatch"
+            )
+        if (
+            self._count_value(executable.get("validated_programs")) > 0
+            and bottleneck == "semantic_compiler_candidate_emission"
+        ):
+            conflicts.append(
+                "validated_programs>0 conflicts with current candidate emission bottleneck"
+            )
+        return conflicts
+
+    def _fallback_compiler_entry_payload(
+        self,
+        resolution_row: dict[str, Any],
+        semantic: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> dict[str, Any]:
+        operation = (
+            resolution_row.get("operation")
+            or semantic.get("selected_operation")
+            or semantic.get("compiled_operation")
+        )
+        execution_intents = semantic.get("execution_intents") or []
+        execution_intents = (
+            execution_intents if isinstance(execution_intents, list) else []
+        )
+        semantic_matches = set()
+        if resolution_row.get("semantic_intent"):
+            semantic_matches.add(str(resolution_row.get("semantic_intent")))
+        if resolution_row.get("operation"):
+            semantic_matches.add(str(resolution_row.get("operation")))
+        for intent in execution_intents:
+            if not isinstance(intent, dict):
+                continue
+            if intent.get("intent"):
+                semantic_matches.add(str(intent.get("intent")))
+            if intent.get("operation"):
+                semantic_matches.add(str(intent.get("operation")))
+            semantic_matches.update(
+                str(item) for item in intent.get("matched_concepts", []) or []
+            )
+        shared_input = arena.get("validation_probe_shared_input_trace")
+        shared_input = shared_input if isinstance(shared_input, dict) else {}
+        non_empty_keys = shared_input.get("non_empty_keys") or []
+        non_empty_keys = non_empty_keys if isinstance(non_empty_keys, list) else []
+        return {
+            "operation": operation,
+            "semantic_match_count": len(semantic_matches)
+            if semantic_matches
+            else None,
+            "execution_intent_count": len(execution_intents),
+            "input_grid_available": "input_grid" in non_empty_keys
+            if non_empty_keys
+            else None,
+            "target_grid_available": "target_grid" in non_empty_keys
+            if non_empty_keys
+            else None,
+            "source_color": None,
+            "target_color": None,
+            "mapping_count": None,
+            "affected_cell_count": None,
+        }
+
+    def _operation_diagnostic_for_resolution(
+        self,
+        semantic: dict[str, Any],
+        resolution_row: dict[str, Any],
+    ) -> dict[str, Any]:
+        operation = resolution_row.get("operation")
+        diagnostics = semantic.get("compiler_operation_diagnostics") or []
+        diagnostics = diagnostics if isinstance(diagnostics, list) else []
+        for row in diagnostics:
+            if isinstance(row, dict) and row.get("operation") == operation:
+                return row
+        return {}
+
+    def _operation_diagnostic_entry_payload(
+        self,
+        diagnostic: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not diagnostic:
+            return {}
+        return {
+            "operation": diagnostic.get("operation"),
+            "semantic_match_count": (
+                len(diagnostic.get("relevant_semantic_matches") or [])
+            ),
+            "execution_intent_count": diagnostic.get(
+                "relevant_execution_intent_count"
+            ),
+            "source_color": diagnostic.get("source_color"),
+            "target_color": diagnostic.get("target_color"),
+            "application_scope": diagnostic.get("application_scope"),
+            "mapping_count": diagnostic.get("mapping_count"),
+            "affected_cell_count": diagnostic.get("affected_cell_count"),
+            "affected_position_count": diagnostic.get("affected_position_count"),
+            "preserved_color_count": diagnostic.get("preserved_color_count"),
+            "composition_step_count": diagnostic.get("composition_step_count"),
+            "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+            "parameter_source": diagnostic.get("parameter_source"),
+            "preservation_contract_state": diagnostic.get(
+                "preservation_contract_state"
+            ),
+            "changed_cell_count": diagnostic.get("changed_cell_count"),
+            "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+            "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+            "predicted_accuracy_breakdown": diagnostic.get(
+                "predicted_accuracy_breakdown"
+            ),
+            "validation_threshold": diagnostic.get("validation_threshold"),
+            "dominant_accuracy_loss_cause": diagnostic.get(
+                "dominant_accuracy_loss_cause"
+            ),
+            "composition_validation_state": diagnostic.get(
+                "composition_validation_state"
+            ),
+            "candidate_object_created": diagnostic.get("candidate_object_created"),
+            "candidate_registered": diagnostic.get("candidate_registered"),
+            "candidate_count_incremented": diagnostic.get(
+                "candidate_count_incremented"
+            ),
+            "proposal_emission_ready": diagnostic.get("proposal_emission_ready"),
+            "materialization_outcome": diagnostic.get("materialization_outcome"),
+            "materialization_completion_stage": diagnostic.get(
+                "materialization_completion_stage"
+            ),
+            "materialization_blocked_stage": diagnostic.get(
+                "materialization_blocked_stage"
+            ),
+            "materialization_rejection_reason": diagnostic.get(
+                "materialization_rejection_reason"
+            ),
+        }
+
+    def _operation_diagnostic_exit_payload(
+        self,
+        diagnostic: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not diagnostic:
+            return {}
+        candidate_count = diagnostic.get("candidate_count")
+        candidate_count = self._count_value(candidate_count)
+        return {
+            "candidate_count": candidate_count,
+            "valid_candidate_count": candidate_count,
+            "rejected_candidate_count": 0 if candidate_count else 1,
+            "total_candidate_count": candidate_count,
+            "composition_step_count": diagnostic.get("composition_step_count"),
+            "application_scope": diagnostic.get("application_scope"),
+            "mapping_count": diagnostic.get("mapping_count"),
+            "affected_position_count": diagnostic.get("affected_position_count"),
+            "candidate_schema_valid": diagnostic.get("candidate_schema_valid"),
+            "rejection_reason": diagnostic.get("rejection_reason"),
+            "preservation_contract_state": diagnostic.get(
+                "preservation_contract_state"
+            ),
+            "changed_cell_count": diagnostic.get("changed_cell_count"),
+            "preserved_cell_count": diagnostic.get("preserved_cell_count"),
+            "predicted_accuracy": diagnostic.get("predicted_accuracy"),
+            "predicted_accuracy_breakdown": diagnostic.get(
+                "predicted_accuracy_breakdown"
+            ),
+            "validation_threshold": diagnostic.get("validation_threshold"),
+            "dominant_accuracy_loss_cause": diagnostic.get(
+                "dominant_accuracy_loss_cause"
+            ),
+            "composition_validation_state": diagnostic.get(
+                "composition_validation_state"
+            ),
+            "candidate_object_created": diagnostic.get("candidate_object_created"),
+            "candidate_registered": diagnostic.get("candidate_registered"),
+            "candidate_count_incremented": diagnostic.get(
+                "candidate_count_incremented"
+            ),
+            "proposal_emission_ready": diagnostic.get("proposal_emission_ready"),
+            "materialization_outcome": diagnostic.get("materialization_outcome"),
+            "materialization_completion_stage": diagnostic.get(
+                "materialization_completion_stage"
+            ),
+            "materialization_blocked_stage": diagnostic.get(
+                "materialization_blocked_stage"
+            ),
+            "materialization_rejection_reason": diagnostic.get(
+                "materialization_rejection_reason"
+            ),
+        }
+
+    def _fallback_compiler_exit_payload(
+        self,
+        resolution_row: dict[str, Any],
+        semantic: dict[str, Any],
+    ) -> dict[str, Any]:
+        candidate_emitted = resolution_row.get("candidate_emitted")
+        candidate_count = (
+            self._count_value(semantic.get("compiled_candidate_count"))
+            if candidate_emitted
+            else 0
+            if candidate_emitted is False
+            else None
+        )
+        return {
+            "candidate_count": candidate_count,
+            "valid_candidate_count": candidate_count,
+            "rejected_candidate_count": 1 if candidate_emitted is False else None,
+            "total_candidate_count": candidate_count,
+            "composition_step_count": 0 if candidate_emitted is False else None,
+            "application_scope": None,
+            "mapping_count": None,
+            "affected_position_count": None,
+            "candidate_schema_valid": False
+            if candidate_emitted is False
+            else None,
+            "best_candidate_confidence": None,
+            "best_accuracy": None,
+            "predicted_accuracy": None,
+            "predicted_accuracy_breakdown": {},
+            "validation_threshold": None,
+            "dominant_accuracy_loss_cause": None,
+            "preservation_contract_state": None,
+            "changed_cell_count": None,
+            "preserved_cell_count": None,
+            "composition_validation_state": None,
+            "candidate_object_created": False
+            if candidate_emitted is False
+            else None,
+            "candidate_registered": False if candidate_emitted is False else None,
+            "candidate_count_incremented": False
+            if candidate_emitted is False
+            else None,
+            "proposal_emission_ready": False if candidate_emitted is False else None,
+            "materialization_outcome": "CANDIDATE_REJECTED"
+            if candidate_emitted is False
+            else "CANDIDATE_EMITTED"
+            if candidate_emitted is True
+            else None,
+            "materialization_completion_stage": "candidate_registered"
+            if candidate_emitted is True
+            else None,
+            "materialization_blocked_stage": None,
+            "materialization_rejection_reason": None,
+        }
+
+    def _normalize_materialization_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized = dict(payload) if isinstance(payload, dict) else {}
+        succeeded = (
+            normalized.get("candidate_object_created") is True
+            and normalized.get("candidate_registered") is True
+            and normalized.get("proposal_emission_ready") is True
+        )
+        if succeeded:
+            normalized["materialization_outcome"] = "CANDIDATE_EMITTED"
+            normalized["materialization_completion_stage"] = "candidate_registered"
+            normalized["materialization_blocked_stage"] = "none"
+            normalized["materialization_rejection_reason"] = "none"
+        elif normalized.get("candidate_object_created") is False:
+            normalized.setdefault("materialization_outcome", "CANDIDATE_REJECTED")
+        return normalized
+
+    def _color_remap_accuracy_breakdown_line(
+        self,
+        exit_payload: dict[str, Any],
+        operation_diagnostic: dict[str, Any],
+    ) -> str:
+        breakdown = (
+            exit_payload.get("predicted_accuracy_breakdown")
+            or operation_diagnostic.get("predicted_accuracy_breakdown")
+            or {}
+        )
+        breakdown = breakdown if isinstance(breakdown, dict) else {}
+        correct = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "correct_cell_count",
+        )
+        total = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "total_cell_count",
+        )
+        incorrect = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "incorrect_cell_count",
+        )
+        changed = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "changed_target_cell_count",
+        )
+        mapped = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "mapped_source_cell_count",
+        )
+        collateral = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "collateral_remap_cell_count",
+        )
+        localized_accuracy = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "localized_accuracy",
+        )
+        localized_positions = self._first_available_breakdown_value(
+            breakdown,
+            exit_payload,
+            operation_diagnostic,
+            "localized_affected_position_count",
+        )
+        selected_scope = self._value(
+            breakdown.get("selected_execution_scope")
+            or exit_payload.get("selected_execution_scope")
+            or operation_diagnostic.get("selected_execution_scope")
+            or exit_payload.get("application_scope")
+            or operation_diagnostic.get("application_scope")
+        )
+        dominant = self._value(
+            breakdown.get("dominant_accuracy_loss_cause")
+            or exit_payload.get("dominant_accuracy_loss_cause")
+            or operation_diagnostic.get("dominant_accuracy_loss_cause")
+        )
+        estimator = self._value(
+            breakdown.get("estimator")
+            or exit_payload.get("accuracy_estimator")
+            or operation_diagnostic.get("accuracy_estimator")
+        )
+        if (
+            correct == "Not Available"
+            and total == "Not Available"
+            and incorrect == "Not Available"
+            and changed == "Not Available"
+            and mapped == "Not Available"
+            and collateral == "Not Available"
+            and dominant == "Not Available"
+            and estimator == "Not Available"
+        ):
+            return "Not Available"
+        return (
+            f"estimator={estimator} correct={correct}/{total} "
+            f"incorrect={incorrect} changed_cells={changed} "
+            f"mapped_source_cells={mapped} collateral_remap_cells={collateral} "
+            f"localized_accuracy={localized_accuracy} "
+            f"localized_positions={localized_positions} "
+            f"selected_scope={selected_scope} "
+            f"dominant_loss={dominant}"
+        )
+
+    def _first_available_breakdown_value(
+        self,
+        breakdown: dict[str, Any],
+        exit_payload: dict[str, Any],
+        operation_diagnostic: dict[str, Any],
+        key: str,
+    ) -> str:
+        for source in (breakdown, exit_payload, operation_diagnostic):
+            value = source.get(key)
+            if self._payload_value_available(value):
+                return self._value(value)
+        return "Not Available"
+
+    def _hydrate_payload(
+        self,
+        payload: dict[str, Any],
+        fallback: dict[str, Any],
+    ) -> dict[str, Any]:
+        hydrated = dict(payload) if isinstance(payload, dict) else {}
+        for key, value in fallback.items():
+            if not self._payload_value_available(hydrated.get(key)):
+                hydrated[key] = value
+        return hydrated
+
+    def _payload_value_available(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str) and value.strip().lower() in {
+            "",
+            "not available",
+            "unknown",
+            "none",
+        }:
+            return False
+        return True
+
+    def _source_trace_row(
+        self,
+        source_trace: list[Any],
+        source_name: str,
+    ) -> dict[str, Any]:
+        for row in source_trace:
+            if isinstance(row, dict) and row.get("source") == source_name:
+                return row
+        return {}
+
+    def _source_trace_row_for_operation(
+        self,
+        source_trace: list[Any],
+        source_name: str,
+        operation: Any,
+    ) -> dict[str, Any]:
+        normalized_source = self._normalize_source_name(source_name)
+        operation = str(operation or "")
+        same_source_rows = [
+            row for row in source_trace
+            if isinstance(row, dict)
+            and (
+                row.get("source") == source_name
+                or row.get("normalized_source") == normalized_source
+            )
+        ]
+        for row in same_source_rows:
+            if str(row.get("operation") or "") == operation:
+                return row
+        for row in same_source_rows:
+            if row.get("entered_arena") is not True:
+                return row
+        return same_source_rows[0] if same_source_rows else {}
+
+    def _compiler_source_flow_alignment(
+        self,
+        source_row: dict[str, Any],
+        resolution_row: dict[str, Any],
+    ) -> str:
+        if not source_row:
+            return "NO_SOURCE_FLOW_ROW"
+        compiler_operation = str(resolution_row.get("operation") or "")
+        source_operation = str(source_row.get("operation") or "")
+        if source_operation and compiler_operation and source_operation != compiler_operation:
+            return (
+                "SOURCE_ENTERED_ARENA_WITH_DIFFERENT_OPERATION "
+                f"source_operation={source_operation}"
+            )
+        if (
+            resolution_row.get("candidate_emitted") is False
+            and source_row.get("entered_arena") is True
+        ):
+            return "SOURCE_FLOW_NOT_COMPILER_ROW_SPECIFIC"
+        return "ALIGNED"
+
+    def _operation_identity_chain(
+        self,
+        resolution_row: dict[str, Any],
+        source_row: dict[str, Any],
+        arena: dict[str, Any],
+    ) -> dict[str, Any]:
+        compiler_operation = resolution_row.get("operation")
+        proposal_operation = source_row.get("operation")
+        arena_operation = (
+            arena.get("validation_probe_operation")
+            or arena.get("winner_operation")
+        )
+        validation_probe_operation = arena.get("validation_probe_operation")
+        links = [
+            ("compiler_to_proposal", compiler_operation, proposal_operation),
+            ("proposal_to_arena", proposal_operation, arena_operation),
+            ("arena_to_validation_probe", arena_operation, validation_probe_operation),
+        ]
+        first_drift = None
+        for stage, left, right in links:
+            if not self._payload_value_available(left) or not self._payload_value_available(right):
+                continue
+            if str(left) != str(right):
+                first_drift = (stage, left, right)
+                break
+        if first_drift:
+            stage, left, right = first_drift
+            state = "OPERATION_IDENTITY_DRIFT"
+            detail = f"{stage}: {left} != {right}"
+        else:
+            state = "CONSISTENT"
+            detail = "operation_identity_preserved"
+        return {
+            "identity_state": state,
+            "semantic_intent": resolution_row.get("semantic_intent"),
+            "compiler_operation": compiler_operation,
+            "proposal_operation": proposal_operation,
+            "arena_operation": arena_operation,
+            "validation_probe_operation": validation_probe_operation,
+            "first_drift_stage": first_drift[0] if first_drift else "none",
+            "drift_detail": detail,
+        }
+
+    def _normalize_source_name(self, value: Any) -> str:
+        token = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "semantic_to_transformation_compiler": "semantic_compiler",
+            "compiler": "semantic_compiler",
+            "program_generation": "normalized_program_candidates",
+            "adaptive_reuse_layer": "adaptive_reuse",
+        }
+        return aliases.get(token, token)
+
+    def _candidate_builder_state(self, arena: dict[str, Any]) -> str:
+        trace = arena.get("candidate_source_flow_trace") or []
+        trace = trace if isinstance(trace, list) else []
+        if any(
+            isinstance(row, dict) and row.get("arena_proposal_built") is True
+            for row in trace
+        ):
+            return "BUILT"
+        blocked = [
+            row.get("blocked_stage")
+            for row in trace
+            if isinstance(row, dict) and row.get("blocked_stage")
+        ]
+        return self._value(blocked[0] if blocked else None)
+
+    def _priority_label(
+        self,
+        coverage: dict[str, Any],
+        arena: dict[str, Any],
+        executable: dict[str, Any],
+    ) -> str:
+        if executable.get("program_validation_contract_state") == (
+            "EVIDENCE_ACCEPTANCE_CONTRACT_UNSATISFIED"
+        ):
+            return "CRITICAL"
+        if arena.get("selection_state") == "NO_SAFE_WINNER":
+            return "HIGH"
+        if coverage.get("knowledge_operationalization_choke_point"):
+            return "HIGH"
+        return "MEDIUM"
+
+    def _read_any(self, *sources_and_keys: Any) -> Any:
+        sources = [item for item in sources_and_keys if isinstance(item, dict)]
+        keys = [item for item in sources_and_keys if isinstance(item, str)]
+        for source in sources:
+            for key in keys:
+                if key in source:
+                    return source[key]
+        return None
+
+    def _field(self, canonical: dict[str, Any], field_name: str) -> str:
+        binding = canonical.get("report_binding", {})
+        values = binding.get("field_values", {}) if isinstance(binding, dict) else {}
+        if field_name in values:
+            return self._value(values[field_name], "Not Available")
+        fields = binding.get("field_bindings", {}) if isinstance(binding, dict) else {}
+        field = fields.get(field_name) if isinstance(fields, dict) else None
+        if isinstance(field, dict):
+            return self._value(field.get("display_value"), "Not Available")
+        return "Not Available"
+
+    def _binding_value(self, canonical: dict[str, Any], field_name: str) -> Any:
+        binding = canonical.get("report_binding", {})
+        fields = binding.get("field_bindings", {}) if isinstance(binding, dict) else {}
+        field = fields.get(field_name) if isinstance(fields, dict) else None
+        if isinstance(field, dict) and "value" in field:
+            return field.get("value")
+        values = binding.get("field_values", {}) if isinstance(binding, dict) else {}
+        if isinstance(values, dict):
+            return values.get(field_name)
+        return None
+
+    def _seconds(self, value: Any) -> str:
+        if isinstance(value, str) and value == "Not Available":
+            return value
+        number = self._number(value)
+        if number is None:
+            return "Not Available"
+        return f"{round(number, 4):g} s"
+
+    def _percent(self, value: Any, *, already_percent: bool = False) -> str:
+        if isinstance(value, str):
+            if value.endswith("%"):
+                return value
+            number = self._number(value)
+        else:
+            number = self._number(value)
+        if number is None:
+            return "Not Available"
+        percent = number if already_percent or number > 1.0 else number * 100.0
+        return f"{round(percent, 4):g}%"
+
+    def _binding_status(self, canonical: dict[str, Any]) -> str:
+        binding = canonical.get("report_binding", {})
+        diagnostics = (
+            binding.get("binding_diagnostics", {})
+            if isinstance(binding, dict)
+            else {}
+        )
+        return self._value(
+            diagnostics.get("binding_validation_status"),
+            "Not Available",
+        )
+
+    def _value(self, value: Any, default: Any = "Not Available") -> str:
+        if value is None:
+            value = default
+        if isinstance(value, bool):
+            return "TRUE" if value else "FALSE"
+        if isinstance(value, (int, float)):
+            return str(round(value, 4) if isinstance(value, float) else value)
+        if isinstance(value, str):
+            return "Not Available" if value.upper() == "UNKNOWN" else value
+        if isinstance(value, list):
+            if not value:
+                return "0"
+            if all(not isinstance(item, (dict, list, tuple, set)) for item in value):
+                preview = ", ".join(str(item) for item in value[:8])
+                suffix = f" (+{len(value) - 8} more)" if len(value) > 8 else ""
+                if len(value) > 8:
+                    self._record_local_reduction(
+                        collection="scalar_list_preview",
+                        original_count=len(value),
+                        rendered_count=8,
+                        limit=8,
+                        reduction_type="PREVIEW",
+                        visibility_state="VISIBLE",
+                    )
+                return preview + suffix
+            return f"{len(value)} entries"
+        if isinstance(value, dict):
+            if not value:
+                return "0"
+            rendered_count = min(len(value), 8)
+            rendered = ", ".join(
+                f"{self._label(str(key))}={self._value(item)}"
+                for key, item in list(value.items())[:8]
+            )
+            if len(value) > 8:
+                omitted_count = len(value) - rendered_count
+                self._record_local_reduction(
+                    collection="dict_preview",
+                    original_count=len(value),
+                    rendered_count=rendered_count,
+                    limit=8,
+                    reduction_type="PREVIEW",
+                    visibility_state="VISIBLE",
+                )
+                rendered = (
+                    f"{rendered} "
+                    f"(showing {rendered_count} of {len(value)} entries; "
+                    f"omitted {omitted_count} entries)"
+                )
+            return rendered
+        return str(value)
+
+    def _first_meaningful(self, *values: Any, default: str = "Not Available") -> str:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, str):
+                text = value.strip()
+                if not text or text.upper() in {"UNKNOWN", "NOT AVAILABLE"}:
+                    continue
+                return text
+            return value
+        return default
+
+    def _source_names(self, row: dict[str, Any], singular_key: str, plural_key: str) -> str:
+        plural = row.get(plural_key)
+        if isinstance(plural, list) and all(not isinstance(item, (dict, list, tuple, set)) for item in plural):
+            return ", ".join(str(item) for item in plural) if plural else "Not Available"
+        singular = row.get(singular_key)
+        if isinstance(singular, str) and singular:
+            return singular
+        if singular is not None:
+            return self._value(singular)
+        return self._value(plural)
+
+    def _compact_value(self, value: Any) -> str:
+        if isinstance(value, list):
+            if not value:
+                return "0"
+            return f"{len(value)} items"
+        if isinstance(value, dict):
+            if not value:
+                return "0"
+            return f"{len(value)} fields"
+        return self._value(value)
+
+    def _inline_map(self, value: Any) -> str:
+        if not isinstance(value, dict) or not value:
+            return "Not Available"
+        return "; ".join(
+            f"{self._value(key)}={self._value(item)}"
+            for key, item in sorted(value.items())
+        )
+
+    def _label(self, key: str) -> str:
+        return key.replace("_", " ").title()
+
+    def _stage_display_label(self, row: dict[str, Any], *, max_width: int) -> str:
+        label = str(row.get("stage_name") or "Not Available")
+        if len(label) <= max_width:
+            return label
+        suffix_source = str(
+            row.get("timing_id")
+            or row.get("execution_id")
+            or label,
+        )
+        suffix = re.sub(r"[^A-Za-z0-9]", "", suffix_source)[-6:] or "stage"
+        keep = max(max_width - len(suffix) - 2, 6)
+        return f"{label[:keep]}~{suffix}"
+
+    def _number(self, value: Any) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _count_pair(self, resolved: Any, total: Any) -> str:
+        resolved_number = self._number(resolved)
+        total_number = self._number(total)
+        if resolved_number is None and total_number is None:
+            return "0/0"
+        if resolved_number is None:
+            resolved_number = 0
+        if total_number is None:
+            total_number = 0
+        return f"{int(resolved_number)}/{int(total_number)}"
+
+    def _normalize_text(self, text: str) -> str:
+        lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        normalized = "\n".join(line.rstrip() for line in lines).strip() + "\n"
+        return normalized
+
+    def _ends_inside_structure(self, rendered_report: str) -> bool:
+        tail = rendered_report.rstrip()
+        return tail.endswith(("{", "[", ":", ","))
+
+    def _build_metrics(
+        self,
+        rendered_report: str,
+        validation_errors: list[str],
+        *,
+        artifact_written: bool,
+        diagnostic_artifact_written: bool,
+        render_measurement: dict[str, Any] | None = None,
+        persistence_measurement: dict[str, Any] | None = None,
+        emission_measurement: dict[str, Any] | None = None,
+        receipt: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        duplicate_count = sum(
+            1
+            for section in HUMAN_SECTION_ORDER
+            if rendered_report.count(self._section_title(section)) > 1
+        )
+        raw_count = len(RAW_STRUCTURE_PATTERN.findall(rendered_report))
+        selected_sections = list(self._last_human_selected_sections)
+        if not selected_sections:
+            visible_titles = [
+                section
+                for section in HUMAN_SECTION_ORDER
+                if self._section_title(section) in rendered_report
+            ]
+            selected_sections = list(visible_titles)
+            if "REPORT INTEGRITY" not in selected_sections:
+                selected_sections.append("REPORT INTEGRITY")
+            if self._section_title(
+                "NATURAL PRODUCTION AUTHORITY HANDOFF"
+            ) in rendered_report:
+                selected_sections.insert(
+                    max(len(selected_sections) - 2, 0),
+                    "NATURAL PRODUCTION AUTHORITY HANDOFF",
+                )
+        report_level = self._last_human_report_level
+        if not report_level:
+            report_level = "minimal" if "Report Level: minimal" in rendered_report else "normal"
+        integrity = self._human_report_integrity(
+            rendered_report,
+            selected_sections=selected_sections,
+            emitted_text=rendered_report,
+            report_level=report_level,
+        )
+        render_measurement = render_measurement or self._measure_report_payload(rendered_report)
+        persistence_measurement = persistence_measurement or self._not_verified_persistence_measurement()
+        emission_measurement = emission_measurement or self._not_verified_emission_measurement()
+        receipt = receipt or {}
+        measurement_metrics = self._measurement_metrics(
+            render_measurement,
+            persistence_measurement,
+            emission_measurement,
+            receipt,
+        )
+        critical_note_count = 0
+        if self._section_title("CRITICAL OBSERVABILITY NOTES") in rendered_report:
+            critical_note_count = rendered_report.count("Observability contradiction:")
+        return {
+            "report_render_success": not validation_errors,
+            "report_complete": integrity["Human Report Complete"] and not validation_errors,
+            "report_truncated": False,
+            "report_section_count": sum(
+                1
+                for section in HUMAN_SECTION_ORDER
+                if self._section_title(section) in rendered_report
+            ),
+            "report_duplicate_section_count": duplicate_count,
+            "report_raw_structure_count": raw_count,
+            "report_begin_marker_present": rendered_report.startswith(REPORT_BEGIN_MARKER),
+            "report_end_marker_present": rendered_report.rstrip().endswith(REPORT_END_MARKER),
+            "report_schema_version": REPORT_SCHEMA_VERSION,
+            "console_emission_started": (
+                "Console Emission Started: TRUE" in rendered_report
+            ),
+            "console_emission_completed": False,
+            "report_integrity": integrity["Human Report Integrity State"],
+            "report_character_count": len(rendered_report),
+            "report_line_count": len(rendered_report.splitlines()),
+            "report_artifact_written": artifact_written,
+            "diagnostic_artifact_written": diagnostic_artifact_written,
+            "report_validation_errors": validation_errors,
+            "human_report_generated": integrity["Human Report Generated"],
+            "human_report_complete": integrity["Human Report Complete"],
+            "human_report_character_limit": "NONE",
+            "human_report_truncation_enabled": False,
+            "human_report_truncated": False,
+            "human_report_starts_at_boundary": integrity["Human Report Starts At Boundary"],
+            "human_report_ends_at_boundary": integrity["Human Report Ends At Boundary"],
+            "human_report_start_marker_present": integrity["Human Report Start Marker Present"],
+            "human_report_end_marker_present": integrity["Human Report End Marker Present"],
+            "human_report_start_marker_count": integrity["Human Report Start Marker Count"],
+            "human_report_end_marker_count": integrity["Human Report End Marker Count"],
+            "human_projection_universe_count": integrity["Human Projection Universe Count"],
+            "human_projection_selected_section_count": integrity["Human Projection Selected Section Count"],
+            "human_projection_unselected_section_count": integrity["Human Projection Unselected Section Count"],
+            "human_projection_visible_section_count": integrity["Human Projection Visible Section Count"],
+            "human_projection_selected_but_empty_count": integrity["Human Projection Selected But Empty Count"],
+            "human_projection_selected_outside_universe_count": integrity["Human Projection Selected Outside Universe Count"],
+            "human_projection_visible_outside_selected_count": integrity["Human Projection Visible Outside Selected Count"],
+            "human_projection_duplicate_universe_identity_count": integrity["Human Projection Duplicate Universe Identity Count"],
+            "human_projection_unknown_human_section_identity_count": integrity["Human Projection Unknown Human Section Identity Count"],
+            "human_report_legacy_section_order_count": integrity["Human Report Legacy Section Order Count"],
+            "human_report_critical_observability_note_count": critical_note_count,
+            "human_report_local_reduction_site_count": self._last_local_reduction_summary.get("Human Report Local Reduction Site Count", 0),
+            "human_report_local_reduction_applied_count": self._last_local_reduction_summary.get("Human Report Local Reduction Applied Count", 0),
+            "human_report_local_reduction_omitted_item_count": self._last_local_reduction_summary.get("Human Report Local Reduction Omitted Item Count", 0),
+            "human_report_silent_local_reduction_count": self._last_local_reduction_summary.get("Human Report Silent Local Reduction Count", 0),
+            "human_report_authority": integrity["Human Report Authority"],
+            "human_report_transport_limit_encountered": False,
+            "human_report_transport_segmented": False,
+            "human_report_integrity_state": integrity["Human Report Integrity State"],
+            "human_report_integrity_reason": integrity["Human Report Integrity Reason"],
+            "deprecated_console_budget_chars": self.console_budget_chars,
+            "deprecated_console_budget_applied_to_human_report": False,
+            **measurement_metrics,
+        }
+
+    def _empty_metrics(self) -> dict[str, Any]:
+        return {
+            "report_render_success": False,
+            "report_complete": False,
+            "report_truncated": False,
+            "report_section_count": 0,
+            "report_duplicate_section_count": 0,
+            "report_raw_structure_count": 0,
+            "report_begin_marker_present": False,
+            "report_end_marker_present": False,
+            "report_schema_version": REPORT_SCHEMA_VERSION,
+            "console_emission_started": False,
+            "console_emission_completed": False,
+            "report_integrity": "INVALID",
+            "report_character_count": 0,
+            "report_line_count": 0,
+            "report_artifact_written": False,
+            "diagnostic_artifact_written": False,
+            "report_validation_errors": [],
+            "human_report_generated": False,
+            "human_report_complete": False,
+            "human_report_character_limit": "NONE",
+            "human_report_truncation_enabled": False,
+            "human_report_truncated": False,
+        }
+
+    def _json_safe(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): self._json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [self._json_safe(item) for item in value]
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        if hasattr(value, "tolist"):
+            try:
+                return value.tolist()
+            except Exception:
+                return str(value)
+        return str(value)
+
+    def _atomic_write_text(self, text: str, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = self._encode_canonical_text(text)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=str(path.parent),
+        )
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, path)
+        finally:
+            if os.path.exists(tmp_name):
+                os.remove(tmp_name)
+
+
+final_report_renderer = DeterministicFinalReportRenderer()

@@ -1,0 +1,2309 @@
+{
+  "authority": "CI_VALIDATION_ONLY",
+  "behavioral_authority": "NONE",
+  "contract_id": "nexryn.arena.candidate_simulator",
+  "contract_version": "1.0",
+  "creation_timestamp": "2026-09-20T00:00:00Z",
+  "immutable_fingerprint": "f99fa105d7bd4bd1fe5d3c2e84997c06b7aaf1e30f4c060990893df74284aca5",
+  "normalization_version": "candidate_normalizer.v1",
+  "schema_version": "executor_canonical_vectors.v1",
+  "source_component": "tools.executor_contract_ci",
+  "vectors": [
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_grid"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_grid",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "aa328d20626dae18606465da9a60331f6fe84f29a8bc29701f9367392f04083d",
+      "vector_id": "v1_preserve_grid"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_colors"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_colors",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "9ba70624325b5558534c5ddeb8a973657375b61010055c9a687674afee08a742",
+      "vector_id": "v1_preserve_colors"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_topology"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_topology",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "5931772c357280585a07de57edd1eef295a7d531f79fdbc7a849dd705b6daa46",
+      "vector_id": "v1_preserve_topology"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_shape"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_shape",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "03979264af154f9004600024447e7889919e3bf4280b15a83f2c74af2510f5f6",
+      "vector_id": "v1_preserve_shape"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_size"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_size",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "daeecd9658d5ac82a92d05bea2cb5f8dc6c539251a57e63d20759625724cbd22",
+      "vector_id": "v1_preserve_size"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_density"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_density",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "c59bf68c098248c7131a2caf5feabc43a46d3174ccecc774506488e21c70f035",
+      "vector_id": "v1_preserve_density"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "preserve_symmetry"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "preserve_symmetry",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "9c8484aa098fdc31742fe40e0d1e18659fa4663033c8d84d2c1519f2c178b5b0",
+      "vector_id": "v1_preserve_symmetry"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "noop"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "noop",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "0c1e461b0a9a6318ed840b7730a6eb73cf05438f173ed145bb929015c28caae0",
+      "vector_id": "v1_noop"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "replace_color"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "replace_color",
+              "parameters": {
+                "source_color": 1,
+                "target_color": 2
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            2,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "c353bade4ad2536e7a23a1f5fd27cbf4743f1b4e4713462910841b47fb21df69",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "replace_color",
+            "parameters": {
+              "source_color": 1,
+              "target_color": 2
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "72c7ef1fd4515c4dc8f99ff1d08477ee7b2e7eff12bba3be2bc23814af06df7e",
+      "vector_id": "v1_replace_color"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "recolor"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "recolor",
+              "parameters": {
+                "affected_positions": [
+                  [
+                    0,
+                    0
+                  ]
+                ],
+                "color_mapping": {
+                  "1": 3
+                }
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            3,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0df9ad5ac83163de084f0b0e0e2cc6876677b418a89be555cee65bcdaf50e567",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "recolor",
+            "parameters": {
+              "affected_positions": [
+                [
+                  0,
+                  0
+                ]
+              ],
+              "color_mapping": {
+                "1": 3
+              }
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "99f134b60196795f506a0af9ff1581f56111295cd223ac61a90c4dd73a01ec31",
+      "vector_id": "v1_recolor"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "construct_path"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "construct_path",
+              "parameters": {
+                "path_cells": [
+                  [
+                    0,
+                    1
+                  ]
+                ],
+                "path_color": 4
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "b00f954d981e9cec5033fb214f0b5e252a9dd1ca43082d91e4827bb85e9f4d2b",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "construct_path",
+            "parameters": {
+              "path_cells": [
+                [
+                  0,
+                  1
+                ]
+              ],
+              "path_color": 4
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "b91707f469a7e89a58607d3f16e717d53f78f44bd4b98054a051b53e37519c4e",
+      "vector_id": "v1_construct_path"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "connect_components"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "connect_components",
+              "parameters": {
+                "fill_color": 5,
+                "path_cells": [
+                  [
+                    1,
+                    0
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            5,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "d12f1b403a052f8a1ad664093054fcf8ee9ac1b7035168b75681676f1f9e7e2a",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "connect_components",
+            "parameters": {
+              "fill_color": 5,
+              "path_cells": [
+                [
+                  1,
+                  0
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "5a460845dc6c92f24a462d8c4407ef2115d79556b373bd1ef44112bdda6e50e2",
+      "vector_id": "v1_connect_components"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "remove_object"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "remove_object",
+              "parameters": {
+                "background_color": 0,
+                "remove_colors": [
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "3db134815730c387980753b97cca06a29f6a97bad1da09f259fb637cc2b9712a",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "remove_object",
+            "parameters": {
+              "background_color": 0,
+              "remove_colors": [
+                1
+              ]
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "8b91a729192b61152bd340987ce6c56ea5c461212308e9b86828c07a5e743030",
+      "vector_id": "v1_remove_object"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "duplicate_object"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "duplicate_object",
+              "parameters": {
+                "cells_to_write": [
+                  {
+                    "col": 1,
+                    "row": 1,
+                    "value": 7
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            7
+          ]
+        ],
+        "semantic_fingerprint": "d4900a5815947983f8ba15b9c3f6b8dda1d7903dfc6a41acbde4b676a5502d09",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "duplicate_object",
+            "parameters": {
+              "cells_to_write": [
+                {
+                  "col": 1,
+                  "row": 1,
+                  "value": 7
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "78fdc5e6a9e051595c58013f6672d5640f3dc438d30a39cd08caac8047c311db",
+      "vector_id": "v1_duplicate_object"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "translate"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "translate",
+              "parameters": {
+                "translation": [
+                  0,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "dada9248ff6eac1bf7615a8b80336ab998c350f930c3713c05b94cdee326c8b9",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "translate",
+            "parameters": {
+              "translation": [
+                0,
+                1
+              ]
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "0b3406c5f568102bad454e4f7d876f47f062af2d56bec97aab1b0f4260a92b24",
+      "vector_id": "v1_translate"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "rotate"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "rotate",
+              "parameters": {}
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "704e07c1f6a6e22818ecf71b0baff1c18c6fef04f1cdf02180977c6bca4c3538",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "rotate",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "86d1da8f0ef2398a4401ccf65cfeb121f38fda289aff06fd84a3a025857695be",
+      "vector_id": "v1_rotate"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "mirror_horizontal"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "mirror_horizontal",
+              "parameters": {}
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "0f619f62b09036306bdff5c316ffc88ff0689943a0ebc4f8cf27ce4f5260da8f",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "mirror_horizontal",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "d0bc90db4b4a44409635fb3074331248d6c7f516336dd70493b073cfb9c97a34",
+      "vector_id": "v1_mirror_horizontal"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "mirror_vertical"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "mirror_vertical",
+              "parameters": {}
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "cd24f0051a246dabbc8ff9e438242e101de4ccdba8669b7b194adb029253f6d1",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "mirror_vertical",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "12b31c715faf3325424afdfbfcf6f538773384b66f0fde0653bffe11fe48acc3",
+      "vector_id": "v1_mirror_vertical"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "mirror_object"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "mirror_object",
+              "parameters": {}
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            1
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "a6d15da6b11e151b9398903f28da3545bcb8c19cb5eec2fa464af4a6b21c5cdb",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "mirror_object",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "771314ad8888f3db057d86eef449c6d8909e88a884531d274a115a86c2ef3492",
+      "vector_id": "v1_mirror_object"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 0,
+          "steps": []
+        },
+        "predicted_output": [],
+        "semantic_fingerprint": "0cf0379b2f05f99743b3d7fc3d8350131c53c5af496961413a9a3daeca8e2433",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": []
+      },
+      "program": {
+        "step_count": 0,
+        "steps": []
+      },
+      "vector_fingerprint": "b624496b0c6a9edb15d18d965182ea9db561b15f4e8944694cfcb670d3f90786",
+      "vector_id": "v1_empty_input"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "duplicate_object"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "duplicate_object",
+              "parameters": {
+                "cells_to_write": [
+                  {
+                    "col": 2,
+                    "row": -1,
+                    "value": 9
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            1
+          ]
+        ],
+        "semantic_fingerprint": "bd995f11feefdda0a4c5a7e7acc468a831b9953a90157631f0818dd0f733cf5e",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "duplicate_object",
+            "parameters": {
+              "cells_to_write": [
+                {
+                  "col": 2,
+                  "row": -1,
+                  "value": 9
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "4bdde2acae25d876d0fd8b5a97dc4608f30d5eb175c0547a22ba8499e623d4ce",
+      "vector_id": "v1_minimal_grid_boundary"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "mirror_vertical"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "mirror_vertical",
+              "parameters": {}
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ],
+        "semantic_fingerprint": "cd24f0051a246dabbc8ff9e438242e101de4ccdba8669b7b194adb029253f6d1",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "cells": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            29,
+            29,
+            2
+          ]
+        ],
+        "shape": [
+          30,
+          30
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "mirror_vertical",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "39136a9367e8736ea8006d0e0e0ea4bc2014d222e44f0c26769301d0b09cea9a",
+      "vector_id": "v1_maximal_supported_grid"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "unknown_operation",
+              "parameters": {}
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            1
+          ]
+        ],
+        "semantic_fingerprint": "c399ff874fabece11ca4094afbbd71b73f0865429aa5acd51ea4b76c8bacc4d5",
+        "simulation_success": false,
+        "unsupported_steps": [
+          {
+            "index": 0,
+            "operation": "unknown_operation",
+            "reason": "unsupported_operation"
+          }
+        ]
+      },
+      "input": {
+        "grid": [
+          [
+            1
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "unknown_operation",
+            "parameters": {}
+          }
+        ]
+      },
+      "vector_fingerprint": "0ba03ee6958e93e0fbe67b6341f11bfe2669cbacfd7c7feaf6b320bc950f523a",
+      "vector_id": "v1_unsupported_failure"
+    },
+    {
+      "applicability": "APPLICABLE",
+      "contract_id": "nexryn.arena.candidate_simulator",
+      "contract_version": "1.0",
+      "covers_operations": [
+        "duplicate_object"
+      ],
+      "expected": {
+        "normalized_executable_semantics": {
+          "step_count": 1,
+          "steps": [
+            {
+              "operation": "duplicate_object",
+              "parameters": {
+                "cells_to_write": []
+              }
+            }
+          ]
+        },
+        "predicted_output": [
+          [
+            1
+          ]
+        ],
+        "semantic_fingerprint": "00c10e54482ca249a8aafba98e559e4c6e1ca5633fef50d4e65939e24399a143",
+        "simulation_success": true,
+        "unsupported_steps": []
+      },
+      "input": {
+        "grid": [
+          [
+            1
+          ]
+        ]
+      },
+      "program": {
+        "step_count": 1,
+        "steps": [
+          {
+            "operation": "replicate",
+            "parameters": {
+              "cells_to_write": []
+            }
+          }
+        ]
+      },
+      "vector_fingerprint": "55be7052d544a289d9798a4629609bb5d5f5e5725ab779ebe29ec3ad906beb83",
+      "vector_id": "v1_alias_normalization"
+    }
+  ]
+}

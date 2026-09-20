@@ -102,11 +102,37 @@ from runtime.governance.cognitive_identity_layer import (
     cognitive_identity_layer
 )
 
+from runtime.governance.cache import (
+
+    GovernanceCache,
+
+    governance_cache,
+
+    GovernanceCacheInvalidationEngine,
+
+    governance_cache_invalidation_engine
+)
+
 from runtime.process.process_semantic_engine import (
 
     ProcessSemanticEngine,
 
     process_semantic_engine
+)
+
+from runtime.governance.world_governance_introspection import (
+
+    GOVERNANCE_ACTIONS,
+
+    REJECTION_CATEGORIES,
+
+    GovernanceDecisionMemory,
+
+    WorldGovernanceIntrospection,
+
+    governance_decision_memory,
+
+    world_governance_introspection
 )
 
 # ============================================
@@ -186,6 +212,18 @@ __all__ = [
     "cognitive_governance_engine",
     "cognitive_identity_layer",
 
+    "GovernanceCache",
+    "governance_cache",
+    "GovernanceCacheInvalidationEngine",
+    "governance_cache_invalidation_engine",
+
     "ProcessSemanticEngine",
-    "process_semantic_engine"
+    "process_semantic_engine",
+
+    "GOVERNANCE_ACTIONS",
+    "REJECTION_CATEGORIES",
+    "GovernanceDecisionMemory",
+    "WorldGovernanceIntrospection",
+    "governance_decision_memory",
+    "world_governance_introspection"
 ]

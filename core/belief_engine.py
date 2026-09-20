@@ -34,6 +34,10 @@ from runtime.dependency_chain_alignment_engine import (
     DependencyChainAlignmentEngine,
 )
 from runtime.dependency import DependencyChainExecutor
+from runtime.governance.dependency_snapshot_cache import (
+    DependencySnapshotCache,
+)
+from runtime.governance.locked_truth_fastpath import LockedTruthFastPath
 from runtime.truth_candidate_engine import TruthCandidateEngine
 from runtime.truth_advancement_planner import TruthAdvancementPlanner
 from runtime.truth_commitment_engine import TruthCommitmentEngine
@@ -287,6 +291,15 @@ class EpistemicCognitionLayer:
         self.scene_graph_engine = SceneGraphEngine()
         self.relational_reasoning_engine = RelationalReasoningEngine()
         self.identity_continuity_engine = IdentityContinuityEngine()
+        self.locked_truth_fastpath = LockedTruthFastPath()
+        self.locked_truth_fastpath_hits = 0
+        self.locked_truth_fastpath_misses = 0
+        self.governance_revalidations_skipped = 0
+        self.dependency_snapshot_cache = DependencySnapshotCache()
+        self.dependency_snapshot_hits = 0
+        self.dependency_snapshot_misses = 0
+        self.dependency_reasoning_skipped = 0
+        self.dependency_snapshot_store_count = 0
         self.causal_graph_validator = CausalGraphValidator(
             evidence_accumulator=CausalEvidenceAccumulator(
                 storage_path=causal_evidence_ledger_path
@@ -328,6 +341,202 @@ class EpistemicCognitionLayer:
             )
         except (TypeError, ValueError, KeyError):
             return {}
+
+    def _truth_commit_report_for_fastpath(self, concept, context):
+        report = context.get("truth_commit_report")
+        if isinstance(report, dict):
+            if report.get("concept") in {None, concept}:
+                return report
+            concept_report = report.get(concept)
+            if isinstance(concept_report, dict):
+                return concept_report
+
+        active_truth = self.truth_commit_engine.registry.retrieve_record(
+            concept,
+        )
+        if active_truth is None:
+            return None
+        truth_report = active_truth.as_dict()
+        metadata = truth_report.get("metadata", {})
+        if isinstance(metadata, dict):
+            final_commit = metadata.get("final_commit_decision", {})
+            identity = metadata.get("identity_governance", {})
+            contextual_truth = metadata.get("contextual_truth", {})
+            adaptive_contradiction = metadata.get(
+                "adaptive_contradiction_governance",
+                {},
+            )
+            if isinstance(final_commit, dict):
+                truth_report.update(final_commit)
+            if isinstance(identity, dict):
+                truth_report.setdefault(
+                    "identity_runtime_state",
+                    identity.get("identity_runtime_state"),
+                )
+                truth_report.setdefault(
+                    "identity_runtime_ready",
+                    identity.get("identity_runtime_ready"),
+                )
+            if isinstance(contextual_truth, dict):
+                truth_report.setdefault(
+                    "contextual_truth_supported",
+                    contextual_truth.get("contextual_truth_supported"),
+                )
+                truth_report.setdefault(
+                    "effective_contradiction",
+                    contextual_truth.get("effective_contradiction"),
+                )
+            if isinstance(adaptive_contradiction, dict):
+                truth_report.setdefault(
+                    "contradiction_threshold",
+                    adaptive_contradiction.get("dynamic_threshold"),
+                )
+            truth_report.setdefault(
+                "failed_identity_governance_gates",
+                metadata.get("failed_identity_governance_gates"),
+            )
+            truth_report.setdefault(
+                "recovery_state",
+                metadata.get("semantic_spine_recovery", {}).get(
+                    "recovery_state",
+                )
+                if isinstance(
+                    metadata.get("semantic_spine_recovery", {}),
+                    dict,
+                )
+                else None,
+            )
+        return truth_report
+
+    def _locked_truth_fastpath_evaluation(self, concept, report, context):
+        return {
+            "concept": concept,
+            "runtime_state": "TRUTH_COMMITTED",
+            "locked_truth_fastpath_report": report,
+            "evidence": {},
+            "trial": {},
+            "trial_resolution": {
+                "concept": concept,
+                "stalled_inconclusive_pattern": False,
+            },
+            "causal_attestation": {
+                "concept": concept,
+                "trial_resolution_gap": 0.0,
+                "truth_candidate_gap": 0.0,
+            },
+            "causal_spine_alignment": {
+                "concept": concept,
+                "alignment_ready": True,
+            },
+            "causal_boundary_alignment": {
+                "concept": concept,
+                "contradiction_interpretable": False,
+                "alignment_state": "LOCKED_TRUTH_REUSED",
+            },
+            "causal_graph_validation": {
+                "concept": concept,
+                "validation_ready": True,
+            },
+            "causal_graph_alignment": {
+                "concept": concept,
+                "alignment_score": 1.0,
+            },
+            "causal_explanation": {},
+            "causal_validation": {
+                "hypothesis": {"target_concept": concept},
+                "validation_ready": True,
+                "validation_state": "REUSED_LOCKED_TRUTH",
+            },
+            "process_dependency_memory": {
+                "dependency_reasoning_invoked": False,
+                "dependency_execution_trace": {
+                    "concept": concept,
+                    "reasoning_invoked": False,
+                    "bypass_reason": report["reason"],
+                },
+            },
+            "contextual_truth": {
+                "truth": concept,
+                "contextual_consistency": True,
+            },
+            "contextual_truth_authority": {},
+            "context_discovery": {
+                "concept": concept,
+                "transformation_family": "locked_truth_reuse",
+            },
+            "context_hierarchy": {
+                "concept": concept,
+                "hierarchy_ready": True,
+            },
+            "semantic_context": {
+                "context": concept,
+                "semantically_validated": True,
+            },
+            "relational_reasoning_report": {},
+            "causal_spine": {},
+            "dependency_chain_alignment": {
+                "concept": concept,
+                "alignment_ready": True,
+                "memory_ready_link_count": 0,
+            },
+            "epistemic_evidence_fusion": {},
+            "causal_evidence_arbitration": {},
+            "contradiction_resolution": {
+                "effective_contradiction_score": 0.0,
+                "contradiction_attribution": {},
+            },
+            "contradiction_attribution": {},
+            "calibration": {},
+            "belief": {},
+            "belief_promotion": {
+                "promotion_state": "TRUTH_COMMITTED",
+            },
+            "truth_candidate": {
+                "concept": concept,
+                "eligible_for_truth_candidate": False,
+                "eligibility_reason": "locked_truth_fastpath_reuse",
+                "dominant_bottleneck": {},
+            },
+            "identity_safe_truth_integration": {
+                "concept": concept,
+                "strengthens_identity": False,
+            },
+            "identity_runtime_report": {},
+            "adaptive_identity_integration": {
+                "concept": concept,
+                "adaptive_tolerance_enabled": False,
+            },
+            "truth_internalization": {
+                "concept": concept,
+                "knowledge_internalization_required": False,
+            },
+            "identity_repair": {
+                "reversible_internalization_rehearsal_request": None,
+            },
+            "reversible_rehearsal_execution": {"result": None},
+            "semantic_spine_recovery": {
+                "concept": concept,
+                "semantic_spine_recovery_confirmed": True,
+            },
+            "evidence_replication": {},
+            "knowledge_generalization": {},
+            "causal_failure_analysis": {},
+            "boundary_refinement": {},
+            "evidence_gap_analysis": {},
+            "truth_advancement": {},
+            "experiment_hypothesis": None,
+            "active_knowledge_acquisition": None,
+            "truth_commit": {
+                "concept": concept,
+                "decision": "TRUTH_COMMITTED",
+                "committed": True,
+                "metadata": {
+                    "remediation": {},
+                    "locked_truth_fastpath_report": report,
+                    "truth_state_mutated": False,
+                },
+            },
+        }
 
     def _grid_pair(self, context):
         input_grid = context.get("input_grid")
@@ -584,6 +793,32 @@ class EpistemicCognitionLayer:
 
         evaluations = []
         for hypothesis in hypotheses:
+            truth_commit_report = self._truth_commit_report_for_fastpath(
+                hypothesis.concept,
+                context,
+            )
+            fastpath_context = {
+                **context,
+                "truth_commit_report": truth_commit_report,
+            }
+            fastpath_report = self.locked_truth_fastpath.evaluate(
+                hypothesis.concept,
+                fastpath_context,
+            )
+            context["locked_truth_fastpath_report"] = fastpath_report
+            if fastpath_report["fastpath_active"]:
+                self.locked_truth_fastpath_hits += 1
+                self.governance_revalidations_skipped += 1
+                evaluations.append(
+                    self._locked_truth_fastpath_evaluation(
+                        hypothesis.concept,
+                        fastpath_report,
+                        context,
+                    )
+                )
+                continue
+            self.locked_truth_fastpath_misses += 1
+
             trial = self.trial_engine.run_trial(hypothesis)
             aggregate = self.evidence_registry.aggregate(hypothesis.concept)
             evidence_fusion = (
@@ -629,56 +864,83 @@ class EpistemicCognitionLayer:
             causal_explanation = self.causal_graph.explain_truth(
                 hypothesis.concept,
             )
-            process_dependency_memory = (
-                self.process_dependency_graph.resolve_dependency_chain(
+            dependency_snapshot_report = (
+                self.dependency_snapshot_cache.get_snapshot(
                     hypothesis.concept,
+                    {
+                        **context,
+                        "truth_commit_report": truth_commit_report,
+                    },
                 )
             )
-            dependency_execution_report = (
-                self.dependency_chain_executor.execute(
-                    hypothesis.concept,
-                    observed_contradictions=[
-                        item.get("target")
-                        for item in process_dependency_memory.get(
-                            "typed_dependency_relations",
-                            [],
-                        )
-                        if item.get("relation") == "forbids"
-                    ],
-                )
-            )
-            process_dependency_memory = {
-                **process_dependency_memory,
-                **dependency_execution_report,
-                "legacy_process_dependency_memory":
-                process_dependency_memory,
-                "dependency_reasoning_invoked": True,
-                "dependency_execution_trace": {
-                    "concept": hypothesis.concept,
-                    "memory_loaded": (
-                        dependency_execution_report.get(
-                            "process_dependency_links_loaded",
-                            0,
-                        ) > 0
-                    ),
-                    "operator_available": True,
-                    "reasoning_invoked": True,
-                    "bypass_reason": None,
-                },
-                "dependency_confidence": max(
-                    process_dependency_memory.get(
-                        "dependency_confidence",
+            if dependency_snapshot_report.get("dependency_snapshot_reused"):
+                self.dependency_snapshot_hits += 1
+                self.dependency_reasoning_skipped += 1
+                process_dependency_memory = {
+                    **dependency_snapshot_report,
+                    "legacy_process_dependency_memory": {},
+                    "dependency_confidence":
+                    dependency_snapshot_report.get(
+                        "dependency_coherence",
                         0.0,
                     ),
-                    dependency_execution_report.get(
-                        "dependency_coherence_average",
-                        dependency_execution_report.get(
-                            "dependency_coherence",
+                }
+            else:
+                self.dependency_snapshot_misses += 1
+                process_dependency_memory = (
+                    self.process_dependency_graph.resolve_dependency_chain(
+                        hypothesis.concept,
+                    )
+                )
+                dependency_execution_report = (
+                    self.dependency_chain_executor.execute(
+                        hypothesis.concept,
+                        observed_contradictions=[
+                            item.get("target")
+                            for item in process_dependency_memory.get(
+                                "typed_dependency_relations",
+                                [],
+                            )
+                            if item.get("relation") == "forbids"
+                        ],
+                    )
+                )
+                process_dependency_memory = {
+                    **process_dependency_memory,
+                    **dependency_execution_report,
+                    "legacy_process_dependency_memory":
+                    process_dependency_memory,
+                    "dependency_reasoning_invoked": True,
+                    "dependency_snapshot_reused": False,
+                    "dependency_reasoning_skipped": False,
+                    "dependency_snapshot_cache_report":
+                    dependency_snapshot_report,
+                    "dependency_execution_trace": {
+                        "concept": hypothesis.concept,
+                        "memory_loaded": (
+                            dependency_execution_report.get(
+                                "process_dependency_links_loaded",
+                                0,
+                            ) > 0
+                        ),
+                        "operator_available": True,
+                        "reasoning_invoked": True,
+                        "bypass_reason": None,
+                    },
+                    "dependency_confidence": max(
+                        process_dependency_memory.get(
+                            "dependency_confidence",
                             0.0,
                         ),
+                        dependency_execution_report.get(
+                            "dependency_coherence_average",
+                            dependency_execution_report.get(
+                                "dependency_coherence",
+                                0.0,
+                            ),
+                        ),
                     ),
-                ),
-            }
+                }
             causal_validation = (
                 self.causal_validation_engine.validate_hypothesis(
                     {
@@ -1331,6 +1593,32 @@ class EpistemicCognitionLayer:
                     causal_spine,
                 },
             )
+            commit_report = commit.as_dict()
+            final_commit_state = (
+                commit_report.get("metadata", {})
+                .get("final_commit_decision", {})
+                .get("final_commit_state")
+            )
+            if final_commit_state == "LOCKED_TRUTH_PRESERVED":
+                snapshot_truth_report = {
+                    **commit_report,
+                    "final_commit_state": final_commit_state,
+                }
+                snapshot = self.dependency_snapshot_cache.build_snapshot(
+                    hypothesis.concept,
+                    process_dependency_memory,
+                    snapshot_truth_report,
+                )
+                store_report = (
+                    self.dependency_snapshot_cache.store_snapshot(
+                        hypothesis.concept,
+                        snapshot,
+                    )
+                )
+                if store_report.get("stored"):
+                    self.dependency_snapshot_store_count += 1
+            else:
+                store_report = {}
             evaluations.append({
                 "concept": hypothesis.concept,
                 "runtime_state": belief.state.value,
@@ -1345,6 +1633,7 @@ class EpistemicCognitionLayer:
                 "causal_explanation": causal_explanation,
                 "causal_validation": causal_validation,
                 "process_dependency_memory": process_dependency_memory,
+                "dependency_snapshot_store": store_report,
                 "contextual_truth": contextual_truth,
                 "contextual_truth_authority": contextual_truth_authority,
                 "context_discovery": context_discovery,
@@ -1387,7 +1676,7 @@ class EpistemicCognitionLayer:
                 "truth_advancement": advancement,
                 "experiment_hypothesis": experiment_hypothesis,
                 "active_knowledge_acquisition": acquisition_request,
-                "truth_commit": commit.as_dict(),
+                "truth_commit": commit_report,
             })
 
         promotion_evaluations = [
@@ -1547,6 +1836,30 @@ class EpistemicCognitionLayer:
         return {
             "system": "epistemic_cognition_layer",
             "evaluations": evaluations,
+            "locked_truth_fastpath": {
+                "system": "locked_truth_fastpath",
+                "locked_truth_fastpath_hits":
+                self.locked_truth_fastpath_hits,
+                "locked_truth_fastpath_misses":
+                self.locked_truth_fastpath_misses,
+                "governance_revalidations_skipped":
+                self.governance_revalidations_skipped,
+                "reports": [
+                    item["locked_truth_fastpath_report"]
+                    for item in evaluations
+                    if "locked_truth_fastpath_report" in item
+                ],
+            },
+            "dependency_snapshot_cache": {
+                **self.dependency_snapshot_cache.report(),
+                "dependency_snapshot_hits": self.dependency_snapshot_hits,
+                "dependency_snapshot_misses":
+                self.dependency_snapshot_misses,
+                "dependency_reasoning_skipped":
+                self.dependency_reasoning_skipped,
+                "dependency_snapshot_store_count":
+                self.dependency_snapshot_store_count,
+            },
             "beliefs": [
                 belief.as_dict()
                 for belief in self.belief_engine.beliefs.values()
