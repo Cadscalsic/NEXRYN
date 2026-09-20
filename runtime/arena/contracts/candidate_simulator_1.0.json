@@ -29,19 +29,20 @@
     "step exception is recorded and subsequent steps continue"
   ],
   "fingerprint_namespace": "nexryn.arena.candidate_simulator@1.0",
-  "immutable_fingerprint": "2bdf320eb2792d72b43525649f323598af2f69162d0ddadd7ff3181b9de8d3d3",
+  "immutable_fingerprint": "704b4d33b1ef869ab6a62e98228ddf4372730fdfdbdee9577aa304cd4027cf16",
   "normalization_rules": [
     "operation aliases canonicalized",
     "preservation and noop steps omitted",
     "unknown parameters retained fail-closed"
   ],
   "schema_version": "executor_semantic_contract.v1",
-  "semantic_surface_fingerprint": "79158fe53a7be1ccc95fe12cc1f09c1369a49e54090a175d7d324084e7784776",
+  "semantic_surface_fingerprint": "4edb8f71adbb75e5ea966942a6f63e4d7c0085c66db561f98431e703d82c8eda",
   "semantic_surface_inventory": {
     "runtime/arena/candidate_normalizer.py": [
       "_candidate",
       "_collapse_key",
       "_step",
+      "_program_signature",
       "_semantic_fingerprint",
       "_semantic_program",
       "_normalize_operation"
