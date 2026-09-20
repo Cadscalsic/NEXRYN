@@ -9,11 +9,6 @@ from pathlib import Path
 from runtime.arena.candidate_normalizer import CandidateNormalizer
 
 
-SOURCE_ARTIFACT = Path(
-    "runtime/artifacts/safe_winner_predicates/run_20260919_215701.json"
-)
-
-
 def proposal(candidate_id, source, steps, **extra):
     return {
         "candidate_id": candidate_id,
@@ -150,12 +145,14 @@ def test_hidden_guard_or_preservation_difference_fails_closed():
 
 
 def test_historical_candidate_set_remains_byte_identical(tmp_path):
-    before = SOURCE_ARTIFACT.read_bytes()
+    source_artifact = tmp_path / "historical_candidate_set.json"
+    source_artifact.write_bytes(b'{"candidate_ids":["historical:a"]}\n')
+    before = source_artifact.read_bytes()
     normalize(
         proposal("a", "one", [duplicate_step()]),
         proposal("b", "two", [duplicate_step(metadata=True)]),
     )
-    assert SOURCE_ARTIFACT.read_bytes() == before
+    assert source_artifact.read_bytes() == before
 
 
 def test_normalization_does_not_mutate_scores_ranks_or_select_winner():
